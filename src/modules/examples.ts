@@ -78,6 +78,7 @@ export class BasicExampleFactory {
   }
 }
 
+//？ 按键示例
 export class KeyExampleFactory {
   @example
   static registerShortcuts() {
@@ -122,6 +123,7 @@ export class KeyExampleFactory {
 }
 
 export class UIExampleFactory {
+  //？官方makeItRed 示例
   @example
   static registerStyleSheet(win: _ZoteroTypes.MainWindow) {
     const doc = win.document;
@@ -136,54 +138,58 @@ export class UIExampleFactory {
     doc.getElementById("zotero-item-pane-content")?.classList.add("makeItRed");
   }
 
-  @example
-  static registerRightClickMenuItem() {
-    const menuIcon = `chrome://${addon.data.config.addonRef}/content/icons/favicon@0.5x.png`;
-    // item menuitem with icon
-    ztoolkit.Menu.register("item", {
-      tag: "menuitem",
-      id: "zotero-itemmenu-addontemplate-test",
-      label: getString("menuitem-label"),
-      commandListener: (ev) => addon.hooks.onDialogEvents("dialogExample"),
-      icon: menuIcon,
-    });
-  }
+  //？右键菜单选项
+  // @example
+  // static registerRightClickMenuItem() {
+  //   const menuIcon = `chrome://${addon.data.config.addonRef}/content/icons/favicon@0.5x.png`;
+  //   // item menuitem with icon
+  //   ztoolkit.Menu.register("item", {
+  //     tag: "menuitem",
+  //     id: "zotero-itemmenu-addontemplate-test",
+  //     label: getString("menuitem-label"),
+  //     commandListener: (ev) => addon.hooks.onDialogEvents("dialogExample"),
+  //     icon: menuIcon,
+  //   });
+  // }
 
-  @example
-  static registerRightClickMenuPopup(win: Window) {
-    ztoolkit.Menu.register(
-      "item",
-      {
-        tag: "menu",
-        label: getString("menupopup-label"),
-        children: [
-          {
-            tag: "menuitem",
-            label: getString("menuitem-submenulabel"),
-            oncommand: "alert('Hello World! Sub Menuitem.')",
-          },
-        ],
-      },
-      "before",
-      win.document?.querySelector(
-        "#zotero-itemmenu-addontemplate-test",
-      ) as XUL.MenuItem,
-    );
-  }
+  //？右键菜单子菜单
+  // @example
+  // static registerRightClickMenuPopup(win: Window) {
+  //   ztoolkit.Menu.register(
+  //     "item",
+  //     {
+  //       tag: "menu",
+  //       label: getString("menupopup-label"),
+  //       children: [
+  //         {
+  //           tag: "menuitem",
+  //           label: getString("menuitem-submenulabel"),
+  //           oncommand: "alert('Hello World! Sub Menuitem.')",
+  //         },
+  //       ],
+  //     },
+  //     "before",
+  //     win.document?.querySelector(
+  //       "#zotero-itemmenu-addontemplate-test",
+  //     ) as XUL.MenuItem,
+  //   );
+  // }
 
-  @example
-  static registerWindowMenuWithSeparator() {
-    ztoolkit.Menu.register("menuFile", {
-      tag: "menuseparator",
-    });
-    // menu->File menuitem
-    ztoolkit.Menu.register("menuFile", {
-      tag: "menuitem",
-      label: getString("menuitem-filemenulabel"),
-      oncommand: "alert('Hello World! File Menuitem.')",
-    });
-  }
+  //? 文件菜单选项
+  // @example
+  // static registerWindowMenuWithSeparator() {
+  //   ztoolkit.Menu.register("menuFile", {
+  //     tag: "menuseparator",
+  //   });
+  //   // menu->File menuitem
+  //   ztoolkit.Menu.register("menuFile", {
+  //     tag: "menuitem",
+  //     label: getString("menuitem-filemenulabel"),
+  //     oncommand: "alert('Hello World! File Menuitem.')",
+  //   });
+  // }
 
+  //？条目列示例
   @example
   static async registerExtraColumn() {
     const field = "test1";
@@ -198,6 +204,7 @@ export class UIExampleFactory {
     });
   }
 
+  //？条目列标签示例
   @example
   static async registerExtraColumnWithCustomCell() {
     const field = "test2";
@@ -348,6 +355,7 @@ export class UIExampleFactory {
   }
 }
 
+//？Shift+P 快捷命令
 export class PromptExampleFactory {
   @example
   static registerNormalCommandExample() {

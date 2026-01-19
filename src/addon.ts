@@ -20,6 +20,8 @@ class Addon {
       rows: Array<{ [dataKey: string]: string }>;
     };
     dialog?: DialogHelper;
+    selectedText?: string;
+    userPrompt?: Array<string>;
   };
   // Lifecycle hooks
   public hooks: typeof hooks;
