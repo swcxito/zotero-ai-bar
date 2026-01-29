@@ -2,161 +2,47 @@ import { config } from "../../package.json";
 import { getSelectionContext } from "./selectionContext";
 import { mockRequest } from "./task";
 
+// must call once in mainwindow otherwise css file won't be loaded in reader popup
+export function registerAIBarStyleSheet(win: _ZoteroTypes.MainWindow) {
+  const doc = win.document;
+  const styles = ztoolkit.UI.createElement(doc, "link", {
+    properties: {
+      type: "text/css",
+      rel: "stylesheet",
+      href: `chrome://${addon.data.config.addonRef}/content/zoteroAIBar.css`,
+    },
+  });
+  doc.documentElement?.appendChild(styles);
+}
+
 export function registerReaderInitializer() {
   Zotero.Reader.registerEventListener(
     "renderTextSelectionPopup",
-    (event) => {
-      const { reader, doc, params, append } = event;
+    ({ reader, doc, params, append }) => {
       // addon.hooks.onReaderPopupShow(event);
       ztoolkit.log(addon.data.selectedText, "selected");
-      getSelectionContext(reader, params);
+      getSelectionContext(reader, params).then();
       // ztoolkit.log(doc);
       // ztoolkit.log(append);
       ztoolkit.log(append);
       ztoolkit.log("Creating Ask AI Bar");
-      const bar = renderAIBar(doc);
-      append(bar);
+      append(renderAIBar(doc));
     },
     config.addonID,
   );
 }
 
 function renderAIBar(doc: Document): DocumentFragment {
-  // Insert styles for ripple and animations
-  if (!doc.getElementById("ai-bar-styles")) {
-    const style = doc.createElement("style");
-    style.id = "ai-bar-styles";
-    style.textContent = `
-      /* AI Bar Animations */
-      @keyframes ripple {
-        to {
-          transform: scale(4);
-          opacity: 0;
-        }
-      }
-
-      /* Ripple effect */
-      .ripple {
-        position: absolute;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.3);
-        transform: scale(0);
-        animation: ripple 0.6s linear;
-        pointer-events: none;
-      }
-
-      /* AI Button */
-      .ai-bar-container .ai-btn {
-        position: relative;
-        overflow: hidden;
-        background: transparent;
-        border: none;
-        color: rgba(255, 255, 255, 0.85);
-        font-size: 12px;
-        padding: 8px 12px;
-        cursor: pointer;
-        border-radius: 4px;
-        transition: all 0.2s;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        font-weight: 500;
-        max-width: 150px;
-        white-space: nowrap;
-      }
-
-      .ai-bar-container .ai-btn:hover:not(:disabled) {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: #fff;
-      }
-
-      .ai-bar-container .ai-btn:active:not(:disabled) {
-        transform: scale(0.98);
-      }
-
-      .ai-bar-container .ai-btn:disabled {
-        opacity: 0.6;
-        cursor: default;
-        pointer-events: none;
-      }
-
-      /* AI Bar Container */
-      .ai-bar-container {
-        transition: all 0.3s ease;
-        position: absolute;
-        top: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        margin-top: 8px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 5px 8px;
-        background: rgba(45, 45, 48, 0.98);
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 8px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-        z-index: 9999;
-        pointer-events: auto;
-        width: max-content;
-      }
-
-      /* Input Group */
-      .ai-bar-container .input-group {
-        display: flex;
-        align-items: flex-end;
-        background: rgba(0, 0, 0, 0.2);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 4px;
-        padding: 2px 4px;
-        margin-left: 2px;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      }
-
-      /* Textarea */
-      .ai-bar-container .input-group textarea {
-        background: transparent;
-        border: none;
-        color: #fff;
-        font-size: 12px;
-        width: 70px;
-        outline: none;
-        padding: 4px 4px;
-        transition: width 0.3s ease;
-        resize: none;
-        overflow: hidden;
-        font-family: inherit;
-        line-height: 1.4;
-      }
-
-      .ai-bar-container .input-group textarea:disabled {
-        opacity: 0.6;
-        cursor: default;
-        pointer-events: none;
-      }
-
-      /* Send Button */
-      .ai-bar-container .ai-send-btn {
-        color: #0060df;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        padding: 4px;
-        opacity: 0.8;
-        transition: opacity 0.2s;
-        margin-bottom: 2px;
-      }
-
-      .ai-bar-container .ai-send-btn:hover {
-        opacity: 1;
-      }
-
-      .ai-bar-container .ai-send-btn.disabled {
-        opacity: 0.6;
-        cursor: default;
-        pointer-events: none;
-      }
-    `;
-    doc.head?.appendChild(style);
+  // Insert styles
+  if (!doc.querySelector(`link[href="chrome://${addon.data.config.addonRef}/content/zoteroAIBar.css"]`)) {
+    const styles = ztoolkit.UI.createElement(doc, "link", {
+      properties: {
+        type: "text/css",
+        rel: "stylesheet",
+        href: `chrome://${addon.data.config.addonRef}/content/zoteroAIBar.css`,
+      },
+    });
+    doc.head?.appendChild(styles);
   }
 
   const disableAll = (container: HTMLElement) => {
@@ -226,10 +112,18 @@ function renderAIBar(doc: Document): DocumentFragment {
         ztoolkit.log("Ask error:", e);
       }
 
-      // Re-enable logic skipped as window closes anyway, 
-      // but if we were to keep it open we would need enableAll()
-
       container.style.display = "none";
+    }
+  };
+
+  const handleButtonAction = async (button: string) => {
+    if (!addon.data.selectedText) return;
+    ztoolkit.log("Action:", addon.data.selectedText);
+    try {
+      const res = await mockRequest(addon.data.selectedText);
+      ztoolkit.log("Response:", res);
+    } catch (e) {
+      ztoolkit.log("Action error:", e);
     }
   };
 
@@ -244,26 +138,14 @@ function renderAIBar(doc: Document): DocumentFragment {
             tag: "button",
             classList: ["ai-btn"],
             properties: { textContent: "📖Explain" },
-            listeners: btnListeners(async () => {
-              if (addon.data.selectedText) {
-                ztoolkit.log("Explain:", addon.data.selectedText);
-                const res = await mockRequest(addon.data.selectedText);
-                ztoolkit.log("Response:", res);
-              }
-            }),
+            listeners: btnListeners(async () => handleButtonAction("explain")),
           },
           // 2. Translate
           {
             tag: "button",
             classList: ["ai-btn"],
             properties: { textContent: "🌐Translate" },
-            listeners: btnListeners(async () => {
-              if (addon.data.selectedText) {
-                ztoolkit.log("Translate:", addon.data.selectedText);
-                const res = await mockRequest(addon.data.selectedText);
-                ztoolkit.log("Response:", res);
-              }
-            }),
+            listeners: btnListeners(async () => handleButtonAction("translate")),
           },
           // 3. Ask (Input Group)
           {
@@ -278,39 +160,12 @@ function renderAIBar(doc: Document): DocumentFragment {
                 },
                 listeners: [
                   {
-                    type: "focus",
-                    listener: (e: Event) => {
-                      const input = e.currentTarget as HTMLTextAreaElement;
-                      const group = input.parentElement as HTMLElement;
-                      input.style.width = "140px";
-                      group.style.borderColor = "#0060df";
-                    },
-                  },
-                  {
                     type: "blur",
                     listener: (e: Event) => {
                       const input = e.currentTarget as HTMLTextAreaElement;
-                      const group = input.parentElement as HTMLElement;
-                      const bar = group.parentElement as HTMLElement;
                       if (!input.value) {
-                        input.style.width = "70px";
                         input.rows = 1;
-                        group.style.borderColor = "rgba(255, 255, 255, 0.1)";
-
-                        // Restore bar gap and sibling buttons
-                        bar.style.gap = "6px";
-                        Array.from(bar.children).forEach((child) => {
-                          if (child !== group) {
-                            const el = child as HTMLElement;
-                            el.style.display = ""; // Reset display
-                            el.style.maxWidth = "150px";
-                            el.style.padding = "8px 12px";
-                            el.style.margin = "";
-                            el.style.opacity = "1";
-                            el.style.pointerEvents = "auto";
-                            // Ensure overflow/whitespace if needed, but they are in btnStyles or class
-                          }
-                        });
+                        input.style.height = "auto";
                       }
                     },
                   },
@@ -322,38 +177,9 @@ function renderAIBar(doc: Document): DocumentFragment {
                       const bar = group.parentElement as HTMLElement;
 
                       if (input.value.length > 0) {
-                        bar.style.gap = "0px";
-                        Array.from(bar.children).forEach((child) => {
-                          if (child !== group) {
-                            const el = child as HTMLElement;
-                            // Collapse animation properties
-                            el.style.maxWidth = "0px";
-                            el.style.padding = "0px";
-                            el.style.margin = "0px";
-                            el.style.opacity = "0";
-                            el.style.pointerEvents = "none";
-                          }
-                        });
-                        input.style.width = "250px";
+                        bar.classList.add("has-input");
                       } else {
-                        // Restore if input becomes empty (optional user convenience)
-                        bar.style.gap = "6px";
-                        Array.from(bar.children).forEach((child) => {
-                          if (child !== group) {
-                            const el = child as HTMLElement;
-                            el.style.maxWidth = "150px";
-                            el.style.padding = "8px 12px";
-                            el.style.margin = "";
-                            el.style.opacity = "1";
-                            el.style.pointerEvents = "auto";
-                          }
-                        });
-                        // Input width restoration to focus mode (140px) or default (70px)? 
-                        // Since it's focused, it should probably stay 140px or whatever focus width is.
-                        // But previous logic expanded it to 250px immediately on input. 
-                        // If empty, let's keep it at focus width (140px) if focused?
-                        // Actually, let's just restore buttons.
-                        input.style.width = "140px"; // Back to focus width
+                        bar.classList.remove("has-input");
                       }
 
                       // Auto grow height

@@ -1,0 +1,153 @@
+/* AI Bar Animations */
+@keyframes ripple {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+/* Ripple effect */
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(0);
+  animation: ripple 0.6s linear;
+  pointer-events: none;
+}
+
+/* AI Button */
+.ai-bar-container .ai-btn {
+  position: relative;
+  overflow: hidden;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-weight: 500;
+  max-width: 150px;
+  white-space: nowrap;
+}
+
+.ai-bar-container .ai-btn:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.ai-bar-container .ai-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.ai-bar-container .ai-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* AI Bar Container */
+.ai-bar-container {
+  transition: all 0.3s ease;
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: rgba(45, 45, 48, 0.98);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  z-index: 9999;
+  pointer-events: auto;
+  width: max-content;
+}
+
+.ai-bar-container.has-input {
+  gap: 0;
+}
+
+.ai-bar-container.has-input .ai-btn {
+  max-width: 0;
+  padding: 0;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Input Group */
+.ai-bar-container .input-group {
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin-left: 2px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ai-bar-container .input-group:focus-within {
+  border-color: #0060df;
+}
+
+/* Textarea */
+.ai-bar-container .input-group textarea {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 12px;
+  width: 70px;
+  outline: none;
+  padding: 4px 4px;
+  transition: width 0.3s ease;
+  resize: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.ai-bar-container .input-group:focus-within textarea {
+  width: 140px;
+}
+
+.ai-bar-container.has-input .input-group textarea {
+  width: 250px;
+}
+
+.ai-bar-container .input-group textarea:disabled {
+  opacity: 0.6;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Send Button */
+.ai-bar-container .ai-send-btn {
+  color: #0060df;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+  margin-bottom: 2px;
+}
+
+.ai-bar-container .ai-send-btn:hover {
+  opacity: 1;
+}
+
+.ai-bar-container .ai-send-btn.disabled {
+  opacity: 0.6;
+  cursor: default;
+  pointer-events: none;
+}
