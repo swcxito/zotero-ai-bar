@@ -1,33 +1,94 @@
-<linkset>
+<linkset xmlns:html="http://www.w3.org/1999/xhtml">
   <html:link rel="localization" href="__addonRef__-preferences.ftl" />
 </linkset>
+<html:style>
+    button {
+      justify-content: center;
+    }
+</html:style>
 <groupbox
   onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
 >
-  <label><html:h2 data-l10n-id="pref-title"></html:h2></label>
-  <checkbox
-    id="zotero-prefpane-__addonRef__-enable"
-    preference="enable"
-    data-l10n-id="pref-enable"
-  />
-  <hbox>
-    <html:label
-      for="zotero-prefpane-__addonRef__-input"
-      data-l10n-id="pref-input"
-    ></html:label>
-    <html:input
-      type="text"
-      id="zotero-prefpane-__addonRef__-input"
-      preference="input"
-    ></html:input>
-  </hbox>
-  <hbox class="virtualized-table-container" flex="1" height="300px">
-    <html:div id="__addonRef__-table-container" />
-  </hbox>
+  <groupbox calss="model-settings">
+    <label>
+      <html:h2 data-l10n-id="pref-model-setting" />
+    </label>
+    <hbox align="center" id="__addonRef__-model-selecter-container">
+      <label data-l10n-id="pref-model-select" />
+      <vbox flex="1">
+        <html:select class="select" id="__addonRef__-model-selecter" style="width: 100%; min-width: 0">
+          <!-- Options will be populated dynamically -->
+        </html:select>
+      </vbox>
+      <button id="__addonRef__-model-edit-button" data-l10n-id="pref-edit-models"/>
+    </hbox>
+  
+    <hbox align="center" style="margin: 15px 10px;gap: 10px;">
+      <vbox flex="1">
+        <div class="range-header" style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-right: 12px;
+                ">
+          <html:label data-l10n-id="pref-temperature" />
+          <html:span id="__addonRef__-temperature-value">0-2</html:span>
+        </div>
+        <html:input type="range" min="0" max="200" step="5" preference="llm.temperature100"
+          id="__addonRef__-temperature-input" />
+      </vbox>
+      <vbox flex="1">
+        <html:label data-l10n-id="pref-max-tokens" />
+        <html:input type="number" min="256" max="8192" step="256" value="2048" style="text-align: left"
+          preference="llm.maxTokens" />
+      </vbox>
+    </hbox>
+  </groupbox>
+  <groupbox>
+    <label>
+      <html:h2 data-l10n-id="pref-prompt" />
+    </label>
+    <hbox gap="10px" style="align-items: center; padding: 5px 0;">
+      <checkbox
+        id="__addonRef__-extend-selection-context"
+        preference="extend-selection-context"
+        data-l10n-id="pref-extend-selection-context"
+        style="flex: 1;"
+      />
+      <label style="flex: 1;">
+        <label data-l10n-id="pref-extend-selection-size"/>
+      <html:input unit="123" type="number" min="1" max="300" step="1" preference="extend-selection-size" id="__addonRef__-extend-selection-size-input" />
+        <label data-l10n-id="pref-extend-selection-unit" />
+
+    </label>
+      </hbox>
+    <label data-l10n-id="pref-current-prompt" />
+    <hbox flex="1" align="center" class="virtualized-table-container">
+      <html:div id="__addonRef__-table-container" />
+    </hbox>
+    <vbox id="__addonRef__-prompt-editor">
+      <label data-l10n-id="pref-prompt-name" />
+      <br />
+      <html:input type="text" id="__addonRef__-prompt-name-input" />
+      <label data-l10n-id="pref-prompt-content" />
+      <html:textarea id="__addonRef__-prompt-content-input" />
+      <hbox gap="10px" padding="5px 0" style="width: 100% ; justify-content: flex-end;">
+<!--        <button id="__addonRef__-add-prompt-button" data-l10n-id="pref-add-prompt" />-->
+        <button id="__addonRef__-update-prompt-button" data-l10n-id="pref-prompt-save" />
+        <button id="__addonRef__-delete-prompt-button" data-l10n-id="pref-prompt-cancel"/>
+      </hbox>
+    </vbox>
+    </groupbox>
+    <groupbox>
+      <label>
+        <html:h2 data-l10n-id="pref-advanced" />
+      </label>
+    </groupbox>
 </groupbox>
 <vbox>
+  <hr />
   <html:label
     data-l10n-id="pref-help"
     data-l10n-args='{"time": "__buildTime__","name": "__addonName__","version":"__buildVersion__"}'
-  ></html:label>
+  />
 </vbox>
