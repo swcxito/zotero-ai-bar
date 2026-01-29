@@ -7,7 +7,7 @@
   "author": "__author__",
   "icons": {
     "48": "content/icons/favicon@0.5x.png",
-    "96": "content/icons/favicon.png"
+    "96": "content/icons/favicon.svg"
   },
   "applications": {
     "zotero": {

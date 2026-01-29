@@ -1,5 +1,6 @@
 # dot files
 .DS_Store
+.idea
 
 # Node.js
 node_modules
@@ -14,3 +15,5 @@ tsconfig.tsbuildinfo
 .scaffold
 build
 logs
+
+dev_ref
