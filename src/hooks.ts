@@ -8,7 +8,8 @@ import {
 import { getString, initLocale } from "./utils/locale";
 import { registerPrefsScripts } from "./modules/preferenceScript";
 import { createZToolkit } from "./utils/ztoolkit";
-import { registerReaderInitializer } from "./modules/readerBarPopup";
+import { registerReaderInitializer, registerAIBarStyleSheet } from "./modules/readerBarPopup";
+import { onModelDialogLoad } from "./modules/modelDialog";
 
 async function onStartup() {
   await Promise.all([
@@ -35,6 +36,10 @@ async function onStartup() {
 async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   // Create ztoolkit for every window
   addon.data.ztoolkit = createZToolkit();
+
+  // UIExampleFactory.registerStyleSheet(win);
+  registerAIBarStyleSheet(win);
+  // await HelperExampleFactory.dialogExample();
 
   win.MozXULElement.insertFTLIfNeeded(
     `${addon.data.config.addonRef}-mainWindow.ftl`,
@@ -88,6 +93,10 @@ async function onPrefsEvent(type: string, data: { [key: string]: any }) {
   switch (type) {
     case "load":
       registerPrefsScripts(data.window);
+      break;
+    case "modelDialogLoad":
+      onModelDialogLoad(data.window);
+      ztoolkit.log("model dialog load hook called");
       break;
     default:
       return;

@@ -2,6 +2,7 @@ import { config } from "../package.json";
 import { ColumnOptions, DialogHelper } from "zotero-plugin-toolkit";
 import hooks from "./hooks";
 import { createZToolkit } from "./utils/ztoolkit";
+import { UserProviderConfig } from "./types";
 
 class Addon {
   public data: {
@@ -22,6 +23,7 @@ class Addon {
     dialog?: DialogHelper;
     selectedText?: string;
     userPrompt?: Array<string>;
+    userProviderConfigs?: UserProviderConfig[];
   };
   // Lifecycle hooks
   public hooks: typeof hooks;
