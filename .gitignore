@@ -4,8 +4,6 @@
 
 # Node.js
 node_modules
-pnpm-lock.yaml
-yarn.lock
 
 # TSC
 tsconfig.tsbuildinfo
