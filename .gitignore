@@ -1,10 +1,9 @@
 # dot files
 .DS_Store
+.idea
 
 # Node.js
 node_modules
-pnpm-lock.yaml
-yarn.lock
 
 # TSC
 tsconfig.tsbuildinfo
@@ -14,3 +13,8 @@ tsconfig.tsbuildinfo
 .scaffold
 build
 logs
+
+dev_ref
+
+test/examples.ts
+addon/content/tailwind.js

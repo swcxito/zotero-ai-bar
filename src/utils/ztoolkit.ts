@@ -1,4 +1,9 @@
-import { ZoteroToolkit } from "zotero-plugin-toolkit";
+import {
+  BasicTool,
+  UITool,
+  unregister,
+  ZoteroToolkit,
+} from "zotero-plugin-toolkit";
 import { config } from "../../package.json";
 
 export { createZToolkit };
@@ -27,12 +32,9 @@ function initZToolkit(_ztoolkit: ReturnType<typeof createZToolkit>) {
   _ztoolkit.basicOptions.api.pluginID = config.addonID;
   _ztoolkit.ProgressWindow.setIconURI(
     "default",
-    `chrome://${config.addonRef}/content/icons/favicon.png`,
+    `chrome://${config.addonRef}/content/icons/favicon.svg`,
   );
 }
-
-import { BasicTool, unregister } from "zotero-plugin-toolkit";
-import { UITool } from "zotero-plugin-toolkit";
 
 class MyToolkit extends BasicTool {
   UI: UITool;
