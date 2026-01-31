@@ -1,6 +1,10 @@
 import { TagElementProps } from "zotero-plugin-toolkit";
 
-export function LogoButton(text: string, iconUrl?: string, onClick?: () => void): TagElementProps {
+export function LogoButton(
+  text: string,
+  iconUrl?: string,
+  onClick?: () => void,
+): TagElementProps {
   return {
     tag: "button",
     namespace: "html",

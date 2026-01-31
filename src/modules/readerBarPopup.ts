@@ -3,6 +3,8 @@ import { getSelectionContext } from "./selectionContext";
 import { streamLLM } from "../utils/llmRequest";
 import { SYSTEM_PROMPT_PREFIX } from "../constants";
 
+//TODO: DOM 操作: 手动创建 ripple 效果的代码稍显冗余，可以考虑封装成一个通用指令或 CSS 动画。
+
 // Generate unique request ID
 function generateRequestId(): string {
   return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -40,7 +42,11 @@ export function registerReaderInitializer() {
 
 function renderAIBar(doc: Document): DocumentFragment {
   // Insert styles
-  if (!doc.querySelector(`link[href="chrome://${addon.data.config.addonRef}/content/zoteroAIBar.css"]`)) {
+  if (
+    !doc.querySelector(
+      `link[href="chrome://${addon.data.config.addonRef}/content/zoteroAIBar.css"]`,
+    )
+  ) {
     const styles = ztoolkit.UI.createElement(doc, "link", {
       properties: {
         type: "text/css",
@@ -113,7 +119,9 @@ function renderAIBar(doc: Document): DocumentFragment {
       const messages = [
         {
           role: "system",
-          content: SYSTEM_PROMPT_PREFIX + `${addon.data.userPrompt?.[0]}<selected>${addon.data.selectedText}</selected>${addon.data.userPrompt?.[2]}`,
+          content:
+            SYSTEM_PROMPT_PREFIX +
+            `${addon.data.userPrompt?.[0]}<selected>${addon.data.selectedText}</selected>${addon.data.userPrompt?.[2]}`,
         },
         {
           role: "user",
@@ -160,7 +168,9 @@ function renderAIBar(doc: Document): DocumentFragment {
     const messages = [
       {
         role: "system",
-        content: SYSTEM_PROMPT_PREFIX + `${addon.data.userPrompt?.[0]}<selected>${addon.data.selectedText}</selected>${addon.data.userPrompt?.[2]}`,
+        content:
+          SYSTEM_PROMPT_PREFIX +
+          `${addon.data.userPrompt?.[0]}<selected>${addon.data.selectedText}</selected>${addon.data.userPrompt?.[2]}`,
       },
       { role: "user", content: prompt },
     ];
@@ -197,7 +207,9 @@ function renderAIBar(doc: Document): DocumentFragment {
             tag: "button",
             classList: ["ai-btn"],
             properties: { textContent: "🌐Translate" },
-            listeners: btnListeners(async () => handleButtonAction("translate")),
+            listeners: btnListeners(async () =>
+              handleButtonAction("translate"),
+            ),
           },
           // 3. Ask (Input Group)
           {
@@ -258,7 +270,9 @@ function renderAIBar(doc: Document): DocumentFragment {
                 ],
               },
               {
-                tag: "div", classList: ["ai-send-btn"], properties: {
+                tag: "div",
+                classList: ["ai-send-btn"],
+                properties: {
                   innerHTML: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`,
                 },
                 listeners: [
@@ -268,8 +282,11 @@ function renderAIBar(doc: Document): DocumentFragment {
                       e.stopPropagation();
                       const btn = e.currentTarget as HTMLElement;
                       if (btn.classList.contains("disabled")) return;
-                      const input = btn.previousElementSibling as HTMLTextAreaElement;
-                      const bar = btn.closest(".ai-bar-container") as HTMLElement;
+                      const input =
+                        btn.previousElementSibling as HTMLTextAreaElement;
+                      const bar = btn.closest(
+                        ".ai-bar-container",
+                      ) as HTMLElement;
                       handleAsk(input, bar);
                     },
                   },

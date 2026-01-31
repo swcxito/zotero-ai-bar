@@ -1,7 +1,7 @@
 {
   "name": "zotero-ai-bar",
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "A handy ai bar for zotero",
   "config": {
     "addonName": "Zotero AI Bar",

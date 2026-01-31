@@ -3,13 +3,12 @@ import { getLogoUrl } from "../constants";
 import { Icons } from "./common";
 import { UserProvider } from "../types";
 
-
 export function CardHead(
   data: UserProvider,
   onDeleteClicked: () => void,
-  onToggleCollapse: (e:Event) => void,
+  onToggleCollapse: (e: Event) => void,
 ): ElementProps {
-  const urlLabel:TagElementProps = {
+  const urlLabel: TagElementProps = {
     tag: "div",
     classList: [
       "text-xs",
@@ -40,7 +39,7 @@ export function CardHead(
       "duration-200",
       "ease-in-out",
       "px-2",
-      "url-input"
+      "url-input",
     ],
     properties: {
       type: "text",
@@ -68,15 +67,16 @@ export function CardHead(
       {
         tag: "div",
         classList: ["flex", "items-center", "gap-4", "flex-1", "min-w-0"],
-        children: [{
-                tag: "object",
-                namespace: "html",
-                properties: {
-                  data: getLogoUrl(data.key??"favicon"),
-                  type: "image/svg+xml",
-                },
-                classList: ["shrink-0", "w-6", "h-6"],
-              },
+        children: [
+          {
+            tag: "object",
+            namespace: "html",
+            properties: {
+              data: getLogoUrl(data.key ?? "favicon"),
+              type: "image/svg+xml",
+            },
+            classList: ["shrink-0", "w-6", "h-6"],
+          },
           // text section
           {
             tag: "div",
@@ -90,7 +90,7 @@ export function CardHead(
               "min-w-10",
             ],
             children: [
-              data.isCustom? urlInput : urlLabel,
+              data.isCustom ? urlInput : urlLabel,
               {
                 tag: "input",
                 classList: [
@@ -110,12 +110,12 @@ export function CardHead(
                   "transition-all",
                   "duration-200",
                   "ease-in-out",
-                  "key-input"
+                  "key-input",
                 ],
-                properties: { 
-                  type: "text", 
-                  placeholder: "API Key", 
-                  value: data.apiKey || ""
+                properties: {
+                  type: "text",
+                  placeholder: "API Key",
+                  value: data.apiKey || "",
                 },
               },
             ],

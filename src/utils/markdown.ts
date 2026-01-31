@@ -7,7 +7,7 @@ import { markedXhtml } from "marked-xhtml";
 marked.use(
   // 代码高亮扩展（必须在 KaTeX 之前）
   markedHighlight({
-    emptyLangClass: 'hljs',
+    emptyLangClass: "hljs",
     langPrefix: "hljs language-", // 与 highlight.js 样式类匹配
     highlight(code, lang) {
       const language = hljs.getLanguage(lang) ? lang : "plaintext";
@@ -20,7 +20,7 @@ marked.use(
     output: "mathml",
     nonStandard: true, // 支持非标准的单个 $ 行内公式
   }),
-  markedXhtml()
+  markedXhtml(),
 );
 // 可选：自定义基础渲染选项
 marked.setOptions({
