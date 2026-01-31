@@ -1,8 +1,3 @@
-import {
-  BasicExampleFactory,
-  HelperExampleFactory,
-  KeyExampleFactory,
-} from "../test/examples";
 import { initLocale } from "./utils/locale";
 import { registerPrefsScripts } from "./modules/preferenceScript";
 import { createZToolkit } from "./utils/ztoolkit";
@@ -11,7 +6,7 @@ import {
   registerReaderInitializer,
 } from "./modules/readerBarPopup";
 import { onModelDialogLoad } from "./modules/modelDialog";
-import { getPref } from "./utils/prefs";
+import { getPref, registerPrefs } from "./utils/prefs";
 import { registerReaderItemPaneSection } from "./modules/readerItemPane";
 
 async function onStartup() {
@@ -25,7 +20,7 @@ async function onStartup() {
 
   registerReaderInitializer();
 
-  BasicExampleFactory.registerPrefs();
+  registerPrefs();
 
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
@@ -83,7 +78,7 @@ async function onNotify(
     type == "tab" &&
     extraData[ids[0]].type == "reader"
   ) {
-    BasicExampleFactory.exampleNotifierCallback();
+    // BasicExampleFactory.exampleNotifierCallback();
   } else {
     return;
   }
@@ -112,10 +107,10 @@ async function onPrefsEvent(type: string, data: { [key: string]: any }) {
 function onShortcuts(type: string) {
   switch (type) {
     case "larger":
-      KeyExampleFactory.exampleShortcutLargerCallback();
+      // KeyExampleFactory.exampleShortcutLargerCallback();
       break;
     case "smaller":
-      KeyExampleFactory.exampleShortcutSmallerCallback();
+      // KeyExampleFactory.exampleShortcutSmallerCallback();
       break;
     default:
       break;
@@ -125,19 +120,19 @@ function onShortcuts(type: string) {
 function onDialogEvents(type: string) {
   switch (type) {
     case "dialogExample":
-      HelperExampleFactory.dialogExample();
+      // HelperExampleFactory.dialogExample();
       break;
     case "clipboardExample":
-      HelperExampleFactory.clipboardExample();
+      // HelperExampleFactory.clipboardExample();
       break;
     case "filePickerExample":
-      HelperExampleFactory.filePickerExample();
+      // HelperExampleFactory.filePickerExample();
       break;
     case "progressWindowExample":
-      HelperExampleFactory.progressWindowExample();
+      // HelperExampleFactory.progressWindowExample();
       break;
     case "vtableExample":
-      HelperExampleFactory.vtableExample();
+      // HelperExampleFactory.vtableExample();
       break;
     default:
       break;
