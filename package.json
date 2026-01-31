@@ -1,28 +1,29 @@
 {
-  "name": "zotero-plugin-template",
+  "name": "zotero-ai-bar",
   "type": "module",
-  "version": "3.1.0",
-  "description": "Zotero Plugin Template",
+  "version": "0.1.2-beta.1",  "packageManager": "pnpm@10.28.0",  "description": "A handy ai bar for zotero",
   "config": {
-    "addonName": "Zotero Plugin Template",
-    "addonID": "addontemplate@euclpts.com",
-    "addonRef": "addontemplate",
-    "addonInstance": "AddonTemplate",
-    "prefsPrefix": "extensions.zotero.addontemplate"
+    "addonName": "Zotero AI Bar",
+    "addonID": "zaibar@fukeke.com",
+    "addonRef": "zaibar",
+    "addonInstance": "ZAIBar",
+    "prefsPrefix": "extensions.zotero.${addonRef}"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/windingwind/zotero-plugin-template.git"
+    "url": "git+https://github.com/swcxito/zotero-ai-bar.git"
   },
-  "author": "windingwind",
+  "author": "swcxito",
   "bugs": {
-    "url": "https://github.com/windingwind/zotero-plugin-template/issues"
+    "url": "https://github.com/swcxito/zotero-ai-bar/issues"
   },
-  "homepage": "https://github.com/windingwind/zotero-plugin-template#readme",
+  "homepage": "https://github.com/swcxito/zotero-ai-bar#readme",
   "license": "AGPL-3.0-or-later",
   "scripts": {
-    "start": "zotero-plugin serve",
-    "build": "zotero-plugin build && tsc --noEmit",
+    "start": "concurrently \"npm run dev:css\" \"zotero-plugin serve\"",
+    "build": "npm run build:css && zotero-plugin build && tsc --noEmit",
+    "build:css": "npx postcss src/styles/app.css -o addon/content/app.css --env=production",
+    "dev:css": "npx postcss src/styles/app.css -o addon/content/app.css --watch",
     "lint:check": "prettier --check . && eslint .",
     "lint:fix": "prettier --write . && eslint . --fix",
     "release": "zotero-plugin release",
@@ -30,20 +31,34 @@
     "update-deps": "npm update --save"
   },
   "dependencies": {
+    "highlight.js": "^11.11.1",
+    "katex": "^0.16.28",
+    "marked": "^17.0.1",
+    "marked-highlight": "^2.2.3",
+    "marked-katex-extension": "^5.1.6",
+    "marked-xhtml": "^1.0.14",
+    "pnpm": "^10.28.0",
     "zotero-plugin-toolkit": "^5.1.0-beta.13"
   },
   "devDependencies": {
+    "@tailwindcss/forms": "^0.5.11",
     "@types/chai": "^5.2.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^24.10.0",
     "@zotero-plugin/eslint-config": "^0.6.7",
+    "autoprefixer": "^10.4.23",
     "chai": "^6.2.1",
+    "concurrently": "^9.2.1",
     "eslint": "^9.39.2",
     "mocha": "^11.7.5",
+    "postcss": "^8.5.6",
+    "postcss-cli": "^11.0.1",
     "prettier": "^3.7.4",
+    "prettier-plugin-tailwindcss": "^0.7.2",
+    "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3",
     "zotero-plugin-scaffold": "^0.8.2",
-    "zotero-types": "^4.1.0-beta.4"
+    "zotero-types": "^4.0.5"
   },
   "prettier": {
     "printWidth": 80,

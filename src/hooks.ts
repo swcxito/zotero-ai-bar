@@ -1,13 +1,13 @@
-import {
-  BasicExampleFactory,
-  HelperExampleFactory,
-  KeyExampleFactory,
-  PromptExampleFactory,
-  UIExampleFactory,
-} from "./modules/examples";
-import { getString, initLocale } from "./utils/locale";
+import { initLocale } from "./utils/locale";
 import { registerPrefsScripts } from "./modules/preferenceScript";
 import { createZToolkit } from "./utils/ztoolkit";
+import {
+  registerAIBarStyleSheet,
+  registerReaderInitializer,
+} from "./modules/readerBarPopup";
+import { onModelDialogLoad } from "./modules/modelDialog";
+import { getPref, registerPrefs } from "./utils/prefs";
+import { registerReaderItemPaneSection } from "./modules/readerItemPane";
 
 async function onStartup() {
   await Promise.all([
@@ -18,21 +18,9 @@ async function onStartup() {
 
   initLocale();
 
-  BasicExampleFactory.registerPrefs();
+  registerReaderInitializer();
 
-  BasicExampleFactory.registerNotifier();
-
-  KeyExampleFactory.registerShortcuts();
-
-  await UIExampleFactory.registerExtraColumn();
-
-  await UIExampleFactory.registerExtraColumnWithCustomCell();
-
-  UIExampleFactory.registerItemPaneCustomInfoRow();
-
-  UIExampleFactory.registerItemPaneSection();
-
-  UIExampleFactory.registerReaderItemPaneSection();
+  registerPrefs();
 
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
@@ -47,50 +35,16 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   // Create ztoolkit for every window
   addon.data.ztoolkit = createZToolkit();
 
+  // UIExampleFactory.registerStyleSheet(win);
+  registerAIBarStyleSheet(win);
+  // await HelperExampleFactory.dialogExample();
+
   win.MozXULElement.insertFTLIfNeeded(
     `${addon.data.config.addonRef}-mainWindow.ftl`,
   );
 
-  const popupWin = new ztoolkit.ProgressWindow(addon.data.config.addonName, {
-    closeOnClick: true,
-    closeTime: -1,
-  })
-    .createLine({
-      text: getString("startup-begin"),
-      type: "default",
-      progress: 0,
-    })
-    .show();
-
-  await Zotero.Promise.delay(1000);
-  popupWin.changeLine({
-    progress: 30,
-    text: `[30%] ${getString("startup-begin")}`,
-  });
-
-  UIExampleFactory.registerStyleSheet(win);
-
-  UIExampleFactory.registerRightClickMenuItem();
-
-  UIExampleFactory.registerRightClickMenuPopup(win);
-
-  UIExampleFactory.registerWindowMenuWithSeparator();
-
-  PromptExampleFactory.registerNormalCommandExample();
-
-  PromptExampleFactory.registerAnonymousCommandExample(win);
-
-  PromptExampleFactory.registerConditionalCommandExample();
-
-  await Zotero.Promise.delay(1000);
-
-  popupWin.changeLine({
-    progress: 100,
-    text: `[100%] ${getString("startup-finish")}`,
-  });
-  popupWin.startCloseTimer(5000);
-
-  addon.hooks.onDialogEvents("dialogExample");
+  addon.data.userProviderConfigs = JSON.parse(getPref("llm.providerConfigs"));
+  await registerReaderItemPaneSection();
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {
@@ -124,7 +78,7 @@ async function onNotify(
     type == "tab" &&
     extraData[ids[0]].type == "reader"
   ) {
-    BasicExampleFactory.exampleNotifierCallback();
+    // BasicExampleFactory.exampleNotifierCallback();
   } else {
     return;
   }
@@ -141,6 +95,10 @@ async function onPrefsEvent(type: string, data: { [key: string]: any }) {
     case "load":
       registerPrefsScripts(data.window);
       break;
+    case "modelDialogLoad":
+      onModelDialogLoad(data.window);
+      ztoolkit.log("model dialog load hook called");
+      break;
     default:
       return;
   }
@@ -149,10 +107,10 @@ async function onPrefsEvent(type: string, data: { [key: string]: any }) {
 function onShortcuts(type: string) {
   switch (type) {
     case "larger":
-      KeyExampleFactory.exampleShortcutLargerCallback();
+      // KeyExampleFactory.exampleShortcutLargerCallback();
       break;
     case "smaller":
-      KeyExampleFactory.exampleShortcutSmallerCallback();
+      // KeyExampleFactory.exampleShortcutSmallerCallback();
       break;
     default:
       break;
@@ -162,19 +120,19 @@ function onShortcuts(type: string) {
 function onDialogEvents(type: string) {
   switch (type) {
     case "dialogExample":
-      HelperExampleFactory.dialogExample();
+      // HelperExampleFactory.dialogExample();
       break;
     case "clipboardExample":
-      HelperExampleFactory.clipboardExample();
+      // HelperExampleFactory.clipboardExample();
       break;
     case "filePickerExample":
-      HelperExampleFactory.filePickerExample();
+      // HelperExampleFactory.filePickerExample();
       break;
     case "progressWindowExample":
-      HelperExampleFactory.progressWindowExample();
+      // HelperExampleFactory.progressWindowExample();
       break;
     case "vtableExample":
-      HelperExampleFactory.vtableExample();
+      // HelperExampleFactory.vtableExample();
       break;
     default:
       break;
@@ -185,6 +143,31 @@ function onDialogEvents(type: string) {
 // Keep in mind hooks only do dispatch. Don't add code that does real jobs in hooks.
 // Otherwise the code would be hard to read and maintain.
 
+// Callbacks for LLM streaming events
+function onLLMStreamStart(data: { requestId: string }) {
+  ztoolkit.log("LLM stream started:", data.requestId);
+  // Notify UI that stream has started
+  if (addon.data.llmCallbacks?.onStart) {
+    addon.data.llmCallbacks.onStart(data.requestId);
+  }
+}
+
+function onLLMStreamUpdate(data: { requestId: string; fullText: string }) {
+  ztoolkit.log("LLM stream update:", data.requestId, data.fullText.length);
+  // Notify UI with updated text
+  if (addon.data.llmCallbacks?.onUpdate) {
+    addon.data.llmCallbacks.onUpdate(data.requestId, data.fullText);
+  }
+}
+
+function onLLMStreamError(data: { requestId: string; error: string }) {
+  ztoolkit.log("LLM stream error:", data.requestId, data.error);
+  // Notify UI of error
+  if (addon.data.llmCallbacks?.onError) {
+    addon.data.llmCallbacks.onError(data.requestId, data.error);
+  }
+}
+
 export default {
   onStartup,
   onShutdown,
@@ -194,4 +177,7 @@ export default {
   onPrefsEvent,
   onShortcuts,
   onDialogEvents,
+  onLLMStreamStart,
+  onLLMStreamUpdate,
+  onLLMStreamError,
 };
