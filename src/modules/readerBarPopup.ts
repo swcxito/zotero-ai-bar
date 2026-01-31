@@ -1,6 +1,12 @@
 import { config } from "../../package.json";
 import { getSelectionContext } from "./selectionContext";
-import { mockRequest } from "./task";
+import { streamLLM } from "../utils/llmRequest";
+import { SYSTEM_PROMPT_PREFIX } from "../constants";
+
+// Generate unique request ID
+function generateRequestId(): string {
+  return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
 
 // must call once in mainwindow otherwise css file won't be loaded in reader popup
 export function registerAIBarStyleSheet(win: _ZoteroTypes.MainWindow) {
@@ -103,28 +109,74 @@ function renderAIBar(doc: Document): DocumentFragment {
       ztoolkit.log("Ask:", text, "Context:", addon.data.selectedText);
       disableAll(container);
 
-      try {
-        const res = await mockRequest(
-          text + "\nContext: " + addon.data.selectedText,
-        );
-        ztoolkit.log(res);
-      } catch (e) {
-        ztoolkit.log("Ask error:", e);
-      }
+      const requestId = generateRequestId();
+      const messages = [
+        {
+          role: "system",
+          content: SYSTEM_PROMPT_PREFIX + `${addon.data.userPrompt?.[0]}<selected>${addon.data.selectedText}</selected>${addon.data.userPrompt?.[2]}`,
+        },
+        {
+          role: "user",
+          content: text,
+        },
+      ];
+
+      // Trigger hooks for stream events
+      await streamLLM(messages, {
+        onStart: () => {
+          addon.hooks.onLLMStreamStart({ requestId });
+        },
+        onUpdate: async (fullText) => {
+          addon.hooks.onLLMStreamUpdate({ requestId, fullText });
+        },
+        onError: (error) => {
+          addon.hooks.onLLMStreamError({ requestId, error });
+        },
+      });
 
       container.style.display = "none";
     }
   };
 
-  const handleButtonAction = async (button: string) => {
+  const handleButtonAction = async (actionType: string) => {
     if (!addon.data.selectedText) return;
-    ztoolkit.log("Action:", addon.data.selectedText);
-    try {
-      const res = await mockRequest(addon.data.selectedText);
-      ztoolkit.log("Response:", res);
-    } catch (e) {
-      ztoolkit.log("Action error:", e);
+    ztoolkit.log("Action:", actionType, addon.data.selectedText);
+
+    const requestId = generateRequestId();
+    let prompt = "";
+
+    // Define prompts for different actions
+    switch (actionType) {
+      case "explain":
+        prompt = `Please explain the following text detailly and vividly in Chinese.`;
+        break;
+      case "translate":
+        prompt = `Please translate the following text to Chinese.`;
+        break;
+      default:
+        prompt = "Please analyze the following text.";
     }
+
+    const messages = [
+      {
+        role: "system",
+        content: SYSTEM_PROMPT_PREFIX + `${addon.data.userPrompt?.[0]}<selected>${addon.data.selectedText}</selected>${addon.data.userPrompt?.[2]}`,
+      },
+      { role: "user", content: prompt },
+    ];
+
+    // Trigger hooks for stream events
+    await streamLLM(messages, {
+      onStart: () => {
+        addon.hooks.onLLMStreamStart({ requestId });
+      },
+      onUpdate: async (fullText) => {
+        addon.hooks.onLLMStreamUpdate({ requestId, fullText });
+      },
+      onError: (error) => {
+        addon.hooks.onLLMStreamError({ requestId, error });
+      },
+    });
   };
 
   return ztoolkit.UI.createElement(doc, "fragment", {

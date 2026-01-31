@@ -112,7 +112,11 @@ export function CardHead(
                   "ease-in-out",
                   "key-input"
                 ],
-                properties: { type: "text", placeholder: "API Key", value: data.apiKey || ""},
+                properties: { 
+                  type: "text", 
+                  placeholder: "API Key", 
+                  value: data.apiKey || ""
+                },
               },
             ],
           },

@@ -23,6 +23,7 @@ export function ProviderCard(data: UserProvider, doc: Document): Node {
       "duration-300",
       "relative",
       "h-fit",
+      "break-inside-avoid",
       "provider-card",
     ],
     // children: [headerTag],
@@ -125,8 +126,10 @@ export function ProviderCard(data: UserProvider, doc: Document): Node {
     }
     modelRows?.forEach((row: Element) => {
       const modelData: UserProviderModel = (row as ModelRowElement).getData();
-      if( modelData.id && modelData.name !== "")
+      if( modelData.id && modelData.name !== ""){
+        modelData.providerId = providerSetting.id;
         models.push(modelData);
+      }
     });
     providerSetting.apiKey = (
       card.querySelector(".key-input") as HTMLInputElement

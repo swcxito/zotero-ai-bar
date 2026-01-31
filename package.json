@@ -32,6 +32,12 @@
     "update-deps": "npm update --save"
   },
   "dependencies": {
+    "highlight.js": "^11.11.1",
+    "katex": "^0.16.28",
+    "marked": "^17.0.1",
+    "marked-highlight": "^2.2.3",
+    "marked-katex-extension": "^5.1.6",
+    "marked-xhtml": "^1.0.14",
     "pnpm": "^10.28.0",
     "zotero-plugin-toolkit": "^5.1.0-beta.13"
   },

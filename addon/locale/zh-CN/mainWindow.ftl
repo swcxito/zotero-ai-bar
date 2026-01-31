@@ -9,3 +9,10 @@ item-section-example2-sidenav-tooltip =
 item-section-example2-button-tooltip =
     .tooltiptext = 移除此面板
 item-info-row-example-label = 示例行
+
+item-section-button-tooltip =
+    .tooltiptext = 清空对话
+item-section-head-text =
+    .label = AI-Bar 速答
+item-section-sidenav-tooltip =
+    .tooltiptext = 跳转 AI-Bar 助手
