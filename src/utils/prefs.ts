@@ -1,4 +1,5 @@
 import { config } from "../../package.json";
+import { getString } from "./locale";
 
 type PluginPrefsMap = _ZoteroTypes.Prefs["PluginPrefsMap"];
 
@@ -33,4 +34,16 @@ export function setPref<K extends keyof PluginPrefsMap>(
  */
 export function clearPref(key: string) {
   return Zotero.Prefs.clear(`${PREFS_PREFIX}.${key}`, true);
+}
+
+/**
+ * Register preference pane.
+ */
+export function registerPrefs() {
+  Zotero.PreferencePanes.register({
+    pluginID: addon.data.config.addonID,
+    src: rootURI + "content/preferences.xhtml",
+    label: getString("prefs-title"),
+    image: `chrome://${addon.data.config.addonRef}/content/icons/favicon.svg`,
+  });
 }
