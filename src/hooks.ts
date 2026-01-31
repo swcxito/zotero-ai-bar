@@ -2,13 +2,14 @@ import {
   BasicExampleFactory,
   HelperExampleFactory,
   KeyExampleFactory,
-  PromptExampleFactory,
-  UIExampleFactory,
-} from "./modules/examples";
-import { getString, initLocale } from "./utils/locale";
+} from "../test/examples";
+import { initLocale } from "./utils/locale";
 import { registerPrefsScripts } from "./modules/preferenceScript";
 import { createZToolkit } from "./utils/ztoolkit";
-import { registerReaderInitializer, registerAIBarStyleSheet } from "./modules/readerBarPopup";
+import {
+  registerAIBarStyleSheet,
+  registerReaderInitializer,
+} from "./modules/readerBarPopup";
 import { onModelDialogLoad } from "./modules/modelDialog";
 import { getPref } from "./utils/prefs";
 import { registerReaderItemPaneSection } from "./modules/readerItemPane";

@@ -5,3 +5,7 @@ node_modules
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+.github
+.idea
+.DS_Store
+.scaffold

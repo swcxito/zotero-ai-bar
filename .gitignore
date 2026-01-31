@@ -17,3 +17,6 @@ build
 logs
 
 dev_ref
+
+test/examples.ts
+addon/content/tailwind.js

@@ -12,8 +12,7 @@ import { ProviderCard } from "../components/providerCard";
 import { UserProviderConfig } from "../types";
 import { setPref } from "../utils/prefs";
 
-
-export async function openDialog(onDialogClosed: ()=> void = () => {}) {
+export async function openDialog(onDialogClosed: () => void = () => {}) {
   // 创建窗口参数
   const windowArgs: {
     onBodyLoaded: any;
@@ -51,9 +50,8 @@ export class ModelDialog {
   constructor(private readonly win: Window) {
     this.doc = win.document;
     this.root = this.doc.querySelector(`#root`);
-    this.providerPopup = this.doc.querySelector<HTMLElement>(
-      `#add-provider-popup`,
-    );
+    this.providerPopup =
+      this.doc.querySelector<HTMLElement>(`#add-provider-popup`);
     this.addProviderButton = this.doc.querySelector<HTMLElement>(
       `#add-provider-container button`,
     );
@@ -90,12 +88,14 @@ export class ModelDialog {
 
     if (addon) {
       addon.data.userProviderConfigs = configs;
-      ztoolkit.log("Updated addon provider settings:", addon.data.userProviderConfigs);
+      ztoolkit.log(
+        "Updated addon provider settings:",
+        addon.data.userProviderConfigs,
+      );
     }
     setPref("llm.providerConfigs", JSON.stringify(configs));
     ztoolkit.log("Saved provider settings:", configs);
   }
-
 
   // private renderTestCard() {
   //   // const testProvider: Provider = {
@@ -128,7 +128,7 @@ export class ModelDialog {
 
     if (container) {
       for (const config of addon.data.userProviderConfigs || []) {
-        const card = ProviderCard(config, this.doc)
+        const card = ProviderCard(config, this.doc);
         container.appendChild(card);
       }
     }
@@ -172,8 +172,10 @@ export class ModelDialog {
 
     this.providerPopup.replaceChildren();
     for (const providerKey in PROVIDERS) {
-      if (addon.data.userProviderConfigs?.some(p => p.id === providerKey)) {
-        ztoolkit.log(`Provider ${providerKey} already exists in settings, skipping button creation.`);
+      if (addon.data.userProviderConfigs?.some((p) => p.id === providerKey)) {
+        ztoolkit.log(
+          `Provider ${providerKey} already exists in settings, skipping button creation.`,
+        );
         continue;
       }
       const provider = PROVIDERS[providerKey as keyof typeof PROVIDERS];
@@ -207,30 +209,31 @@ export class ModelDialog {
           },
         ),
       );
-      this.providerPopup.appendChild(b)
-    ztoolkit.log("Added provider button:", b);
-  }
-  ztoolkit.UI.appendElement(
-    LogoButton(
-      "Custom Provider",
-      `chrome://${config.addonRef}/content/icons/favicon.svg`,
-      () => {
-        this.hidePopup();
-        const container = this.root?.querySelector("#provider-block");
-        if (container) {
-          const card = ProviderCard(
-            {
-              id: crypto.randomUUID(),
-              name: "Custom Provider",
-              isCustom: true,
-            },
-            this.doc,
-          );
-          container?.appendChild(card);
-        }
-      }
-    ),
-    this.providerPopup,)
+      this.providerPopup.appendChild(b);
+      ztoolkit.log("Added provider button:", b);
+    }
+    ztoolkit.UI.appendElement(
+      LogoButton(
+        "Custom Provider",
+        `chrome://${config.addonRef}/content/icons/favicon.svg`,
+        () => {
+          this.hidePopup();
+          const container = this.root?.querySelector("#provider-block");
+          if (container) {
+            const card = ProviderCard(
+              {
+                id: crypto.randomUUID(),
+                name: "Custom Provider",
+                isCustom: true,
+              },
+              this.doc,
+            );
+            container?.appendChild(card);
+          }
+        },
+      ),
+      this.providerPopup,
+    );
   }
 }
 

@@ -33,8 +33,7 @@ function setupLLMCallbacks() {
 
       const pop = chatPopMap.get(requestId);
       if (pop) {
-        const html = await renderMarkdown(fullText);
-        pop.innerHTML = html;
+        pop.innerHTML = await renderMarkdown(fullText);
         pop.scrollIntoView({ behavior: "smooth", block: "end" });
       }
     },
@@ -64,8 +63,10 @@ export function injectCSS(doc: Document | ShadowRoot, filename: string) {
   if (doc.querySelector(`link[href="${url}"]`)) return;
 
   // 判断是否是 ShadowRoot（通过检查 host 属性而不是 instanceof）
-  const isShadowRoot = 'host' in doc && !('head' in doc);
-  const ownerDoc = isShadowRoot ? (doc as any).ownerDocument : doc as Document;
+  const isShadowRoot = "host" in doc && !("head" in doc);
+  const ownerDoc = isShadowRoot
+    ? (doc as any).ownerDocument
+    : (doc as Document);
 
   const link = ownerDoc.createElement("link");
   link.rel = "stylesheet";
@@ -96,8 +97,7 @@ export async function registerReaderItemPaneSection() {
       icon: `chrome://${config.addonRef}/content/icons/favicon.svg`,
     },
     // Optional
-    bodyXHTML:
-      `<div id="ai-bar-chat-root" style="width: 100%;display: flex;
+    bodyXHTML: `<div id="ai-bar-chat-root" style="width: 100%;display: flex;
 flex-direction: column; overflow-y: auto;max-height: 600px;"></div>`,
     // Optional, Called when the section is first created, must be synchronous
     onInit: ({ item }) => {
@@ -115,7 +115,13 @@ flex-direction: column; overflow-y: auto;max-height: 600px;"></div>`,
       return true;
     },
     // Called when the section is asked to render, must be synchronous.
-    onRender: ({ doc, body, item, setSectionSummary, setSectionButtonStatus }) => {
+    onRender: ({
+      doc,
+      body,
+      item,
+      setSectionSummary,
+      setSectionButtonStatus,
+    }) => {
       setSectionSummary("TODO!");
       setSectionButtonStatus("clear", { hidden: true });
     },
@@ -194,8 +200,8 @@ flex-direction: column; overflow-y: auto;max-height: 600px;"></div>`,
                   shadowRoot.append(pop);
                 }
                 pop?.scrollIntoView({ behavior: "smooth", block: "end" });
-              }
-            }
+              },
+            },
           );
         },
       },

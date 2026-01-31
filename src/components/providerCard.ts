@@ -1,12 +1,7 @@
-import {
-  UserProviderModel,
-  UserProviderConfig,
-  UserProvider,
-} from "../types";
+import { UserProvider, UserProviderConfig, UserProviderModel } from "../types";
 import { CardHead } from "./cardHead";
 import { CardModelRow } from "./modelRow";
 import { InlineButton } from "./inlineButton";
-
 
 export function ProviderCard(data: UserProvider, doc: Document): Node {
   const card = ztoolkit.UI.createElement(doc, "div", {
@@ -126,7 +121,7 @@ export function ProviderCard(data: UserProvider, doc: Document): Node {
     }
     modelRows?.forEach((row: Element) => {
       const modelData: UserProviderModel = (row as ModelRowElement).getData();
-      if( modelData.id && modelData.name !== ""){
+      if (modelData.id && modelData.name !== "") {
         modelData.providerId = providerSetting.id;
         models.push(modelData);
       }
