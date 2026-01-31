@@ -10,6 +10,8 @@ import { registerPrefsScripts } from "./modules/preferenceScript";
 import { createZToolkit } from "./utils/ztoolkit";
 import { registerReaderInitializer, registerAIBarStyleSheet } from "./modules/readerBarPopup";
 import { onModelDialogLoad } from "./modules/modelDialog";
+import { getPref } from "./utils/prefs";
+import { registerReaderItemPaneSection } from "./modules/readerItemPane";
 
 async function onStartup() {
   await Promise.all([
@@ -44,6 +46,9 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   win.MozXULElement.insertFTLIfNeeded(
     `${addon.data.config.addonRef}-mainWindow.ftl`,
   );
+
+  addon.data.userProviderConfigs = JSON.parse(getPref("llm.providerConfigs"));
+  await registerReaderItemPaneSection();
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {
@@ -142,6 +147,31 @@ function onDialogEvents(type: string) {
 // Keep in mind hooks only do dispatch. Don't add code that does real jobs in hooks.
 // Otherwise the code would be hard to read and maintain.
 
+// Callbacks for LLM streaming events
+function onLLMStreamStart(data: { requestId: string }) {
+  ztoolkit.log("LLM stream started:", data.requestId);
+  // Notify UI that stream has started
+  if (addon.data.llmCallbacks?.onStart) {
+    addon.data.llmCallbacks.onStart(data.requestId);
+  }
+}
+
+function onLLMStreamUpdate(data: { requestId: string; fullText: string }) {
+  ztoolkit.log("LLM stream update:", data.requestId, data.fullText.length);
+  // Notify UI with updated text
+  if (addon.data.llmCallbacks?.onUpdate) {
+    addon.data.llmCallbacks.onUpdate(data.requestId, data.fullText);
+  }
+}
+
+function onLLMStreamError(data: { requestId: string; error: string }) {
+  ztoolkit.log("LLM stream error:", data.requestId, data.error);
+  // Notify UI of error
+  if (addon.data.llmCallbacks?.onError) {
+    addon.data.llmCallbacks.onError(data.requestId, data.error);
+  }
+}
+
 export default {
   onStartup,
   onShutdown,
@@ -151,4 +181,7 @@ export default {
   onPrefsEvent,
   onShortcuts,
   onDialogEvents,
+  onLLMStreamStart,
+  onLLMStreamUpdate,
+  onLLMStreamError,
 };

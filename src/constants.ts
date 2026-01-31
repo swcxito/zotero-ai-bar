@@ -4,6 +4,8 @@ export function getLogoUrl(providerKey: string): string {
   return `chrome://${config.addonRef}/content/icons/${providerKey.toLowerCase()}.svg`;
 }
 
+export const SYSTEM_PROMPT_PREFIX = "You are a helpful assistant integrated into Zotero, a research tool for managing references and documents. Your task is to assist users with their research-related queries based on the content of the documents parts they provide. The content that users are intersted in will be delimited by <selected> and </selected> tags. When generating responses, please consider the context of these selected sections. Inline formula must be delimited by $...$, Block formula must be delimited by $$...$$ block. The following is the content provided by the user:\n\n";
+
 export const PROVIDERS = {
   OPENAI: {
     name: "OpenAI",

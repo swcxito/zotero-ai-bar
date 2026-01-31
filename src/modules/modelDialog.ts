@@ -82,7 +82,7 @@ export class ModelDialog {
     const cards = container.querySelectorAll(".provider-card");
     const configs: UserProviderConfig[] = [];
 
-    cards.forEach((card: HTMLElement) => {
+    cards.forEach((card: Element) => {
       if ((card as any).getData) {
         configs.push((card as any).getData());
       }
@@ -92,7 +92,7 @@ export class ModelDialog {
       addon.data.userProviderConfigs = configs;
       ztoolkit.log("Updated addon provider settings:", addon.data.userProviderConfigs);
     }
-    setPref("llm.providerSettings", JSON.stringify(configs));
+    setPref("llm.providerConfigs", JSON.stringify(configs));
     ztoolkit.log("Saved provider settings:", configs);
   }
 

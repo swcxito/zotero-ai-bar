@@ -12,10 +12,10 @@ declare namespace _ZoteroTypes {
       "llm.modelName": string;
       "llm.temperature100": number;
       "llm.maxTokens": number;
-      "llm.modelId": string;
       "extend-selection-context": boolean;
       "extend-selection-size": number;
-      "llm.providerSettings": string;
+      "llm.providerConfigs": string;
+      "llm.modelId": string;
     };
   }
 }

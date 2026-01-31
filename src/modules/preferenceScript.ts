@@ -28,8 +28,9 @@ function updateModelSelector(modelSelector: HTMLSelectElement,doc:Document) {
   const providers = addon.data.userProviderConfigs;
   for (const provider of providers ?? []) {
     for (const model of provider.models ?? []) {
+      if (!model.id) continue;
       const option = doc.createElement("option");
-      option.value = provider.id;
+      option.value = model.id;
       option.textContent = `${model.name} (${provider.name})`;
       modelSelector.appendChild(option);
     }

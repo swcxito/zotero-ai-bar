@@ -11,5 +11,5 @@ export default {
       center: true,
     },
   },
-  plugins: [require("@tailwindcss/forms")],
+  plugins: [],
 };

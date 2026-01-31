@@ -1,10 +1,9 @@
 <!doctype html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" class="dark">
-<!-- <link href="chrome://__addonRef__/content/app.css" rel="stylesheet" /> -->
-
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link href="chrome://__addonRef__/content/app.css" rel="stylesheet" />
   <!--  <link href="./app.css" rel="stylesheet"/>-->
   <script>
     // document.addEventListener("DOMContentLoaded", (ev) => {
@@ -13,13 +12,12 @@
     //     this,
     //   );
     // });
-    const body = document.querySelector("body");
-    body.addEventListener("load",()=>{
+          window.addEventListener("load", () => {
       window.arguments[0].onBodyLoaded(window)
     })
   </script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="chrome://__addonRef__/content/tail.js"></script>
+<!--   <script src="https://cdn.tailwindcss.com"></script>-->
+<!-- <script src="chrome://__addonRef__/content/tail.js"></script> -->
   <title>123</title>
 </head>
 

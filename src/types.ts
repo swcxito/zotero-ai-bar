@@ -10,6 +10,7 @@ export interface UserProviderModel {
     id?: string;       // 模型唯一 ID (UUID)
     name: string;     // 模型名称
     enable?: boolean;  // 是否启用
+    providerId?: string; // 所属 Provider ID
 }
 
 export interface UserProvider {
