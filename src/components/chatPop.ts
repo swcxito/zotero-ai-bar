@@ -7,14 +7,14 @@ export function ChatPop(doc: Document, isAgent: boolean = true): Element {
       // position: "absolute",
       // bottom: "20px",
       borderRadius: isAgent ? "0 8px 8px 8px" : "8px 0 8px 8px",
-      width: "100%",
+      boxSizing: "border-box",
       padding: "12px",
-      margin: isAgent ? "0 12px 12px 0" : "0 0 12px 12px",
+      margin: isAgent ? "6px 12px 12px 4px" : "6px 4px 12px 12px",
       // borderWidth: "1px",
       // borderColor: "rgba(0, 255, 0, 0.1)",
       boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
       textAlign: "justify",
-      backgroundColor: "rgb(255,214,216)",
+      backgroundColor: "rgb(255,243,243)",
     },
   });
 }
