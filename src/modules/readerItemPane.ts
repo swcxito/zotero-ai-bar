@@ -97,8 +97,8 @@ export async function registerReaderItemPaneSection() {
       icon: `chrome://${config.addonRef}/content/icons/favicon.svg`,
     },
     // Optional
-    bodyXHTML: `<div id="ai-bar-chat-root" style="width: 100%;display: flex;
-flex-direction: column; overflow-y: auto;max-height: 600px;"></div>`,
+    bodyXHTML: `<div><div id="ai-bar-chat-root" flex="1" style="width: 100%;
+flex-direction: column; overflow-y: auto;max-height: 600px;overflow-x: hidden"></div></div>`,
     // Optional, Called when the section is first created, must be synchronous
     onInit: ({ item }) => {
       // ztoolkit.log("Section init!", item?.id);
@@ -142,6 +142,8 @@ flex-direction: column; overflow-y: auto;max-height: 600px;"></div>`,
       injectCSS(shadowRoot, "katex.min.css");
       injectCSS(shadowRoot, "katex-swap.min.css");
       injectCSS(shadowRoot, "atom-one-light.min.css");
+      // Preload chat pop style
+      shadowRoot.append(ChatPop(doc, true));
 
       // setSectionButtonStatus("test", { hidden: false });
     },
