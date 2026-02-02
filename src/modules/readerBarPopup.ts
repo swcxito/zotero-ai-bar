@@ -121,7 +121,7 @@ function renderAIBar(doc: Document): DocumentFragment {
           role: "system",
           content:
             SYSTEM_PROMPT_PREFIX +
-            `${addon.data.userPrompt?.[0]}<selected>${addon.data.selectedText}</selected>${addon.data.userPrompt?.[2]}`,
+            `${addon.data.userPrompt?.[0]}\n<selected>\n${addon.data.selectedText}\n</selected>\n${addon.data.userPrompt?.[2]}`,
         },
         {
           role: "user",
@@ -153,16 +153,59 @@ function renderAIBar(doc: Document): DocumentFragment {
     const requestId = generateRequestId();
     let prompt = "";
 
+    const targetLanguage = "Chinese";
     // Define prompts for different actions
     switch (actionType) {
       case "explain":
-        prompt = `Please explain the following text detailly and vividly in Chinese.`;
+        prompt = `Please explain the text detailed in Chinese.`;
         break;
       case "translate":
-        prompt = `Please translate the following text to Chinese.`;
+        prompt = `Translate the provided text into ${targetLanguage}.
+If I select a single word, provide its IPA pronunciation, part of speech, a concise meanings in the context, and more meanings.
+If I select an abbreviation or acronym, provide its full form and a brief explanation.
+If I select a sentence or paragraph, provide a clear and accurate translation only.
+Keep the response concise and clearly structured.
+The following are some English to Chinese examples:
+## Example-1:
+Work adopted a 
+<selected>
+single
+</selected>
+green micro-LED.
+## Response-1:
+**single**
+英 / ˈsɪŋɡ(ə)l /
+美 / ˈsɪŋɡ(ə)l /
+**adj. 单一的，单个的；**
+-----
+adj. 独自的，孤独的；单身的，未婚的；
+n. 单数；单曲唱片；
+
+## Example-2:
+He is still
+<selected>
+single
+</selected>
+.
+## Response-2:
+**single**
+英 / ˈsɪŋɡ(ə)l /
+美 / ˈsɪŋɡ(ə)l /
+**adj. 单身的，未婚的；**
+-----
+adj. 独自的，孤独的；单一的，单个的；
+n. 单数；单曲唱片；
+
+## Example-3:
+<selected>NASA</selected>
+## Response-3:
+**NASA**
+abbr. 美国国家航空和宇宙航行局（National Aeronautics and Space Administration）
+美国国家航空航天局是美国联邦政府负责民用太空探索、航空研究和空间科学研究的机构。
+`;
         break;
       default:
-        prompt = "Please analyze the following text.";
+        prompt = "Please analyze the text.";
     }
 
     const messages = [
@@ -170,7 +213,7 @@ function renderAIBar(doc: Document): DocumentFragment {
         role: "system",
         content:
           SYSTEM_PROMPT_PREFIX +
-          `${addon.data.userPrompt?.[0]}<selected>${addon.data.selectedText}</selected>${addon.data.userPrompt?.[2]}`,
+          `${addon.data.userPrompt?.[0]}\n<selected>\n${addon.data.selectedText}\n</selected>\n${addon.data.userPrompt?.[2]}`,
       },
       { role: "user", content: prompt },
     ];
