@@ -8,3 +8,5 @@ pref("extend-selection-size", 70);
 
 pref("llm.providerConfigs", "");
 pref("llm.modelId", "");
+
+pref("chat.formulaOptimization", true);

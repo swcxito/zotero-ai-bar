@@ -16,6 +16,7 @@ declare namespace _ZoteroTypes {
       "extend-selection-size": number;
       "llm.providerConfigs": string;
       "llm.modelId": string;
+      "chat.formulaOptimization": boolean;
     };
   }
 }
