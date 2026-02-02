@@ -1,7 +1,9 @@
 {
   "name": "zotero-ai-bar",
   "type": "module",
-  "version": "0.1.2-beta.1",  "packageManager": "pnpm@10.28.0",  "description": "A handy ai bar for zotero",
+  "version": "0.1.2-beta.1",
+  "packageManager": "pnpm@10.28.0",
+  "description": "A handy ai bar for zotero",
   "config": {
     "addonName": "Zotero AI Bar",
     "addonID": "zaibar@fukeke.com",

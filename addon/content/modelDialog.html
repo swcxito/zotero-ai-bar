@@ -4,63 +4,63 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link href="chrome://__addonRef__/content/app.css" rel="stylesheet" />
-  <!--  <link href="./app.css" rel="stylesheet"/>-->
-  <script>
-    // document.addEventListener("DOMContentLoaded", (ev) => {
-    //   Services.scriptloader.loadSubScript(
-    //     "resource://zotero/require.js",
-    //     this,
-    //   );
-    // });
-          window.addEventListener("load", () => {
-      window.arguments[0].onBodyLoaded(window)
-    })
-  </script>
-<!--   <script src="https://cdn.tailwindcss.com"></script>-->
-<!-- <script src="chrome://__addonRef__/content/tailwind.js"></script> -->
-  <title>123</title>
-</head>
+    <!--  <link href="./app.css" rel="stylesheet"/>-->
+    <script>
+      // document.addEventListener("DOMContentLoaded", (ev) => {
+      //   Services.scriptloader.loadSubScript(
+      //     "resource://zotero/require.js",
+      //     this,
+      //   );
+      // });
+      window.addEventListener("load", () => {
+        window.arguments[0].onBodyLoaded(window);
+      });
+    </script>
+    <!--   <script src="https://cdn.tailwindcss.com"></script>-->
+    <!-- <script src="chrome://__addonRef__/content/tailwind.js"></script> -->
+    <title>123</title>
+  </head>
 
-<body
-  class="duration-300 transition-colors"
->
-<div id="root" class=" bg-zinc-100 dark:bg-zinc-800">
-  <div class="mx-auto min-h-screen max-w-7xl px-8 py-8">
-    <header
-      id="provider-head"
-      class="mb-10 flex items-center justify-between"
-    >
-      <h2 class="text-xl font-semibold">Model Providers</h2>
-      <div class="relative" id="add-provider-container">
-        <button
-          class="relative z-10 flex items-center gap-2 rounded-full bg-rose-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:bg-rose-400 active:scale-95"
+  <body class="duration-300 transition-colors">
+    <div id="root" class="bg-zinc-100 dark:bg-zinc-800">
+      <div class="mx-auto min-h-screen max-w-7xl px-8 py-8">
+        <header
+          id="provider-head"
+          class="mb-10 flex items-center justify-between"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          <span>Add Provider</span>
-        </button>
+          <h2 class="text-xl font-semibold">Model Providers</h2>
+          <div class="relative" id="add-provider-container">
+            <button
+              class="relative z-10 flex items-center gap-2 rounded-full bg-rose-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:bg-rose-400 active:scale-95"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>Add Provider</span>
+            </button>
+            <div
+              id="add-provider-popup"
+              class="opacity-0 invisible pointer-events-none absolute right-0 z-20 mt-2 w-40 h-fit transition-all rounded-2xl overflow-clip border border-gray-100 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-800"
+            >
+              <!-- Dropdown content will be populated dynamically -->
+            </div>
+          </div>
+        </header>
         <div
-          id="add-provider-popup"
-          class="opacity-0 invisible pointer-events-none absolute right-0 z-20 mt-2 w-40 h-fit transition-all rounded-2xl overflow-clip border border-gray-100 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-800"
-        >
-          <!-- Dropdown content will be populated dynamically -->
-        </div>
+          id="provider-block"
+          class="relative min-h-[200px] grid grid-cols-1 md:grid-cols-2 gap-4"
+        ></div>
       </div>
-    </header>
-    <div id="provider-block" class="relative min-h-[200px] grid grid-cols-1 md:grid-cols-2 gap-4">
     </div>
-  </div>
-</div>
-</body>
+  </body>
 </html>

@@ -9,3 +9,5 @@ pnpm-lock.yaml
 .idea
 .DS_Store
 .scaffold
+**/*.min.css
+addon/content/app.css
