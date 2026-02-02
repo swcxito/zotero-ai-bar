@@ -131,7 +131,7 @@ export async function streamLLM(
         try {
           const json = JSON.parse(dataStr);
           const content = json.choices?.[0]?.delta?.content;
-          if (content) {
+          if (content !== undefined) {
             if (!started) {
               started = true;
               callbacks.onStart?.();
@@ -148,8 +148,8 @@ export async function streamLLM(
       }
     }
 
-    // Final update
-    if (fullText) {
+    // Final update - ensure all content including trailing newlines are flushed
+    if (fullText || started) {
       await callbacks.onUpdate?.(fullText);
     }
   } catch (error: any) {
