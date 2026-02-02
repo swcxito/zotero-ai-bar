@@ -47,7 +47,9 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
     `${addon.data.config.addonRef}-mainWindow.ftl`,
   );
 
-  addon.data.userProviderConfigs = JSON.parse(getPref("llm.providerConfigs"));
+  const llmConfig = getPref("llm.providerConfigs");
+  if (llmConfig)
+    addon.data.userProviderConfigs = JSON.parse(getPref("llm.providerConfigs"));
   await registerReaderItemPaneSection();
 }
 
