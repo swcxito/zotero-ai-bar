@@ -1,59 +1,8 @@
 import { getLocaleID } from "../utils/locale";
 import { config } from "../../package.json";
-import { ChatPop } from "../components/chatPop";
+import { ChatBox } from "../components/chatBox";
 import { renderMarkdown } from "../utils/markdown";
 import { streamLLM } from "../utils/llmRequest";
-
-const sectionMap = new Map<number | string, HTMLElement>();
-const chatPopMap = new Map<string, Element>(); // Map requestId to chat popup element
-
-// Setup LLM callbacks to receive stream events and update UI
-function setupLLMCallbacks() {
-  addon.data.llmCallbacks = {
-    onStart: (requestId: string) => {
-      ztoolkit.log("UI: LLM stream started", requestId);
-
-      // Find the first available shadowRoot to add chat popup
-      for (const body of sectionMap.values()) {
-        const root = body.querySelector("#ai-bar-chat-root");
-        if (root?.shadowRoot) {
-          const doc = body.ownerDocument;
-          const pop = ChatPop(doc, true);
-          pop.setAttribute("data-request-id", requestId);
-          pop.innerHTML = "Thinking...";
-          root.shadowRoot.appendChild(pop);
-          chatPopMap.set(requestId, pop);
-          break;
-        }
-      }
-    },
-
-    onUpdate: async (requestId: string, fullText: string) => {
-      ztoolkit.log("UI: LLM stream update", requestId, fullText.length);
-
-      const pop = chatPopMap.get(requestId);
-      if (pop) {
-        pop.innerHTML = await renderMarkdown(fullText);
-        pop.scrollIntoView({ behavior: "smooth", block: "end" });
-      }
-    },
-
-    onError: (requestId: string, error: string) => {
-      ztoolkit.log("UI: LLM stream error", requestId, error);
-
-      const pop = chatPopMap.get(requestId);
-      if (pop) {
-        const doc = pop.ownerDocument!;
-        const errorDiv = doc.createElement("div");
-        errorDiv.style.color = "red";
-        errorDiv.style.marginTop = "8px";
-        errorDiv.textContent = `Error: ${error}`;
-        pop.appendChild(errorDiv);
-        pop.scrollIntoView({ behavior: "smooth", block: "end" });
-      }
-    },
-  };
-}
 
 export function injectCSS(doc: Document | ShadowRoot, filename: string) {
   // 获取插件内资源的 URL
@@ -83,7 +32,9 @@ export function injectCSS(doc: Document | ShadowRoot, filename: string) {
 
 export async function registerReaderItemPaneSection() {
   // Setup LLM callbacks to update UI
-  setupLLMCallbacks();
+  if (!addon.data.sectionMap) {
+    addon.data.sectionMap = new Map();
+  }
 
   Zotero.ItemPaneManager.registerSection({
     paneID: "ai-bar-reader",
@@ -97,8 +48,8 @@ export async function registerReaderItemPaneSection() {
       icon: `chrome://${config.addonRef}/content/icons/favicon.svg`,
     },
     // Optional
-    bodyXHTML: `<div><div id="ai-bar-chat-root" flex="1" style="width: 100%;
-flex-direction: column; overflow-y: auto;max-height: 600px;overflow-x: hidden"></div></div>`,
+    bodyXHTML: `<div id="ai-bar-chat-root" style="width: 100%;display: flex;
+flex-direction: column; overflow-y: auto;max-height: 600px;overflow-x: hidden;gap: 8px;padding: 8px 0"></div>`,
     // Optional, Called when the section is first created, must be synchronous
     onInit: ({ item }) => {
       // ztoolkit.log("Section init!", item?.id);
@@ -111,6 +62,7 @@ flex-direction: column; overflow-y: auto;max-height: 600px;overflow-x: hidden"><
     // Optional, Called when the section data changes (setting item/mode/tabType/inTrash), must be synchronous. return false to cancel the change
     onItemChange: ({ item, setEnabled, tabType }) => {
       ztoolkit.log(`Section item data changed to ${item?.id}`);
+      addon.data.currentSection = item?.id;
       setEnabled(tabType === "reader");
       return true;
     },
@@ -134,16 +86,18 @@ flex-direction: column; overflow-y: auto;max-height: 600px;overflow-x: hidden"><
       setSectionSummary,
       setSectionButtonStatus,
     }) => {
-      if (item) sectionMap.set(item.id, body);
+      if (item && addon.data.sectionMap)
+        addon.data.sectionMap.set(item.id, body);
       const root = body.querySelector("#ai-bar-chat-root") as HTMLElement;
       const shadowRoot = root.attachShadow({ mode: "open" });
 
       // 将 CSS 注入到 Shadow DOM 中
+      injectCSS(shadowRoot, `../app.css`);
       injectCSS(shadowRoot, "katex.min.css");
       injectCSS(shadowRoot, "katex-swap.min.css");
       injectCSS(shadowRoot, "atom-one-light.min.css");
       // Preload chat pop style
-      shadowRoot.append(ChatPop(doc, true));
+      shadowRoot.append(ChatBox(doc, true));
 
       // setSectionButtonStatus("test", { hidden: false });
     },
@@ -164,47 +118,13 @@ flex-direction: column; overflow-y: auto;max-height: 600px;overflow-x: hidden"><
         icon: `chrome://${config.addonRef}/content/icons/openai.svg`,
         // l10nID: getLocaleID("item-section-example2-button-tooltip"),
         onClick: async ({ item, paneID }) => {
-          const body = sectionMap.get(item.id);
+          const body = addon.data.sectionMap?.get(item.id);
           if (!body) return;
 
           const root = body.querySelector("#ai-bar-chat-root");
           if (!root || !root.shadowRoot) return;
           const shadowRoot = root.shadowRoot;
           const doc = body.ownerDocument;
-
-          let pop: Element | null = null;
-
-          await streamLLM(
-            [{ role: "user", content: "Test message from Zotero AI Bar!" }],
-            {
-              onStart: () => {
-                pop = ChatPop(doc);
-                shadowRoot.append(pop);
-              },
-              onUpdate: async (text) => {
-                if (pop) {
-                  const html = await renderMarkdown(text);
-                  pop.innerHTML = html;
-                  pop.scrollIntoView({ behavior: "smooth", block: "end" });
-                }
-              },
-              onError: (err) => {
-                const errorDiv = doc.createElement("div");
-                errorDiv.style.color = "red";
-                errorDiv.style.marginTop = "8px";
-                errorDiv.textContent = err;
-                if (pop) {
-                  pop.appendChild(errorDiv);
-                } else {
-                  pop = ChatPop(doc);
-                  pop.innerHTML = "";
-                  pop.appendChild(errorDiv);
-                  shadowRoot.append(pop);
-                }
-                pop?.scrollIntoView({ behavior: "smooth", block: "end" });
-              },
-            },
-          );
         },
       },
     ],
