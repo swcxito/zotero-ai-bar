@@ -21,6 +21,7 @@ A handy AI assistant integration for Zotero 7. This plugin brings LLM capabiliti
 ### Setup
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/swcxito/zotero-ai-bar.git
    cd zotero-ai-bar

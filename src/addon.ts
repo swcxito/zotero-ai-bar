@@ -24,11 +24,9 @@ class Addon {
     selectedText?: string;
     userPrompt?: Array<string>;
     userProviderConfigs?: UserProviderConfig[];
-    llmCallbacks?: {
-      onStart?: (requestId: string) => void;
-      onUpdate?: (requestId: string, fullText: string) => void;
-      onError?: (requestId: string, error: string) => void;
-    };
+    currentSection?: number;
+    sectionMap?: Map<number | string, HTMLElement>;
+    abortController?: AbortController;
   };
   // Lifecycle hooks
   public hooks: typeof hooks;
