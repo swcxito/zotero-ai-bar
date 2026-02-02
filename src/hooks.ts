@@ -8,6 +8,10 @@ import {
 import { onModelDialogLoad } from "./modules/modelDialog";
 import { getPref, registerPrefs } from "./utils/prefs";
 import { registerReaderItemPaneSection } from "./modules/readerItemPane";
+import { ChatBox } from "./components/chatBox";
+import { renderMarkdown } from "./utils/markdown";
+
+const chatPopMap = new Map<string, Element>();
 
 async function onStartup() {
   await Promise.all([
@@ -43,7 +47,9 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
     `${addon.data.config.addonRef}-mainWindow.ftl`,
   );
 
-  addon.data.userProviderConfigs = JSON.parse(getPref("llm.providerConfigs"));
+  const llmConfig = getPref("llm.providerConfigs");
+  if (llmConfig)
+    addon.data.userProviderConfigs = JSON.parse(getPref("llm.providerConfigs"));
   await registerReaderItemPaneSection();
 }
 
@@ -146,25 +152,47 @@ function onDialogEvents(type: string) {
 // Callbacks for LLM streaming events
 function onLLMStreamStart(data: { requestId: string }) {
   ztoolkit.log("LLM stream started:", data.requestId);
-  // Notify UI that stream has started
-  if (addon.data.llmCallbacks?.onStart) {
-    addon.data.llmCallbacks.onStart(data.requestId);
+
+  if (!addon.data.sectionMap) return;
+
+  // Find the first available shadowRoot to add chat popup
+  const body = addon.data.sectionMap.get(addon.data.currentSection ?? "");
+  if (body) {
+    const root = body.querySelector("#ai-bar-chat-root");
+    if (root?.shadowRoot) {
+      const doc = body.ownerDocument;
+      const pop = ChatBox(doc, true);
+      pop.setAttribute("data-request-id", data.requestId);
+      pop.innerHTML = "Thinking...";
+      root.shadowRoot.appendChild(pop);
+      chatPopMap.set(data.requestId, pop);
+    }
   }
 }
 
-function onLLMStreamUpdate(data: { requestId: string; fullText: string }) {
-  ztoolkit.log("LLM stream update:", data.requestId, data.fullText.length);
-  // Notify UI with updated text
-  if (addon.data.llmCallbacks?.onUpdate) {
-    addon.data.llmCallbacks.onUpdate(data.requestId, data.fullText);
+async function onLLMStreamUpdate(data: {
+  requestId: string;
+  fullText: string;
+}) {
+  // ztoolkit.log("LLM stream update:", data.requestId, data.fullText.length);
+  const pop = chatPopMap.get(data.requestId);
+  if (pop) {
+    pop.innerHTML = await renderMarkdown(data.fullText);
+    pop.scrollIntoView({ behavior: "smooth", block: "end" });
   }
 }
 
 function onLLMStreamError(data: { requestId: string; error: string }) {
   ztoolkit.log("LLM stream error:", data.requestId, data.error);
-  // Notify UI of error
-  if (addon.data.llmCallbacks?.onError) {
-    addon.data.llmCallbacks.onError(data.requestId, data.error);
+  const pop = chatPopMap.get(data.requestId);
+  if (pop) {
+    const doc = pop.ownerDocument!;
+    const errorDiv = doc.createElement("div");
+    errorDiv.style.color = "red";
+    errorDiv.style.marginTop = "8px";
+    errorDiv.textContent = `Error: ${data.error}`;
+    pop.appendChild(errorDiv);
+    pop.scrollIntoView({ behavior: "smooth", block: "end" });
   }
 }
 
