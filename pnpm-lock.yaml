@@ -43,8 +43,8 @@ importers:
         specifier: ^10.0.10
         version: 10.0.10
       '@types/node':
-        specifier: ^24.10.0
-        version: 24.10.9
+        specifier: ^25.1.0
+        version: 25.1.0
       '@zotero-plugin/eslint-config':
         specifier: ^0.6.7
         version: 0.6.7(eslint@9.39.2(jiti@1.21.7))(typescript@5.9.3)
@@ -632,8 +632,8 @@ packages:
   '@types/mocha@10.0.10':
     resolution: {integrity: sha512-xPyYSz1cMPnJQhl0CLMH68j3gprKZaTjG3s5Vi+fDgx+uhG9NOXwbVt52eFS8ECyXhyKcjDLCBEqBExKuiZb7Q==}
 
-  '@types/node@24.10.9':
-    resolution: {integrity: sha512-ne4A0IpG3+2ETuREInjPNhUGis1SFjv1d5asp8MzEAGtOZeTeHVDOYqOgqfhvseqg/iXty2hjBf1zAOb7RNiNw==}
+  '@types/node@25.1.0':
+    resolution: {integrity: sha512-t7frlewr6+cbx+9Ohpl0NOTKXZNV9xHRmNOvql47BFJKcEG1CxtxlPEEe+gR9uhVWM4DwhnvTF110mIL4yP9RA==}
 
   '@types/prop-types@15.7.15':
     resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
@@ -2421,7 +2421,7 @@ snapshots:
 
   '@types/mocha@10.0.10': {}
 
-  '@types/node@24.10.9':
+  '@types/node@25.1.0':
     dependencies:
       undici-types: 7.16.0
 
