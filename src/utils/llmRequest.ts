@@ -12,6 +12,11 @@ export interface StreamCallbacks {
   onError?: (error: string) => void;
 }
 
+const getAbortController = () => {
+  if (typeof AbortController !== "undefined") return AbortController;
+  return (Zotero.getMainWindow() as any).AbortController;
+};
+
 // TODO： 区分HTTP网络错误和API返回的错误信息，提供更具体的错误反馈。
 /**
  * Send a streaming request to the LLM.
@@ -24,6 +29,16 @@ export async function streamLLM(
   callbacks: StreamCallbacks,
   refreshRate: number = 5,
 ) {
+  // Cancel previous request if exists
+  if (addon.data.abortController) {
+    addon.data.abortController.abort();
+    addon.data.abortController = undefined;
+  }
+
+  const AC = getAbortController();
+  const controller = new AC();
+  addon.data.abortController = controller;
+
   try {
     const modelId = getPref("llm.modelId");
     if (!modelId) throw new Error("No model selected.");
@@ -75,6 +90,7 @@ export async function streamLLM(
         max_tokens: maxTokens,
         stream: true,
       }),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -136,7 +152,15 @@ export async function streamLLM(
     if (fullText) {
       await callbacks.onUpdate?.(fullText);
     }
-  } catch (error) {
+  } catch (error: any) {
+    if (error.name === "AbortError") {
+      ztoolkit.log("LLM Request Cancelled");
+      return;
+    }
     callbacks.onError?.(error instanceof Error ? error.message : String(error));
+  } finally {
+    if (addon.data.abortController === controller) {
+      addon.data.abortController = undefined;
+    }
   }
 }
