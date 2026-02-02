@@ -49,7 +49,7 @@ export async function registerReaderItemPaneSection() {
     },
     // Optional
     bodyXHTML: `<div id="ai-bar-chat-root" style="width: 100%;display: flex;
-flex-direction: column; overflow-y: auto;max-height: 600px;overflow-x: hidden;gap: 8px;padding: 8px 0"></div>`,
+flex-direction: column; overflow-y: auto;max-height: 700px;overflow-x: hidden;gap: 8px;padding: 8px 0"></div>`,
     // Optional, Called when the section is first created, must be synchronous
     onInit: ({ item }) => {
       // ztoolkit.log("Section init!", item?.id);
@@ -96,8 +96,8 @@ flex-direction: column; overflow-y: auto;max-height: 600px;overflow-x: hidden;ga
       injectCSS(shadowRoot, "katex.min.css");
       injectCSS(shadowRoot, "katex-swap.min.css");
       injectCSS(shadowRoot, "atom-one-light.min.css");
-      // Preload chat pop style
-      shadowRoot.append(ChatBox(doc, true));
+
+      // shadowRoot.append(ChatBox(doc, true));
 
       // setSectionButtonStatus("test", { hidden: false });
     },
