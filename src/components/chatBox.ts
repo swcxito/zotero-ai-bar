@@ -1,34 +1,233 @@
+import { Icons } from "./common";
+import { getString } from "../utils/locale";
+
 // TODO：尽量将样式移入 CSS 文件，通过 class 来控制样式，便于维护和适应 Zotero 的明/暗色主题切换。
 
-export function ChatBox(doc: Document, isAgent: boolean = true): Element {
-  const roleClassList = isAgent
-    ? [
-        "chat-pop-agent",
-        "bg-rose-50",
-        "dark:bg-zinc-800",
-        "rounded-tl-none",
-        "mr-4",
-        "ml-2",
-      ]
-    : [
-        "chat-pop-user",
-        "bg-zinc-100",
-        "dark:bg-zinc-800/50",
-        "rounded-tr-none",
-        "ml-4",
-        "mr-2",
-      ];
+interface ActionButtonOptions {
+  label: string;
+  icon: string;
+  onClick?: (e: MouseEvent, btn: HTMLElement) => void;
+  title?: string;
+  className?: string; // Additional classes
+}
+
+function createActionButton(options: ActionButtonOptions): any {
+  return {
+    tag: "button",
+    classList: [
+      "px-2.5",
+      "py-1.5",
+      "rounded-lg",
+      "border",
+      "border-transparent",
+      "hover:border-slate-200",
+      "dark:hover:border-neutral-800",
+      "hover:bg-slate-50",
+      "dark:hover:bg-neutral-900",
+      "text-slate-400",
+      "dark:text-neutral-500",
+      "hover:text-rose-500",
+      "dark:hover:text-rose-400",
+      "transition-all",
+      "flex",
+      "items-center",
+      "gap-1.5",
+      "text-[10px]",
+      "font-bold",
+      "uppercase",
+      "tracking-wider",
+      "justify-center",
+      ...(options.className ? options.className.split(" ") : []),
+    ],
+    attributes: {
+      title: options.title || "",
+    },
+    children: [
+      {
+        tag: "div",
+        classList: [
+          "w-3.5",
+          "h-3.5",
+          "flex",
+          "items-center",
+          "justify-center",
+          "[&>svg]:w-full",
+          "[&>svg]:h-full",
+        ],
+        properties: {
+          innerHTML: options.icon,
+        },
+      },
+      {
+        tag: "span",
+        properties: {
+          textContent: options.label,
+        },
+      },
+    ],
+    listeners: [
+      {
+        type: "click",
+        listener: (e: MouseEvent) => {
+          if (options.onClick) {
+            options.onClick(e, e.currentTarget as HTMLElement);
+          }
+        },
+      },
+    ],
+  };
+}
+
+export function ChatBox(
+  doc: Document,
+  isUser: boolean = false,
+  onRegenerate?: () => void
+): Element {
   return ztoolkit.UI.createElement(doc, "div", {
     tag: "div",
-
     classList: [
-      ...roleClassList,
-      "p-3",
-      "rounded-2xl",
-      "shadow-md",
-      "chat-pop",
-      "shadow-r",
-      "dark:shadow-zinc-500",
+      "flex",
+      "w-full",
+      "animate-in",
+      "fade-in",
+      "slide-in-from-bottom-3",
+      "duration-300",
+      "flex-col",
+      ...(isUser
+        ? [
+          "items-end",
+          "max-w-[85%]",
+          "sm:max-w-[75%]",
+          "justify-end",
+          "self-end",
+        ]
+        : ["items-start", "w-full", "flex-1"]),
+    ],
+    children: [
+      {
+        tag: "div",
+        classList: [
+          "chat-message",
+          "transition-all",
+          "duration-300",
+          "w-full",
+          "text-justify",
+          "break-words",
+          ...(isUser
+            ? [
+              "px-5",
+              "py-3.5",
+              "rounded-2xl",
+              "bg-rose-500",
+              "text-white",
+              "dark:bg-rose-600",
+              "rounded-tr-none",
+              "shadow-md",
+              "shadow-rose-200/50",
+              "dark:shadow-none",
+              "text-sm",
+              "leading-relaxed",
+            ]
+            : [
+              "pr-4",
+              "w-full",
+              "text-slate-800",
+              "dark:text-rose-50/90",
+              "text-[15px]",
+              "leading-relaxed",
+              "py-1",
+            ]),
+        ],
+      },
+      //todo: add streaming indicator
+      // Actions container
+      {
+        tag: "div",
+        classList: [
+          "mt-4",
+          "flex",
+          "items-center",
+          "gap-1.5",
+          ...(isUser
+            ? ["justify-end"]
+            : [
+              "justify-start",
+              "opacity-60",
+              "hover:opacity-100",
+              "transition-opacity",
+              "duration-300",
+            ]),
+        ],
+        children: [
+          createActionButton({
+            label: "Copy",
+            icon: Icons.Copy,
+            title: getString("chat-copy-text"),
+            onClick: (_e, btn) => {
+              const container = btn.closest(".items-start") || btn.closest(".items-end");
+              const messageEl = container?.querySelector(".chat-message");
+              if (messageEl && messageEl.textContent) {
+                new ztoolkit.Clipboard()
+                  .addText(messageEl.textContent, "text/plain")
+                  .copy();
+                const span = btn.querySelector("span");
+                if (span) {
+                  const originalText = span.textContent;
+                  span.textContent = "Copied";
+                  setTimeout(() => {
+                    span.textContent = originalText;
+                  }, 4000);
+                }
+              }
+            }
+          }),
+          createActionButton({
+            label: "COPY MD",
+            icon: Icons.Markdown,
+            title: getString("chat-copy-markdown"),
+            onClick: (_e, btn) => {
+              const container = btn.closest(".items-start") || btn.closest(".items-end");
+              const messageEl = container?.querySelector(".chat-message");
+              const markdown = (container as HTMLElement)?.dataset?.markdown || (messageEl as HTMLElement)?.dataset?.markdown;
+
+              const textToCopy = markdown || messageEl?.textContent;
+
+              if (textToCopy) {
+                new ztoolkit.Clipboard()
+                  .addText(textToCopy, "text/plain")
+                  .copy();
+                const span = btn.querySelector("span");
+                if (span) {
+                  const originalText = span.textContent;
+                  span.textContent = "Copied";
+                  setTimeout(() => {
+                    span.textContent = originalText;
+                  }, 4000);
+                }
+              }
+            }
+          }),
+          ...(!isUser ? [
+            createActionButton({
+              label: "NOTE",
+              icon: Icons.Note,
+              title: getString("chat-save-as-note"),
+              // TODO: Add note logic
+              onClick: (_e, _btn) => {
+                // Placeholder for NOTE functionality
+              }
+            }),
+            createActionButton({
+              label: "Redo",
+              icon: Icons.Redo,
+              title: getString("chat-regenerate-response"),
+              onClick: (_e, _btn) => {
+                if (onRegenerate) onRegenerate();
+              }
+            })
+          ] : [])
+        ]
+      }
     ],
   });
 }

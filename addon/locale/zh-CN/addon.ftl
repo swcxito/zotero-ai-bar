@@ -12,3 +12,7 @@ tabpanel-reader-tab-label = 阅读器标签
 pref-provider-alibaba = 阿里云
 pref-provider-volcengine = 火山引擎
 
+chat-copy-text = 复制内容
+chat-copy-markdown = 复制原始Markdown
+chat-save-as-note = 保存为笔记
+chat-regenerate-response = 重新生成

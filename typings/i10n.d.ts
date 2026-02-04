@@ -3,6 +3,10 @@
 /* eslint-disable */
 // @ts-nocheck
 export type FluentMessageId =
+  | 'chat-copy-markdown'
+  | 'chat-copy-text'
+  | 'chat-regenerate-response'
+  | 'chat-save-as-note'
   | 'item-info-row-example-label'
   | 'item-section-button-tooltip'
   | 'item-section-example1-head-text'
