@@ -161,9 +161,10 @@ function onLLMStreamStart(data: { requestId: string }) {
     const root = body.querySelector("#ai-bar-chat-root");
     if (root?.shadowRoot) {
       const doc = body.ownerDocument;
-      const pop = ChatBox(doc, true);
+      const pop = ChatBox(doc, false); // AI response should be false
       pop.setAttribute("data-request-id", data.requestId);
-      pop.innerHTML = "Thinking...";
+      const chatMessage = pop.querySelector(".chat-message");
+      if (chatMessage) chatMessage.innerHTML = "Thinking...";
       root.shadowRoot.appendChild(pop);
       chatPopMap.set(data.requestId, pop);
     }
@@ -177,7 +178,11 @@ async function onLLMStreamUpdate(data: {
   // ztoolkit.log("LLM stream update:", data.requestId, data.fullText.length);
   const pop = chatPopMap.get(data.requestId);
   if (pop) {
-    pop.innerHTML = await renderMarkdown(data.fullText);
+    const chatMessage = pop.querySelector(".chat-message");
+    if (chatMessage) {
+      chatMessage.innerHTML = await renderMarkdown(data.fullText);
+      (pop as HTMLElement).dataset.markdown = data.fullText;
+    }
     pop.scrollIntoView({ behavior: "smooth", block: "end" });
   }
 }

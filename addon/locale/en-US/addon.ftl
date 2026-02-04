@@ -12,3 +12,8 @@ tabpanel-reader-tab-label = Reader Tab
 
 pref-provider-alibaba = Alibaba Cloud
 pref-provider-volcengine = Volcano Engine
+
+chat-copy-text = Copy text
+chat-copy-markdown = Copy original markdown
+chat-save-as-note = Save as Note
+chat-regenerate-response = Regenerate response
