@@ -153,55 +153,75 @@ function renderAIBar(doc: Document): DocumentFragment {
     const requestId = generateRequestId();
     let prompt = "";
 
-    const targetLanguage = "Chinese";
+    const targetLanguage = "zh-CN";
     // Define prompts for different actions
     switch (actionType) {
       case "explain":
-        prompt = `Please explain the text detailed in Chinese.`;
+        prompt = `Explain the <selected> text detailed in ${targetLanguage}.`;
         break;
       case "translate":
-        prompt = `Translate the provided text into ${targetLanguage}.
-If I select a single word, provide its IPA pronunciation, part of speech, a concise meanings in the context, and more meanings.
-If I select an abbreviation or acronym, provide its full form and a brief explanation.
-If I select a sentence or paragraph, provide a clear and accurate translation only.
-Keep the response concise and clearly structured.
-The following are some English to Chinese examples:
-## Example-1:
-Work adopted a 
-<selected>
-single
-</selected>
-green micro-LED.
-## Response-1:
-**single**
-英 / ˈsɪŋɡ(ə)l /
-美 / ˈsɪŋɡ(ə)l /
-**adj. 单一的，单个的；**
------
-adj. 独自的，孤独的；单身的，未婚的；
-n. 单数；单曲唱片；
+        prompt = `
+# Task
+Translate the <selected> content into ${targetLanguage}.
 
-## Example-2:
-He is still
-<selected>
-single
-</selected>
-.
-## Response-2:
-**single**
-英 / ˈsɪŋɡ(ə)l /
-美 / ˈsɪŋɡ(ə)l /
-**adj. 单身的，未婚的；**
------
-adj. 独自的，孤独的；单一的，单个的；
-n. 单数；单曲唱片；
+# Mode Selection Rules
+Analyze the <selected> text and follow the matching rule below:
 
-## Example-3:
-<selected>NASA</selected>
-## Response-3:
+## Mode 1: Sentence or Paragraph
+IF the selection is a phrase, sentence, or paragraph:
+- Provide a direct, fluent, and academic translation.
+- Do not add explanations nor original text.
+
+## Mode 2: Abbreviation / Acronym (e.g., NASA, AI, RNA)
+IF the selection is an abbreviation:
+- Format: **Abbreviation**
+- Line 1: Full form in English.
+- Line 2: abbr. + Full form in ${targetLanguage}.
+- Line 3: Brief explanation in ${targetLanguage}.
+
+## Mode 3: Single Word
+IF the selection is a single word:
+- Analyze the surrounding context to determine the specific meaning used here.
+- Output strictly using this format:
+
+**<Word>**
+<IPA Pronunciation>
+**<Part of Speech>. <Meaning in CURRENT Context>**
+-----
+<Part of Speech>. <Other Common Meaning 1>
+<Part of Speech>. <Other Common Meaning 2>
+
+# Examples
+It is a example of how to format your response based on the selection type.
+The following examples using English to Chinese translation are for illustration only, please translate into ${targetLanguage} in your response.
+## Example (Word):
+Context: Work adopted a <selected>single</selected> green micro-LED.
+Output:
+**single**
+/ˈsɪŋɡ(ə)l/
+**adj. 单一的，单个的**
+-----
+adj. 独自的；单身的
+n. 单曲
+
+## Example (Abbreviation):
+Context: Research by <selected>NASA</selected> shows...
+Output:
 **NASA**
-abbr. 美国国家航空和宇宙航行局（National Aeronautics and Space Administration）
-美国国家航空航天局是美国联邦政府负责民用太空探索、航空研究和空间科学研究的机构。
+National Aeronautics and Space Administration
+abbr. 美国国家航空航天局
+负责民用太空计划、航空研究和太空研究的机构
+
+## Example (Sentence or Paragraph):
+Context: <selected>The results were inconclusive.</selected>
+Output:
+结果是非决定性的。
+
+## Example (Sentence or Paragraph):
+Context: <selected>Photosynthesis is the process by which green plants and some other organisms use sunlight to synthesize foods from carbon dioxide and water.</selected>
+Output:
+光合作用是绿色植物和其他一些生物利用阳光将二氧化碳和水合成食物的过程。
+
 `;
         break;
       default:
