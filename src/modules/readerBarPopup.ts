@@ -2,6 +2,7 @@ import { config } from "../../package.json";
 import { getSelectionContext } from "./selectionContext";
 import { streamLLM } from "../utils/llmRequest";
 import { SYSTEM_PROMPT_PREFIX } from "../constants";
+import { getPref } from "../utils/prefs";
 
 //TODO: DOM 操作: 手动创建 ripple 效果的代码稍显冗余，可以考虑封装成一个通用指令或 CSS 动画。
 
@@ -28,13 +29,19 @@ export function registerReaderInitializer() {
     "renderTextSelectionPopup",
     ({ reader, doc, params, append }) => {
       // addon.hooks.onReaderPopupShow(event);
+      addon.data.selectedText = params.annotation.text?.trim();
       ztoolkit.log(addon.data.selectedText, "selected");
-      getSelectionContext(reader, params).then();
+      addon.data.selectionContext = undefined;
+      if (getPref("extend-selection-context"))
+        addon.data.selectionContextPromise = getSelectionContext(reader, params);
+      else addon.data.selectionContextPromise = Promise.resolve();
       // ztoolkit.log(doc);
       // ztoolkit.log(append);
-      ztoolkit.log(append);
+      ztoolkit.log("annotation", params.annotation);
       ztoolkit.log("Creating Ask AI Bar");
-      append(renderAIBar(doc));
+      addon.data.currentAnnotation = params.annotation;
+      if (reader._internalReader._type === "pdf")
+        append(renderAIBar(doc));
     },
     config.addonID,
   );
@@ -115,13 +122,21 @@ function renderAIBar(doc: Document): DocumentFragment {
       ztoolkit.log("Ask:", text, "Context:", addon.data.selectedText);
       disableAll(container);
 
+      try {
+        if (addon.data.selectionContextPromise) {
+          await addon.data.selectionContextPromise;
+        }
+      } catch (e) {
+        ztoolkit.log("Get selection context failed:", e);
+      }
+
       const requestId = generateRequestId();
       const messages = [
         {
           role: "system",
           content:
             SYSTEM_PROMPT_PREFIX +
-            `${addon.data.userPrompt?.[0]}\n<selected>\n${addon.data.selectedText}\n</selected>\n${addon.data.userPrompt?.[2]}`,
+            `${addon.data.selectionContext?.[0]}\n<selected>\n${addon.data.selectedText}\n</selected>\n${addon.data.selectionContext?.[2]}`,
         },
         {
           role: "user",
@@ -150,10 +165,18 @@ function renderAIBar(doc: Document): DocumentFragment {
     if (!addon.data.selectedText) return;
     ztoolkit.log("Action:", actionType, addon.data.selectedText);
 
+    try {
+      if (addon.data.selectionContextPromise) {
+        await addon.data.selectionContextPromise;
+      }
+    } catch (e) {
+      ztoolkit.log("Get selection context failed:", e);
+    }
+
     const requestId = generateRequestId();
     let prompt = "";
 
-    const targetLanguage = "zh-CN";
+    const targetLanguage = Zotero.locale;
     // Define prompts for different actions
     switch (actionType) {
       case "explain":
@@ -233,7 +256,7 @@ Output:
         role: "system",
         content:
           SYSTEM_PROMPT_PREFIX +
-          `${addon.data.userPrompt?.[0]}\n<selected>\n${addon.data.selectedText}\n</selected>\n${addon.data.userPrompt?.[2]}`,
+          `${addon.data.selectionContext?.[0]}\n<selected>\n${addon.data.selectedText}\n</selected>\n${addon.data.selectionContext?.[2]}`,
       },
       { role: "user", content: prompt },
     ];
