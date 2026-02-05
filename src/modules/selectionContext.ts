@@ -55,11 +55,8 @@ export async function getSelectionContext(
       selectedPageIndexes,
     );
     // ztoolkit.log("full-text", fullText);
-    // const data = await Zotero.PDFWorker.getRecognizerData(itemID);
-    const data = await getPageBatchRecognizerData(itemID, index.pageIndex!);
-    const currentPage = data.pages[0];
     //TODO: get context by search
-    if (lineCount <= 10) {
+    if (lineCount <= 40) {
       // search in fullText
       const matches = countOccurrencesInFullText(fullText.text, selectedText);
       const macheCount = matches.length;
@@ -78,6 +75,15 @@ export async function getSelectionContext(
       ) {
         // words only, use position match
         // ztoolkit.log(selected.position?.rects);
+        let data;
+        let currentPage;
+        if (index.pageIndex! <= 4 && !isCrossPage) {
+          data = await Zotero.PDFWorker.getRecognizerData(itemID);
+          currentPage = data.pages[index.pageIndex!];
+        } else {
+          data = await getPageBatchRecognizerData(itemID, index.pageIndex!);
+          currentPage = data.pages[0];
+        }
         ztoolkit.log("data:", data);
         ztoolkit.log("current-page:", currentPage);
         addon.data.selectionContext = getContextByPosition(
@@ -309,14 +315,19 @@ function countOccurrencesInFullText(
   const text = Array.isArray(fullText) ? fullText.join(" ") : fullText;
   if (!text) return [];
 
-  const escaped = selected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const regex = new RegExp(escaped, "gi");
+  // Optimize: Split by whitespace to handle newlines/spaces differences in PDF text
+  const parts = selected.trim().split(/\s+/);
+  const pattern = parts
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("\\s+");
+
+  const regex = new RegExp(pattern, "gi");
 
   const matches: Array<{ start: number; end: number }> = [];
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text)) !== null) {
     const start = match.index;
-    const end = start + selected.length;
+    const end = start + match[0].length;
     matches.push({ start, end });
   }
 
@@ -325,79 +336,64 @@ function countOccurrencesInFullText(
 
 /**
  * 获取从指定页开始的详细版面数据（RecognizerData）
- * 由于 Zotero Worker 限制，每次调用最多只能获取 5 页数据。
+ * 前提：startIndex > 4（startIndex <= 4 的情况由外部处理）
  *
  * @param  itemID - Zotero 附件条目 ID
- * @param  startIndex - 起始页索引（0-based，即第1页为0）
- * @returns {Promise<Object>} 返回包含 metadata 和 pages 数组的数据对象。pageIndex 已自动修正为原始页码。
+ * @param  startIndex - 起始页索引（0-based，必须 > 4）
+ * @returns {Promise<Object>} 返回包含 metadata 和 pages 数组的数据对象
  */
-async function getPageBatchRecognizerData(itemID:number, startIndex:number) {
-  // 1. 获取附件对象并验证
+async function getPageBatchRecognizerData(itemID: number, startIndex: number) {
+  // 1. 获取附件并读取文件
   const attachment = await Zotero.Items.getAsync(itemID);
   if (!attachment.isPDFAttachment()) {
     throw new Error(`Item ${itemID} is not a PDF attachment`);
   }
 
-  // 2. 将文件读取到内存
-  // IOUtils.read 返回 Uint8Array，需转为 ArrayBuffer 供 Worker 使用
   const path = await attachment.getFilePathAsync();
-  if(!path) {
+  if (!path) {
     throw new Error(`Attachment ${itemID} has no valid file path`);
   }
+
   const rawData = await IOUtils.read(path);
   let buf = new Uint8Array(rawData).buffer;
 
-  // 3. 如果起始页 > 0，需要在内存中删除前面的所有页面
-  // 使得目标起始页变成新 Buffer 的第 0 页
-  if (startIndex > 0) {
-    // 生成要删除的页码数组：[0, 1, ..., startIndex - 1]
-    const pageIndexesToDelete = Array.from({ length: startIndex }, (_, i) => i);
+  // 2. 删除头部页面（仅删除头部，不裁剪尾部）
+  // deletePages 使用 PDFAssembler 重组 PDF 成本高，而 getRecognizerData 只读前5页，
+  // 尾部页数对其无影响，故不做尾部裁剪
+  const pageIndexesToDelete = Array.from({ length: startIndex }, (_, i) => i);
 
-    try {
-      // 调用 Worker 的 deletePages 动作
-      // 使用 _query 私有方法直接通信，不经过 manager.js 的封装，避免副作用
-      const result = await Zotero.PDFWorker._query(
-        'deletePages',
-        {
-          buf: buf,
-          pageIndexes: pageIndexesToDelete,
-          password: ''
-        },
-        [buf] // [Important] Transferable: 转移 buffer 所有权给 worker，防止拷贝，提升性能
-      );
-      buf = result.buf;
-    } catch (e: any) {
-      Zotero.debug(`[Plugin] Failed to seek to page ${startIndex}: ${e.message}`);
-      throw e;
-    }
+  try {
+    const result = await Zotero.PDFWorker._query(
+      'deletePages',
+      { buf, pageIndexes: pageIndexesToDelete, password: '' },
+      [buf]
+    );
+    buf = result.buf;
+  } catch (e: any) {
+    Zotero.debug(`[Plugin] Failed to delete pages for offset ${startIndex}: ${e.message}`);
+    throw e;
   }
 
-  // 4. 调用 getRecognizerData 获取数据（硬编码只能获取新 Buffer 的前 5 页）
+  // 3. 获取数据
   let data;
   try {
     data = await Zotero.PDFWorker._query(
       'getRecognizerData',
-      {
-        buf: buf,
-        password: ''
-      },
-      [buf] // 再次转移所有权
+      { buf, password: '' },
+      [buf]
     );
   } catch (e: any) {
     const msg = typeof e === 'object' && e.message ? e.message : JSON.stringify(e);
     throw new Error(`Failed to get recognizer data: ${msg}`);
   }
 
-  // 5. 数据后处理
-  if (data && data.pages) {
-    // 修正页码：Worker 返回的页码是基于裁切后的 PDF（从 0 开始），需加上 startIndex 偏移
-    data.pages.forEach((page: { pageIndex: number; }) => {
-      page.pageIndex = page.pageIndex + startIndex;
-    });
-
-    // 修正总页数：加上被删除的页数，使其反映原始文档情况
+  // 4. 修正页码偏移
+  if (data?.pages) {
+    for (const page of data.pages) {
+      page.pageIndex += startIndex;
+    }
     if (data.totalPages) {
-      data.totalPages = data.totalPages + startIndex;
+      data.totalPages += startIndex;
     }
   }
 
