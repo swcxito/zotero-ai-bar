@@ -1,5 +1,5 @@
 // src/modules/selectionContext.ts
-// TODO fix unexpexted empty context result when selection is after page5
+// TODO fix unexpected empty context result when selection is after page5
 
 /**
  * 获取选中内容的上下文
@@ -26,27 +26,28 @@ export async function getSelectionContext(
     index?.indexType === "pdf" &&
     reader._internalReader._type === "pdf"
   ) {
-    const selextedPageIndexes = isCrossPage
+    const selectedPageIndexes = isCrossPage
       ? [index.pageIndex!, index.pageIndex! + 1]
       : [index.pageIndex!];
     const fullText = await Zotero.PDFWorker.getFullText(
       itemID,
-      selextedPageIndexes,
+      selectedPageIndexes,
     );
     // ztoolkit.log("full-text", fullText);
-    const data = await Zotero.PDFWorker.getRecognizerData(itemID);
-    const currentPage = data.pages[index.pageIndex!];
+    // const data = await Zotero.PDFWorker.getRecognizerData(itemID);
+    const data = await getPageBatchRecognizerData(itemID, index.pageIndex!);
+    const currentPage = data.pages[0];
     //TODO: get context by search
     if (lineCount <= 10) {
       // search in fullText
-      const maches = countOccurrencesInFullText(fullText.text, selectedText);
-      const macheCount = maches.length;
+      const matches = countOccurrencesInFullText(fullText.text, selectedText);
+      const macheCount = matches.length;
       const contextSize = 70;
-      ztoolkit.log("search-matches", maches);
+      ztoolkit.log("search-matches", matches);
       if (macheCount == 1) {
         addon.data.userPrompt = getContextAroundIndex(
           fullText.text,
-          [maches[0].start, maches[0].end],
+          [matches[0].start, matches[0].end],
           contextSize + 30,
         );
         ztoolkit.log("selected context by search:", addon.data.userPrompt);
@@ -56,6 +57,8 @@ export async function getSelectionContext(
       ) {
         // words only, use position match
         // ztoolkit.log(selected.position?.rects);
+        ztoolkit.log("data:", data);
+        ztoolkit.log("current-page:", currentPage);
         addon.data.userPrompt = getContextByPosition(
           selected,
           currentPage,
@@ -153,7 +156,7 @@ function getContextByPosition(
 function parseArray(page: Array<any>, indexOffset: number = 0): Array<TextBox> {
   const flatTextBoxes: Array<TextBox> = [];
   function walk(node: any, index: number) {
-    // find a array, recursively
+    // find an array, recursively
     if (Array.isArray(node)) {
       if (node.length === 14 && typeof node[13] === "string") {
         const textBoxNode = node as TextBox;
@@ -189,7 +192,7 @@ function getContextAroundIndex(
   index: Array<number>,
   contextSize: number = 50,
 ): Array<string> {
-  if (typeof text !== "string" || !Array.isArray(index) || index.length < 2) {
+  if (!Array.isArray(index) || index.length < 2) {
     return ["", "", ""];
   }
 
@@ -202,7 +205,7 @@ function getContextAroundIndex(
   // 左侧处理
   const leftSlice = text.slice(0, start);
   const leftMatches = Array.from(leftSlice.matchAll(/\S+/g)); // 非空白序列及其索引
-  let leftCtx = "";
+  let leftCtx;
   if (leftSlice.length === 0) {
     leftCtx = "";
   } else if (leftMatches.length >= contextSize) {
@@ -217,7 +220,7 @@ function getContextAroundIndex(
   // 右侧处理
   const rightSlice = text.slice(end);
   const rightMatches = Array.from(rightSlice.matchAll(/\S+/g));
-  let rightCtx = "";
+  let rightCtx;
   if (rightSlice.length === 0) {
     rightCtx = "";
   } else if (rightMatches.length >= contextSize) {
@@ -232,29 +235,12 @@ function getContextAroundIndex(
   return [leftCtx, selected, rightCtx];
 }
 
-function getWordNearIndex(text: string, index: number): string;
-function getWordNearIndex(text: string, index: Array<number>): string;
-function getWordNearIndex(text: string, index: any): string {
-  const headIndex = Array.isArray(index) ? index[0] : index;
-  const tailIndex = Array.isArray(index) ? index[1] : index;
-  const left = Math.max(
-    text.lastIndexOf(" ", tailIndex),
-    text.lastIndexOf("\n", tailIndex),
-  );
-  const right = Math.min(
-    text.indexOf(" ", headIndex + 1),
-    text.indexOf("\n", headIndex + 1),
-  );
-  return text.substring(left + 1, right === -1 ? text.length : right);
-}
-
 function parseSortIndex(str: string): {
   indexType: "pdf" | "epub" | "html";
   pageIndex: number | null;
   offset: number | null;
   top_y: number | null;
 } | null {
-  if (typeof str !== "string") return null;
 
   // PDF 附件：xxxxx|xxxxxx|xxxxx => pageIndex|offset|top
   let m = str.match(/^(\d+)\|(\d+)\|(\d+)$/);
@@ -305,15 +291,96 @@ function countOccurrencesInFullText(
   const escaped = selected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const regex = new RegExp(escaped, "gi");
 
-  const maches: Array<{ start: number; end: number }> = [];
+  const matches: Array<{ start: number; end: number }> = [];
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text)) !== null) {
     const start = match.index;
     const end = start + selected.length;
-    maches.push({ start, end });
+    matches.push({ start, end });
   }
 
-  return maches;
+  return matches;
+}
+
+/**
+ * 获取从指定页开始的详细版面数据（RecognizerData）
+ * 由于 Zotero Worker 限制，每次调用最多只能获取 5 页数据。
+ *
+ * @param  itemID - Zotero 附件条目 ID
+ * @param  startIndex - 起始页索引（0-based，即第1页为0）
+ * @returns {Promise<Object>} 返回包含 metadata 和 pages 数组的数据对象。pageIndex 已自动修正为原始页码。
+ */
+async function getPageBatchRecognizerData(itemID:number, startIndex:number) {
+  // 1. 获取附件对象并验证
+  const attachment = await Zotero.Items.getAsync(itemID);
+  if (!attachment.isPDFAttachment()) {
+    throw new Error(`Item ${itemID} is not a PDF attachment`);
+  }
+
+  // 2. 将文件读取到内存
+  // IOUtils.read 返回 Uint8Array，需转为 ArrayBuffer 供 Worker 使用
+  const path = await attachment.getFilePathAsync();
+  if(!path) {
+    throw new Error(`Attachment ${itemID} has no valid file path`);
+  }
+  const rawData = await IOUtils.read(path);
+  let buf = new Uint8Array(rawData).buffer;
+
+  // 3. 如果起始页 > 0，需要在内存中删除前面的所有页面
+  // 使得目标起始页变成新 Buffer 的第 0 页
+  if (startIndex > 0) {
+    // 生成要删除的页码数组：[0, 1, ..., startIndex - 1]
+    const pageIndexesToDelete = Array.from({ length: startIndex }, (_, i) => i);
+
+    try {
+      // 调用 Worker 的 deletePages 动作
+      // 使用 _query 私有方法直接通信，不经过 manager.js 的封装，避免副作用
+      const result = await Zotero.PDFWorker._query(
+        'deletePages',
+        {
+          buf: buf,
+          pageIndexes: pageIndexesToDelete,
+          password: ''
+        },
+        [buf] // [Important] Transferable: 转移 buffer 所有权给 worker，防止拷贝，提升性能
+      );
+      buf = result.buf;
+    } catch (e: any) {
+      Zotero.debug(`[Plugin] Failed to seek to page ${startIndex}: ${e.message}`);
+      throw e;
+    }
+  }
+
+  // 4. 调用 getRecognizerData 获取数据（硬编码只能获取新 Buffer 的前 5 页）
+  let data;
+  try {
+    data = await Zotero.PDFWorker._query(
+      'getRecognizerData',
+      {
+        buf: buf,
+        password: ''
+      },
+      [buf] // 再次转移所有权
+    );
+  } catch (e: any) {
+    const msg = typeof e === 'object' && e.message ? e.message : JSON.stringify(e);
+    throw new Error(`Failed to get recognizer data: ${msg}`);
+  }
+
+  // 5. 数据后处理
+  if (data && data.pages) {
+    // 修正页码：Worker 返回的页码是基于裁切后的 PDF（从 0 开始），需加上 startIndex 偏移
+    data.pages.forEach((page: { pageIndex: number; }) => {
+      page.pageIndex = page.pageIndex + startIndex;
+    });
+
+    // 修正总页数：加上被删除的页数，使其反映原始文档情况
+    if (data.totalPages) {
+      data.totalPages = data.totalPages + startIndex;
+    }
+  }
+
+  return data;
 }
 
 interface AnnotationRect {
