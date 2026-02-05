@@ -5,12 +5,24 @@ export function IconView(
   sizeRem: number = 1,
   extraClasses: string[] = [],
 ): TagElementProps {
-  let data = iconMarkup;
   if (iconMarkup.trim().startsWith("<svg")) {
-    data = `data:image/svg+xml;utf8,${encodeURIComponent(iconMarkup)}`;
+    return {
+      tag: "span",
+      namespace: "html",
+      styles: {
+        width: `${sizeRem}rem`,
+        height: `${sizeRem}rem`,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: "0",
+      },
+      classList: extraClasses,
+      properties: { innerHTML: iconMarkup },
+    };
   }
   return {
-    tag: "object",
+    tag: "img",
     namespace: "html",
     styles: {
       width: `${sizeRem}rem`,
@@ -19,6 +31,6 @@ export function IconView(
       flexShrink: "0",
     },
     classList: extraClasses,
-    properties: { data: data, type: "image/svg+xml" },
+    properties: { src: iconMarkup },
   };
 }

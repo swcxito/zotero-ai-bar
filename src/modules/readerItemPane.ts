@@ -3,6 +3,7 @@ import { config } from "../../package.json";
 import { ChatBox } from "../components/chatBox";
 import { renderMarkdown } from "../utils/markdown";
 import { streamLLM } from "../utils/llmRequest";
+import { InputArea } from "../components/inputArea";
 
 export function injectCSS(doc: Document | ShadowRoot, filename: string) {
   // 获取插件内资源的 URL
@@ -60,8 +61,11 @@ export async function registerReaderItemPaneSection() {
       icon: `chrome://${config.addonRef}/content/icons/favicon.svg`,
     },
     // Optional
-    bodyXHTML: `<div id="ai-bar-chat-root" style="width: 100%;display: flex;
-flex-direction: column; overflow-y: auto;max-height: 700px;overflow-x: hidden;gap: 8px;padding: 8px 0;"></div>`,
+    bodyXHTML: `<div id="ai-bar-chat-root" 
+class="transition-transform duration-300"
+style="width: 100%;display: flex;justify-content: start;
+flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;gap: 8px;padding-top: 8px">
+</div>`,
     // Optional, Called when the section is first created, must be synchronous
     onInit: ({ item }) => {
       // ztoolkit.log("Section init!", item?.id);
@@ -102,6 +106,7 @@ flex-direction: column; overflow-y: auto;max-height: 700px;overflow-x: hidden;ga
         addon.data.sectionMap.set(item.id, body);
       const root = body.querySelector("#ai-bar-chat-root") as HTMLElement;
       const shadowRoot = root.attachShadow({ mode: "open" });
+      resizeReaderItemPaneHeight(body,"fit");
 
       // 将 CSS 注入到 Shadow DOM 中
       // injectDebugTailwindScript(shadowRoot);
@@ -110,27 +115,54 @@ flex-direction: column; overflow-y: auto;max-height: 700px;overflow-x: hidden;ga
       injectCSS(shadowRoot, "atom-one.css");
       injectCSS(shadowRoot, `../app.css`);
 
-      const box = ChatBox(doc, false);
+      const messageContainer = doc.createElement("div");
+      messageContainer.classList.add(
+        "message-container",
+        "flex",
+        "flex-col",
+        "flex-1",
+        "overflow-y-auto",
+      );
+      shadowRoot.appendChild(messageContainer);
+      shadowRoot.appendChild(InputArea(doc));
+
+      const box = ChatBox(doc,undefined, false);
       const box2 = box.querySelector(".chat-message") as HTMLElement;
-      const text = "Alright, markdown playground mode 🧪✨\nHere's a quick sampler—tell me if this is what you had in mind:\n\n---\n\n# Heading 1\n\n## Heading 2\n\n### Heading 3\n\n**Bold text**\n*Italic text*\n~~Strikethrough~~\n\n> This is a blockquote\n> Still quoting…\n\n---\n\n### Lists\n\n**Unordered**\n\n* Item one\n* Item two\n\n  * Sub-item\n\n**Ordered**\n\n1. First\n2. Second\n3. Third\n\n---\n\n### Code\n\nInline `code` looks like this.\n\nBlock code:\n\n```python\ndef hello():\n    print(\"Hello, markdown!\")\n```\n\n---\n\n### Links & Images\n\n[OpenAI](https://openai.com)\n\n![Placeholder image](https://via.placeholder.com/150)\n\n---\n\n### Tables\n\n| Column A | Column B |\n| -------: | :------- |\n|    Right | Left     |\n|      123 | abc      |\n\n---\n\nIf you're testing something specific (tables rendering, nested lists, emojis, math, etc.), say the word and I'll zero in on it 🔍😊\n";
+      const text =
+        "Alright, markdown playground mode 🧪✨\nHere's a quick sampler—tell me if this is what you had in mind:\n\n---\n\n# Heading 1\n\n## Heading 2\n\n### Heading 3\n\n**Bold text**\n*Italic text*\n~~Strikethrough~~\n\n> This is a blockquote\n> Still quoting…\n\n---\n\n### Lists\n\n**Unordered**\n\n* Item one\n* Item two\n\n  * Sub-item\n\n**Ordered**\n\n1. First\n2. Second\n3. Third\n\n---\n\n### Code\n\nInline `code` looks like this.\n\nBlock code:\n\n```python\ndef hello():\n    print(\"Hello, markdown!\")\n```\n\n---\n\n### Links & Images\n\n[OpenAI](https://openai.com)\n\n![Placeholder image](https://via.placeholder.com/150)\n\n---\n\n### Tables\n\n| Column A | Column B |\n| -------: | :------- |\n|    Right | Left     |\n|      123 | abc      |\n\n---\n\nIf you're testing something specific (tables rendering, nested lists, emojis, math, etc.), say the word and I'll zero in on it 🔍😊\n";
       box2.innerHTML = await renderMarkdown(text);
       (box as HTMLElement).dataset.markdown = text;
-      shadowRoot.append(box);
-
-      // setSectionButtonStatus("test", { hidden: false });
+      // messageContainer.appendChild(box);
+      setSectionButtonStatus("test", { hidden: true });
+      setSectionButtonStatus("clear", { hidden: false });
     },
     // Optional, Called when the section is toggled. Can happen anytime even if the section is not visible or not rendered
-    // onToggle: ({ item }) => {
-    //   ztoolkit.log("Section toggled!", item?.id);
-    // },
+    onToggle: ({ item ,body}) => {
+      ztoolkit.log("Section toggled!", item?.id);
+      resizeReaderItemPaneHeight(body,"fit");
+    },
     // Optional, Buttons to be shown in the section header
     sectionButtons: [
-      // {
-      //   type: "clear",
-      //   icon: "chrome://zotero/skin/16/universal/empty-trash.svg",
-      //   l10nID: getLocaleID("item-section-example2-button-tooltip"),
-      //   onClick: ({ item, paneID }) => { },
-      // },
+      {
+        type: "clear",
+        icon: "chrome://zotero/skin/16/universal/empty-trash.svg",
+        l10nID: getLocaleID("item-section-example2-button-tooltip"),
+        onClick: ({ item, paneID }) => {
+          const body = addon.data.sectionMap?.get(item.id);
+          if (!body) return;
+
+          const root = body.querySelector("#ai-bar-chat-root");
+          if (!root || !root.shadowRoot) return;
+          const shadowRoot = root.shadowRoot;
+          const doc = body.ownerDocument;
+          const messageContainer = shadowRoot.querySelector(
+            ".message-container",
+          );
+          if (messageContainer) {
+            messageContainer.innerHTML = "";
+          }
+        },
+      },
       {
         type: "test",
         icon: `chrome://${config.addonRef}/content/icons/openai.svg`,
@@ -147,4 +179,24 @@ flex-direction: column; overflow-y: auto;max-height: 700px;overflow-x: hidden;ga
       },
     ],
   });
+}
+
+export function resizeReaderItemPaneHeight(body: HTMLElement,resizePolicy: "maximize"|"fit"="maximize") {
+  const itemPaneHeader = body.ownerDocument.querySelector("#zotero-item-pane-header");
+  const bottomDist = itemPaneHeader
+    ? itemPaneHeader.getBoundingClientRect().bottom
+    : 0;
+  let sectionHeader = body.previousElementSibling as HTMLElement;
+  if (!sectionHeader || !sectionHeader.classList.contains("head")) {
+    sectionHeader = sectionHeader.previousElementSibling as HTMLElement;
+  }
+  const sectionHeaderHeight = sectionHeader ? sectionHeader.offsetHeight : 0;
+  const sectionHeaderDist = sectionHeader.getBoundingClientRect().bottom;
+
+  const calcHeight =
+    resizePolicy === "maximize"
+      ? bottomDist + sectionHeaderHeight + 24
+      : sectionHeaderDist + 6;
+  const root = body.querySelector("#ai-bar-chat-root") as HTMLElement;
+  root.style.height = `calc(100vh - ${calcHeight}px)`;
 }

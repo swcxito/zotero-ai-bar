@@ -7,7 +7,7 @@ import {
 } from "./modules/readerBarPopup";
 import { onModelDialogLoad } from "./modules/modelDialog";
 import { getPref, registerPrefs } from "./utils/prefs";
-import { registerReaderItemPaneSection } from "./modules/readerItemPane";
+import { registerReaderItemPaneSection, resizeReaderItemPaneHeight } from "./modules/readerItemPane";
 import { ChatBox } from "./components/chatBox";
 import { renderMarkdown } from "./utils/markdown";
 
@@ -31,7 +31,7 @@ async function onStartup() {
   );
 
   // Mark initialized as true to confirm plugin loading status
-  // outside of the plugin (e.g. scaffold testing process)
+  // outside the plugin (e.g. scaffold testing process)
   addon.data.initialized = true;
 }
 
@@ -69,7 +69,7 @@ function onShutdown(): void {
 
 /**
  * This function is just an example of dispatcher for Notify events.
- * Any operations should be placed in a function to keep this funcion clear.
+ * Any operations should be placed in a function to keep this function clear.
  */
 async function onNotify(
   event: string,
@@ -77,7 +77,7 @@ async function onNotify(
   ids: Array<string | number>,
   extraData: { [key: string]: any },
 ) {
-  // You can add your code to the corresponding notify type
+  // You can add your code to the corresponding to notify type
   ztoolkit.log("notify", event, type, ids, extraData);
   if (
     event == "select" &&
@@ -92,7 +92,7 @@ async function onNotify(
 
 /**
  * This function is just an example of dispatcher for Preference UI events.
- * Any operations should be placed in a function to keep this funcion clear.
+ * Any operations should be placed in a function to keep this function clear.
  * @param type event type
  * @param data event data
  */
@@ -147,7 +147,7 @@ function onDialogEvents(type: string) {
 
 // Add your hooks here. For element click, etc.
 // Keep in mind hooks only do dispatch. Don't add code that does real jobs in hooks.
-// Otherwise the code would be hard to read and maintain.
+// Otherwise, the code would be hard to read and maintain.
 
 // Callbacks for LLM streaming events
 function onLLMStreamStart(data: { requestId: string }) {
@@ -161,12 +161,20 @@ function onLLMStreamStart(data: { requestId: string }) {
     const root = body.querySelector("#ai-bar-chat-root");
     if (root?.shadowRoot) {
       const doc = body.ownerDocument;
+      resizeReaderItemPaneHeight(body);
+      const container = root.shadowRoot.querySelector(".message-container");
+      if (!doc || !container) return;
       const pop = ChatBox(doc, false); // AI response should be false
       pop.setAttribute("data-request-id", data.requestId);
       const chatMessage = pop.querySelector(".chat-message");
       if (chatMessage) chatMessage.innerHTML = "Thinking...";
-      root.shadowRoot.appendChild(pop);
+      container.appendChild(pop);
       chatPopMap.set(data.requestId, pop);
+
+      const inputArea = root.shadowRoot.querySelector(".input-area");
+      if (inputArea) {
+        inputArea.scrollIntoView({ behavior: "smooth", block: "end" });
+      }
     }
   }
 }
@@ -183,7 +191,10 @@ async function onLLMStreamUpdate(data: {
       chatMessage.innerHTML = await renderMarkdown(data.fullText);
       (pop as HTMLElement).dataset.markdown = data.fullText;
     }
-    pop.scrollIntoView({ behavior: "smooth", block: "end" });
+    const container = pop.parentElement;
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    }
   }
 }
 
@@ -197,7 +208,10 @@ function onLLMStreamError(data: { requestId: string; error: string }) {
     errorDiv.style.marginTop = "8px";
     errorDiv.textContent = `Error: ${data.error}`;
     pop.appendChild(errorDiv);
-    pop.scrollIntoView({ behavior: "smooth", block: "end" });
+    const container = pop.parentElement;
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    }
   }
 }
 
