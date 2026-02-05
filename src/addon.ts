@@ -21,6 +21,8 @@ class Addon {
       rows: Array<{ [dataKey: string]: string }>;
     };
     dialog?: DialogHelper;
+    currentAnnotation?: _ZoteroTypes.Annotations.AnnotationJson;
+    currentReader?: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">;
     selectedText?: string;
     selectionContext?: Array<string>;
     selectionContextPromise?: Promise<void>;

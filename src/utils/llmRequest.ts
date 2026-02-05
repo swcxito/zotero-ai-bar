@@ -27,6 +27,7 @@ export interface Message {
 export interface StreamCallbacks {
   onStart?: () => void;
   onUpdate?: (fullText: string) => Promise<void> | void;
+  onEnd?: () => void;
   onError?: (error: string) => void;
 }
 
@@ -43,7 +44,7 @@ const getAbortController = () => {
  * @param refreshRate Update UI every N chunks.
  */
 export async function streamLLM(
-  messages: Message[],
+  messagesOrPromise: Message[] | Promise<Message[]>,
   callbacks: StreamCallbacks,
   refreshRate: number = 5,
 ) {
@@ -58,6 +59,9 @@ export async function streamLLM(
   addon.data.abortController = controller;
 
   try {
+    callbacks.onStart?.();
+    const messages = await messagesOrPromise;
+
     const modelId = getPref("llm.modelId");
     if (!modelId) throw new Error("No model selected.");
     ztoolkit.log(`Using model ID: ${modelId}`);
@@ -152,7 +156,6 @@ export async function streamLLM(
           if (content !== undefined) {
             if (!started) {
               started = true;
-              callbacks.onStart?.();
             }
             fullText += content;
             count++;
@@ -170,6 +173,7 @@ export async function streamLLM(
     if (fullText || started) {
       await callbacks.onUpdate?.(fullText);
     }
+    callbacks.onEnd?.();
   } catch (error: any) {
     if (error.name === "AbortError") {
       ztoolkit.log("LLM Request Cancelled");

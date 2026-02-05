@@ -30,7 +30,7 @@ interface ActionButtonOptions {
   className?: string; // Additional classes
 }
 
-function createActionButton(options: ActionButtonOptions): any {
+function createActionButton(options: ActionButtonOptions, enabled: boolean = true): any {
   return {
     tag: "button",
     classList: [
@@ -58,13 +58,15 @@ function createActionButton(options: ActionButtonOptions): any {
       "justify-center",
       ...(options.className ? options.className.split(" ") : []),
     ],
-    attributes: {
+    properties: {
       title: options.title || "",
+      disabled: !enabled,
     },
     children: [
-      IconView(options.icon, 0.875),
+      IconView(options.icon, 1),
       {
         tag: "span",
+        classList: ["btn-label"],
         properties: {
           textContent: options.label,
         },
@@ -85,6 +87,7 @@ function createActionButton(options: ActionButtonOptions): any {
 
 export function ChatBox(
   doc: Document,
+  annotation: _ZoteroTypes.Annotations.AnnotationJson | undefined,
   isUser: boolean = false,
   onRegenerate?: () => void
 ): Element {
@@ -148,6 +151,7 @@ export function ChatBox(
       {
         tag: "div",
         classList: [
+          "chat-actions",
           "mt-4",
           "flex",
           "items-center",
@@ -160,6 +164,7 @@ export function ChatBox(
               "hover:opacity-100",
               "transition-opacity",
               "duration-300",
+              "hidden",
             ]),
         ],
         children: [
@@ -174,7 +179,7 @@ export function ChatBox(
                 new ztoolkit.Clipboard()
                   .addText(messageEl.textContent, "text/plain")
                   .copy();
-                const span = btn.querySelector("span");
+                const span = btn.querySelector(".btn-label");
                 if (span) {
                   const originalText = span.textContent;
                   span.textContent = "Copied";
@@ -200,7 +205,7 @@ export function ChatBox(
                 new ztoolkit.Clipboard()
                   .addText(textToCopy, "text/plain")
                   .copy();
-                const span = btn.querySelector("span");
+                const span = btn.querySelector(".btn-label");
                 if (span) {
                   const originalText = span.textContent;
                   span.textContent = "Copied";
@@ -212,23 +217,27 @@ export function ChatBox(
             }
           }),
           ...(!isUser ? [
-            createActionButton({
-              label: "NOTE",
-              icon: Icons.Note,
-              title: getString("chat-save-as-note"),
-              // TODO: Add note logic
-              onClick: (_e, _btn) => {
-                // Placeholder for NOTE functionality
-              }
-            }),
-            createActionButton({
-              label: "Redo",
-              icon: Icons.Redo,
-              title: getString("chat-regenerate-response"),
-              onClick: (_e, _btn) => {
-                if (onRegenerate) onRegenerate();
-              }
-            })
+            // createActionButton({
+            //   label: "NOTE",
+            //   icon: Icons.Note,
+            //   title: getString("chat-save-as-note"),
+            //   // TODO: Add note logic
+            //   onClick: (_e, _btn) => {
+            //     // Placeholder for NOTE functionality
+            //     if (!Zotero.getMainWindow().ZoteroContextPane.activeEditor || !annotation)
+            //       return;
+            //     annotation.comment = (_btn.closest(".items-start") as HTMLElement).dataset.markdown || "";
+            //     addon.data.currentReader?._addToNote([annotation]);
+            //   }
+            // }),
+            // createActionButton({
+            //   label: "Redo",
+            //   icon: Icons.Redo,
+            //   title: getString("chat-regenerate-response"),
+            //   onClick: (_e, _btn) => {
+            //     if (onRegenerate) onRegenerate();
+            //   }
+            // })
           ] : [])
         ]
       }

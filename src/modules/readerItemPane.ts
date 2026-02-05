@@ -124,7 +124,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
         addon.data.sectionMap.set(item.id, body);
       const root = body.querySelector("#ai-bar-chat-root") as HTMLElement;
       const shadowRoot = root.attachShadow({ mode: "open" });
-      resizeReaderItemPaneHeight(body,"fit");
+      resizeReaderItemPaneHeight(body, "fit");
 
       // 将 CSS 注入到 Shadow DOM 中
       // injectDebugTailwindScript(shadowRoot);
@@ -144,20 +144,22 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
       shadowRoot.appendChild(messageContainer);
       shadowRoot.appendChild(InputArea(doc));
 
-      const box = ChatBox(doc,undefined, false);
+      const box = ChatBox(doc, undefined, false);
       const box2 = box.querySelector(".chat-message") as HTMLElement;
       const text =
         "Alright, markdown playground mode 🧪✨\nHere's a quick sampler—tell me if this is what you had in mind:\n\n---\n\n# Heading 1\n\n## Heading 2\n\n### Heading 3\n\n**Bold text**\n*Italic text*\n~~Strikethrough~~\n\n> This is a blockquote\n> Still quoting…\n\n---\n\n### Lists\n\n**Unordered**\n\n* Item one\n* Item two\n\n  * Sub-item\n\n**Ordered**\n\n1. First\n2. Second\n3. Third\n\n---\n\n### Code\n\nInline `code` looks like this.\n\nBlock code:\n\n```python\ndef hello():\n    print(\"Hello, markdown!\")\n```\n\n---\n\n### Links & Images\n\n[OpenAI](https://openai.com)\n\n![Placeholder image](https://via.placeholder.com/150)\n\n---\n\n### Tables\n\n| Column A | Column B |\n| -------: | :------- |\n|    Right | Left     |\n|      123 | abc      |\n\n---\n\nIf you're testing something specific (tables rendering, nested lists, emojis, math, etc.), say the word and I'll zero in on it 🔍😊\n";
       box2.innerHTML = await renderMarkdown(text);
       (box as HTMLElement).dataset.markdown = text;
+      const actions = box.querySelector(".chat-actions");
+      if (actions) actions.classList.remove("hidden");
       // messageContainer.appendChild(box);
       setSectionButtonStatus("test", { hidden: true });
       setSectionButtonStatus("clear", { hidden: false });
     },
     // Optional, Called when the section is toggled. Can happen anytime even if the section is not visible or not rendered
-    onToggle: ({ item ,body}) => {
+    onToggle: ({ item, body }) => {
       ztoolkit.log("Section toggled!", item?.id);
-      resizeReaderItemPaneHeight(body,"fit");
+      resizeReaderItemPaneHeight(body, "fit");
     },
     // Optional, Buttons to be shown in the section header
     sectionButtons: [
@@ -173,9 +175,8 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
           if (!root || !root.shadowRoot) return;
           const shadowRoot = root.shadowRoot;
           const doc = body.ownerDocument;
-          const messageContainer = shadowRoot.querySelector(
-            ".message-container",
-          );
+          const messageContainer =
+            shadowRoot.querySelector(".message-container");
           if (messageContainer) {
             messageContainer.innerHTML = "";
           }
@@ -213,7 +214,7 @@ export function resizeReaderItemPaneHeight(body: HTMLElement,resizePolicy: "maxi
 
   const calcHeight =
     resizePolicy === "maximize"
-      ? bottomDist + sectionHeaderHeight + 24
+      ? bottomDist + sectionHeaderHeight + 12
       : sectionHeaderDist + 6;
   const root = body.querySelector("#ai-bar-chat-root") as HTMLElement;
   root.style.height = `calc(100vh - ${calcHeight}px)`;

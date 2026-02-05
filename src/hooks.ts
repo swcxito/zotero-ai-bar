@@ -161,10 +161,10 @@ function onLLMStreamStart(data: { requestId: string }) {
     const root = body.querySelector("#ai-bar-chat-root");
     if (root?.shadowRoot) {
       const doc = body.ownerDocument;
-      resizeReaderItemPaneHeight(body);
+      resizeReaderItemPaneHeight(body, "maximize");
       const container = root.shadowRoot.querySelector(".message-container");
       if (!doc || !container) return;
-      const pop = ChatBox(doc, false); // AI response should be false
+      const pop = ChatBox(doc, addon.data.currentAnnotation, false); // AI response should be false
       pop.setAttribute("data-request-id", data.requestId);
       const chatMessage = pop.querySelector(".chat-message");
       if (chatMessage) chatMessage.innerHTML = "Thinking...";
@@ -198,10 +198,25 @@ async function onLLMStreamUpdate(data: {
   }
 }
 
+function onLLMStreamEnd(data: { requestId: string }) {
+  ztoolkit.log("LLM stream ended:", data.requestId);
+  const pop = chatPopMap.get(data.requestId);
+  if (pop) {
+    const actions = pop.querySelector(".chat-actions");
+    if (actions) {
+      actions.classList.remove("hidden");
+    }
+  }
+}
+
 function onLLMStreamError(data: { requestId: string; error: string }) {
   ztoolkit.log("LLM stream error:", data.requestId, data.error);
   const pop = chatPopMap.get(data.requestId);
   if (pop) {
+    const actions = pop.querySelector(".chat-actions");
+    if (actions) {
+      actions.classList.remove("hidden");
+    }
     const doc = pop.ownerDocument!;
     const errorDiv = doc.createElement("div");
     errorDiv.style.color = "red";
@@ -226,5 +241,6 @@ export default {
   onDialogEvents,
   onLLMStreamStart,
   onLLMStreamUpdate,
+  onLLMStreamEnd,
   onLLMStreamError,
 };
