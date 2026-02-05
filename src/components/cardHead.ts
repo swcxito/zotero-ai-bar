@@ -2,6 +2,7 @@ import { ElementProps, TagElementProps } from "zotero-plugin-toolkit";
 import { getLogoUrl } from "../constants";
 import { Icons } from "./common";
 import { UserProvider } from "../types";
+import { IconView } from "./iconView";
 
 export function CardHead(
   data: UserProvider,
@@ -68,15 +69,7 @@ export function CardHead(
         tag: "div",
         classList: ["flex", "items-center", "gap-4", "flex-1", "min-w-0"],
         children: [
-          {
-            tag: "object",
-            namespace: "html",
-            properties: {
-              data: getLogoUrl(data.key ?? "favicon"),
-              type: "image/svg+xml",
-            },
-            classList: ["shrink-0", "w-6", "h-6"],
-          },
+          IconView(getLogoUrl(data.key ?? "favicon"), 1.5, ["shrink-0"]),
           // text section
           {
             tag: "div",
@@ -137,7 +130,7 @@ export function CardHead(
                   "hover:bg-white/50",
                   "dark:hover:bg-red-950",
                 ],
-                properties: { innerHTML: Icons.Delete },
+                children: [IconView(Icons.Delete, 1)],
                 listeners: [{ type: "click", listener: onDeleteClicked }],
               },
               {
@@ -153,9 +146,17 @@ export function CardHead(
                   "hover:bg-white/50",
                   "dark:hover:bg-zinc-800",
                 ],
-                properties: {
-                  innerHTML: `<div class="transition-transform duration-300 ease-in-out">${Icons.Chevron}</div>`,
-                },
+                children: [
+                  {
+                    tag: "div",
+                    classList: [
+                      "transition-transform",
+                      "duration-300",
+                      "ease-in-out",
+                    ],
+                    children: [IconView(Icons.Chevron, 1)],
+                  },
+                ],
                 listeners: [{ type: "click", listener: onToggleCollapse }],
               },
             ],
