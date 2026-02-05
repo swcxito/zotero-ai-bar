@@ -73,7 +73,6 @@ export function ChatBox(
   return ztoolkit.UI.createElement(doc, "div", {
     tag: "div",
     classList: [
-      "flex",
       "w-full",
       "animate-in",
       "fade-in",
@@ -88,7 +87,7 @@ export function ChatBox(
           "justify-end",
           "self-end",
         ]
-        : ["items-start", "w-full", "flex-1"]),
+        : ["items-start", "w-full"]),
     ],
     children: [
       {
