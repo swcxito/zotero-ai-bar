@@ -22,7 +22,8 @@ class Addon {
     };
     dialog?: DialogHelper;
     selectedText?: string;
-    userPrompt?: Array<string>;
+    selectionContext?: Array<string>;
+    selectionContextPromise?: Promise<void>;
     userProviderConfigs?: UserProviderConfig[];
     currentSection?: number;
     sectionMap?: Map<number | string, HTMLElement>;

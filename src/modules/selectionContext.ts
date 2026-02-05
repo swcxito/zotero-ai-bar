@@ -1,6 +1,9 @@
 // src/modules/selectionContext.ts
 // TODO fix unexpected empty context result when selection is after page5
 
+import { get } from "http";
+import { getPref } from "../utils/prefs";
+
 /**
  * 获取选中内容的上下文
  */
@@ -42,15 +45,15 @@ export async function getSelectionContext(
       // search in fullText
       const matches = countOccurrencesInFullText(fullText.text, selectedText);
       const macheCount = matches.length;
-      const contextSize = 70;
+      const contextSize = getPref("extend-selection-size") || 70;
       ztoolkit.log("search-matches", matches);
       if (macheCount == 1) {
-        addon.data.userPrompt = getContextAroundIndex(
+        addon.data.selectionContext = getContextAroundIndex(
           fullText.text,
           [matches[0].start, matches[0].end],
           contextSize + 30,
         );
-        ztoolkit.log("selected context by search:", addon.data.userPrompt);
+        ztoolkit.log("selected context by search:", addon.data.selectionContext);
       } else if (
         selectedText.split(" ").length <= 5 ||
         selectedText.length <= 5
@@ -59,13 +62,13 @@ export async function getSelectionContext(
         // ztoolkit.log(selected.position?.rects);
         ztoolkit.log("data:", data);
         ztoolkit.log("current-page:", currentPage);
-        addon.data.userPrompt = getContextByPosition(
+        addon.data.selectionContext = getContextByPosition(
           selected,
           currentPage,
           contextSize,
           isCrossPage ? data.pages[index.pageIndex! + 1] : undefined,
         );
-        ztoolkit.log("selected context by position:", addon.data.userPrompt);
+        ztoolkit.log("selected context by position:", addon.data.selectionContext);
       }
     }
   }

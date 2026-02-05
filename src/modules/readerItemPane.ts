@@ -146,7 +146,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
       {
         type: "clear",
         icon: "chrome://zotero/skin/16/universal/empty-trash.svg",
-        l10nID: getLocaleID("item-section-example2-button-tooltip"),
+        l10nID: getLocaleID("item-section-button-tooltip"),
         onClick: ({ item, paneID }) => {
           const body = addon.data.sectionMap?.get(item.id);
           if (!body) return;
