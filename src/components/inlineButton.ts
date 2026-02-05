@@ -1,5 +1,6 @@
 import { TagElementProps } from "zotero-plugin-toolkit";
 import { Icons } from "./common";
+import { IconView } from "./iconView";
 
 export function InlineButton(onClicked: (e: Event) => void): TagElementProps {
   return {
@@ -29,7 +30,10 @@ export function InlineButton(onClicked: (e: Event) => void): TagElementProps {
       "mt-2",
       "mb-4",
     ],
-    properties: { innerHTML: Icons.Add + " Add Model" },
+    children: [
+      IconView(Icons.Add, 1),
+      { tag: "span", properties: { textContent: "Add Model" } },
+    ],
     listeners: [
       {
         type: "click",

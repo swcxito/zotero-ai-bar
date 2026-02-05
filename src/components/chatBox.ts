@@ -1,5 +1,6 @@
 import { Icons } from "./common";
 import { getString } from "../utils/locale";
+import { IconView } from "./iconView";
 
 // TODO：尽量将样式移入 CSS 文件，通过 class 来控制样式，便于维护和适应 Zotero 的明/暗色主题切换。
 
@@ -43,21 +44,7 @@ function createActionButton(options: ActionButtonOptions): any {
       title: options.title || "",
     },
     children: [
-      {
-        tag: "div",
-        classList: [
-          "w-3.5",
-          "h-3.5",
-          "flex",
-          "items-center",
-          "justify-center",
-          "[&>svg]:w-full",
-          "[&>svg]:h-full",
-        ],
-        properties: {
-          innerHTML: options.icon,
-        },
-      },
+      IconView(options.icon, 0.875),
       {
         tag: "span",
         properties: {
