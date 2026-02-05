@@ -19,7 +19,7 @@ marked.use(
   markedKatex({
     throwOnError: false, // 公式错误时不中断渲染
     output: "mathml",
-    nonStandard: true, // 支持非标准的单个 $ 行内公式
+    // nonStandard: true, // 支持非标准的单个 $ 行内公式
   }),
   markedXhtml(),
 );
@@ -32,22 +32,28 @@ marked.setOptions({
 
 /**
  * 优化公式格式：
- * 1. 在单个 $ 符号前添加空格（如果缺失）
- * 2. 在 $$ 符号前确保有两个连续换行
+ * 1. 在行内公式 $...$ 前后确保至少一个空格（如果不是行首/行尾）
+ * 2. 在块级公式 $$...$$ 前后确保至少两个换行
  */
 function optimizeFormulas(text: string): string {
-  let optimized = text.replace(/(?<![ $])\$(?!\$)/g, (match, offset) => {
-    // 如果 $ 处在字符串开头，不需要加空格
-    return offset === 0 ? match : " " + match;
-  });
+  return text.replace(
+    /(\s*)(\$\$[\s\S]*?\$\$|\$[^$\n]+\$)(\s*)/g,
+    (match, prefix, formula, suffix, offset) => {
+      // 1. 处理块级公式
+      if (formula.startsWith("$$")) {
+        const newPrefix = offset === 0 ? "" : "\n\n";
+        return newPrefix + formula + "\n\n";
+      }
 
-  optimized = optimized.replace(/(\n*)\$\$/g, (match, newlines, offset) => {
-    // 如果 $$ 处在字符串开头，直接返回
-    // if (offset === 0) return "$$";
-    return newlines.length < 2 ? "\n\n$$" : match;
-  });
+      // 2. 处理行内公式
+      // 如果前缀为空且不是开头，添加空格
+      const newPrefix = prefix || (offset === 0 ? "" : " ");
+      // 如果后缀为空，添加空格
+      const newSuffix = suffix || " ";
 
-  return optimized;
+      return newPrefix + formula + newSuffix;
+    },
+  );
 }
 
 /**
