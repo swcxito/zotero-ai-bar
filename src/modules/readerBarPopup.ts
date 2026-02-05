@@ -55,9 +55,10 @@ export function registerReaderInitializer() {
       else addon.data.selectionContextPromise = Promise.resolve();
       // ztoolkit.log(doc);
       // ztoolkit.log(append);
-      ztoolkit.log("annotation", params.annotation);
+      // ztoolkit.log("annotation", params.annotation);
       ztoolkit.log("Creating Ask AI Bar");
       addon.data.currentAnnotation = params.annotation;
+      addon.data.currentReader = reader;
       if (reader._internalReader._type === "pdf")
         append(renderAIBar(doc));
     },
@@ -140,35 +141,40 @@ function renderAIBar(doc: Document): DocumentFragment {
       ztoolkit.log("Ask:", text, "Context:", addon.data.selectedText);
       disableAll(container);
 
-      try {
-        if (addon.data.selectionContextPromise) {
-          await addon.data.selectionContextPromise;
-        }
-      } catch (e) {
-        ztoolkit.log("Get selection context failed:", e);
-      }
-
       const requestId = generateRequestId();
-      const messages = [
-        {
-          role: "system",
-          content:
-            SYSTEM_PROMPT_PREFIX +
-            `${addon.data.selectionContext?.[0]}\n<selected>\n${addon.data.selectedText}\n</selected>\n${addon.data.selectionContext?.[2]}`,
-        },
-        {
-          role: "user",
-          content: text,
-        },
-      ];
+      const messagesPromise = (async () => {
+        try {
+          if (addon.data.selectionContextPromise) {
+            await addon.data.selectionContextPromise;
+          }
+        } catch (e) {
+          ztoolkit.log("Get selection context failed:", e);
+        }
+
+        return [
+          {
+            role: "system",
+            content:
+              SYSTEM_PROMPT_PREFIX +
+              `${addon.data.selectionContext?.[0]}\n<selected>\n${addon.data.selectedText}\n</selected>\n${addon.data.selectionContext?.[2]}`,
+          },
+          {
+            role: "user",
+            content: text,
+          },
+        ];
+      })();
 
       // Trigger hooks for stream events
-      await streamLLM(messages, {
+      await streamLLM(messagesPromise, {
         onStart: () => {
           addon.hooks.onLLMStreamStart({ requestId });
         },
         onUpdate: async (fullText) => {
           addon.hooks.onLLMStreamUpdate({ requestId, fullText });
+        },
+        onEnd: () => {
+          addon.hooks.onLLMStreamEnd({ requestId });
         },
         onError: (error) => {
           addon.hooks.onLLMStreamError({ requestId, error });
@@ -182,14 +188,6 @@ function renderAIBar(doc: Document): DocumentFragment {
   const handleButtonAction = async (actionType: string) => {
     if (!addon.data.selectedText) return;
     ztoolkit.log("Action:", actionType, addon.data.selectedText);
-
-    try {
-      if (addon.data.selectionContextPromise) {
-        await addon.data.selectionContextPromise;
-      }
-    } catch (e) {
-      ztoolkit.log("Get selection context failed:", e);
-    }
 
     const requestId = generateRequestId();
     let prompt = "";
@@ -269,23 +267,36 @@ Output:
         prompt = "Please analyze the text.";
     }
 
-    const messages = [
-      {
-        role: "system",
-        content:
-          SYSTEM_PROMPT_PREFIX +
-          `${addon.data.selectionContext?.[0]}\n<selected>\n${addon.data.selectedText}\n</selected>\n${addon.data.selectionContext?.[2]}`,
-      },
-      { role: "user", content: prompt },
-    ];
+    const messagesPromise = (async () => {
+      try {
+        if (addon.data.selectionContextPromise) {
+          await addon.data.selectionContextPromise;
+        }
+      } catch (e) {
+        ztoolkit.log("Get selection context failed:", e);
+      }
+
+      return [
+        {
+          role: "system",
+          content:
+            SYSTEM_PROMPT_PREFIX +
+            `${addon.data.selectionContext?.[0]}\n<selected>\n${addon.data.selectedText}\n</selected>\n${addon.data.selectionContext?.[2]}`,
+        },
+        { role: "user", content: prompt },
+      ];
+    })();
 
     // Trigger hooks for stream events
-    await streamLLM(messages, {
+    await streamLLM(messagesPromise, {
       onStart: () => {
         addon.hooks.onLLMStreamStart({ requestId });
       },
       onUpdate: async (fullText) => {
         addon.hooks.onLLMStreamUpdate({ requestId, fullText });
+      },
+      onEnd: () => {
+        addon.hooks.onLLMStreamEnd({ requestId });
       },
       onError: (error) => {
         addon.hooks.onLLMStreamError({ requestId, error });
