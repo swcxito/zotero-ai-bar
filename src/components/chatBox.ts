@@ -167,6 +167,10 @@ export function ChatBox(
               "hidden",
             ]),
         ],
+        styles:{
+          textAlign: "justify" ,
+          // textJustify: "inter-ideograph",
+        },
         children: [
           createActionButton({
             label: "Copy",

@@ -20,6 +20,7 @@ import { config } from "../../package.json";
 import { getSelectionContext } from "./selectionContext";
 import { streamLLM } from "../utils/llmRequest";
 import { SYSTEM_PROMPT_PREFIX } from "../constants";
+import { getString } from "../utils/locale";
 import { getPref } from "../utils/prefs";
 
 //TODO: DOM 操作: 手动创建 ripple 效果的代码稍显冗余，可以考虑封装成一个通用指令或 CSS 动画。
@@ -198,6 +199,9 @@ function renderAIBar(doc: Document): DocumentFragment {
       case "explain":
         prompt = `Explain the <selected> text detailed in ${targetLanguage}.`;
         break;
+      case "summarize":
+        prompt = `Summarize the <selected> text concisely in ${targetLanguage}, highlighting the key points.`;
+        break;
       case "translate":
         prompt = `
 # Task
@@ -314,19 +318,34 @@ Output:
           {
             tag: "button",
             classList: ["ai-btn"],
-            properties: { textContent: "📖Explain" },
+            properties: {
+              textContent: `\u{1F4D6}${getString("reader-bar-explain")}`,
+            },
             listeners: btnListeners(async () => handleButtonAction("explain")),
           },
           // 2. Translate
           {
             tag: "button",
             classList: ["ai-btn"],
-            properties: { textContent: "🌐Translate" },
+            properties: {
+              textContent: `\u{1F310}${getString("reader-bar-translate")}`,
+            },
             listeners: btnListeners(async () =>
               handleButtonAction("translate"),
             ),
           },
-          // 3. Ask (Input Group)
+          // 3. Summarize
+          {
+            tag: "button",
+            classList: ["ai-btn"],
+            properties: {
+              textContent: `\u{1F4DD}${getString("reader-bar-summarize")}`,
+            },
+            listeners: btnListeners(async () =>
+              handleButtonAction("summarize"),
+            ),
+          },
+          // 4. Ask (Input Group)
           {
             tag: "div",
             classList: ["input-group"],
@@ -334,7 +353,7 @@ Output:
               {
                 tag: "textarea",
                 properties: {
-                  placeholder: "Ask AI...",
+                  placeholder: getString("reader-bar-ask-placeholder"),
                   rows: 1,
                 },
                 listeners: [
