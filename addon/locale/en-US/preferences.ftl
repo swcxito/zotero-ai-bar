@@ -6,6 +6,7 @@ pref-temperature = Temperature
 pref-max-tokens = Max Tokens
 pref-provider = Model Provider
 pref-model-name = Model Name
+
 # Prompt Options
 pref-prompt = Prompt Settings
 pref-extend-selection-context =
