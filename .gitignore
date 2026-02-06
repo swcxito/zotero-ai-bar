@@ -20,3 +20,4 @@ design
 test/examples.ts
 addon/content/tailwind.js
 addon/content/app.css
+*.ai
