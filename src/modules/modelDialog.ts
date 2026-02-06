@@ -190,7 +190,7 @@ export class ModelDialog {
 
     this.providerPopup.replaceChildren();
     for (const providerKey in PROVIDERS) {
-      if (addon.data.userProviderConfigs?.some((p) => p.id === providerKey)) {
+      if (addon.data.userProviderConfigs?.some((p) => p.key === providerKey)) {
         ztoolkit.log(
           `Provider ${providerKey} already exists in settings, skipping button creation.`,
         );
@@ -220,6 +220,7 @@ export class ModelDialog {
                   isCustom: false,
                 },
                 this.doc,
+                () => this.renderProviders(),
               );
               container?.appendChild(card);
               b.remove();
