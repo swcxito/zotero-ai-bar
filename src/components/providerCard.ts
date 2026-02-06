@@ -21,7 +21,7 @@ import { CardHead } from "./cardHead";
 import { CardModelRow } from "./modelRow";
 import { InlineButton } from "./inlineButton";
 
-export function ProviderCard(data: UserProvider, doc: Document): Node {
+export function ProviderCard(data: UserProvider, doc: Document, onDelete=()=>{}): Node {
   const card = ztoolkit.UI.createElement(doc, "div", {
     classList: [
       "overflow-clip",
@@ -44,6 +44,7 @@ export function ProviderCard(data: UserProvider, doc: Document): Node {
 
   function onDeleteClicked() {
     card.remove();
+    onDelete();
   }
 
   const cardBody = ztoolkit.UI.createElement(doc, "div", {
