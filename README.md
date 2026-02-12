@@ -13,7 +13,7 @@ You can visit the [**Project Homepage**](https://zotero.fukeke.com) for more inf
 If you find this project helpful, please consider supporting its development and maintenance:
 
 [<img alt="&quot;Buy Me A Coffee&quot;" height="60px" src="docs/assets/red-button.png"/>](https://www.buymeacoffee.com/fukeke)
-[<img alt="Afdian" src="https://img.shields.io/badge/-Afdian-946CE6?style=flat&logo=afdian&logoColor=ffffff" height="60px"/>](https://afdian.com/a/fukeke)
+[<img alt="Afdian" src="docs/assets/afdian-btn-en.png" height="60px"/>](https://afdian.com/a/fukeke)
 
 ## Features
 
@@ -57,7 +57,7 @@ Switch between Dark Mode and Light Mode at will:
 
 ## Usage
 
-Here is a quick tutorial. For detailed instructions, please click and visit the project [homepage](https://zotero.fukeke.com).
+Here is a quick tutorial. For detailed instructions, please click and visit the project [homepage](https://zotero.fukeke.com)
 
 1. Install the plugin.
 2. Open the model settings.
