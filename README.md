@@ -6,7 +6,7 @@
 
 A beautiful and handful AI assistant plugin for Zotero, putting an AI assistant right at your fingertips.
 
-You can visit the [**Project Homepage**]() for more information and detailed tutorials.
+You can visit the [**Project Homepage**](https://zotero.fukeke.com) for more information and detailed tutorials.
 
 ## Support
 
@@ -57,7 +57,7 @@ Switch between Dark Mode and Light Mode at will:
 
 ## Usage
 
-Here is a quick tutorial. For detailed instructions, please visit the project homepage:
+Here is a quick tutorial. For detailed instructions, please click and visit the project [homepage](https://zotero.fukeke.com).
 
 1. Install the plugin.
 2. Open the model settings.
