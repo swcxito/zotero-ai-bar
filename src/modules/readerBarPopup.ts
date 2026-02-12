@@ -52,7 +52,10 @@ export function registerReaderInitializer() {
       ztoolkit.log(addon.data.selectedText, "selected");
       addon.data.selectionContext = undefined;
       if (getPref("extend-selection-context"))
-        addon.data.selectionContextPromise = getSelectionContext(reader, params);
+        addon.data.selectionContextPromise = getSelectionContext(
+          reader,
+          params,
+        );
       else addon.data.selectionContextPromise = Promise.resolve();
       // ztoolkit.log(doc);
       // ztoolkit.log(append);
@@ -60,8 +63,7 @@ export function registerReaderInitializer() {
       ztoolkit.log("Creating Ask AI Bar");
       addon.data.currentAnnotation = params.annotation;
       addon.data.currentReader = reader;
-      if (reader._internalReader._type === "pdf")
-        append(renderAIBar(doc));
+      if (reader._internalReader._type === "pdf") append(renderAIBar(doc));
     },
     config.addonID,
   );

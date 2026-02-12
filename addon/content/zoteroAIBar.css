@@ -38,6 +38,7 @@
 .ai-bar-container .ai-btn:hover:not(:disabled) {
   background-color: rgba(255, 255, 255, 0.1);
   color: #fff;
+  cursor: pointer;
 }
 
 .ai-bar-container .ai-btn:active:not(:disabled) {
@@ -145,6 +146,7 @@
 
 .ai-bar-container .ai-send-btn:hover {
   opacity: 1;
+  cursor: pointer;
 }
 
 .ai-bar-container .ai-send-btn.disabled {

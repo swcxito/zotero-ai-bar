@@ -43,7 +43,7 @@ export function LogoButton(
       "dark:text-zinc-200",
     ],
     children: [
-      IconView(iconUrl??'', 1),
+      IconView(iconUrl ?? "", 1),
       {
         tag: "span",
         namespace: "html",

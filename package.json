@@ -24,7 +24,7 @@
   "scripts": {
     "start": "concurrently \"npm run dev:css\" \"zotero-plugin serve\"",
     "build": "npm run build:css && zotero-plugin build && tsc --noEmit",
-    "build:css": "npx postcss src/styles/app.css -o addon/content/app.css --env=production",
+    "build:css": "cross-env NODE_ENV=production postcss src/styles/app.css -o addon/content/app.css",
     "dev:css": "npx postcss src/styles/app.css -o addon/content/app.css --watch",
     "lint:check": "prettier --check . && eslint .",
     "lint:fix": "prettier --write . && eslint . --fix",
@@ -51,6 +51,8 @@
     "autoprefixer": "^10.4.24",
     "chai": "^6.2.1",
     "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3",
+    "cssnano": "^7.1.0",
     "eslint": "^9.39.2",
     "mocha": "^11.7.5",
     "postcss": "^8.5.6",

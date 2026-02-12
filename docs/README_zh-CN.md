@@ -12,8 +12,6 @@
 
 如果你觉得这个项目对你有帮助，欢迎通过以下方式赞助，支持我继续开发和维护这个项目：
 
-[//]: # "[![Buy Me a Coffee](https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=%e2%98%95&slug=fukeke&button_colour=FF5F5F&font_colour=ffffff&font_family=Comic&outline_colour=000000&coffee_colour=FFDD00&name=bmc-button)](https://www.buymeacoffee.com/fukeke)"
-
 [<img alt="爱发电" src="https://img.shields.io/badge/-爱发电-946CE6?style=flat&logo=afdian&logoColor=ffffff" height="60px"/>](https://afdian.com/a/fukeke)
 [<img alt="&amp;amp;quot;Buy Me A Coffee&amp;amp;quot;" height="60px" src="assets/red-button.png"/>](https://www.buymeacoffee.com/fukeke)
 
@@ -75,8 +73,8 @@
 - [x] ~~多语言支持（中英文）~~
 - [x] ~~基础设置~~
 - [x] ~~文档~~
-- [ ] 持续集成/持续部署
 - [ ] 美化工具栏
+- [ ] 工具链模型选择
 - [ ] 自定义提示语
 - [ ] 添加笔记
 - [ ] 重新回复
@@ -92,10 +90,10 @@
 
 ## 致谢
 
-本项目基于以下项目开发：</br>
+本项目基于以下项目开发：<br/>
 [![Zotero](https://img.shields.io/badge/Zotero-CC2936?style=flat&logo=zotero)](https://www.zotero.org) [![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat&logo=github)](https://github.com/windingwind/zotero-plugin-template)
 
-本项目参考了以下项目的部分实现：</br>
+本项目参考了以下项目的部分实现：<br/>
 [![GitHub Repo stars](https://img.shields.io/github/stars/windingwind/zotero-pdf-translate?label=zotero-pdf-translate&style=flat&logo=github)](https://github.com/windingwind/zotero-pdf-translate) [![GitHub Repo stars](https://img.shields.io/github/stars/guaguastandup/zotero-pdf2zh?label=Zotero%20PDF2zh&style=flat&logo=github)](https://github.com/guaguastandup/zotero-pdf2zh)
 
 ## 许可证

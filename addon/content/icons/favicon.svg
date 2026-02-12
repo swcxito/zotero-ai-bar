@@ -1,30 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024">
+<svg id="a" data-name="图层 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 593.34">
   <defs>
-    <style>
-      .cls-1 {
-        fill: url(#_未命名的渐变_11);
-      }
-
-      .cls-2 {
-        fill: url(#_未命名的渐变_83);
-      }
-
-      .cls-2, .cls-3 {
-        stroke: #ffabe2;
-        stroke-miterlimit: 10;
-        stroke-width: 3px;
-      }
-
-      .cls-3 {
-        fill: url(#_未命名的渐变_81-2);
-      }
-
-      .cls-4 {
-        fill: url(#_未命名的渐变_81);
-      }
-    </style>
-    <linearGradient id="_未命名的渐变_11" data-name="未命名的渐变 11" x1="0" y1="699.96" x2="1024" y2="699.96" gradientUnits="userSpaceOnUse">
+    <linearGradient id="b" x1="0" y1="484.8" x2="1024" y2="484.8" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#e66e50"/>
       <stop offset=".14" stop-color="#e56e55"/>
       <stop offset=".32" stop-color="#e36e64"/>
@@ -33,7 +10,7 @@
       <stop offset=".95" stop-color="#d471cf"/>
       <stop offset="1" stop-color="#d372db"/>
     </linearGradient>
-    <radialGradient id="_未命名的渐变_81" data-name="未命名的渐变 81" cx="330.82" cy="472.04" fx="330.82" fy="472.04" r="170.89" gradientTransform="translate(106.94 -56.14) rotate(12.03)" gradientUnits="userSpaceOnUse">
+    <radialGradient id="c" cx="330.82" cy="256.88" fx="330.82" fy="256.88" r="170.89" gradientTransform="translate(62.08 -60.87) rotate(12.03)" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#c7b299"/>
       <stop offset=".02" stop-color="#d4b37e"/>
       <stop offset=".04" stop-color="#e2b563"/>
@@ -46,7 +23,7 @@
       <stop offset=".92" stop-color="#fe9e5d"/>
       <stop offset="1" stop-color="#f96"/>
     </radialGradient>
-    <radialGradient id="_未命名的渐变_83" data-name="未命名的渐变 83" cx="550.5" cy="303.86" fx="550.5" fy="303.86" r="85.57" gradientTransform="translate(0 0)" gradientUnits="userSpaceOnUse">
+    <radialGradient id="d" cx="550.5" cy="88.7" fx="550.5" fy="88.7" r="85.57" gradientTransform="translate(0 0)" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#c7b299"/>
       <stop offset=".02" stop-color="#d4b37e"/>
       <stop offset=".04" stop-color="#e2b563"/>
@@ -59,14 +36,10 @@
       <stop offset=".73" stop-color="#fe9a62"/>
       <stop offset="1" stop-color="#f96"/>
     </radialGradient>
-    <radialGradient id="_未命名的渐变_81-2" data-name="未命名的渐变 81" cx="733.96" cy="499.84" fx="733.96" fy="499.84" r="35.52" gradientTransform="translate(836.79 -347.88) rotate(60.5)" xlink:href="#_未命名的渐变_81"/>
+    <radialGradient id="e" cx="733.96" cy="284.68" fx="733.96" fy="284.68" r="35.52" gradientTransform="translate(649.53 -457.07) rotate(60.5)" xlink:href="#c"/>
   </defs>
-  <g id="_图层_1" data-name="图层 1">
-    <rect class="cls-1" y="591.43" width="1024" height="217.07" rx="68.52" ry="68.52"/>
-  </g>
-  <g id="_图层_2" data-name="图层 2">
-    <polygon class="cls-4" points="367.7 307.36 403.76 428.01 499.21 510.13 378.57 546.19 296.44 641.64 260.38 521 164.93 438.87 285.58 402.81 367.7 307.36"/>
-    <polygon class="cls-2" points="550.5 218.29 580.75 273.6 636.07 303.86 580.75 334.11 550.5 389.43 520.24 334.11 464.92 303.86 520.24 273.6 550.5 218.29"/>
-    <polygon class="cls-3" points="794.14 519.58 780.35 541.82 780.72 567.98 758.49 554.19 732.32 554.56 746.12 532.33 745.74 506.16 767.98 519.96 794.14 519.58"/>
-  </g>
+  <rect y="376.27" width="1024" height="217.07" rx="68.52" ry="68.52" style="fill: url(#b);"/>
+  <polygon points="367.7 92.2 403.76 212.85 499.21 294.97 378.57 331.03 296.44 426.48 260.38 305.84 164.93 223.71 285.58 187.65 367.7 92.2" style="fill: url(#c);"/>
+  <polygon points="550.5 3.13 580.75 58.44 636.07 88.7 580.75 118.95 550.5 174.27 520.24 118.95 464.92 88.7 520.24 58.44 550.5 3.13" style="fill: url(#d); stroke: #ffabe2; stroke-miterlimit: 10; stroke-width: 3px;"/>
+  <polygon points="794.14 304.42 780.35 326.66 780.72 352.82 758.49 339.03 732.32 339.4 746.12 317.17 745.74 291 767.98 304.8 794.14 304.42" style="fill: url(#e); stroke: #ffabe2; stroke-miterlimit: 10; stroke-width: 3px;"/>
 </svg>
