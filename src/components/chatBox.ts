@@ -30,7 +30,10 @@ interface ActionButtonOptions {
   className?: string; // Additional classes
 }
 
-function createActionButton(options: ActionButtonOptions, enabled: boolean = true): any {
+function createActionButton(
+  options: ActionButtonOptions,
+  enabled: boolean = true,
+): any {
   return {
     tag: "button",
     classList: [
@@ -89,7 +92,7 @@ export function ChatBox(
   doc: Document,
   annotation: _ZoteroTypes.Annotations.AnnotationJson | undefined,
   isUser: boolean = false,
-  onRegenerate?: () => void
+  onRegenerate?: () => void,
 ): Element {
   return ztoolkit.UI.createElement(doc, "div", {
     tag: "div",
@@ -102,12 +105,12 @@ export function ChatBox(
       "flex-col",
       ...(isUser
         ? [
-          "items-end",
-          "max-w-[85%]",
-          "sm:max-w-[75%]",
-          "justify-end",
-          "self-end",
-        ]
+            "items-end",
+            "max-w-[85%]",
+            "sm:max-w-[75%]",
+            "justify-end",
+            "self-end",
+          ]
         : ["items-start", "w-full"]),
     ],
     children: [
@@ -122,28 +125,28 @@ export function ChatBox(
           "break-words",
           ...(isUser
             ? [
-              "px-5",
-              "py-3.5",
-              "rounded-2xl",
-              "bg-rose-500",
-              "text-white",
-              "dark:bg-rose-600",
-              "rounded-tr-none",
-              "shadow-md",
-              "shadow-rose-200/50",
-              "dark:shadow-none",
-              "text-sm",
-              "leading-relaxed",
-            ]
+                "px-5",
+                "py-3.5",
+                "rounded-2xl",
+                "bg-rose-500",
+                "text-white",
+                "dark:bg-rose-600",
+                "rounded-tr-none",
+                "shadow-md",
+                "shadow-rose-200/50",
+                "dark:shadow-none",
+                "text-sm",
+                "leading-relaxed",
+              ]
             : [
-              "pr-4",
-              "w-full",
-              "text-slate-800",
-              "dark:text-rose-50/90",
-              "text-[15px]",
-              "leading-relaxed",
-              "py-1",
-            ]),
+                "pr-4",
+                "w-full",
+                "text-slate-800",
+                "dark:text-rose-50/90",
+                "text-[15px]",
+                "leading-relaxed",
+                "py-1",
+              ]),
         ],
       },
       //todo: add streaming indicator
@@ -159,16 +162,16 @@ export function ChatBox(
           ...(isUser
             ? ["justify-end"]
             : [
-              "justify-start",
-              "opacity-60",
-              "hover:opacity-100",
-              "transition-opacity",
-              "duration-300",
-              "hidden",
-            ]),
+                "justify-start",
+                "opacity-60",
+                "hover:opacity-100",
+                "transition-opacity",
+                "duration-300",
+                "hidden",
+              ]),
         ],
-        styles:{
-          textAlign: "justify" ,
+        styles: {
+          textAlign: "justify",
           // textJustify: "inter-ideograph",
         },
         children: [
@@ -177,7 +180,8 @@ export function ChatBox(
             icon: Icons.Copy,
             title: getString("chat-copy-text"),
             onClick: (_e, btn) => {
-              const container = btn.closest(".items-start") || btn.closest(".items-end");
+              const container =
+                btn.closest(".items-start") || btn.closest(".items-end");
               const messageEl = container?.querySelector(".chat-message");
               if (messageEl && messageEl.textContent) {
                 new ztoolkit.Clipboard()
@@ -192,16 +196,19 @@ export function ChatBox(
                   }, 4000);
                 }
               }
-            }
+            },
           }),
           createActionButton({
             label: "COPY MD",
             icon: Icons.Markdown,
             title: getString("chat-copy-markdown"),
             onClick: (_e, btn) => {
-              const container = btn.closest(".items-start") || btn.closest(".items-end");
+              const container =
+                btn.closest(".items-start") || btn.closest(".items-end");
               const messageEl = container?.querySelector(".chat-message");
-              const markdown = (container as HTMLElement)?.dataset?.markdown || (messageEl as HTMLElement)?.dataset?.markdown;
+              const markdown =
+                (container as HTMLElement)?.dataset?.markdown ||
+                (messageEl as HTMLElement)?.dataset?.markdown;
 
               const textToCopy = markdown || messageEl?.textContent;
 
@@ -218,33 +225,35 @@ export function ChatBox(
                   }, 4000);
                 }
               }
-            }
+            },
           }),
-          ...(!isUser ? [
-            // createActionButton({
-            //   label: "NOTE",
-            //   icon: Icons.Note,
-            //   title: getString("chat-save-as-note"),
-            //   // TODO: Add note logic
-            //   onClick: (_e, _btn) => {
-            //     // Placeholder for NOTE functionality
-            //     if (!Zotero.getMainWindow().ZoteroContextPane.activeEditor || !annotation)
-            //       return;
-            //     annotation.comment = (_btn.closest(".items-start") as HTMLElement).dataset.markdown || "";
-            //     addon.data.currentReader?._addToNote([annotation]);
-            //   }
-            // }),
-            // createActionButton({
-            //   label: "Redo",
-            //   icon: Icons.Redo,
-            //   title: getString("chat-regenerate-response"),
-            //   onClick: (_e, _btn) => {
-            //     if (onRegenerate) onRegenerate();
-            //   }
-            // })
-          ] : [])
-        ]
-      }
+          ...(!isUser
+            ? [
+                // createActionButton({
+                //   label: "NOTE",
+                //   icon: Icons.Note,
+                //   title: getString("chat-save-as-note"),
+                //   // TODO: Add note logic
+                //   onClick: (_e, _btn) => {
+                //     // Placeholder for NOTE functionality
+                //     if (!Zotero.getMainWindow().ZoteroContextPane.activeEditor || !annotation)
+                //       return;
+                //     annotation.comment = (_btn.closest(".items-start") as HTMLElement).dataset.markdown || "";
+                //     addon.data.currentReader?._addToNote([annotation]);
+                //   }
+                // }),
+                // createActionButton({
+                //   label: "Redo",
+                //   icon: Icons.Redo,
+                //   title: getString("chat-regenerate-response"),
+                //   onClick: (_e, _btn) => {
+                //     if (onRegenerate) onRegenerate();
+                //   }
+                // })
+              ]
+            : []),
+        ],
+      },
     ],
   });
 }

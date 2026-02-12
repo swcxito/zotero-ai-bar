@@ -5,7 +5,6 @@ export default {
     "./src/modules/**/*.ts",
     "./src/components/**/*.ts",
   ],
-  safelist: ["*"],
   theme: {
     container: {
       center: true,

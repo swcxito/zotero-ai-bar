@@ -68,7 +68,10 @@ export async function getSelectionContext(
           [matches[0].start, matches[0].end],
           contextSize + 30,
         );
-        ztoolkit.log("selected context by search:", addon.data.selectionContext);
+        ztoolkit.log(
+          "selected context by search:",
+          addon.data.selectionContext,
+        );
       } else if (
         selectedText.split(" ").length <= 5 ||
         selectedText.length <= 5
@@ -92,7 +95,10 @@ export async function getSelectionContext(
           contextSize,
           isCrossPage ? data.pages[index.pageIndex! + 1] : undefined,
         );
-        ztoolkit.log("selected context by position:", addon.data.selectionContext);
+        ztoolkit.log(
+          "selected context by position:",
+          addon.data.selectionContext,
+        );
       }
     }
   }
@@ -268,7 +274,6 @@ function parseSortIndex(str: string): {
   offset: number | null;
   top_y: number | null;
 } | null {
-
   // PDF 附件：xxxxx|xxxxxx|xxxxx => pageIndex|offset|top
   let m = str.match(/^(\d+)\|(\d+)\|(\d+)$/);
   if (m) {
@@ -364,13 +369,15 @@ async function getPageBatchRecognizerData(itemID: number, startIndex: number) {
 
   try {
     const result = await Zotero.PDFWorker._query(
-      'deletePages',
-      { buf, pageIndexes: pageIndexesToDelete, password: '' },
-      [buf]
+      "deletePages",
+      { buf, pageIndexes: pageIndexesToDelete, password: "" },
+      [buf],
     );
     buf = result.buf;
   } catch (e: any) {
-    Zotero.debug(`[Plugin] Failed to delete pages for offset ${startIndex}: ${e.message}`);
+    Zotero.debug(
+      `[Plugin] Failed to delete pages for offset ${startIndex}: ${e.message}`,
+    );
     throw e;
   }
 
@@ -378,12 +385,13 @@ async function getPageBatchRecognizerData(itemID: number, startIndex: number) {
   let data;
   try {
     data = await Zotero.PDFWorker._query(
-      'getRecognizerData',
-      { buf, password: '' },
-      [buf]
+      "getRecognizerData",
+      { buf, password: "" },
+      [buf],
     );
   } catch (e: any) {
-    const msg = typeof e === 'object' && e.message ? e.message : JSON.stringify(e);
+    const msg =
+      typeof e === "object" && e.message ? e.message : JSON.stringify(e);
     throw new Error(`Failed to get recognizer data: ${msg}`);
   }
 

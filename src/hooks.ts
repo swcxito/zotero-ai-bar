@@ -7,7 +7,10 @@ import {
 } from "./modules/readerBarPopup";
 import { onModelDialogLoad } from "./modules/modelDialog";
 import { getPref, registerPrefs } from "./utils/prefs";
-import { registerReaderItemPaneSection, resizeReaderItemPaneHeight } from "./modules/readerItemPane";
+import {
+  registerReaderItemPaneSection,
+  resizeReaderItemPaneHeight,
+} from "./modules/readerItemPane";
 import { ChatBox } from "./components/chatBox";
 import { renderMarkdown } from "./utils/markdown";
 

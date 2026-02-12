@@ -21,98 +21,98 @@
 @tailwind utilities;
 
 @layer components {
-    body::-webkit-scrollbar {
-        display: none;
-    }
+  body::-webkit-scrollbar {
+    display: none;
+  }
 
-    .chat-message p {
-        margin-bottom: 0.75rem;
-        text-align: justify;
-    }
+  .chat-message p {
+    margin-bottom: 0.75rem;
+    text-align: justify;
+  }
 
-    .chat-message p:last-child {
-        margin-bottom: 0;
-    }
+  .chat-message p:last-child {
+    margin-bottom: 0;
+  }
 
-    .chat-message ul {
-        @apply list-disc ml-5 mb-3 marker:text-rose-500 dark:marker:text-rose-400;
-    }
+  .chat-message ul {
+    @apply list-disc ml-5 mb-3 marker:text-rose-500 dark:marker:text-rose-400;
+  }
 
-    .chat-message ol {
-        @apply list-decimal ml-5 mb-3 marker:text-rose-500 dark:marker:text-rose-400;
-    }
+  .chat-message ol {
+    @apply list-decimal ml-5 mb-3 marker:text-rose-500 dark:marker:text-rose-400;
+  }
 
-    .chat-message blockquote {
-        @apply border-l-4 border-rose-400 dark:border-rose-600 pl-4 py-1 my-3 text-gray-600 dark:text-gray-300 bg-rose-50/30 dark:bg-rose-900/10 rounded-r-lg italic;
-    }
+  .chat-message blockquote {
+    @apply border-l-4 border-rose-400 dark:border-rose-600 pl-4 py-1 my-3 text-gray-600 dark:text-gray-300 bg-rose-50/30 dark:bg-rose-900/10 rounded-r-lg italic;
+  }
 
-    .chat-message li {
-        margin-bottom: 0.25rem;
-    }
+  .chat-message li {
+    margin-bottom: 0.25rem;
+  }
 
-    .chat-message a {
-        color: #f43f5e;
-        text-decoration: underline;
-        text-underline-offset: 2px;
-    }
+  .chat-message a {
+    color: #f43f5e;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 
-    .chat-message h1 {
-        @apply text-2xl;
-        font-weight: 700;
-        margin-top: 1rem;
-        margin-bottom: 0.5rem;
-    }
+  .chat-message h1 {
+    @apply text-2xl;
+    font-weight: 700;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+  }
 
-    .chat-message h2 {
-        @apply text-xl;
-        font-weight: 700;
-        margin-top: 1rem;
-        margin-bottom: 0.5rem;
-    }
+  .chat-message h2 {
+    @apply text-xl;
+    font-weight: 700;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+  }
 
-    .chat-message h3 {
-        @apply text-lg;
-        /* 17px */
-        font-weight: 700;
-        margin-top: 1rem;
-        margin-bottom: 0.5rem;
-    }
+  .chat-message h3 {
+    @apply text-lg;
+    /* 17px */
+    font-weight: 700;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+  }
 
-    .chat-message h4 {
-        @apply text-base;
-        font-weight: 700;
-        margin-top: 1rem;
-        margin-bottom: 0.5rem;
-    }
+  .chat-message h4 {
+    @apply text-base;
+    font-weight: 700;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+  }
 
-    .chat-message table {
-        @apply w-full border-separate border-spacing-0 rounded-xl border border-rose-200 dark:border-rose-900/50 my-6 overflow-hidden text-sm;
-    }
+  .chat-message table {
+    @apply w-full border-separate border-spacing-0 rounded-xl border border-rose-200 dark:border-rose-900/50 my-6 overflow-hidden text-sm;
+  }
 
-    .chat-message th {
-        @apply bg-rose-50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-100 font-semibold text-left px-4 py-3 border-b border-rose-200 dark:border-rose-900/50;
-    }
+  .chat-message th {
+    @apply bg-rose-50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-100 font-semibold text-left px-4 py-3 border-b border-rose-200 dark:border-rose-900/50;
+  }
 
-    .chat-message td {
-        @apply px-4 py-3 text-gray-700 dark:text-gray-300 border-b border-rose-100 dark:border-rose-900/30;
-    }
+  .chat-message td {
+    @apply px-4 py-3 text-gray-700 dark:text-gray-300 border-b border-rose-100 dark:border-rose-900/30;
+  }
 
-    .chat-message tr:last-child td {
-        @apply border-b-0;
-    }
+  .chat-message tr:last-child td {
+    @apply border-b-0;
+  }
 
-    .chat-message tr:nth-child(even) {
-        @apply bg-rose-50/50 dark:bg-rose-900/10;
-    }
+  .chat-message tr:nth-child(even) {
+    @apply bg-rose-50/50 dark:bg-rose-900/10;
+  }
 
-    /* Code & Pre */
-    .chat-message code:not(pre code) {
-        @apply px-1.5 py-0.5 rounded-md bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 text-[0.9em] font-medium font-mono;
-    }
-.chat-message pre {
+  /* Code & Pre */
+  .chat-message code:not(pre code) {
+    @apply px-1.5 py-0.5 rounded-md bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 text-[0.9em] font-medium font-mono;
+  }
+  .chat-message pre {
     @apply my-4 mx-2 rounded-xl p-4 overflow-x-auto shadow-sm shadow-rose-200 dark:shadow-rose-950 dark:bg-zinc-800 bg-zinc-50;
-}
-.chat-message pre code {
+  }
+  .chat-message pre code {
     @apply bg-transparent p-0 text-inherit;
-}
+  }
 }

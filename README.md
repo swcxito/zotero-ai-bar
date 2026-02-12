@@ -73,7 +73,6 @@ Here is a quick tutorial. For detailed instructions, please visit the project ho
 - [x] ~~Multi-language Support (English/Chinese)~~
 - [x] ~~Basic Settings~~
 - [x] ~~Documentation~~
-- [ ] CI/CD
 - [ ] Beautify Toolbar
 - [ ] Custom Prompts
 - [ ] Add Notes
