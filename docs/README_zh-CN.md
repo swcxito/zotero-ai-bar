@@ -12,8 +12,8 @@
 
 如果你觉得这个项目对你有帮助，欢迎通过以下方式赞助，支持我继续开发和维护这个项目：
 
-[<img alt="爱发电" src="docs/assets/afdian-btn-zh.png" height="60px"/>](https://afdian.com/a/fukeke)
-[<img alt="&amp;amp;quot;Buy Me A Coffee&amp;amp;quot;" height="60px" src="docs/assets/red-button.png"/>](https://www.buymeacoffee.com/fukeke)
+[<img alt="爱发电" src="/docs/assets/afdian-btn-zh.png" height="60px"/>](https://afdian.com/a/fukeke)
+[<img alt="&amp;amp;quot;Buy Me A Coffee&amp;amp;quot;" height="60px" src="/docs/assets/red-button.png"/>](https://www.buymeacoffee.com/fukeke)
 
 ## 功能介绍
 
