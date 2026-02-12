@@ -220,12 +220,10 @@ function onLLMStreamError(data: { requestId: string; error: string }) {
     if (actions) {
       actions.classList.remove("hidden");
     }
-    const doc = pop.ownerDocument!;
-    const errorDiv = doc.createElement("div");
-    errorDiv.style.color = "red";
-    errorDiv.style.marginTop = "8px";
-    errorDiv.textContent = `Error: ${data.error}`;
-    pop.appendChild(errorDiv);
+    const chatMessage = pop.querySelector(".chat-message");
+    if (chatMessage) {
+      chatMessage.innerHTML = `<div style="color: red; white-space: pre-wrap; word-break: break-word;">${data.error}</div>`;
+    }
     const container = pop.parentElement;
     if (container) {
       container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
