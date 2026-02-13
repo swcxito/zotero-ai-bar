@@ -22,8 +22,8 @@ import { streamLLM } from "../utils/llmRequest";
 import { SYSTEM_PROMPT_PREFIX } from "../constants";
 import { getString } from "../utils/locale";
 import { getPref } from "../utils/prefs";
-
-//TODO: DOM 操作: 手动创建 ripple 效果的代码稍显冗余，可以考虑封装成一个通用指令或 CSS 动画。
+import { aiBarCommands } from "./prompts";
+import { AIButton } from "../components/aiButton";
 
 // Generate unique request ID
 function generateRequestId(): string {
@@ -95,49 +95,9 @@ function renderAIBar(doc: Document): DocumentFragment {
     });
   };
 
-  const btnListeners = (onClick: (e: Event) => Promise<void>) => [
-    {
-      type: "click",
-      listener: (e: Event) => {
-        const btn = e.currentTarget as HTMLButtonElement;
-        if (btn.disabled) return;
-
-        const container = btn.closest(".ai-bar-container") as HTMLElement;
-        if (container) disableAll(container);
-
-        // Create ripple effect
-        const ripple = btn.ownerDocument!.createElement("span");
-        ripple.className = "ripple";
-        const rect = btn.getBoundingClientRect();
-        const size = Math.max(rect.width, rect.height);
-        const x = (e as MouseEvent).clientX - rect.left - size / 2;
-        const y = (e as MouseEvent).clientY - rect.top - size / 2;
-
-        ripple.style.width = ripple.style.height = `${size}px`;
-        ripple.style.left = `${x}px`;
-        ripple.style.top = `${y}px`;
-
-        btn.appendChild(ripple);
-
-        ripple.addEventListener("animationend", () => {
-          ripple.remove();
-        });
-
-        e.stopPropagation();
-        setTimeout(() => {
-          const bar = btn.closest(".ai-bar-container") as HTMLElement;
-          if (bar) bar.style.display = "none";
-        }, 300);
-
-        onClick(e);
-      },
-    },
-  ];
-
   const handleAsk = async (
     input: HTMLTextAreaElement,
     container: HTMLElement,
-    btn?: HTMLElement,
   ) => {
     const text = input.value.trim();
     if (text && addon.data.selectedText) {
@@ -188,90 +148,20 @@ function renderAIBar(doc: Document): DocumentFragment {
     }
   };
 
-  const handleButtonAction = async (actionType: string) => {
+  const handleButtonAction = async (commandId: string) => {
     if (!addon.data.selectedText) return;
-    ztoolkit.log("Action:", actionType, addon.data.selectedText);
+    ztoolkit.log("Action:", commandId, addon.data.selectedText);
+
+    const command = aiBarCommands[commandId];
+    if (!command) {
+      ztoolkit.log("Unknown command:", commandId);
+      return;
+    }
 
     const requestId = generateRequestId();
-    let prompt = "";
-
     const targetLanguage = Zotero.locale;
-    // Define prompts for different actions
-    switch (actionType) {
-      case "explain":
-        prompt = `Explain the <selected> text detailed in ${targetLanguage}.`;
-        break;
-      case "summarize":
-        prompt = `Summarize the <selected> text concisely in ${targetLanguage}, highlighting the key points.`;
-        break;
-      case "translate":
-        prompt = `
-# Task
-Translate the <selected> content into ${targetLanguage}.
-
-# Mode Selection Rules
-Analyze the <selected> text and follow the matching rule below:
-
-## Mode 1: Sentence or Paragraph
-IF the selection is a phrase, sentence, or paragraph:
-- Provide a direct, fluent, and academic translation.
-- Do not add explanations nor original text.
-
-## Mode 2: Abbreviation / Acronym (e.g., NASA, AI, RNA)
-IF the selection is an abbreviation:
-- Format: **Abbreviation**
-- Line 1: Full form in English.
-- Line 2: abbr. + Full form in ${targetLanguage}.
-- Line 3: Brief explanation in ${targetLanguage}.
-
-## Mode 3: Single Word
-IF the selection is a single word:
-- Analyze the surrounding context to determine the specific meaning used here.
-- Output strictly using this format:
-
-**<Word>**
-<IPA Pronunciation>
-**<Part of Speech>. <Meaning in CURRENT Context>**
------
-<Part of Speech>. <Other Common Meaning 1>
-<Part of Speech>. <Other Common Meaning 2>
-
-# Examples
-It is a example of how to format your response based on the selection type.
-The following examples using English to Chinese translation are for illustration only, please translate into ${targetLanguage} in your response.
-## Example (Word):
-Context: Work adopted a <selected>single</selected> green micro-LED.
-Output:
-**single**
-/ˈsɪŋɡ(ə)l/
-**adj. 单一的，单个的**
------
-adj. 独自的；单身的
-n. 单曲
-
-## Example (Abbreviation):
-Context: Research by <selected>NASA</selected> shows...
-Output:
-**NASA**
-National Aeronautics and Space Administration
-abbr. 美国国家航空航天局
-负责民用太空计划、航空研究和太空研究的机构
-
-## Example (Sentence or Paragraph):
-Context: <selected>The results were inconclusive.</selected>
-Output:
-结果是非决定性的。
-
-## Example (Sentence or Paragraph):
-Context: <selected>Photosynthesis is the process by which green plants and some other organisms use sunlight to synthesize foods from carbon dioxide and water.</selected>
-Output:
-光合作用是绿色植物和其他一些生物利用阳光将二氧化碳和水合成食物的过程。
-
-`;
-        break;
-      default:
-        prompt = "Please analyze the text.";
-    }
+    const prompt = command.getPrompt(targetLanguage);
+    ztoolkit.log("Generated Prompt:", prompt);
 
     const messagesPromise = (async () => {
       try {
@@ -310,44 +200,25 @@ Output:
     });
   };
 
+  // Create AI buttons from commands
+  const createCommandButtons = () => {
+    return Object.values(aiBarCommands).map((command) =>
+      AIButton({
+        label: getString(command.label),
+        icon: command.icon,
+        onClick: async () => handleButtonAction(command.id),
+      }),
+    );
+  };
+
   return ztoolkit.UI.createElement(doc, "fragment", {
     children: [
       {
         tag: "div",
         classList: ["ai-bar-container"],
         children: [
-          // 1. Explain
-          {
-            tag: "button",
-            classList: ["ai-btn"],
-            properties: {
-              textContent: `\u{1F4D6}${getString("reader-bar-explain")}`,
-            },
-            listeners: btnListeners(async () => handleButtonAction("explain")),
-          },
-          // 2. Translate
-          {
-            tag: "button",
-            classList: ["ai-btn"],
-            properties: {
-              textContent: `\u{1F310}${getString("reader-bar-translate")}`,
-            },
-            listeners: btnListeners(async () =>
-              handleButtonAction("translate"),
-            ),
-          },
-          // 3. Summarize
-          {
-            tag: "button",
-            classList: ["ai-btn"],
-            properties: {
-              textContent: `\u{1F4DD}${getString("reader-bar-summarize")}`,
-            },
-            listeners: btnListeners(async () =>
-              handleButtonAction("summarize"),
-            ),
-          },
-          // 4. Ask (Input Group)
+          ...createCommandButtons(),
+          // Ask (Input Group)
           {
             tag: "div",
             classList: ["input-group"],
