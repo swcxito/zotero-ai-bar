@@ -23,7 +23,11 @@ export function IconView(
   sizeRem: number = 1,
   extraClasses: string[] = [],
 ): TagElementProps {
-  if (iconMarkup.trim().startsWith("<svg")) {
+  const trimmedMarkup = iconMarkup.trim();
+  if (trimmedMarkup.startsWith("<svg")) {
+    const finalMarkup = trimmedMarkup.includes("xmlns=")
+      ? trimmedMarkup
+      : trimmedMarkup.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
     return {
       tag: "span",
       namespace: "html",
@@ -36,7 +40,7 @@ export function IconView(
         flexShrink: "0",
       },
       classList: extraClasses,
-      properties: { innerHTML: iconMarkup },
+      properties: { innerHTML: finalMarkup },
     };
   }
   return {
