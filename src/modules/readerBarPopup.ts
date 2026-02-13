@@ -231,12 +231,31 @@ function renderAIBar(doc: Document): DocumentFragment {
                 },
                 listeners: [
                   {
+                    type: "focus",
+                    listener: (e: Event) => {
+                      const input = e.currentTarget as HTMLTextAreaElement;
+                      // Add overlay element to prevent reader's global keydown handler
+                      if (!doc.querySelector(".context-menu-overlay")) {
+                        const overlay = doc.createElement("div");
+                        overlay.className = "context-menu-overlay";
+                        overlay.style.cssText =
+                          "position: fixed; inset: 0; pointer-events: none; z-index: -1; opacity: 0;";
+                        doc.body.appendChild(overlay);
+                      }
+                    },
+                  },
+                  {
                     type: "blur",
                     listener: (e: Event) => {
                       const input = e.currentTarget as HTMLTextAreaElement;
                       if (!input.value) {
                         input.rows = 1;
                         input.style.height = "auto";
+                      }
+                      // Remove overlay element when textarea loses focus
+                      const overlay = doc.querySelector(".context-menu-overlay");
+                      if (overlay) {
+                        overlay.remove();
                       }
                     },
                   },
@@ -263,7 +282,11 @@ function renderAIBar(doc: Document): DocumentFragment {
                     type: "keydown",
                     listener: (e: Event) => {
                       const ke = e as KeyboardEvent;
+                      // Prevent all keyboard events from bubbling up to parent
+                      // This ensures backspace and other keys don't close the popup
                       ke.stopPropagation();
+                      ke.stopImmediatePropagation();
+
                       if (ke.key === "Enter" && !ke.shiftKey) {
                         ke.preventDefault();
                         const input = ke.currentTarget as HTMLTextAreaElement;
@@ -272,6 +295,14 @@ function renderAIBar(doc: Document): DocumentFragment {
                         ) as HTMLElement;
                         handleAsk(input, bar);
                       }
+                    },
+                  },
+                  {
+                    type: "keyup",
+                    listener: (e: Event) => {
+                      // Also prevent keyup events from bubbling
+                      e.stopPropagation();
+                      e.stopImmediatePropagation();
                     },
                   },
                 ],
