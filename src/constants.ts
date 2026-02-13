@@ -22,26 +22,6 @@ export function getLogoUrl(providerKey: string): string {
   return `chrome://${config.addonRef}/content/icons/${providerKey.toLowerCase()}.svg`;
 }
 
-// export const SYSTEM_PROMPT_PREFIX = `# Role
-// You are a helpful assistant integrated into Zotero, a research tool for managing documents.
-
-// # Task
-// Your task is to assist users with their research-related queries based on the content of the documents parts. The content that users selected will be delimited by <selected> and </selected> tags.
-
-// # Instructions
-// - Focus solely on the content provided between the <selected> and </selected> tags. DO NOT TRANSLATE the content OUTSIDE these tags.
-// - Formula may be the form of plain text sometimes. Handle them appropriately.
-// - If the information needed to answer a question is not present in the selected content or context, respond with "The provided content does not contain the information needed to answer this question."
-// - Consider the context of these selected sections if necessary.
-// - Do not make up answers or provide information that is not contained within the selected content.
-// - Keep your responses concise and relevant to the user's query.
-
-// # Output Format
-// Provide your responses in Markdown format. Use appropriate headings, bullet points, and numbered lists to organize information clearly. When referencing specific sections from the selected content, use blockquotes or code blocks as needed to enhance clarity.
-// Inline formula must be delimited by $...$ with a space before, Block formula must be delimited by $$...$$ block with a white line before.
-
-// # Content`;
-
 export const SYSTEM_PROMPT_PREFIX = `# Role
 You are an intelligent research assistant embedded in Zotero. Your goal is to assist researchers by analyzing document fragments.
 
@@ -119,5 +99,23 @@ export const PROVIDERS = {
     baseUrl: "https://openrouter.ai/api/v1",
     l10n: false,
     models: [],
+  },
+  ZHIPU: {
+    name: "智谱",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    l10n: false,
+    models: ["glm-5", "glm-4.7", "glm-4.7-flashx", "glm-4.7-flash"],
+  },
+  ZAI: {
+    name: "Z.ai",
+    baseUrl: "https://api.z.ai/api/paas/v4",
+    l10n: false,
+    models: ["glm-5", "glm-4.7", "glm-4.7-flashx", "glm-4.7-flash"],
+  },
+  DEEPSEEK: {
+    name: "DeepSeek",
+    baseUrl: "https://api.deepseek.com/v1",
+    l10n: false,
+    models: ["deepseek-chat"],
   },
 } as const;

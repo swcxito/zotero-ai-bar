@@ -99,19 +99,25 @@ export async function streamLLM(
     // Remove trailing slash and append /chat/completions
     const url = provider.baseUrl.replace(/\/$/, "") + "/chat/completions";
 
+    const body: Record<string, unknown> = {
+      model: model.name,
+      messages: messages,
+      temperature: temp,
+      max_tokens: maxTokens,
+      stream: true,
+    };
+
+    if (provider.key === "ZHIPU" || provider.key === "ZAI") {
+      body.thinking = { type: "disabled" };
+    }
+
     const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${provider.apiKey}`,
       },
-      body: JSON.stringify({
-        model: model.name,
-        messages: messages,
-        temperature: temp,
-        max_tokens: maxTokens,
-        stream: true,
-      }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
 
