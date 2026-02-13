@@ -24,6 +24,7 @@ import { getString } from "../utils/locale";
 import { getPref } from "../utils/prefs";
 import { aiBarCommands } from "./prompts";
 import { AIButton } from "../components/aiButton";
+import { ModelInfo } from "../components/modelInfo";
 
 // Generate unique request ID
 function generateRequestId(): string {
@@ -217,6 +218,7 @@ function renderAIBar(doc: Document): DocumentFragment {
         tag: "div",
         classList: ["ai-bar-container"],
         children: [
+          ModelInfo(),
           ...createCommandButtons(),
           // Ask (Input Group)
           {
