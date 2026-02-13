@@ -35,11 +35,11 @@ export default defineConfig({
         bundle: true,
         target: "firefox115",
         outfile: `.scaffold/build/addon/content/scripts/${pkg.config.addonRef}.js`,
-        // 代码压缩和体积优化
-        minify: true,
-        minifyWhitespace: true,
-        minifyIdentifiers: true,
-        minifySyntax: true,
+        // 代码压缩和体积优化 - 仅在生产环境中启用
+        minify: process.env.NODE_ENV === "production",
+        minifyWhitespace: process.env.NODE_ENV === "production",
+        minifyIdentifiers: process.env.NODE_ENV === "production",
+        minifySyntax: process.env.NODE_ENV === "production",
         // 移除调试代码
         // drop: process.env.NODE_ENV === "production" ? ["console", "debugger"] : [],
         // 启用 Tree Shaking（移除未使用的代码）
