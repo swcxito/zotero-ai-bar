@@ -162,7 +162,7 @@ function renderAIBar(doc: Document): DocumentFragment {
     const requestId = generateRequestId();
     const targetLanguage = Zotero.locale;
     const prompt = command.getPrompt(targetLanguage);
-    ztoolkit.log("Generated Prompt:", prompt);
+    // ztoolkit.log("Generated Prompt:", prompt);
 
     const messagesPromise = (async () => {
       try {
