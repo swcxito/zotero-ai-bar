@@ -86,7 +86,11 @@
   }
 
   .chat-message table {
-    @apply w-full border-separate border-spacing-0 rounded-xl border border-rose-200 dark:border-rose-900/50 my-6 overflow-hidden text-sm;
+    @apply w-full border-separate border-spacing-0 rounded-xl border border-rose-200 dark:border-rose-900/50 my-6 overflow-x-auto block text-sm;
+  }
+
+  .chat-message math[display="block"] {
+    @apply block overflow-x-auto overflow-y-hidden py-2;
   }
 
   .chat-message th {
