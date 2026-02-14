@@ -30,6 +30,7 @@ class Addon {
     currentSection?: number;
     sectionMap?: Map<number | string, HTMLElement>;
     abortController?: AbortController;
+    lastMessagesPromise?: Promise<import("./utils/llmRequest").Message[]>;
   };
   // Lifecycle hooks
   public hooks: typeof hooks;
