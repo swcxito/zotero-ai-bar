@@ -20,18 +20,23 @@ import { Icons } from "./common";
 import { getString } from "../utils/locale";
 import { IconView } from "./iconView";
 
-interface ActionButtonOptions {
+interface CreateActionButtonProps {
   label: string;
   icon: string;
   onClick?: (e: MouseEvent, btn: HTMLElement) => void;
   title?: string;
-  className?: string; // Additional classes
+  className?: string;
+  enabled?: boolean;
 }
 
-function createActionButton(
-  options: ActionButtonOptions,
-  enabled: boolean = true,
-): any {
+function createActionButton({
+  label,
+  icon,
+  onClick,
+  title,
+  className,
+  enabled = true,
+}: CreateActionButtonProps): any {
   return {
     tag: "button",
     classList: [
@@ -57,19 +62,19 @@ function createActionButton(
       "uppercase",
       "tracking-wider",
       "justify-center",
-      ...(options.className ? options.className.split(" ") : []),
+      ...(className ? className.split(" ") : []),
     ],
     properties: {
-      title: options.title || "",
+      title: title || "",
       disabled: !enabled,
     },
     children: [
-      IconView(options.icon, 1),
+      IconView({ iconMarkup: icon, sizeRem: 1 }),
       {
         tag: "span",
         classList: ["btn-label"],
         properties: {
-          textContent: options.label,
+          textContent: label,
         },
       },
     ],
@@ -77,8 +82,8 @@ function createActionButton(
       {
         type: "click",
         listener: (e: MouseEvent) => {
-          if (options.onClick) {
-            options.onClick(e, e.currentTarget as HTMLElement);
+          if (onClick) {
+            onClick(e, e.currentTarget as HTMLElement);
           }
         },
       },
@@ -86,12 +91,19 @@ function createActionButton(
   };
 }
 
-export function ChatBox(
-  doc: Document,
-  annotation: _ZoteroTypes.Annotations.AnnotationJson | undefined,
-  isUser: boolean = false,
-  onRegenerate?: () => void,
-): Element {
+export interface ChatBoxProps {
+  doc: Document;
+  annotation: _ZoteroTypes.Annotations.AnnotationJson | undefined;
+  isUser?: boolean;
+  onRegenerate?: () => void;
+}
+
+export function ChatBox({
+  doc,
+  annotation,
+  isUser = false,
+  onRegenerate,
+}: ChatBoxProps): Element {
   return ztoolkit.UI.createElement(doc, "div", {
     tag: "div",
     classList: [

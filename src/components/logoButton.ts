@@ -19,11 +19,17 @@
 import { TagElementProps } from "zotero-plugin-toolkit";
 import { IconView } from "./iconView";
 
-export function LogoButton(
-  text: string,
-  iconUrl?: string,
-  onClick?: () => void,
-): TagElementProps {
+export interface LogoButtonProps {
+  text: string;
+  iconUrl?: string;
+  onClick?: () => void;
+}
+
+export function LogoButton({
+  text,
+  iconUrl,
+  onClick,
+}: LogoButtonProps): TagElementProps {
   return {
     tag: "button",
     namespace: "html",
@@ -43,7 +49,7 @@ export function LogoButton(
       "dark:text-zinc-200",
     ],
     children: [
-      IconView(iconUrl ?? "", 1),
+      IconView({ iconMarkup: iconUrl ?? "", sizeRem: 1 }),
       {
         tag: "span",
         namespace: "html",

@@ -146,7 +146,7 @@ export class ModelDialog {
 
     if (container) {
       for (const config of addon.data.userProviderConfigs || []) {
-        const card = ProviderCard(config, this.doc);
+        const card = ProviderCard({ data: config, doc: this.doc });
         container.appendChild(card);
       }
     }
@@ -201,15 +201,15 @@ export class ModelDialog {
       const b = ztoolkit.UI.createElement(
         this.doc,
         "button",
-        LogoButton(
-          name,
-          `chrome://${config.addonRef}/content/icons/${providerKey.toLowerCase()}.svg`,
-          () => {
+        LogoButton({
+          text: name,
+          iconUrl: `chrome://${config.addonRef}/content/icons/${providerKey.toLowerCase()}.svg`,
+          onClick: () => {
             this.hidePopup();
             const container = this.root?.querySelector("#provider-block");
             if (container) {
-              const card = ProviderCard(
-                {
+              const card = ProviderCard({
+                data: {
                   id: crypto.randomUUID(),
                   key: providerKey as keyof typeof PROVIDERS,
                   name: name,
@@ -219,38 +219,38 @@ export class ModelDialog {
                   })),
                   isCustom: false,
                 },
-                this.doc,
-                () => this.renderProviders(),
-              );
+                doc: this.doc,
+                onDelete: () => this.renderProviders(),
+              });
               container?.appendChild(card);
               b.remove();
             }
           },
-        ),
+        }),
       );
       this.providerPopup.appendChild(b);
       ztoolkit.log("Added provider button:", b);
     }
     ztoolkit.UI.appendElement(
-      LogoButton(
-        "Custom Provider",
-        `chrome://${config.addonRef}/content/icons/favicon.svg`,
-        () => {
+      LogoButton({
+        text: "Custom Provider",
+        iconUrl: `chrome://${config.addonRef}/content/icons/favicon.svg`,
+        onClick: () => {
           this.hidePopup();
           const container = this.root?.querySelector("#provider-block");
           if (container) {
-            const card = ProviderCard(
-              {
+            const card = ProviderCard({
+              data: {
                 id: crypto.randomUUID(),
                 name: "Custom Provider",
                 isCustom: true,
               },
-              this.doc,
-            );
+              doc: this.doc,
+            });
             container?.appendChild(card);
           }
         },
-      ),
+      }),
       this.providerPopup,
     );
   }

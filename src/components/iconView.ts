@@ -18,11 +18,17 @@
 
 import { TagElementProps } from "zotero-plugin-toolkit";
 
-export function IconView(
-  iconMarkup: string,
-  sizeRem: number = 1,
-  extraClasses: string[] = [],
-): TagElementProps {
+export interface IconViewProps {
+  iconMarkup: string;
+  sizeRem?: number;
+  extraClasses?: string[];
+}
+
+export function IconView({
+  iconMarkup,
+  sizeRem = 1,
+  extraClasses = [],
+}: IconViewProps): TagElementProps {
   const trimmedMarkup = iconMarkup.trim();
   if (trimmedMarkup.startsWith("<svg")) {
     const finalMarkup = trimmedMarkup.includes("xmlns=")

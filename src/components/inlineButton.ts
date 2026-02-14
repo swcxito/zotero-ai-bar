@@ -20,7 +20,11 @@ import { TagElementProps } from "zotero-plugin-toolkit";
 import { Icons } from "./common";
 import { IconView } from "./iconView";
 
-export function InlineButton(onClicked: (e: Event) => void): TagElementProps {
+export interface InlineButtonProps {
+  onClicked: (e: Event) => void;
+}
+
+export function InlineButton({ onClicked }: InlineButtonProps): TagElementProps {
   return {
     tag: "button",
     classList: [
@@ -49,7 +53,7 @@ export function InlineButton(onClicked: (e: Event) => void): TagElementProps {
       "mb-4",
     ],
     children: [
-      IconView(Icons.Add, 1),
+      IconView({ iconMarkup: Icons.Add, sizeRem: 1 }),
       { tag: "span", properties: { textContent: "Add Model" } },
     ],
     listeners: [

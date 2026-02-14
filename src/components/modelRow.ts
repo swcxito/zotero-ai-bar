@@ -20,7 +20,12 @@ import { UserProviderModel } from "../types";
 import { Icons } from "./common";
 import { IconView } from "./iconView";
 
-export function CardModelRow(doc: Document, data?: UserProviderModel) {
+export interface CardModelRowProps {
+  doc: Document;
+  data?: UserProviderModel;
+}
+
+export function CardModelRow({ doc, data }: CardModelRowProps) {
   const row = ztoolkit.UI.createElement(doc, "div", {
     tag: "div",
     //flex items-center gap-3 p-2 rounded-xl transition-all duration-300 bg-zinc-50 dark:bg-zinc-800  ring-2 ring-rose-100
@@ -73,7 +78,7 @@ export function CardModelRow(doc: Document, data?: UserProviderModel) {
               "dark:hover:bg-zinc-700",
             ],
             properties: { title: "Quick Select" },
-            children: [IconView(Icons.QuickInput, 1)],
+            children: [IconView({ iconMarkup: Icons.QuickInput, sizeRem: 1 })],
           },
           {
             tag: "input",
@@ -111,7 +116,7 @@ export function CardModelRow(doc: Document, data?: UserProviderModel) {
           "shrink-0",
         ],
         properties: { title: "Delete Model" },
-        children: [IconView(Icons.Delete, 1)],
+        children: [IconView({ iconMarkup: Icons.Delete, sizeRem: 1 })],
         listeners: [
           {
             type: "click",
