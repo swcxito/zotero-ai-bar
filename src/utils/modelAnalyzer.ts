@@ -1,4 +1,5 @@
 import { config } from "../../package.json";
+import { ModelIcons } from "../components/common";
 
 /**
  * Extracts model family, type, and version from a model ID string based on common naming conventions.
@@ -177,13 +178,5 @@ export function analyzeModelName(modelName: string): ModelAnalysisResult {
 export function getModelIconPath(family: string): string {
   const normalizedFamily = family.toLowerCase();
 
-  switch (normalizedFamily) {
-    case "gpt":
-    case "chatgpt":
-      return `chrome://${config.addonRef}/content/icons/openai.svg`;
-    case "deepseek":
-      return `chrome://${config.addonRef}/content/icons/deepseek.svg`;
-    default:
-      return `chrome://${config.addonRef}/content/icons/models/${normalizedFamily}.svg`;
-  }
+  return ModelIcons.get(normalizedFamily) || "";
 }

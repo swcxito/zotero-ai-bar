@@ -30,7 +30,9 @@ export function IconView({
   extraClasses = [],
 }: IconViewProps): TagElementProps {
   const trimmedMarkup = iconMarkup.trim();
-  if (trimmedMarkup.startsWith("<svg")) {
+
+  // If it's a raw SVG or has xmlns, treat as markup
+  if (trimmedMarkup.startsWith("<svg") || trimmedMarkup.includes("xmlns=")) {
     const finalMarkup = trimmedMarkup.includes("xmlns=")
       ? trimmedMarkup
       : trimmedMarkup.replace(
@@ -43,6 +45,7 @@ export function IconView({
       styles: {
         width: `${sizeRem}rem`,
         height: `${sizeRem}rem`,
+        fontSize: `${sizeRem}rem`,
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",

@@ -21,6 +21,7 @@ import { getPref, setPref } from "../utils/prefs";
 import { analyzeModelName, getModelIconPath } from "../utils/modelAnalyzer";
 import { UserProviderConfig, UserProviderModel } from "../types";
 import { getString } from "../utils/locale";
+import { IconView } from "./iconView";
 
 /**
  * Update the model info display
@@ -46,26 +47,41 @@ function updateModelInfoDisplay(container: HTMLElement) {
   container.innerHTML = "";
 
   // Add model icon
-  const img = container.ownerDocument.createElement("img");
-  img.className = "model-info-icon";
-  img.src = iconPath;
-  img.alt = modelAnalysis.family;
-  container.appendChild(img);
+  ztoolkit.UI.appendElement(
+    IconView({
+      iconMarkup: iconPath,
+      extraClasses: ["model-info-icon"],
+      sizeRem: 1.5,
+    }),
+    container,
+  );
 
   // Add version text if available
   if (modelAnalysis.version) {
-    const span = container.ownerDocument.createElement("span");
-    span.className = "model-info-version";
-    span.textContent = modelAnalysis.version;
-    container.appendChild(span);
+    ztoolkit.UI.appendElement(
+      {
+        tag: "span",
+        classList: ["model-info-version"],
+        properties: {
+          textContent: modelAnalysis.version,
+        },
+      },
+      container,
+    );
   }
 
   // Add type text if available
   if (modelAnalysis.type) {
-    const span = container.ownerDocument.createElement("span");
-    span.className = "model-info-type";
-    span.textContent = modelAnalysis.type;
-    container.appendChild(span);
+    ztoolkit.UI.appendElement(
+      {
+        tag: "span",
+        classList: ["model-info-type"],
+        properties: {
+          textContent: modelAnalysis.type,
+        },
+      },
+      container,
+    );
   }
 }
 
@@ -94,14 +110,13 @@ export function ModelInfo(): TagElementProps {
   const children: TagElementProps[] = [];
 
   // Add model icon
-  children.push({
-    tag: "img",
-    classList: ["model-info-icon"],
-    properties: {
-      src: iconPath,
-      alt: modelAnalysis.family,
-    },
-  });
+  children.push(
+    IconView({
+      iconMarkup: iconPath,
+      extraClasses: ["model-info-icon"],
+      sizeRem: 1.5,
+    }),
+  );
 
   // Add version text if available (top-right corner)
   if (modelAnalysis.version) {
@@ -211,10 +226,14 @@ function toggleModelDropdown(anchor: HTMLElement) {
         const modelAnalysis = analyzeModelName(model.name);
         const iconPath = getModelIconPath(modelAnalysis.family);
 
-        const icon = doc.createElement("img");
-        icon.src = iconPath;
-        icon.className = "model-dropdown-icon";
-        item.appendChild(icon);
+        ztoolkit.UI.appendElement(
+          IconView({
+            iconMarkup: iconPath,
+            extraClasses: ["model-dropdown-icon"],
+            sizeRem: 1.2,
+          }),
+          item,
+        );
 
         const text = doc.createElement("span");
         text.textContent = model.name;
