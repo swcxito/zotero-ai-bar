@@ -128,6 +128,8 @@ function renderAIBar(doc: Document): DocumentFragment {
         ];
       })();
 
+      addon.data.lastMessagesPromise = messagesPromise;
+
       // Trigger hooks for stream events
       await streamLLM(messagesPromise, {
         onStart: () => {
@@ -182,6 +184,8 @@ function renderAIBar(doc: Document): DocumentFragment {
         { role: "user", content: prompt },
       ];
     })();
+
+    addon.data.lastMessagesPromise = messagesPromise;
 
     // Trigger hooks for stream events
     await streamLLM(messagesPromise, {

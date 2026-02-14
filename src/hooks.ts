@@ -13,8 +13,31 @@ import {
 } from "./modules/readerItemPane";
 import { ChatBox } from "./components/chatBox";
 import { renderMarkdown } from "./utils/markdown";
+import { streamLLM } from "./utils/llmRequest";
 
 const chatPopMap = new Map<string, Element>();
+
+async function regenerateResponse() {
+  const messagesPromise = addon.data.lastMessagesPromise;
+  if (!messagesPromise) return;
+
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  await streamLLM(messagesPromise, {
+    onStart: () => {
+      onLLMStreamStart({ requestId });
+    },
+    onUpdate: async (fullText) => {
+      onLLMStreamUpdate({ requestId, fullText });
+    },
+    onEnd: () => {
+      onLLMStreamEnd({ requestId });
+    },
+    onError: (error) => {
+      onLLMStreamError({ requestId, error });
+    },
+  });
+}
 
 async function onStartup() {
   await Promise.all([
@@ -167,7 +190,12 @@ function onLLMStreamStart(data: { requestId: string }) {
       resizeReaderItemPaneHeight(body, "maximize");
       const container = root.shadowRoot.querySelector(".message-container");
       if (!doc || !container) return;
-      const pop = ChatBox({ doc, annotation: addon.data.currentAnnotation, isUser: false });
+      const pop = ChatBox({
+        doc,
+        annotation: addon.data.currentAnnotation,
+        isUser: false,
+        onRegenerate: () => regenerateResponse(),
+      });
       pop.setAttribute("data-request-id", data.requestId);
       const chatMessage = pop.querySelector(".chat-message");
       if (chatMessage) chatMessage.innerHTML = "Thinking...";

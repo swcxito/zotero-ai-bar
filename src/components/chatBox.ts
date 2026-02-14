@@ -252,14 +252,14 @@ export function ChatBox({
                 //     addon.data.currentReader?._addToNote([annotation]);
                 //   }
                 // }),
-                // createActionButton({
-                //   label: "Redo",
-                //   icon: Icons.Redo,
-                //   title: getString("chat-regenerate-response"),
-                //   onClick: (_e, _btn) => {
-                //     if (onRegenerate) onRegenerate();
-                //   }
-                // })
+                createActionButton({
+                  label: "Retry",
+                  icon: Icons.Redo,
+                  title: getString("chat-regenerate-response"),
+                  onClick: (_e, _btn) => {
+                    if (onRegenerate) onRegenerate();
+                  }
+                })
               ]
             : []),
         ],
