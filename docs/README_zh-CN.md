@@ -18,10 +18,10 @@
 ## v0.3.0 更新内容
 
 - 工具栏上的模型选择器，无需打开设置页面即可切换模型。
-![img.png](assets/img.png)
+  ![img.png](assets/img.png)
 
 - 针对失败请求的重试按钮，无需重新输入提示词。
-![img.png](assets/retry.png)
+  ![img.png](assets/retry.png)
 
 ## 功能介绍
 

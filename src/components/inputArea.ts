@@ -89,7 +89,13 @@ export function InputArea(doc: Document): HTMLElement {
           "text-slate-400",
           "dark:text-neutral-600",
         ],
-        children: [IconView({ iconMarkup: Icons.Send, sizeRem: 1.5, extraClasses: ["text-white"] })],
+        children: [
+          IconView({
+            iconMarkup: Icons.Send,
+            sizeRem: 1.5,
+            extraClasses: ["text-white"],
+          }),
+        ],
       },
     ],
   };

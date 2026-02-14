@@ -42,31 +42,32 @@ Answer user queries based on the provided document content. The specific user se
 # Content`;
 
 export interface AIBarCommand {
-    id: string;
-    icon: string;
-    label: FluentMessageId;
-    getPrompt: (targetLanguage: string) => string;
+  id: string;
+  icon: string;
+  label: FluentMessageId;
+  getPrompt: (targetLanguage: string) => string;
 }
 
 export const aiBarCommands: Record<string, AIBarCommand> = {
-    explain: {
-        id: "explain",
-        icon: "📖",
-        label: "reader-bar-explain",
-        getPrompt: (targetLanguage: string) => `Explain the <selected> text detailed in the document. ${targetLanguage ? `Answer in ${targetLanguage}.` : ""}`,
-    },
-    summarize: {
-        id: "summarize",
-        icon: "📝",
-        label: "reader-bar-summarize",
-        getPrompt: (targetLanguage: string) =>
-            `Summarize the <selected> text concisely${targetLanguage ? ` in ${targetLanguage}` : ""}, highlighting the key points.`,
-    },
-    translate: {
-        id: "translate",
-        icon: "🌐",
-        label: "reader-bar-translate",
-        getPrompt: (targetLanguage: string) => `
+  explain: {
+    id: "explain",
+    icon: "📖",
+    label: "reader-bar-explain",
+    getPrompt: (targetLanguage: string) =>
+      `Explain the <selected> text detailed in the document. ${targetLanguage ? `Answer in ${targetLanguage}.` : ""}`,
+  },
+  summarize: {
+    id: "summarize",
+    icon: "📝",
+    label: "reader-bar-summarize",
+    getPrompt: (targetLanguage: string) =>
+      `Summarize the <selected> text concisely${targetLanguage ? ` in ${targetLanguage}` : ""}, highlighting the key points.`,
+  },
+  translate: {
+    id: "translate",
+    icon: "🌐",
+    label: "reader-bar-translate",
+    getPrompt: (targetLanguage: string) => `
 # Task
 Translate the <selected> content into ${targetLanguage}.
 
@@ -128,5 +129,5 @@ Context: <selected>Photosynthesis is the process by which green plants and some 
 Output:
 光合作用是绿色植物和其他一些生物利用阳光将二氧化碳和水合成食物的过程。
 `,
-    },
+  },
 };

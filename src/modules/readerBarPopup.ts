@@ -258,7 +258,9 @@ function renderAIBar(doc: Document): DocumentFragment {
                         input.style.height = "auto";
                       }
                       // Remove overlay element when textarea loses focus
-                      const overlay = doc.querySelector(".context-menu-overlay");
+                      const overlay = doc.querySelector(
+                        ".context-menu-overlay",
+                      );
                       if (overlay) {
                         overlay.remove();
                       }

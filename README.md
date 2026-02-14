@@ -18,10 +18,10 @@ If you find this project helpful, please consider supporting its development and
 ## What's new in v0.3.0
 
 - model selector on the toolbar, no need to open settings page to switch models.
-![img.png](docs/assets/img.png)
+  ![img.png](docs/assets/img.png)
 
 - Retry button for failed requests, no need to re-enter the prompt.
-![img.png](docs/assets/retry.png)
+  ![img.png](docs/assets/retry.png)
 
 ## Features
 

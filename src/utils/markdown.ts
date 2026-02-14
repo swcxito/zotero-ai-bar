@@ -98,7 +98,10 @@ export async function renderMarkdown(markdown: string): Promise<string> {
         /<math(?![^>]*xmlns)/g,
         '<math xmlns="http://www.w3.org/1998/Math/MathML"',
       )
-      .replace(/<svg(?![^>]*xmlns)/g, '<svg xmlns="http://www.w3.org/2000/svg"');
+      .replace(
+        /<svg(?![^>]*xmlns)/g,
+        '<svg xmlns="http://www.w3.org/2000/svg"',
+      );
   } catch (error) {
     console.error("Markdown 解析失败:", error);
     return `<p class="error">内容解析错误</p>`;
