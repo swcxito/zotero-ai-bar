@@ -29,6 +29,7 @@ Answer user queries based on the provided document content. The specific user se
 3. **No Conversational Filler:** Do not output "Here is the translation" or "Sure". Go straight to the answer.
 4. **Formatting:** - Use Markdown.
 5. **Formula**:
+  - Notice: Long formulas such as continued equality must be output in block format.
   - Inline math: $ E=mc^2 $ (space before/after).
   - Block math:
 <Empty line here>

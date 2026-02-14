@@ -79,7 +79,7 @@ function optimizeFormulas(text: string): string {
  * @param markdown 源文本
  * @returns 渲染后的 HTML 字符串
  */
-export function renderMarkdown(markdown: string): string | Promise<string> {
+export async function renderMarkdown(markdown: string): Promise<string> {
   try {
     let text = markdown;
 
@@ -88,7 +88,17 @@ export function renderMarkdown(markdown: string): string | Promise<string> {
       text = optimizeFormulas(text);
     }
 
-    return marked.parse(text);
+    const html = await marked.parse(text);
+
+    // 针对 Zotero 的 innerHTML 安全检查，补全 math 和 svg 的命名空间
+    // 避免 "Removed unsafe attribute. Element: svg. Attribute: xmlns." 警告
+    // 同时也确保在 XHTML 环境下这些标签能被正确识别
+    return html
+      .replace(
+        /<math(?![^>]*xmlns)/g,
+        '<math xmlns="http://www.w3.org/1998/Math/MathML"',
+      )
+      .replace(/<svg(?![^>]*xmlns)/g, '<svg xmlns="http://www.w3.org/2000/svg"');
   } catch (error) {
     console.error("Markdown 解析失败:", error);
     return `<p class="error">内容解析错误</p>`;
