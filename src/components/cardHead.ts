@@ -22,11 +22,17 @@ import { Icons } from "./common";
 import { UserProvider } from "../types";
 import { IconView } from "./iconView";
 
-export function CardHead(
-  data: UserProvider,
-  onDeleteClicked: () => void,
-  onToggleCollapse: (e: Event) => void,
-): ElementProps {
+export interface CardHeadProps {
+  data: UserProvider;
+  onDeleteClicked: () => void;
+  onToggleCollapse: (e: Event) => void;
+}
+
+export function CardHead({
+  data,
+  onDeleteClicked,
+  onToggleCollapse,
+}: CardHeadProps): ElementProps {
   const urlLabel: TagElementProps = {
     tag: "div",
     classList: [
@@ -87,7 +93,7 @@ export function CardHead(
         tag: "div",
         classList: ["flex", "items-center", "gap-4", "flex-1", "min-w-0"],
         children: [
-          IconView(getLogoUrl(data.key ?? "favicon"), 1.5, ["shrink-0"]),
+          IconView({ iconMarkup: getLogoUrl(data.key ?? "favicon"), sizeRem: 1.5, extraClasses: ["shrink-0"] }),
           // text section
           {
             tag: "div",
@@ -148,7 +154,7 @@ export function CardHead(
                   "hover:bg-white/50",
                   "dark:hover:bg-red-950",
                 ],
-                children: [IconView(Icons.Delete, 1)],
+                children: [IconView({ iconMarkup: Icons.Delete, sizeRem: 1 })],
                 listeners: [{ type: "click", listener: onDeleteClicked }],
               },
               {
@@ -172,7 +178,7 @@ export function CardHead(
                       "duration-300",
                       "ease-in-out",
                     ],
-                    children: [IconView(Icons.Chevron, 1)],
+                    children: [IconView({ iconMarkup: Icons.Chevron, sizeRem: 1 })],
                   },
                 ],
                 listeners: [{ type: "click", listener: onToggleCollapse }],

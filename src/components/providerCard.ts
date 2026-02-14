@@ -21,11 +21,17 @@ import { CardHead } from "./cardHead";
 import { CardModelRow } from "./modelRow";
 import { InlineButton } from "./inlineButton";
 
-export function ProviderCard(
-  data: UserProvider,
-  doc: Document,
+export interface ProviderCardProps {
+  data: UserProvider;
+  doc: Document;
+  onDelete?: () => void;
+}
+
+export function ProviderCard({
+  data,
+  doc,
   onDelete = () => {},
-): Node {
+}: ProviderCardProps): Node {
   const card = ztoolkit.UI.createElement(doc, "div", {
     classList: [
       "overflow-clip",
@@ -91,7 +97,7 @@ export function ProviderCard(
 
   data.models?.forEach((model) => {
     if (model.id) {
-      const row = CardModelRow(doc, model);
+      const row = CardModelRow({ doc, data: model });
       modelCardList?.appendChild(row);
     }
   });
@@ -99,11 +105,13 @@ export function ProviderCard(
   const addModelButton = ztoolkit.UI.createElement(
     doc,
     "button",
-    InlineButton(() => {
+    InlineButton({
+      onClicked: () => {
       if (modelCardList) {
-        const row = CardModelRow(doc);
+        const row = CardModelRow({ doc });
         modelCardList.insertBefore(row, addModelButton);
       }
+    }
     }),
   );
 
@@ -164,7 +172,7 @@ export function ProviderCard(
   const header = ztoolkit.UI.createElement(
     doc,
     "div",
-    CardHead(data, onDeleteClicked, onToggleCollapse),
+    CardHead({ data, onDeleteClicked, onToggleCollapse }),
   );
 
   modelCardList?.appendChild(addModelButton);

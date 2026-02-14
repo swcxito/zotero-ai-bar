@@ -53,7 +53,7 @@ export function InputArea(doc: Document): HTMLElement {
           "hover:text-rose-500",
           "transition-colors",
         ],
-        children: [IconView(Icons.Link, 1)],
+        children: [IconView({ iconMarkup: Icons.Link, sizeRem: 1 })],
       },
       {
         tag: "textarea",
@@ -89,7 +89,7 @@ export function InputArea(doc: Document): HTMLElement {
           "text-slate-400",
           "dark:text-neutral-600",
         ],
-        children: [IconView(Icons.Send, 1.5, ["text-white"])],
+        children: [IconView({ iconMarkup: Icons.Send, sizeRem: 1.5, extraClasses: ["text-white"] })],
       },
     ],
   };

@@ -167,7 +167,7 @@ function onLLMStreamStart(data: { requestId: string }) {
       resizeReaderItemPaneHeight(body, "maximize");
       const container = root.shadowRoot.querySelector(".message-container");
       if (!doc || !container) return;
-      const pop = ChatBox(doc, addon.data.currentAnnotation, false); // AI response should be false
+      const pop = ChatBox({ doc, annotation: addon.data.currentAnnotation, isUser: false });
       pop.setAttribute("data-request-id", data.requestId);
       const chatMessage = pop.querySelector(".chat-message");
       if (chatMessage) chatMessage.innerHTML = "Thinking...";
