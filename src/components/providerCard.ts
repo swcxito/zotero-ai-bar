@@ -107,11 +107,11 @@ export function ProviderCard({
     "button",
     InlineButton({
       onClicked: () => {
-      if (modelCardList) {
-        const row = CardModelRow({ doc });
-        modelCardList.insertBefore(row, addModelButton);
-      }
-    }
+        if (modelCardList) {
+          const row = CardModelRow({ doc });
+          modelCardList.insertBefore(row, addModelButton);
+        }
+      },
     }),
   );
 

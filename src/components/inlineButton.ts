@@ -24,7 +24,9 @@ export interface InlineButtonProps {
   onClicked: (e: Event) => void;
 }
 
-export function InlineButton({ onClicked }: InlineButtonProps): TagElementProps {
+export function InlineButton({
+  onClicked,
+}: InlineButtonProps): TagElementProps {
   return {
     tag: "button",
     classList: [

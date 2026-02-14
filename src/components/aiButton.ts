@@ -19,62 +19,70 @@
 import { TagElementProps } from "zotero-plugin-toolkit";
 
 export interface AIButtonProps {
-    label: string;
-    icon?: string;
-    onClick: (e: Event) => Promise<void>;
+  label: string;
+  icon?: string;
+  onClick: (e: Event) => Promise<void>;
 }
 
-export function AIButton({ label, icon = "", onClick }: AIButtonProps): TagElementProps {
-    return {
-        tag: "button",
-        classList: ["ai-btn"],
-        properties: {
-            textContent: icon ? `${icon}${label}` : label,
+export function AIButton({
+  label,
+  icon = "",
+  onClick,
+}: AIButtonProps): TagElementProps {
+  return {
+    tag: "button",
+    classList: ["ai-btn"],
+    properties: {
+      textContent: icon ? `${icon}${label}` : label,
+    },
+    listeners: [
+      {
+        type: "click",
+        listener: async (e: Event) => {
+          const btn = e.currentTarget as HTMLButtonElement;
+          if (btn.disabled) return;
+
+          const container = btn.closest(".ai-bar-container") as HTMLElement;
+          if (container) {
+            container
+              .querySelectorAll("button, textarea")
+              .forEach((el: Element) => {
+                (el as HTMLButtonElement | HTMLTextAreaElement).disabled = true;
+              });
+            container
+              .querySelectorAll(".ai-send-btn")
+              .forEach((el: Element) => {
+                (el as HTMLElement).classList.add("disabled");
+              });
+          }
+
+          // Create ripple effect
+          const ripple = btn.ownerDocument!.createElement("span");
+          ripple.className = "ripple";
+          const rect = btn.getBoundingClientRect();
+          const size = Math.max(rect.width, rect.height);
+          const x = (e as MouseEvent).clientX - rect.left - size / 2;
+          const y = (e as MouseEvent).clientY - rect.top - size / 2;
+
+          ripple.style.width = ripple.style.height = `${size}px`;
+          ripple.style.left = `${x}px`;
+          ripple.style.top = `${y}px`;
+
+          btn.appendChild(ripple);
+
+          ripple.addEventListener("animationend", () => {
+            ripple.remove();
+          });
+
+          e.stopPropagation();
+          setTimeout(() => {
+            const bar = btn.closest(".ai-bar-container") as HTMLElement;
+            if (bar) bar.style.display = "none";
+          }, 300);
+
+          await onClick(e);
         },
-        listeners: [
-            {
-                type: "click",
-                listener: async (e: Event) => {
-                    const btn = e.currentTarget as HTMLButtonElement;
-                    if (btn.disabled) return;
-
-                    const container = btn.closest(".ai-bar-container") as HTMLElement;
-                    if (container) {
-                        container.querySelectorAll("button, textarea").forEach((el: Element) => {
-                            (el as HTMLButtonElement | HTMLTextAreaElement).disabled = true;
-                        });
-                        container.querySelectorAll(".ai-send-btn").forEach((el: Element) => {
-                            (el as HTMLElement).classList.add("disabled");
-                        });
-                    }
-
-                    // Create ripple effect
-                    const ripple = btn.ownerDocument!.createElement("span");
-                    ripple.className = "ripple";
-                    const rect = btn.getBoundingClientRect();
-                    const size = Math.max(rect.width, rect.height);
-                    const x = (e as MouseEvent).clientX - rect.left - size / 2;
-                    const y = (e as MouseEvent).clientY - rect.top - size / 2;
-
-                    ripple.style.width = ripple.style.height = `${size}px`;
-                    ripple.style.left = `${x}px`;
-                    ripple.style.top = `${y}px`;
-
-                    btn.appendChild(ripple);
-
-                    ripple.addEventListener("animationend", () => {
-                        ripple.remove();
-                    });
-
-                    e.stopPropagation();
-                    setTimeout(() => {
-                        const bar = btn.closest(".ai-bar-container") as HTMLElement;
-                        if (bar) bar.style.display = "none";
-                    }, 300);
-
-                    await onClick(e);
-                },
-            },
-        ],
-    };
+      },
+    ],
+  };
 }

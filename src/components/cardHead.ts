@@ -93,7 +93,11 @@ export function CardHead({
         tag: "div",
         classList: ["flex", "items-center", "gap-4", "flex-1", "min-w-0"],
         children: [
-          IconView({ iconMarkup: getLogoUrl(data.key ?? "favicon"), sizeRem: 1.5, extraClasses: ["shrink-0"] }),
+          IconView({
+            iconMarkup: getLogoUrl(data.key ?? "favicon"),
+            sizeRem: 1.5,
+            extraClasses: ["shrink-0"],
+          }),
           // text section
           {
             tag: "div",
@@ -178,7 +182,9 @@ export function CardHead({
                       "duration-300",
                       "ease-in-out",
                     ],
-                    children: [IconView({ iconMarkup: Icons.Chevron, sizeRem: 1 })],
+                    children: [
+                      IconView({ iconMarkup: Icons.Chevron, sizeRem: 1 }),
+                    ],
                   },
                 ],
                 listeners: [{ type: "click", listener: onToggleCollapse }],

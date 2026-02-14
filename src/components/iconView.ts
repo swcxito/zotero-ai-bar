@@ -33,7 +33,10 @@ export function IconView({
   if (trimmedMarkup.startsWith("<svg")) {
     const finalMarkup = trimmedMarkup.includes("xmlns=")
       ? trimmedMarkup
-      : trimmedMarkup.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+      : trimmedMarkup.replace(
+          "<svg",
+          '<svg xmlns="http://www.w3.org/2000/svg"',
+        );
     return {
       tag: "span",
       namespace: "html",

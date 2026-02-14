@@ -258,8 +258,8 @@ export function ChatBox({
                   title: getString("chat-regenerate-response"),
                   onClick: (_e, _btn) => {
                     if (onRegenerate) onRegenerate();
-                  }
-                })
+                  },
+                }),
               ]
             : []),
         ],
