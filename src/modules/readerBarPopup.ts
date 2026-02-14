@@ -19,10 +19,9 @@
 import { config } from "../../package.json";
 import { getSelectionContext } from "./selectionContext";
 import { streamLLM } from "../utils/llmRequest";
-import { SYSTEM_PROMPT_PREFIX } from "../constants";
 import { getString } from "../utils/locale";
 import { getPref } from "../utils/prefs";
-import { aiBarCommands } from "./prompts";
+import { aiBarCommands, SYSTEM_PROMPT_PREFIX } from "./prompts";
 import { AIButton } from "../components/aiButton";
 import { ModelInfo } from "../components/modelInfo";
 
