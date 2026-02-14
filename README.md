@@ -15,6 +15,14 @@ If you find this project helpful, please consider supporting its development and
 [<img alt="&quot;Buy Me A Coffee&quot;" height="60px" src="docs/assets/red-button.png"/>](https://www.buymeacoffee.com/fukeke)
 [<img alt="Afdian" src="docs/assets/afdian-btn-en.png" height="60px"/>](https://afdian.com/a/fukeke)
 
+## What's new in v0.3.0
+
+- model selector on the toolbar, no need to open settings page to switch models.
+![img.png](docs/assets/img.png)
+
+- Retry button for failed requests, no need to re-enter the prompt.
+![img.png](docs/assets/retry.png)
+
 ## Features
 
 **Leave the complex work to us, keep the simple operations for yourself.**

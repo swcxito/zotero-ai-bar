@@ -15,6 +15,14 @@
 [<img alt="爱发电" src="docs/assets/afdian-btn-zh.png" height="60px"/>](https://afdian.com/a/fukeke)
 [<img alt="&amp;amp;quot;Buy Me A Coffee&amp;amp;quot;" height="60px" src="docs/assets/red-button.png"/>](https://www.buymeacoffee.com/fukeke)
 
+## v0.3.0 更新内容
+
+- 工具栏上的模型选择器，无需打开设置页面即可切换模型。
+![img.png](assets/img.png)
+
+- 针对失败请求的重试按钮，无需重新输入提示词。
+![img.png](assets/retry.png)
+
 ## 功能介绍
 
 **把复杂的工作交给我们，简单的操作留给你自己**
