@@ -111,6 +111,10 @@ export async function streamLLM(
       body.thinking = { type: "disabled" };
     }
 
+    else if (provider.key === "ALIBABA_CLOUD" && model.name.startsWith("qwen")) {
+      body.enable_thinking = false;
+    }
+
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -159,7 +163,7 @@ export async function streamLLM(
         try {
           const json = JSON.parse(dataStr);
           const content = json.choices?.[0]?.delta?.content;
-          if (content !== undefined) {
+          if (content) {
             if (!started) {
               started = true;
             }
