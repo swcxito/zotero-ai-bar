@@ -109,9 +109,10 @@ export async function streamLLM(
 
     if (provider.key === "ZHIPU" || provider.key === "ZAI") {
       body.thinking = { type: "disabled" };
-    }
-
-    else if (provider.key === "ALIBABA_CLOUD" && model.name.startsWith("qwen")) {
+    } else if (
+      provider.key === "ALIBABA_CLOUD" &&
+      model.name.startsWith("qwen")
+    ) {
       body.enable_thinking = false;
     }
 

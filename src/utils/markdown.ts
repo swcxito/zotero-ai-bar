@@ -37,7 +37,7 @@ marked.use(
   markedKatex({
     throwOnError: false, // 公式错误时不中断渲染
     output: "mathml",
-    // nonStandard: true, // 支持非标准的单个 $ 行内公式
+    nonStandard: true, // 支持非标准的公式
   }),
   markedXhtml(),
 );
