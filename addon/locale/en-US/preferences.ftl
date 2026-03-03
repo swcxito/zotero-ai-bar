@@ -4,6 +4,11 @@ pref-model-select = Model Selection
 pref-edit-models = Edit Models
 pref-temperature = Temperature
 pref-max-tokens = Max Tokens
+pref-stream-update-speed = Chat Update Speed
+pref-stream-speed-realtime = Realtime
+pref-stream-speed-fast = Fast
+pref-stream-speed-default = Default
+pref-stream-speed-performance = Performance Saver
 pref-provider = Model Provider
 pref-model-name = Model Name
 

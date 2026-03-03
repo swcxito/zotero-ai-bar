@@ -4,6 +4,11 @@ pref-model-select = 模型选择
 pref-edit-models = 编辑模型
 pref-temperature = Temperature
 pref-max-tokens = Max Tokens
+pref-stream-update-speed = 对话更新速度
+pref-stream-speed-realtime = 及时
+pref-stream-speed-fast = 快
+pref-stream-speed-default = 默认
+pref-stream-speed-performance = 节约性能
 pref-provider = 模型提供商
 pref-model-name = 模型名称
 # 提示词选项
