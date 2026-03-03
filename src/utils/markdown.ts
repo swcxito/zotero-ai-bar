@@ -23,6 +23,15 @@ import hljs from "highlight.js";
 import { markedXhtml } from "marked-xhtml";
 import { getPref } from "./prefs";
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 marked.use(
   // 代码高亮扩展（必须在 KaTeX 之前）
   markedHighlight({
@@ -46,6 +55,15 @@ marked.setOptions({
   breaks: true, // 支持 GFM 换行
   gfm: true, // 启用 GitHub 风格 Markdown
   async: true,
+});
+
+marked.use({
+  renderer: {
+    html(token: any) {
+      const raw = typeof token === "string" ? token : (token?.text ?? "");
+      return escapeHtml(raw);
+    },
+  },
 });
 
 /**

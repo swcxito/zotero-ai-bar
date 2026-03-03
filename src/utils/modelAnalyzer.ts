@@ -38,6 +38,7 @@ const TYPE_KEYWORDS = new Set([
   "codex",
   "code",
   "flashx",
+  "highspeed",
 ]);
 
 const IGNORED_KEYWORDS = new Set([
