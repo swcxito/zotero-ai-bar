@@ -26,6 +26,7 @@ pref-prompt-save = Save Prompt
 pref-prompt-add = Add Prompt
 # Advanced Options
 pref-advanced = Advanced Settings
+pref-ui = Interface Settings
 
 
 pref-help = { $name } Build { $version } { $time }

@@ -37,6 +37,7 @@ export type FluentMessageId =
   | 'pref-stream-speed-realtime'
   | 'pref-stream-update-speed'
   | 'pref-temperature'
+  | 'pref-ui'
   | 'prefs-title'
   | 'reader-bar-ask-placeholder'
   | 'reader-bar-explain'
