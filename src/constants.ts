@@ -97,4 +97,10 @@ export const PROVIDERS = {
     l10n: false,
     models: ["deepseek-chat"],
   },
+  MINIMAX: {
+    name: "Minimax",
+    baseUrl: "https://api.minimaxi.com/v1",
+    l10n: false,
+    models: ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
+  },
 } as const;

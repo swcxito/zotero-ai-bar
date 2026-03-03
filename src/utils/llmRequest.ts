@@ -114,6 +114,8 @@ export async function streamLLM(
       model.name.startsWith("qwen")
     ) {
       body.enable_thinking = false;
+    } else if (provider.key === "MINIMAX") {
+      body.reasoning_split = true;
     }
 
     const response = await fetch(url, {
