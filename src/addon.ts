@@ -4,6 +4,8 @@ import hooks from "./hooks";
 import { createZToolkit } from "./utils/ztoolkit";
 import { UserProviderConfig } from "./types";
 
+type ChatHostMode = "sidebar" | "window";
+
 class Addon {
   public data: {
     alive: boolean;
@@ -31,6 +33,21 @@ class Addon {
     sectionMap?: Map<number | string, HTMLElement>;
     abortController?: AbortController;
     lastMessagesPromise?: Promise<import("./utils/llmRequest").Message[]>;
+    chatHostMode?: ChatHostMode;
+    chatWindow?: Window;
+    requestHostMap?: Map<
+      string,
+      {
+        mode: ChatHostMode;
+        sectionId?: number | string;
+      }
+    >;
+    requestSourceMap?: Map<string, string>;
+    lastRequestHost?: {
+      mode: ChatHostMode;
+      sectionId?: number | string;
+    };
+    lastRequestSource?: string;
   };
   // Lifecycle hooks
   public hooks: typeof hooks;

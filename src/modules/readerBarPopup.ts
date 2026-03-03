@@ -19,15 +19,159 @@
 import { config } from "../../package.json";
 import { getSelectionContext } from "./selectionContext";
 import { streamLLM } from "../utils/llmRequest";
+import type { Message } from "../utils/llmRequest";
 import { getString } from "../utils/locale";
 import { getPref } from "../utils/prefs";
 import { aiBarCommands, SYSTEM_PROMPT_PREFIX } from "./prompts";
 import { AIButton } from "../components/aiButton";
 import { ModelInfo } from "../components/modelInfo";
+import { ensureChatWindowReady, focusChatWindow } from "../utils/window";
 
 // Generate unique request ID
 function generateRequestId(): string {
   return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+function getCurrentHostMode() {
+  const location = addon.data.chatHostMode || getPref("chat.location");
+  return location === "window" ? "window" : "sidebar";
+}
+
+function buildSystemContent(selectedText?: string) {
+  const contextLeft = addon.data.selectionContext?.[0] || "";
+  const contextRight = addon.data.selectionContext?.[2] || "";
+  if (!selectedText) {
+    return `${SYSTEM_PROMPT_PREFIX}${contextLeft}\n${contextRight}`.trim();
+  }
+
+  return (
+    SYSTEM_PROMPT_PREFIX +
+    `${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`
+  );
+}
+
+export function getReaderSourceLabel(
+  reader?: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">,
+) {
+  const isValidTitle = (value?: unknown) => {
+    if (typeof value !== "string") return false;
+    const text = value.trim();
+    if (!text) return false;
+    if (/^(pdf|epub|snapshot)$/i.test(text)) return false;
+    return true;
+  };
+
+  const getItemTitle = (item?: any) => {
+    if (!item) return undefined;
+    const title =
+      item?.getField?.("title") || item?.getDisplayTitle?.() || item?.title;
+    return isValidTitle(title) ? String(title).trim() : undefined;
+  };
+
+  const getFileName = (item?: any) => {
+    if (!item) return undefined;
+    const name =
+      item?.attachmentFilename ||
+      item?.getFilename?.() ||
+      item?.getField?.("filename");
+    if (typeof name === "string" && name.trim()) return name.trim();
+
+    const filePath = item?.getFilePath?.();
+    if (typeof filePath === "string" && filePath.trim()) {
+      const normalized = filePath.replace(/\\/g, "/");
+      return normalized.split("/").pop() || undefined;
+    }
+
+    return undefined;
+  };
+
+  const itemID = reader?.itemID;
+  if (itemID) {
+    const item = Zotero.Items.get(itemID) as any;
+
+    const parentID = item?.parentID || item?.parentItemID;
+    const parentItem = parentID
+      ? (Zotero.Items.get(parentID) as any)
+      : undefined;
+
+    const title = getItemTitle(parentItem) || getItemTitle(item);
+    if (title) return title;
+
+    const fileName = getFileName(item);
+    if (fileName) return fileName;
+  }
+  return getString("item-section-head-text");
+}
+
+export async function sendChatRequest(params: {
+  userPrompt: string;
+  selectedText?: string;
+  sourceLabel?: string;
+  hostMode?: "sidebar" | "window";
+  sectionId?: number | string;
+}) {
+  const requestId = generateRequestId();
+
+  const messagesPromise: Promise<Message[]> = (async () => {
+    try {
+      if (addon.data.selectionContextPromise) {
+        await addon.data.selectionContextPromise;
+      }
+    } catch (e) {
+      ztoolkit.log("Get selection context failed:", e);
+    }
+
+    return [
+      {
+        role: "system",
+        content: buildSystemContent(params.selectedText),
+      },
+      {
+        role: "user",
+        content: params.userPrompt,
+      },
+    ];
+  })();
+
+  addon.data.lastMessagesPromise = messagesPromise;
+
+  if (!addon.data.requestHostMap) addon.data.requestHostMap = new Map();
+  if (!addon.data.requestSourceMap) addon.data.requestSourceMap = new Map();
+
+  const route = {
+    mode: params.hostMode || getCurrentHostMode(),
+    sectionId: params.sectionId,
+  } as const;
+
+  const sourceLabel =
+    params.sourceLabel || getReaderSourceLabel(addon.data.currentReader);
+
+  addon.data.requestHostMap.set(requestId, route);
+  addon.data.requestSourceMap.set(requestId, sourceLabel);
+  addon.data.lastRequestHost = route;
+  addon.data.lastRequestSource = sourceLabel;
+
+  if (route.mode === "window") {
+    await ensureChatWindowReady();
+    focusChatWindow();
+  }
+
+  await streamLLM(messagesPromise, {
+    onStart: () => {
+      addon.hooks.onLLMStreamStart({ requestId });
+    },
+    onUpdate: async (fullText) => {
+      addon.hooks.onLLMStreamUpdate({ requestId, fullText });
+    },
+    onEnd: () => {
+      addon.hooks.onLLMStreamEnd({ requestId });
+    },
+    onError: (error) => {
+      addon.hooks.onLLMStreamError({ requestId, error });
+    },
+  });
+
+  return requestId;
 }
 
 // must call once in mainwindow otherwise css file won't be loaded in reader popup
@@ -104,46 +248,12 @@ function renderAIBar(doc: Document): DocumentFragment {
       ztoolkit.log("Ask:", text, "Context:", addon.data.selectedText);
       disableAll(container);
 
-      const requestId = generateRequestId();
-      const messagesPromise = (async () => {
-        try {
-          if (addon.data.selectionContextPromise) {
-            await addon.data.selectionContextPromise;
-          }
-        } catch (e) {
-          ztoolkit.log("Get selection context failed:", e);
-        }
-
-        return [
-          {
-            role: "system",
-            content:
-              SYSTEM_PROMPT_PREFIX +
-              `${addon.data.selectionContext?.[0]}\n<selected>\n${addon.data.selectedText}\n</selected>\n${addon.data.selectionContext?.[2]}`,
-          },
-          {
-            role: "user",
-            content: text,
-          },
-        ];
-      })();
-
-      addon.data.lastMessagesPromise = messagesPromise;
-
-      // Trigger hooks for stream events
-      await streamLLM(messagesPromise, {
-        onStart: () => {
-          addon.hooks.onLLMStreamStart({ requestId });
-        },
-        onUpdate: async (fullText) => {
-          addon.hooks.onLLMStreamUpdate({ requestId, fullText });
-        },
-        onEnd: () => {
-          addon.hooks.onLLMStreamEnd({ requestId });
-        },
-        onError: (error) => {
-          addon.hooks.onLLMStreamError({ requestId, error });
-        },
+      await sendChatRequest({
+        userPrompt: text,
+        selectedText: addon.data.selectedText,
+        sourceLabel: getReaderSourceLabel(addon.data.currentReader),
+        hostMode: getCurrentHostMode(),
+        sectionId: addon.data.currentSection,
       });
 
       container.style.display = "none";
@@ -160,47 +270,16 @@ function renderAIBar(doc: Document): DocumentFragment {
       return;
     }
 
-    const requestId = generateRequestId();
     const targetLanguage = Zotero.locale;
     const prompt = command.getPrompt(targetLanguage);
     // ztoolkit.log("Generated Prompt:", prompt);
 
-    const messagesPromise = (async () => {
-      try {
-        if (addon.data.selectionContextPromise) {
-          await addon.data.selectionContextPromise;
-        }
-      } catch (e) {
-        ztoolkit.log("Get selection context failed:", e);
-      }
-
-      return [
-        {
-          role: "system",
-          content:
-            SYSTEM_PROMPT_PREFIX +
-            `${addon.data.selectionContext?.[0]}\n<selected>\n${addon.data.selectedText}\n</selected>\n${addon.data.selectionContext?.[2]}`,
-        },
-        { role: "user", content: prompt },
-      ];
-    })();
-
-    addon.data.lastMessagesPromise = messagesPromise;
-
-    // Trigger hooks for stream events
-    await streamLLM(messagesPromise, {
-      onStart: () => {
-        addon.hooks.onLLMStreamStart({ requestId });
-      },
-      onUpdate: async (fullText) => {
-        addon.hooks.onLLMStreamUpdate({ requestId, fullText });
-      },
-      onEnd: () => {
-        addon.hooks.onLLMStreamEnd({ requestId });
-      },
-      onError: (error) => {
-        addon.hooks.onLLMStreamError({ requestId, error });
-      },
+    await sendChatRequest({
+      userPrompt: prompt,
+      selectedText: addon.data.selectedText,
+      sourceLabel: getReaderSourceLabel(addon.data.currentReader),
+      hostMode: getCurrentHostMode(),
+      sectionId: addon.data.currentSection,
     });
   };
 

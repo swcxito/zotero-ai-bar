@@ -11,17 +11,75 @@ import {
   registerReaderItemPaneSection,
   resizeReaderItemPaneHeight,
 } from "./modules/readerItemPane";
+import {
+  CHAT_WINDOW_MESSAGE_CONTAINER_ID,
+  ensureChatWindowUI,
+} from "./modules/chatWindowHost";
 import { ChatBox } from "./components/chatBox";
 import { renderMarkdown } from "./utils/markdown";
 import { streamLLM } from "./utils/llmRequest";
+import {
+  clearDeadChatWindowRef,
+  ensureChatWindow,
+  isWindowAlive,
+} from "./utils/window";
 
 const chatPopMap = new Map<string, Element>();
+
+function getCurrentHostMode() {
+  const location = addon.data.chatHostMode || getPref("chat.location");
+  return location === "window" ? "window" : "sidebar";
+}
+
+function ensureRequestMaps() {
+  if (!addon.data.requestHostMap) addon.data.requestHostMap = new Map();
+  if (!addon.data.requestSourceMap) addon.data.requestSourceMap = new Map();
+}
+
+function getMessageContainerByRequest(requestId: string) {
+  const route = addon.data.requestHostMap?.get(requestId);
+  const mode = route?.mode || getCurrentHostMode();
+
+  if (mode === "window") {
+    const chatWindow = ensureChatWindow();
+    ensureChatWindowUI(chatWindow.document);
+    return chatWindow.document.querySelector(
+      `#${CHAT_WINDOW_MESSAGE_CONTAINER_ID}`,
+    ) as HTMLElement | null;
+  }
+
+  if (!addon.data.sectionMap) return null;
+  const sectionId = route?.sectionId ?? addon.data.currentSection;
+  const body = addon.data.sectionMap.get(sectionId ?? "");
+  if (!body) return null;
+  const root = body.querySelector("#ai-bar-chat-root");
+  if (!root?.shadowRoot) return null;
+
+  resizeReaderItemPaneHeight(body, "maximize");
+  return root.shadowRoot.querySelector(".message-container") as HTMLElement;
+}
+
+function cleanupRequestData(requestId: string) {
+  addon.data.requestHostMap?.delete(requestId);
+  addon.data.requestSourceMap?.delete(requestId);
+}
 
 async function regenerateResponse() {
   const messagesPromise = addon.data.lastMessagesPromise;
   if (!messagesPromise) return;
 
   const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  ensureRequestMaps();
+  addon.data.requestHostMap?.set(requestId, {
+    mode: addon.data.lastRequestHost?.mode || getCurrentHostMode(),
+    sectionId:
+      addon.data.lastRequestHost?.sectionId ?? addon.data.currentSection,
+  });
+  addon.data.requestSourceMap?.set(
+    requestId,
+    addon.data.lastRequestSource || "Unknown Source",
+  );
 
   await streamLLM(messagesPromise, {
     onStart: () => {
@@ -47,6 +105,9 @@ async function onStartup() {
   ]);
 
   initLocale();
+
+  addon.data.chatHostMode = getCurrentHostMode();
+  ensureRequestMaps();
 
   registerReaderInitializer();
 
@@ -76,17 +137,23 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   const llmConfig = getPref("llm.providerConfigs");
   if (llmConfig)
     addon.data.userProviderConfigs = JSON.parse(getPref("llm.providerConfigs"));
-  await registerReaderItemPaneSection();
+  if (getCurrentHostMode() === "sidebar") {
+    await registerReaderItemPaneSection();
+  }
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {
   ztoolkit.unregisterAll();
   addon.data.dialog?.window?.close();
+  clearDeadChatWindowRef();
 }
 
 function onShutdown(): void {
   ztoolkit.unregisterAll();
   addon.data.dialog?.window?.close();
+  if (isWindowAlive(addon.data.chatWindow)) {
+    addon.data.chatWindow?.close();
+  }
   // Remove addon object
   addon.data.alive = false;
   // @ts-expect-error - Plugin instance is not typed
@@ -179,35 +246,46 @@ function onDialogEvents(type: string) {
 function onLLMStreamStart(data: { requestId: string }) {
   ztoolkit.log("LLM stream started:", data.requestId);
 
-  if (!addon.data.sectionMap) return;
+  const container = getMessageContainerByRequest(data.requestId);
+  if (!container) return;
 
-  // Find the first available shadowRoot to add chat popup
-  const body = addon.data.sectionMap.get(addon.data.currentSection ?? "");
-  if (body) {
-    const root = body.querySelector("#ai-bar-chat-root");
-    if (root?.shadowRoot) {
-      const doc = body.ownerDocument;
-      resizeReaderItemPaneHeight(body, "maximize");
-      const container = root.shadowRoot.querySelector(".message-container");
-      if (!doc || !container) return;
-      const pop = ChatBox({
-        doc,
-        annotation: addon.data.currentAnnotation,
-        isUser: false,
-        onRegenerate: () => regenerateResponse(),
-      });
-      pop.setAttribute("data-request-id", data.requestId);
-      const chatMessage = pop.querySelector(".chat-message");
-      if (chatMessage) chatMessage.innerHTML = "Thinking...";
-      container.appendChild(pop);
-      chatPopMap.set(data.requestId, pop);
+  const doc = container.ownerDocument;
+  if (!doc) return;
 
-      const inputArea = root.shadowRoot.querySelector(".input-area");
-      if (inputArea) {
-        inputArea.scrollIntoView({ behavior: "smooth", block: "end" });
-      }
+  const pop = ChatBox({
+    doc,
+    annotation: addon.data.currentAnnotation,
+    isUser: false,
+    onRegenerate: () => regenerateResponse(),
+  }) as HTMLElement;
+  pop.setAttribute("data-request-id", data.requestId);
+
+  const chatMessage = pop.querySelector(".chat-message") as HTMLElement | null;
+  if (chatMessage) {
+    const sourceLabel = addon.data.requestSourceMap?.get(data.requestId);
+    if (sourceLabel) {
+      const sourceEl = doc.createElement("div");
+      sourceEl.classList.add(
+        "text-xs",
+        "tracking-wider",
+        "font-semibold",
+        "text-slate-400",
+        "dark:text-neutral-500",
+        "mb-1",
+      );
+      sourceEl.textContent = `Source: ${sourceLabel}`;
+      chatMessage.appendChild(sourceEl);
     }
+
+    const contentEl = doc.createElement("div");
+    contentEl.classList.add("chat-message-content");
+    contentEl.innerHTML = "Thinking...";
+    chatMessage.appendChild(contentEl);
   }
+
+  container.appendChild(pop);
+  chatPopMap.set(data.requestId, pop);
+  container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
 }
 
 async function onLLMStreamUpdate(data: {
@@ -217,7 +295,7 @@ async function onLLMStreamUpdate(data: {
   // ztoolkit.log("LLM stream update:", data.requestId, data.fullText.length);
   const pop = chatPopMap.get(data.requestId);
   if (pop) {
-    const chatMessage = pop.querySelector(".chat-message");
+    const chatMessage = pop.querySelector(".chat-message-content");
     if (chatMessage) {
       chatMessage.innerHTML = await renderMarkdown(data.fullText);
       (pop as HTMLElement).dataset.markdown = data.fullText;
@@ -238,6 +316,7 @@ function onLLMStreamEnd(data: { requestId: string }) {
       actions.classList.remove("hidden");
     }
   }
+  cleanupRequestData(data.requestId);
 }
 
 function onLLMStreamError(data: { requestId: string; error: string }) {
@@ -248,7 +327,7 @@ function onLLMStreamError(data: { requestId: string; error: string }) {
     if (actions) {
       actions.classList.remove("hidden");
     }
-    const chatMessage = pop.querySelector(".chat-message");
+    const chatMessage = pop.querySelector(".chat-message-content");
     if (chatMessage) {
       chatMessage.innerHTML = `<div style="color: red; white-space: pre-wrap; word-break: break-word;">${data.error}</div>`;
     }
@@ -257,6 +336,7 @@ function onLLMStreamError(data: { requestId: string; error: string }) {
       container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
     }
   }
+  cleanupRequestData(data.requestId);
 }
 
 export default {
