@@ -73,6 +73,8 @@ Here is a quick tutorial. For detailed instructions, please click and visit the 
 4. Close the settings page; configurations are saved automatically.
 5. Start using it!
 
+Note: Requests are currently mutually exclusive. Starting a new request will cancel the previous streaming request.
+
 ## Roadmap
 
 - [x] ~~Basic Features~~
@@ -85,7 +87,7 @@ Here is a quick tutorial. For detailed instructions, please click and visit the 
 - [ ] Custom Prompts
 - [ ] Add Notes
 - [ ] Regenerate Response
-- [ ] Standalone Window Option
+- [x] ~~Standalone Window Option~~
 - [ ] Continuous Conversation
 - [ ] Attachment Support
 - [ ] New Chat Session

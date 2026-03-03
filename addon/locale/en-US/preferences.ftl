@@ -9,6 +9,14 @@ pref-stream-speed-realtime = Realtime
 pref-stream-speed-fast = Fast
 pref-stream-speed-default = Default
 pref-stream-speed-performance = Performance Saver
+pref-chat-location = Chat Location
+pref-chat-location-desc = Takes effect after restarting Zotero
+pref-chat-location-sidebar = 
+    .label = Sidebar
+pref-chat-location-window = 
+    .label = Separate Window
+pref-chat-window-always-on-top =
+    .label = Keep chat window on top
 pref-provider = Model Provider
 pref-model-name = Model Name
 

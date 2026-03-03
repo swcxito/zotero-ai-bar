@@ -13,6 +13,8 @@ declare namespace _ZoteroTypes {
       "llm.temperature100": number;
       "llm.maxTokens": number;
       "llm.streamUpdateSpeed": string;
+      "chat.location": string;
+      "chat.windowAlwaysOnTop": boolean;
       "extend-selection-context": boolean;
       "extend-selection-size": number;
       "llm.providerConfigs": string;

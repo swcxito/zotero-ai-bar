@@ -140,6 +140,27 @@
         />
       </html:select>
     </hbox>
+    <hbox align="center" style="margin-top: 10px">
+      <vbox flex="1">
+        <html:label data-l10n-id="pref-chat-location" />
+        <html:small data-l10n-id="pref-chat-location-desc" />
+      </vbox>
+      <radiogroup
+        preference="chat.location"
+        orient="horizontal"
+        style="gap: 10px"
+      >
+        <radio value="sidebar" data-l10n-id="pref-chat-location-sidebar" />
+        <radio value="window" data-l10n-id="pref-chat-location-window" />
+      </radiogroup>
+    </hbox>
+    <hbox align="center" style="margin-top: 10px">
+      <checkbox
+        id="__addonRef__-chat-window-always-on-top"
+        preference="chat.windowAlwaysOnTop"
+        data-l10n-id="pref-chat-window-always-on-top"
+      />
+    </hbox>
   </groupbox>
   <groupbox>
     <label>

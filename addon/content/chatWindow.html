@@ -1,0 +1,33 @@
+<!doctype html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      href="chrome://__addonRef__/content/styles/katex.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="chrome://__addonRef__/content/styles/katex-swap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="chrome://__addonRef__/content/styles/atom-one.css"
+      rel="stylesheet"
+    />
+    <link href="chrome://__addonRef__/content/app.css" rel="stylesheet" />
+    <script>
+      window.addEventListener("load", () => {
+        window.arguments[0].onBodyLoaded(window);
+      });
+    </script>
+    <title>Zotero AI Bar</title>
+  </head>
+  <body
+    class="bg-zinc-100 text-slate-900 transition-colors duration-300 dark:bg-zinc-900 dark:text-rose-50/90"
+  >
+    <div class="mx-auto flex h-screen max-w-5xl flex-col px-4 py-4">
+      <div id="ai-bar-window-root" class="flex h-full flex-col gap-2"></div>
+    </div>
+  </body>
+</html>
