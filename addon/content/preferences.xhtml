@@ -121,6 +121,25 @@
     <label>
       <html:h2 data-l10n-id="pref-advanced" />
     </label>
+    <hbox align="center">
+      <html:label data-l10n-id="pref-stream-update-speed" flex="1" />
+      <html:select
+        class="select"
+        id="__addonRef__-stream-update-speed-selector"
+        preference="llm.streamUpdateSpeed"
+      >
+        <html:option
+          value="realtime"
+          data-l10n-id="pref-stream-speed-realtime"
+        />
+        <html:option value="fast" data-l10n-id="pref-stream-speed-fast" />
+        <html:option value="default" data-l10n-id="pref-stream-speed-default" />
+        <html:option
+          value="performance"
+          data-l10n-id="pref-stream-speed-performance"
+        />
+      </html:select>
+    </hbox>
   </groupbox>
 </groupbox>
 <vbox>

@@ -36,6 +36,21 @@ const getAbortController = () => {
   return (Zotero.getMainWindow() as any).AbortController;
 };
 
+function getRefreshRateFromPref() {
+  const speed = getPref("llm.streamUpdateSpeed");
+  switch (speed) {
+    case "realtime":
+      return 1;
+    case "fast":
+      return 2;
+    case "performance":
+      return 8;
+    case "default":
+    default:
+      return 4;
+  }
+}
+
 // TODO： 区分HTTP网络错误和API返回的错误信息，提供更具体的错误反馈。
 /**
  * Send a streaming request to the LLM.
@@ -46,7 +61,7 @@ const getAbortController = () => {
 export async function streamLLM(
   messagesOrPromise: Message[] | Promise<Message[]>,
   callbacks: StreamCallbacks,
-  refreshRate: number = 5,
+  refreshRate: number = getRefreshRateFromPref(),
 ) {
   // Cancel previous request if exists
   if (addon.data.abortController) {

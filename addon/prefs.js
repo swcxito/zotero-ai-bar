@@ -3,6 +3,7 @@ pref("llm.apiKey", "");
 pref("llm.modelName", "gpt-4o");
 pref("llm.temperature100", 70);
 pref("llm.maxTokens", 3000);
+pref("llm.streamUpdateSpeed", "default");
 pref("extend-selection-context", true);
 pref("extend-selection-size", 70);
 
