@@ -23,7 +23,7 @@
 // }
 
 import { config } from "../../package.json";
-import { LogoButton } from "../components/logoButton";
+import { ProviderLogoButton } from "../components/providerLogoButton";
 import { PROVIDERS } from "../constants";
 import { getString } from "../utils/locale";
 import { ProviderCard } from "../components/providerCard";
@@ -201,7 +201,7 @@ export class ModelDialog {
       const b = ztoolkit.UI.createElement(
         this.doc,
         "button",
-        LogoButton({
+        ProviderLogoButton({
           text: name,
           iconUrl: `chrome://${config.addonRef}/content/icons/${providerKey.toLowerCase()}.svg`,
           onClick: () => {
@@ -232,7 +232,7 @@ export class ModelDialog {
       ztoolkit.log("Added provider button:", b);
     }
     ztoolkit.UI.appendElement(
-      LogoButton({
+      ProviderLogoButton({
         text: "Custom Provider",
         iconUrl: `chrome://${config.addonRef}/content/icons/favicon.svg`,
         onClick: () => {
