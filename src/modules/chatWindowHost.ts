@@ -2,7 +2,7 @@ import { ChatBox } from "../components/chatBox";
 import { InputArea } from "../components/inputArea";
 import { renderMarkdown } from "../utils/markdown";
 import { getString } from "../utils/locale";
-import { sendChatRequest, getReaderSourceLabel } from "./readerBarPopup";
+import { getReaderSourceLabel } from "./readerBarPopup";
 
 export const CHAT_WINDOW_MESSAGE_CONTAINER_ID =
   "ai-bar-window-message-container";
@@ -51,7 +51,7 @@ async function submitFromWindowInput(
 
   const userMessage = ChatBox({
     doc,
-    annotation: addon.data.currentAnnotation,
+    annotation: addon.chatManager.currentAnnotation,
     isUser: true,
   }) as HTMLElement;
   const userMessageNode = userMessage.querySelector(
@@ -68,11 +68,11 @@ async function submitFromWindowInput(
   input.style.height = "auto";
   updateSendButtonState(input, sendBtn);
 
-  await sendChatRequest({
+  await addon.chatManager.sendChatRequest({
     userPrompt: content,
-    sourceLabel: getReaderSourceLabel(addon.data.currentReader),
+    sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
     hostMode: "window",
-    sectionId: addon.data.currentSection,
+    sectionId: addon.chatManager.currentSection,
   });
 }
 

@@ -16,7 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { PROVIDERS } from "./constants";
+import { PROVIDERS } from "./utils/providerInfo";
 
 export interface ProviderInfo {
   key: string;

@@ -16,39 +16,13 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { config } from "../../package.json";
-import { getSelectionContext } from "./selectionContext";
-import { streamLLM } from "../utils/llmRequest";
-import type { Message } from "../utils/llmRequest";
-import { getString } from "../utils/locale";
-import { getPref } from "../utils/prefs";
-import { aiBarCommands, SYSTEM_PROMPT_PREFIX } from "./prompts";
-import { AiActionButton } from "../components/aiActionButton";
-import { ModelInfo } from "../components/modelInfo";
-import { ensureChatWindowReady, focusChatWindow } from "../utils/window";
-
-// Generate unique request ID
-function generateRequestId(): string {
-  return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
-function getCurrentHostMode() {
-  const location = addon.data.chatHostMode || getPref("chat.location");
-  return location === "window" ? "window" : "sidebar";
-}
-
-function buildSystemContent(selectedText?: string) {
-  const contextLeft = addon.data.selectionContext?.[0] || "";
-  const contextRight = addon.data.selectionContext?.[2] || "";
-  if (!selectedText) {
-    return `${SYSTEM_PROMPT_PREFIX}${contextLeft}\n${contextRight}`.trim();
-  }
-
-  return (
-    SYSTEM_PROMPT_PREFIX +
-    `${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`
-  );
-}
+import {config} from "../../package.json";
+import {getSelectionContext} from "../utils/selectionContext";
+import {getString} from "../utils/locale";
+import {getPref} from "../utils/prefs";
+import {aiBarCommands} from "../utils/prompts";
+import {AiActionButton} from "../components/aiActionButton";
+import {ModelInfo} from "../components/modelInfo";
 
 export function getReaderSourceLabel(
   reader?: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">,
@@ -57,8 +31,8 @@ export function getReaderSourceLabel(
     if (typeof value !== "string") return false;
     const text = value.trim();
     if (!text) return false;
-    if (/^(pdf|epub|snapshot)$/i.test(text)) return false;
-    return true;
+    return !/^(pdf|epub|snapshot)$/i.test(text);
+
   };
 
   const getItemTitle = (item?: any) => {
@@ -103,77 +77,6 @@ export function getReaderSourceLabel(
   return getString("item-section-head-text");
 }
 
-export async function sendChatRequest(params: {
-  userPrompt: string;
-  selectedText?: string;
-  sourceLabel?: string;
-  hostMode?: "sidebar" | "window";
-  sectionId?: number | string;
-}) {
-  const requestId = generateRequestId();
-
-  const messagesPromise: Promise<Message[]> = (async () => {
-    try {
-      if (addon.data.selectionContextPromise) {
-        await addon.data.selectionContextPromise;
-      }
-    } catch (e) {
-      ztoolkit.log("Get selection context failed:", e);
-    }
-
-    return [
-      {
-        role: "system",
-        content: buildSystemContent(params.selectedText),
-      },
-      {
-        role: "user",
-        content: params.userPrompt,
-      },
-    ];
-  })();
-
-  addon.data.lastMessagesPromise = messagesPromise;
-
-  if (!addon.data.requestHostMap) addon.data.requestHostMap = new Map();
-  if (!addon.data.requestSourceMap) addon.data.requestSourceMap = new Map();
-
-  const route = {
-    mode: params.hostMode || getCurrentHostMode(),
-    sectionId: params.sectionId,
-  } as const;
-
-  const sourceLabel =
-    params.sourceLabel || getReaderSourceLabel(addon.data.currentReader);
-
-  addon.data.requestHostMap.set(requestId, route);
-  addon.data.requestSourceMap.set(requestId, sourceLabel);
-  addon.data.lastRequestHost = route;
-  addon.data.lastRequestSource = sourceLabel;
-
-  if (route.mode === "window") {
-    await ensureChatWindowReady();
-    focusChatWindow();
-  }
-
-  await streamLLM(messagesPromise, {
-    onStart: () => {
-      addon.hooks.onLLMStreamStart({ requestId });
-    },
-    onUpdate: async (fullText) => {
-      addon.hooks.onLLMStreamUpdate({ requestId, fullText });
-    },
-    onEnd: () => {
-      addon.hooks.onLLMStreamEnd({ requestId });
-    },
-    onError: (error) => {
-      addon.hooks.onLLMStreamError({ requestId, error });
-    },
-  });
-
-  return requestId;
-}
-
 // must call once in mainwindow otherwise css file won't be loaded in reader popup
 export function registerAIBarStyleSheet(win: _ZoteroTypes.MainWindow) {
   const doc = win.document;
@@ -194,19 +97,18 @@ export function registerReaderInitializer() {
       // addon.hooks.onReaderPopupShow(event);
       addon.data.selectedText = params.annotation.text?.trim();
       ztoolkit.log(addon.data.selectedText, "selected");
-      addon.data.selectionContext = undefined;
       if (getPref("extend-selection-context"))
         addon.data.selectionContextPromise = getSelectionContext(
           reader,
           params,
         );
-      else addon.data.selectionContextPromise = Promise.resolve();
+      else addon.data.selectionContextPromise = Promise.resolve(undefined);
       // ztoolkit.log(doc);
       // ztoolkit.log(append);
       // ztoolkit.log("annotation", params.annotation);
       ztoolkit.log("Creating Ask AI Bar");
-      addon.data.currentAnnotation = params.annotation;
-      addon.data.currentReader = reader;
+      addon.chatManager.currentAnnotation = params.annotation;
+      addon.chatManager.currentReader = reader;
       if (reader._internalReader._type === "pdf") append(renderAIBar(doc));
     },
     config.addonID,
@@ -248,12 +150,12 @@ function renderAIBar(doc: Document): DocumentFragment {
       ztoolkit.log("Ask:", text, "Context:", addon.data.selectedText);
       disableAll(container);
 
-      await sendChatRequest({
+      await addon.chatManager.sendChatRequest({
         userPrompt: text,
         selectedText: addon.data.selectedText,
-        sourceLabel: getReaderSourceLabel(addon.data.currentReader),
-        hostMode: getCurrentHostMode(),
-        sectionId: addon.data.currentSection,
+        sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
+        hostMode: addon.chatManager.getCurrentHostMode(),
+        sectionId: addon.chatManager.currentSection,
       });
 
       container.style.display = "none";
@@ -270,16 +172,15 @@ function renderAIBar(doc: Document): DocumentFragment {
       return;
     }
 
-    const targetLanguage = Zotero.locale;
-    const prompt = command.getPrompt(targetLanguage);
+    const prompt = command.getPrompt(Zotero.locale);
     // ztoolkit.log("Generated Prompt:", prompt);
 
-    await sendChatRequest({
+    await addon.chatManager.sendChatRequest({
       userPrompt: prompt,
       selectedText: addon.data.selectedText,
-      sourceLabel: getReaderSourceLabel(addon.data.currentReader),
-      hostMode: getCurrentHostMode(),
-      sectionId: addon.data.currentSection,
+      sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
+      hostMode: addon.chatManager.getCurrentHostMode(),
+      sectionId: addon.chatManager.currentSection,
     });
   };
 

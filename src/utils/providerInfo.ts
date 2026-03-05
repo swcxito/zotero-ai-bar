@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: AGPL-3.0-only
- * constants.ts
+ * providerInfo.ts
  *
  * This file is part of Zotero AI Bar.
  * Zotero AI Bar - A handy AI assistant integration for Zotero
@@ -16,7 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { config } from "../package.json";
+import { config } from "../../package.json";
 
 export function getLogoUrl(providerKey: string): string {
   return `chrome://${config.addonRef}/content/icons/${providerKey.toLowerCase()}.svg`;

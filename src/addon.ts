@@ -3,8 +3,7 @@ import { ColumnOptions, DialogHelper } from "zotero-plugin-toolkit";
 import hooks from "./hooks";
 import { createZToolkit } from "./utils/ztoolkit";
 import { UserProviderConfig } from "./types";
-
-type ChatHostMode = "sidebar" | "window";
+import { ChatManager } from "./modules/chatManager";
 
 class Addon {
   public data: {
@@ -23,32 +22,13 @@ class Addon {
       rows: Array<{ [dataKey: string]: string }>;
     };
     dialog?: DialogHelper;
-    currentAnnotation?: _ZoteroTypes.Annotations.AnnotationJson;
-    currentReader?: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">;
     selectedText?: string;
-    selectionContext?: Array<string>;
-    selectionContextPromise?: Promise<void>;
+    selectionContextPromise?: Promise<Array<string> | undefined>;
     userProviderConfigs?: UserProviderConfig[];
-    currentSection?: number;
-    sectionMap?: Map<number | string, HTMLElement>;
-    abortController?: AbortController;
-    lastMessagesPromise?: Promise<import("./utils/llmRequest").Message[]>;
-    chatHostMode?: ChatHostMode;
-    chatWindow?: Window;
-    requestHostMap?: Map<
-      string,
-      {
-        mode: ChatHostMode;
-        sectionId?: number | string;
-      }
-    >;
-    requestSourceMap?: Map<string, string>;
-    lastRequestHost?: {
-      mode: ChatHostMode;
-      sectionId?: number | string;
-    };
-    lastRequestSource?: string;
+    sidePaneMap?: Map<number, HTMLElement>;
   };
+  // Chat state and logic
+  public chatManager: ChatManager;
   // Lifecycle hooks
   public hooks: typeof hooks;
   // APIs
@@ -62,6 +42,7 @@ class Addon {
       initialized: false,
       ztoolkit: createZToolkit(),
     };
+    this.chatManager = new ChatManager();
     this.hooks = hooks;
     this.api = {};
   }

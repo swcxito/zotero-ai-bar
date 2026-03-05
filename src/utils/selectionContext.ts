@@ -20,7 +20,7 @@
 // TODO fix unexpected empty context result when selection is after page5
 
 import { get } from "http";
-import { getPref } from "../utils/prefs";
+import { getPref } from "./prefs";
 
 /**
  * 获取选中内容的上下文
@@ -28,11 +28,12 @@ import { getPref } from "../utils/prefs";
 export async function getSelectionContext(
   reader: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">,
   params: { annotation: _ZoteroTypes.Annotations.AnnotationJson },
-) {
+): Promise<Array<string> | undefined> {
   const itemID = reader.itemID;
   const selected = params.annotation;
   const selectedText = selected.text.trim();
   addon.data.selectedText = selectedText;
+  let selectionContext: Array<string> | undefined;
   const isCrossPage = !!(
     selected.position?.rects && selected.position?.nextPageRects
   );
@@ -63,15 +64,12 @@ export async function getSelectionContext(
       const contextSize = getPref("extend-selection-size") || 70;
       ztoolkit.log("search-matches", matches);
       if (macheCount == 1) {
-        addon.data.selectionContext = getContextAroundIndex(
+        selectionContext = getContextAroundIndex(
           fullText.text,
           [matches[0].start, matches[0].end],
           contextSize + 30,
         );
-        ztoolkit.log(
-          "selected context by search:",
-          addon.data.selectionContext,
-        );
+        ztoolkit.log("selected context by search:", selectionContext);
       } else if (
         selectedText.split(" ").length <= 5 ||
         selectedText.length <= 5
@@ -89,16 +87,13 @@ export async function getSelectionContext(
         }
         ztoolkit.log("data:", data);
         ztoolkit.log("current-page:", currentPage);
-        addon.data.selectionContext = getContextByPosition(
+        selectionContext = getContextByPosition(
           selected,
           currentPage,
           contextSize,
           isCrossPage ? data.pages[index.pageIndex! + 1] : undefined,
         );
-        ztoolkit.log(
-          "selected context by position:",
-          addon.data.selectionContext,
-        );
+        ztoolkit.log("selected context by position:", selectionContext);
       }
     }
   }
@@ -113,6 +108,7 @@ export async function getSelectionContext(
   // const path = reader._item.attachmentPath;
   // not accessible due to CORS policy
   // const chars = await pdfDocument?.getPageData({ pageIndex: index.pageIndex! });
+  return selectionContext;
 }
 
 function getContextByPosition(
