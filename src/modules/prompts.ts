@@ -54,13 +54,28 @@ export const aiBarCommands: Record<string, AIBarCommand> = {
     icon: "📖",
     label: "reader-bar-explain",
     getPrompt: (targetLanguage: string) =>
-      `${targetLanguage ? `Answer in ${targetLanguage}.` : ""} Explain the <selected> text.
-You need to explain WHAT it is first, making sure a beginner can totally understand without previous knowledge detailedly. In this explanation, you should consider all knowledge you have about the text. 
+      `${targetLanguage ? `\n**IMPORTANT: You must output your entire explanation in ${targetLanguage}.**\n` : ""}
+### Analysis Strategy
+Please analyze the <selected> text and choose the most appropriate explanation strategy below:
 
-# Constraints
-- You can explain it in context briefly if necessary.
-- Structure answer with Markdown headers and lists if necessary.
-- Using precise language to explain and clarify is preferred, rather than metaphors.
+1. **If the selection is an isolated concept, jargon, or term:**
+   - Define WHAT it is clearly and directly.
+   - Explain it in a way that a beginner can fully understand without any prior domain knowledge.
+
+2. **If the selection makes a conclusion, claim, or deduction:**
+   - Explain HOW and WHY this conclusion is reached.
+   - Break down the logic or reasoning process step-by-step.
+   - Insert necessary background knowledge or premises using Markdown blockquotes (\`>\`) to make the analysis easier to follow.
+
+3. **If the selection is general text (sentences/paragraphs):**
+   - Paraphrase the core meaning of the <selected> text.
+   - Analyze its implications and clarify any complex phrasing based on its apparent context.
+
+### Constraints & Formatting
+- **Tone & Style:** Use precise, professional, and objective language. Avoid overly abstract metaphors.
+- **Completeness:** Utilize your broad knowledge to provide a deep understanding, but keep the context relevant.
+- **Structure:** Strictly use Markdown formatting. Use appropriate headings (\`#\`), bullet points (\`-\`), ordered lists (\`1.\`, \`2.\`), and bold text (\`**text**\`) to ensure the explanation is highly scannable and readable.
+- **Context:** Briefly explain the surrounding context if it is essential for understanding the selection.
 `,
   },
   summarize: {
@@ -79,7 +94,7 @@ You need to explain WHAT it is first, making sure a beginner can totally underst
 Translate the <selected> content into ${targetLanguage}.
 
 # Mode Selection Rules
-Analyze the <selected> text and follow the matching rule below:
+Before response, Analyze the type of <selected> text and follow the matching rule below:
 
 ## Mode 1: Sentence or Paragraph
 IF the selection is a phrase, sentence, or paragraph:
@@ -99,7 +114,7 @@ IF the selection is a single word:
 - Output strictly using this format:
 
 **<Word>**
-<IPA Pronunciation>
+\`<IPA Pronunciation>\`
 **<Part of Speech>. <Meaning in CURRENT Context>**
 -----
 <Part of Speech>. <Other Common Meaning 1>
@@ -112,7 +127,7 @@ The following examples using English to Chinese translation are for illustration
 Context: Work adopted a <selected>single</selected> green micro-LED.
 Output:
 **single**
-/ˈsɪŋɡ(ə)l/
+\`/ˈsɪŋɡ(ə)l/\`
 **adj. 单一的，单个的**
 -----
 adj. 独自的；单身的
@@ -122,7 +137,7 @@ n. 单曲
 Context: Research by <selected>NASA</selected> shows...
 Output:
 **NASA**
-National Aeronautics and Space Administration
+\`National Aeronautics and Space Administration\`
 abbr. 美国国家航空航天局
 负责民用太空计划、航空研究和太空研究的机构
 
