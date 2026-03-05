@@ -26,6 +26,8 @@ export function InputArea(doc: Document): HTMLElement {
     classList: [
       "input-area",
       "max-w-3xl",
+      "w-full",
+      "mx-auto",
       "my-2",
       "flex",
       "items-center",
@@ -47,6 +49,8 @@ export function InputArea(doc: Document): HTMLElement {
       {
         tag: "button",
         classList: [
+          "flex",
+          "justify-center",
           "p-2.5",
           "text-slate-400",
           "dark:text-neutral-500",
@@ -81,6 +85,8 @@ export function InputArea(doc: Document): HTMLElement {
           disabled: "true",
         },
         classList: [
+          "flex",
+          "justify-center",
           "p-2.5",
           "rounded-xl",
           "transition-all",
