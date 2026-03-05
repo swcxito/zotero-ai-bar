@@ -23,7 +23,7 @@ import type { Message } from "../utils/llmRequest";
 import { getString } from "../utils/locale";
 import { getPref } from "../utils/prefs";
 import { aiBarCommands, SYSTEM_PROMPT_PREFIX } from "./prompts";
-import { AIButton } from "../components/aiButton";
+import { AiActionButton } from "../components/aiActionButton";
 import { ModelInfo } from "../components/modelInfo";
 import { ensureChatWindowReady, focusChatWindow } from "../utils/window";
 
@@ -286,7 +286,7 @@ function renderAIBar(doc: Document): DocumentFragment {
   // Create AI buttons from commands
   const createCommandButtons = () => {
     return Object.values(aiBarCommands).map((command) =>
-      AIButton({
+      AiActionButton({
         label: getString(command.label),
         icon: command.icon,
         onClick: async () => handleButtonAction(command.id),

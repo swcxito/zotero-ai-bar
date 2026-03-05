@@ -18,7 +18,7 @@
 ## UI/component patterns specific to this repo
 - UI is built with `ztoolkit.UI.createElement` factories in `src/components/*` (no React/Vue).
 - Reader item pane chat is mounted into Shadow DOM in `src/modules/readerItemPane.ts`; styles are injected with `injectCSS` using `chrome://...` URLs.
-- Prefer extending existing component factories (`ChatBox`, `AIButton`, `ProviderCard`, `ModelInfo`) over ad-hoc DOM mutation.
+- Prefer extending existing component factories (`ChatBox`, `AiActionButton`, `ProviderCard`, `ModelInfo`) over ad-hoc DOM mutation.
 - Tailwind source is `src/styles/app.css`; generated file `addon/content/app.css` is build output.
 
 ## Preferences, i18n, and configuration

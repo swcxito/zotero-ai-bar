@@ -25,7 +25,7 @@ export interface LogoButtonProps {
   onClick?: () => void;
 }
 
-export function LogoButton({
+export function ProviderLogoButton({
   text,
   iconUrl,
   onClick,

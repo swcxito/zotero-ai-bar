@@ -18,78 +18,7 @@
 
 import { Icons } from "./common";
 import { getString } from "../utils/locale";
-import { IconView } from "./iconView";
-
-interface CreateActionButtonProps {
-  label: string;
-  icon: string;
-  onClick?: (e: MouseEvent, btn: HTMLElement) => void;
-  title?: string;
-  className?: string;
-  enabled?: boolean;
-}
-
-function createActionButton({
-  label,
-  icon,
-  onClick,
-  title,
-  className,
-  enabled = true,
-}: CreateActionButtonProps): any {
-  return {
-    tag: "button",
-    classList: [
-      "px-2.5",
-      "py-1.5",
-      "rounded-lg",
-      "border",
-      "border-transparent",
-      "hover:border-slate-200",
-      "dark:hover:border-neutral-800",
-      "hover:bg-slate-50",
-      "dark:hover:bg-neutral-900",
-      "text-slate-400",
-      "dark:text-neutral-500",
-      "hover:text-rose-500",
-      "dark:hover:text-rose-400",
-      "transition-all",
-      "flex",
-      "items-center",
-      "gap-1.5",
-      "text-[10px]",
-      "font-bold",
-      "uppercase",
-      "tracking-wider",
-      "justify-center",
-      ...(className ? className.split(" ") : []),
-    ],
-    properties: {
-      title: title || "",
-      disabled: !enabled,
-    },
-    children: [
-      IconView({ iconMarkup: icon, sizeRem: 1 }),
-      {
-        tag: "span",
-        classList: ["btn-label"],
-        properties: {
-          textContent: label,
-        },
-      },
-    ],
-    listeners: [
-      {
-        type: "click",
-        listener: (e: MouseEvent) => {
-          if (onClick) {
-            onClick(e, e.currentTarget as HTMLElement);
-          }
-        },
-      },
-    ],
-  };
-}
+import { ActionButton } from "./actionButton";
 
 export interface ChatBoxProps {
   doc: Document;
@@ -185,7 +114,7 @@ export function ChatBox({
           // textJustify: "inter-ideograph",
         },
         children: [
-          createActionButton({
+          ActionButton({
             label: "Copy",
             icon: Icons.Copy,
             title: getString("chat-copy-text"),
@@ -208,7 +137,7 @@ export function ChatBox({
               }
             },
           }),
-          createActionButton({
+          ActionButton({
             label: "COPY MD",
             icon: Icons.Markdown,
             title: getString("chat-copy-markdown"),
@@ -252,7 +181,7 @@ export function ChatBox({
                 //     addon.data.currentReader?._addToNote([annotation]);
                 //   }
                 // }),
-                createActionButton({
+              ActionButton({
                   label: "Retry",
                   icon: Icons.Redo,
                   title: getString("chat-regenerate-response"),
