@@ -18,9 +18,6 @@
 
 import { getLocaleID } from "../utils/locale";
 import { config } from "../../package.json";
-import { ChatBox } from "../components/chatBox";
-import { renderMarkdown } from "../utils/markdown";
-import { streamLLM } from "../utils/llmRequest";
 import { InputArea } from "../components/inputArea";
 
 export function injectCSS(doc: Document | ShadowRoot, filename: string) {
@@ -63,8 +60,8 @@ function injectDebugTailwindScript(root: ShadowRoot) {
 
 export async function registerReaderItemPaneSection() {
   // Setup LLM callbacks to update UI
-  if (!addon.data.sectionMap) {
-    addon.data.sectionMap = new Map();
+  if (!addon.data.sidePaneMap) {
+    addon.data.sidePaneMap = new Map();
   }
 
   Zotero.ItemPaneManager.registerSection({
@@ -96,7 +93,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
     // Optional, Called when the section data changes (setting item/mode/tabType/inTrash), must be synchronous. return false to cancel the change
     onItemChange: ({ item, setEnabled, tabType }) => {
       ztoolkit.log(`Section item data changed to ${item?.id}`);
-      addon.data.currentSection = item?.id;
+      addon.chatManager.currentSection = item?.id;
       setEnabled(tabType === "reader");
       return true;
     },
@@ -120,8 +117,8 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
       setSectionSummary,
       setSectionButtonStatus,
     }) => {
-      if (item && addon.data.sectionMap)
-        addon.data.sectionMap.set(item.id, body);
+      if (item && addon.data.sidePaneMap)
+        addon.data.sidePaneMap.set(item.id, body);
       const root = body.querySelector("#ai-bar-chat-root") as HTMLElement;
       const shadowRoot = root.attachShadow({ mode: "open" });
       resizeReaderItemPaneHeight(body, "fit");
@@ -168,7 +165,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
         icon: "chrome://zotero/skin/16/universal/empty-trash.svg",
         l10nID: getLocaleID("item-section-button-tooltip"),
         onClick: ({ item, paneID }) => {
-          const body = addon.data.sectionMap?.get(item.id);
+          const body = addon.data.sidePaneMap?.get(item.id);
           if (!body) return;
 
           const root = body.querySelector("#ai-bar-chat-root");

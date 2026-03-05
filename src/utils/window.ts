@@ -24,15 +24,15 @@ function isWindowAlive(win?: Window) {
 }
 
 function clearDeadChatWindowRef() {
-  if (!isWindowAlive(addon.data.chatWindow)) {
-    addon.data.chatWindow = undefined;
+  if (!isWindowAlive(addon.chatManager.chatWindow)) {
+    addon.chatManager.chatWindow = undefined;
   }
 }
 
 function ensureChatWindow() {
   clearDeadChatWindowRef();
-  if (isWindowAlive(addon.data.chatWindow)) {
-    return addon.data.chatWindow as Window;
+  if (isWindowAlive(addon.chatManager.chatWindow)) {
+    return addon.chatManager.chatWindow as Window;
   }
 
   const alwaysOnTop = getPref("chat.windowAlwaysOnTop");
@@ -43,7 +43,7 @@ function ensureChatWindow() {
   } = {
     onBodyLoaded: onChatWindowLoad,
     onWindowClosed: () => {
-      addon.data.chatWindow = undefined;
+      addon.chatManager.chatWindow = undefined;
     },
   };
 
@@ -69,7 +69,7 @@ function ensureChatWindow() {
     throw new Error("Failed to open chat window.");
   }
 
-  addon.data.chatWindow = dialogWindow;
+  addon.chatManager.chatWindow = dialogWindow;
   return dialogWindow;
 }
 

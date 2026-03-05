@@ -16,7 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { getPref } from "./prefs";
+import { getPref } from "../utils/prefs";
 import { UserProviderConfig, UserProviderModel } from "../types";
 
 export interface Message {
@@ -64,14 +64,14 @@ export async function streamLLM(
   refreshRate: number = getRefreshRateFromPref(),
 ) {
   // Cancel previous request if exists
-  if (addon.data.abortController) {
-    addon.data.abortController.abort();
-    addon.data.abortController = undefined;
+  if (addon.chatManager.abortController) {
+    addon.chatManager.abortController.abort();
+    addon.chatManager.abortController = undefined;
   }
 
   const AC = getAbortController();
   const controller = new AC();
-  addon.data.abortController = controller;
+  addon.chatManager.abortController = controller;
 
   try {
     callbacks.onStart?.();
@@ -209,8 +209,8 @@ export async function streamLLM(
     }
     callbacks.onError?.(error instanceof Error ? error.message : String(error));
   } finally {
-    if (addon.data.abortController === controller) {
-      addon.data.abortController = undefined;
+    if (addon.chatManager.abortController === controller) {
+      addon.chatManager.abortController = undefined;
     }
   }
 }

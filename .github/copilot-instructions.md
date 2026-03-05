@@ -41,3 +41,4 @@
 - When touching selection context logic, verify both search-based and position-based fallback paths in `src/modules/selectionContext.ts`.
 - Follow existing ESLint/Prettier setup (`eslint.config.mjs`, `prettier.config.js`) and keep changes minimal/surgical.
 - Existing AI conventions source scan found only `README.md`; no prior agent rules file existed.
+- DO NOT build or test changes.

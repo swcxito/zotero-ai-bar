@@ -17,7 +17,7 @@
  */
 
 import { ElementProps, TagElementProps } from "zotero-plugin-toolkit";
-import { getLogoUrl } from "../constants";
+import { getLogoUrl } from "../utils/providerInfo";
 import { Icons } from "./common";
 import { UserProvider } from "../types";
 import { IconView } from "./iconView";
