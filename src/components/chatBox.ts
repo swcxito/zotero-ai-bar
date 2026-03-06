@@ -181,7 +181,7 @@ export function ChatBox({
                 //     addon.data.currentReader?._addToNote([annotation]);
                 //   }
                 // }),
-              ActionButton({
+                ActionButton({
                   label: "Retry",
                   icon: Icons.Redo,
                   title: getString("chat-regenerate-response"),

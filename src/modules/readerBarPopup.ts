@@ -16,13 +16,13 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import {config} from "../../package.json";
-import {getSelectionContext} from "../utils/selectionContext";
-import {getString} from "../utils/locale";
-import {getPref} from "../utils/prefs";
-import {aiBarCommands} from "../utils/prompts";
-import {AiActionButton} from "../components/aiActionButton";
-import {ModelInfo} from "../components/modelInfo";
+import { config } from "../../package.json";
+import { getSelectionContext } from "../utils/selectionContext";
+import { getString } from "../utils/locale";
+import { getPref } from "../utils/prefs";
+import { aiBarCommands } from "../utils/prompts";
+import { AiActionButton } from "../components/aiActionButton";
+import { ModelInfo } from "../components/modelInfo";
 
 export function getReaderSourceLabel(
   reader?: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">,
@@ -32,7 +32,6 @@ export function getReaderSourceLabel(
     const text = value.trim();
     if (!text) return false;
     return !/^(pdf|epub|snapshot)$/i.test(text);
-
   };
 
   const getItemTitle = (item?: any) => {

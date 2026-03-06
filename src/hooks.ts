@@ -8,10 +8,7 @@ import {
 import { onModelDialogLoad } from "./modules/modelDialog";
 import { getPref, registerPrefs } from "./utils/prefs";
 import { registerReaderItemPaneSection } from "./modules/readerItemPane";
-import {
-  clearDeadChatWindowRef,
-  isWindowAlive,
-} from "./utils/window";
+import { clearDeadChatWindowRef, isWindowAlive } from "./utils/window";
 
 async function onStartup() {
   await Promise.all([
@@ -131,7 +128,6 @@ function onShortcuts(type: string) {
       break;
   }
 }
-
 
 // Add your hooks here. For element click, etc.
 // Keep in mind hooks only do dispatch. Don't add code that does real jobs in hooks.
