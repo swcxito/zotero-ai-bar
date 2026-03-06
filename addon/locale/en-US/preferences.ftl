@@ -35,6 +35,8 @@ pref-prompt-add = Add Prompt
 # Advanced Options
 pref-advanced = Advanced Settings
 pref-ui = Interface Settings
+pref-formula-optimization =
+    .label = Enable Formula Block Optimization
 
 
 pref-help = { $name } Build { $version } { $time }

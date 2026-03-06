@@ -34,6 +34,8 @@ pref-prompt-add = 添加提示词
 # 高级选项
 pref-advanced = 高级设置
 pref-ui = 界面设置
+pref-formula-optimization =
+    .label = 启用公式块优化
 
 
 pref-help = { $name } Build { $version } { $time }
