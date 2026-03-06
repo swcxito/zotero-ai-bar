@@ -97,7 +97,10 @@ function optimizeFormulas(text: string): string {
     }
 
     if (inBlockMath) {
-      const escapedPrefix = blockQuotePrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const escapedPrefix = blockQuotePrefix.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&",
+      );
       const normalizedLine = blockQuotePrefix
         ? line.replace(new RegExp(`^\\s*${escapedPrefix}`), blockQuotePrefix)
         : line.replace(/^\s*/, "");
