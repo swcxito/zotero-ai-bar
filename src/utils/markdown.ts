@@ -66,30 +66,53 @@ marked.use({
   },
 });
 
-/**
- * 优化公式格式：
- * 1. 在行内公式 $...$ 前后确保至少一个空格（如果不是行首/行尾）
- * 2. 在块级公式 $$...$$ 前后确保至少两个换行
- */
 function optimizeFormulas(text: string): string {
-  return text.replace(
-    /(\s*)(\$\$[\s\S]*?\$\$|\$[^$\n]+\$)(\s*)/g,
-    (match, prefix, formula, suffix, offset) => {
-      // 1. 处理块级公式
-      if (formula.startsWith("$$")) {
-        const newPrefix = offset === 0 ? "" : "\n\n";
-        return newPrefix + formula + "\n\n";
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const output: string[] = [];
+
+  let inBlockMath = false;
+  let blockQuotePrefix = "";
+
+  for (const line of lines) {
+    const delimiterMatch = line.match(/^(\s*(?:>\s*)*)\$\$\s*$/);
+
+    if (delimiterMatch) {
+      const prefix = delimiterMatch[1] ?? "";
+
+      if (!inBlockMath) {
+        inBlockMath = true;
+        blockQuotePrefix = prefix;
+        if (output.length > 0 && output[output.length - 1].trim() !== "") {
+          output.push("");
+        }
+        output.push(`${blockQuotePrefix}$$`);
+      } else {
+        output.push(`${blockQuotePrefix}$$`);
+        inBlockMath = false;
+        blockQuotePrefix = "";
+        output.push("");
       }
 
-      // 2. 处理行内公式
-      // 如果前缀为空且不是开头，添加空格
-      const newPrefix = prefix || (offset === 0 ? "" : " ");
-      // 如果后缀为空，添加空格
-      const newSuffix = suffix || " ";
+      continue;
+    }
 
-      return newPrefix + formula + newSuffix;
-    },
-  );
+    if (inBlockMath) {
+      const escapedPrefix = blockQuotePrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const normalizedLine = blockQuotePrefix
+        ? line.replace(new RegExp(`^\\s*${escapedPrefix}`), blockQuotePrefix)
+        : line.replace(/^\s*/, "");
+      output.push(normalizedLine);
+      continue;
+    }
+
+    output.push(line);
+  }
+
+  while (output.length > 0 && output[output.length - 1] === "") {
+    output.pop();
+  }
+
+  return output.join("\n");
 }
 
 /**

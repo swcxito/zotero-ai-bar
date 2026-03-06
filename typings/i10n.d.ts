@@ -22,6 +22,7 @@ export type FluentMessageId =
   | 'pref-extend-selection-context'
   | 'pref-extend-selection-size'
   | 'pref-extend-selection-unit'
+  | 'pref-formula-optimization'
   | 'pref-help'
   | 'pref-max-tokens'
   | 'pref-model-name'
