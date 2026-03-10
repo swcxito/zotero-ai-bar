@@ -11,4 +11,7 @@ chat-regenerate-response = 重新生成
 reader-bar-explain = 解释
 reader-bar-translate = 翻译
 reader-bar-summarize = 总结
+reader-bar-smart-copy = 智能复制
+reader-bar-expand = 更多
+reader-bar-expand-placeholder = 更多选项即将推出...
 reader-bar-ask-placeholder = 问问 AI...

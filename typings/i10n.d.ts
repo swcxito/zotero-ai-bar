@@ -46,6 +46,9 @@ export type FluentMessageId =
   | 'pref-ui'
   | 'prefs-title'
   | 'reader-bar-ask-placeholder'
+  | 'reader-bar-expand'
+  | 'reader-bar-expand-placeholder'
   | 'reader-bar-explain'
+  | 'reader-bar-smart-copy'
   | 'reader-bar-summarize'
   | 'reader-bar-translate';

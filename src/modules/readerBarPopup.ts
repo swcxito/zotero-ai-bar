@@ -23,6 +23,7 @@ import { getPref } from "../utils/prefs";
 import { aiBarCommands } from "../utils/prompts";
 import { AiActionButton } from "../components/aiActionButton";
 import { ModelInfo } from "../components/modelInfo";
+import { ExpandButton } from "../components/expandButton";
 
 export function getReaderSourceLabel(
   reader?: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">,
@@ -174,24 +175,37 @@ function renderAIBar(doc: Document): DocumentFragment {
     const prompt = command.getPrompt(Zotero.locale);
     // ztoolkit.log("Generated Prompt:", prompt);
 
-    await addon.chatManager.sendChatRequest({
+    const requestParams: Parameters<
+      typeof addon.chatManager.sendChatRequest
+    >[0] = {
       userPrompt: prompt,
       selectedText: addon.data.selectedText,
       sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
       hostMode: addon.chatManager.getCurrentHostMode(),
       sectionId: addon.chatManager.currentSection,
-    });
+    };
+
+    // Enable auto-copy for smartCopy command only
+    if (commandId === "smartCopy") {
+      requestParams.autoCopy = true;
+    }
+
+    await addon.chatManager.sendChatRequest(requestParams);
   };
 
-  // Create AI buttons from commands
+  // Create AI buttons from commands in specific order: explain, translate, smartCopy
   const createCommandButtons = () => {
-    return Object.values(aiBarCommands).map((command) =>
-      AiActionButton({
-        label: getString(command.label),
-        icon: command.icon,
-        onClick: async () => handleButtonAction(command.id),
-      }),
-    );
+    const commandOrder = ["explain", "translate", "smartCopy"];
+    return commandOrder
+      .map((id) => aiBarCommands[id])
+      .filter(Boolean)
+      .map((command) =>
+        AiActionButton({
+          label: getString(command.label),
+          icon: command.icon,
+          onClick: async () => handleButtonAction(command.id),
+        }),
+      );
   };
 
   return ztoolkit.UI.createElement(doc, "fragment", {
@@ -202,6 +216,18 @@ function renderAIBar(doc: Document): DocumentFragment {
         children: [
           ModelInfo(),
           ...createCommandButtons(),
+          ExpandButton({
+            label: getString("reader-bar-expand"),
+            icon: "🔽",
+            menuItems: [
+              {
+                id: "summarize",
+                icon: aiBarCommands.summarize.icon,
+                label: getString(aiBarCommands.summarize.label),
+                onClick: () => handleButtonAction("summarize"),
+              },
+            ],
+          }),
           // Ask (Input Group)
           {
             tag: "div",

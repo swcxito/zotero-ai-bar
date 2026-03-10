@@ -411,6 +411,26 @@
   color: #6b7280;
 }
 
+.expand-container {
+  position: relative;
+}
+
+.expand-trigger-btn .btn-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dropdown-item-icon-text {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
 /* Light Mode Styles */
 @media (prefers-color-scheme: light) {
   .model-dropdown-menu {

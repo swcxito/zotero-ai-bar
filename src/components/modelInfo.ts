@@ -22,6 +22,7 @@ import { analyzeModelName, getModelIconPath } from "../utils/modelAnalyzer";
 import { UserProviderConfig, UserProviderModel } from "../types";
 import { getString } from "../utils/locale";
 import { IconView } from "./iconView";
+import { DropdownMenuGroup, toggleDropdownMenu } from "./dropdownMenu";
 
 /**
  * Update the model info display
@@ -162,117 +163,49 @@ export function ModelInfo(): TagElementProps {
 }
 
 function toggleModelDropdown(anchor: HTMLElement) {
-  const doc = anchor.ownerDocument;
   const container = anchor.closest(".ai-bar-container") as HTMLElement;
   if (!container) return;
-
-  // Close function
-  const closeDropdown = (e?: Event) => {
-    // If click is inside dropdown, don't close
-    if (e && (e.target as HTMLElement).closest("#ai-bar-model-dropdown")) {
-      return;
-    }
-
-    const dropdown = doc.getElementById("ai-bar-model-dropdown");
-    if (dropdown) {
-      dropdown.remove();
-    }
-    doc.removeEventListener("click", closeDropdown, true);
-    anchor.removeEventListener("blur", closeDropdown, true);
-  };
-
-  const existing = doc.getElementById("ai-bar-model-dropdown");
-  if (existing) {
-    // If existing, remove it and return (toggle off)
-    existing.remove();
-    doc.removeEventListener("click", closeDropdown, true);
-    anchor.removeEventListener("blur", closeDropdown, true);
-    return;
-  }
-
-  const dropdown = doc.createElement("div");
-  dropdown.id = "ai-bar-model-dropdown";
-  dropdown.className = "model-dropdown-menu";
 
   // Populate with providers and models
   const currentModelId = getPref("llm.modelId");
   const providers = addon.data.userProviderConfigs || [];
 
-  if (providers.length === 0) {
-    const emptyItem = doc.createElement("div");
-    emptyItem.className = "model-dropdown-empty";
-    emptyItem.textContent =
-      getString("no-models-available" as any) || "No models available";
-    dropdown.appendChild(emptyItem);
-  } else {
-    providers.forEach((provider) => {
-      if (!provider.models || provider.models.length === 0) return;
-
-      const groupTitle = doc.createElement("div");
-      groupTitle.className = "model-dropdown-group-title";
-      groupTitle.textContent = provider.name;
-      dropdown.appendChild(groupTitle);
-
-      const modelList = doc.createElement("div");
-      modelList.className = "model-dropdown-group-list";
-
-      provider.models.forEach((model) => {
-        const item = doc.createElement("div");
-        item.className = "model-dropdown-item";
-        if (model.id === currentModelId) {
-          item.classList.add("selected");
-        }
-
-        const modelAnalysis = analyzeModelName(model.name);
-        const iconPath = getModelIconPath(modelAnalysis.family);
-
-        ztoolkit.UI.appendElement(
-          IconView({
-            iconMarkup: iconPath,
-            extraClasses: ["model-dropdown-icon"],
-            sizeRem: 1.2,
-          }),
-          item,
-        );
-
-        const text = doc.createElement("span");
-        text.textContent = model.name;
-        item.appendChild(text);
-
-        item.onclick = (e) => {
-          e.stopPropagation();
+  const groups: DropdownMenuGroup[] = providers
+    .filter((provider) => (provider.models || []).length > 0)
+    .map((provider) => ({
+      title: provider.name,
+      items: (provider.models || []).map((model) => ({
+        id: model.id || model.name,
+        label: model.name,
+        selected: model.id === currentModelId,
+        renderLeading: (doc: Document) => {
+          const holder = doc.createElement("span");
+          const modelAnalysis = analyzeModelName(model.name);
+          const iconPath = getModelIconPath(modelAnalysis.family);
+          ztoolkit.UI.appendElement(
+            IconView({
+              iconMarkup: iconPath,
+              extraClasses: ["model-dropdown-icon"],
+              sizeRem: 1.2,
+            }),
+            holder,
+          );
+          return holder;
+        },
+        onClick: () => {
           if (model.id) {
             setPref("llm.modelId", model.id);
             updateModelInfoDisplay(anchor);
           }
-          // Force close
-          const d = doc.getElementById("ai-bar-model-dropdown");
-          if (d) d.remove();
-          doc.removeEventListener("click", closeDropdown, true);
-        };
+        },
+      })),
+    }));
 
-        modelList.appendChild(item);
-      });
-      dropdown.appendChild(modelList);
-    });
-  }
-
-  // Append to container to follow popup positioning
-  container.appendChild(dropdown);
-
-  // Position the dropdown relative to anchor
-  dropdown.style.position = "absolute";
-  dropdown.style.top = "calc(100% + 2px)";
-  dropdown.style.left = "0";
-  dropdown.style.zIndex = "10001";
-
-  // Add click outside listener and blur
-  // Use capture phase to ensure we catch clicks before they might be stopped
-  setTimeout(() => {
-    doc.addEventListener("click", closeDropdown, true);
-    // Make anchor focusable temporarily to enable blur event
-    if (!anchor.hasAttribute("tabindex")) {
-      anchor.setAttribute("tabindex", "-1");
-    }
-  }, 10);
+  toggleDropdownMenu({
+    menuId: "ai-bar-model-dropdown",
+    anchor,
+    container,
+    groups,
+    emptyText: getString("no-models-available" as any) || "No models available",
+  });
 }

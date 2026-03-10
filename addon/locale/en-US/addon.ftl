@@ -11,4 +11,7 @@ chat-regenerate-response = Regenerate response
 reader-bar-explain = Explain
 reader-bar-translate = Translate
 reader-bar-summarize = Summarize
+reader-bar-smart-copy = Smart Copy
+reader-bar-expand = More
+reader-bar-expand-placeholder = More options coming soon...
 reader-bar-ask-placeholder = Ask AI...
