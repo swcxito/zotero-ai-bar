@@ -132,9 +132,9 @@ Context: Work adopted a <selected>single</selected> green micro-LED.
 Output:
 **single**
 \`/ˈsɪŋɡ(ə)l/\`
-**adj. 单一的，单个的**
+**adj. 单一的,单个的**
 -----
-adj. 独自的；单身的
+adj. 独自的;单身的
 n. 单曲
 
 ## Example (Abbreviation):
@@ -154,6 +154,74 @@ Output:
 Context: <selected>Photosynthesis is the process by which green plants and some other organisms use sunlight to synthesize foods from carbon dioxide and water.</selected>
 Output:
 光合作用是绿色植物和其他一些生物利用阳光将二氧化碳和水合成食物的过程。
+`,
+  },
+  smartCopy: {
+    id: "smartCopy",
+    icon: "📋",
+    label: "reader-bar-smart-copy",
+    getPrompt: () => `
+# Task
+Clean and format the <selected> text, preserving the original language while removing noise and formatting formulas.
+
+# Critical Requirements
+
+## 1. Language Preservation (MANDATORY)
+- **CRITICAL**: Output MUST be in the SAME LANGUAGE as the input <selected> text.
+- Do NOT translate the content under any circumstances.
+- Maintain all original terms, names, and technical vocabulary in their original language.
+- Preserve original punctuation and writing style of the source language.
+
+## 2. Preserve Content Structure
+- Keep original text structure, wording, and paragraph breaks.
+- Do NOT paraphrase, summarize, or add commentary.
+- Maintain academic tone and technical terminology.
+
+## 3. Remove Document Artifacts
+Remove common PDF/document noise:
+- Page numbers (e.g., "Page 5", "- 23 -")
+- Headers and footers (repeated text at top/bottom)
+- Column formatting artifacts (broken words, unnatural line breaks)
+- Watermarks and metadata
+- Reference markers that break flow (keep inline citations if part of sentence)
+
+## 4. Formula Formatting
+Convert mathematical expressions to LaTeX markdown:
+
+**Inline formulas**: \` $ formula $ \` (spaces around)
+Example: The energy $ E = mc^2 $ shows...
+
+**Block formulas**:
+
+$$
+formula
+$$
+
+(empty lines before/after)
+
+**Recognition patterns:**
+- Greek: α, β, γ, Δ, Σ, θ, λ, μ, π, σ, ω
+- Operators: ±, ×, ÷, ≈, ≠, ≤, ≥, ∈, ∉, ∑, ∏, ∫, ∂
+- Symbols: √, ∞, →, ⇒, ∀, ∃
+- Sub/superscripts: x₁, x², eⁿ
+
+# Example
+
+Input:
+\`\`\`
+--- Page 42 ---
+The relationship between energy and mass is given by Einstein's
+famous equation E=mc². This fundamental principle
+————————————————————
+Journal of Physics | Volume 23
+————————————————————
+shows that energy E and mass m are interchangeable.
+\`\`\`
+
+Output:
+\`\`\`
+The relationship between energy and mass is given by Einstein's famous equation $ E = mc^2 $. This fundamental principle shows that energy $ E $ and mass $ m $ are interchangeable.
+\`\`\`
 `,
   },
 };

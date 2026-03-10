@@ -139,4 +139,13 @@
   .chat-message pre code {
     @apply bg-transparent p-0 text-inherit;
   }
+
+  /* Expand Button Dropdown Styles */
+  .expand-menu {
+    transform: translateY(-4px) scale(0.98);
+  }
+
+  .expand-menu.opacity-100 {
+    transform: translateY(0) scale(1);
+  }
 }

@@ -41,6 +41,7 @@ type RequestState = {
   hostMode: ChatHostMode;
   sectionId?: number;
   sourceLabel: string;
+  autoCopy?: boolean;
 };
 
 export class ChatManager {
@@ -114,6 +115,7 @@ export class ChatManager {
     sourceLabel?: string;
     hostMode?: ChatHostMode;
     sectionId?: number;
+    autoCopy?: boolean;
   }): Promise<string> {
     const requestId = crypto.randomUUID();
 
@@ -157,6 +159,7 @@ export class ChatManager {
       hostMode: route.mode,
       sectionId: route.sectionId,
       sourceLabel,
+      autoCopy: params.autoCopy,
     });
     this.lastRequest = {
       hostMode: route.mode,
@@ -174,7 +177,7 @@ export class ChatManager {
         this.onLLMStreamStart({ requestId });
       },
       onUpdate: async (fullText) => {
-        this.onLLMStreamUpdate({ requestId, fullText });
+        await this.onLLMStreamUpdate({ requestId, fullText });
       },
       onEnd: () => {
         this.onLLMStreamEnd({ requestId });
@@ -204,7 +207,7 @@ export class ChatManager {
         this.onLLMStreamStart({ requestId });
       },
       onUpdate: async (fullText) => {
-        this.onLLMStreamUpdate({ requestId, fullText });
+        await this.onLLMStreamUpdate({ requestId, fullText });
       },
       onEnd: () => {
         this.onLLMStreamEnd({ requestId });
@@ -296,11 +299,25 @@ export class ChatManager {
 
   onLLMStreamEnd(data: { requestId: string }) {
     ztoolkit.log("LLM stream ended:", data.requestId);
-    const pop = this.requestMap?.get(data.requestId)?.chatPop;
+    const requestState = this.requestMap?.get(data.requestId);
+    const pop = requestState?.chatPop;
     if (pop) {
       const actions = pop.querySelector(".chat-actions");
       if (actions) {
         actions.classList.remove("hidden");
+      }
+
+      // Auto-copy to clipboard if flag is set
+      if (requestState?.autoCopy) {
+        const markdown = (pop as HTMLElement).dataset.markdown;
+        if (markdown) {
+          try {
+            new ztoolkit.Clipboard().addText(markdown, "text/plain").copy();
+            ztoolkit.log("Auto-copied markdown to clipboard");
+          } catch (e) {
+            ztoolkit.log("Auto-copy failed:", e);
+          }
+        }
       }
     }
     this.cleanupRequestData(data.requestId);
