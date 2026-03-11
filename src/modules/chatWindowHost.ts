@@ -129,7 +129,7 @@ export function ensureChatWindowUI(doc: Document) {
     "pb-2",
   );
 
-  const inputArea = InputArea(doc);
+  const inputArea = InputArea(doc, addon.chatManager.currentSection!);
   bindInputArea(doc, inputArea);
 
   root.appendChild(messageContainer);
