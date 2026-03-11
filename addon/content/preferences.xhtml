@@ -96,8 +96,23 @@
         <label data-l10n-id="pref-extend-selection-unit" />
       </label>
     </hbox>
+    <hbox align="start" style="margin-top: 6px; gap: 12px">
+      <vbox flex="1">
+        <checkbox id="__addonRef__-auto-attach-fulltext" preference="chat.autoAttachFullText"
+          data-l10n-id="pref-auto-attach-fulltext" />
+        <html:small data-l10n-id="pref-auto-attach-fulltext-desc" style="margin-left: 22px; color: #b45309" />
+      </vbox>
+      <vbox flex="1">
+        <checkbox id="__addonRef__-auto-attach-item-data" preference="chat.autoAttachItemData"
+          data-l10n-id="pref-auto-attach-item-data" />
+      </vbox>
+    </hbox>
     <vbox id="__addonRef__-prompt-preview-container" style="margin-top: 10px">
-      <label data-l10n-id="pref-custom-prompts" style="font-weight: bold" />
+      <hbox align="center" style="margin-bottom: 8px">
+        <label data-l10n-id="pref-custom-prompts" style="font-weight: bold" />
+        <spacer flex="1" />
+        <button id="__addonRef__-prompt-edit-button" data-l10n-id="pref-edit-prompts" />
+        </hbox>
       <hbox
         flex="1"
         align="center"
@@ -107,13 +122,6 @@
         <html:div
           id="__addonRef__-prompt-table-container"
           style="width: 100%"
-        />
-      </hbox>
-      <hbox align="center" style="margin-top: 8px">
-        <spacer flex="1" />
-        <button
-          id="__addonRef__-prompt-edit-button"
-          data-l10n-id="pref-edit-prompts"
         />
       </hbox>
     </vbox>
@@ -161,6 +169,14 @@
         preference="chat.windowAlwaysOnTop"
         data-l10n-id="pref-chat-window-always-on-top"
       />
+    </hbox>
+    <hbox align="center" style="margin-top: 10px">
+      <vbox flex="1">
+        <html:label data-l10n-id="pref-context-rounds" />
+        <html:small data-l10n-id="pref-context-rounds-desc" />
+      </vbox>
+      <html:input type="number" min="1" max="64" step="1" style="text-align: left; width: 60px"
+        preference="chat.contextRounds" />
     </hbox>
   </groupbox>
   <groupbox>

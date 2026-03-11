@@ -53,4 +53,11 @@ pref-prompteditor-button-save = 保存
 pref-prompteditor-button-add = 添加提示词
 pref-prompteditor-empty-state = 暂无自定义提示词。
 
+pref-context-rounds = 上下文保留轮数
+pref-context-rounds-desc = 侧边栏模式下每个文档保留的最近对话轮数
+pref-auto-attach-fulltext =
+    .label = 自动点亮全文按钮
+pref-auto-attach-fulltext-desc = 开启后将大幅增加Token用量
+pref-auto-attach-item-data =
+    .label = 自动附加条目数据
 pref-help = { $name } Build { $version } { $time }

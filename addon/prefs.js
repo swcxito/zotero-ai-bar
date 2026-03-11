@@ -14,3 +14,6 @@ pref("prompt.userPrompts", "");
 pref("llm.modelId", "");
 
 pref("chat.formulaOptimization", true);
+pref("chat.contextRounds", 8);
+pref("chat.autoAttachFullText", false);
+pref("chat.autoAttachItemData", false);

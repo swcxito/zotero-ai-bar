@@ -17,6 +17,8 @@
  */
 
 import { ChatBox } from "../components/chatBox";
+import { Icons } from "../components/common";
+import { IconView } from "../components/iconView";
 import { renderMarkdown } from "../utils/markdown";
 import { streamLLM } from "./llmRequest";
 import type { Message } from "./llmRequest";
@@ -44,6 +46,18 @@ type RequestState = {
   autoCopy?: boolean;
 };
 
+/** Per-section (per-document tab) state for sidebar chat */
+export type SidebarSectionState = {
+  conversationHistory: Message[];
+  isStreaming: boolean;
+  fullTextEnabled: boolean;
+  abortController?: InstanceType<typeof AbortController>;
+  /** requestId of the currently active stream, used to record history */
+  activeRequestId?: string;
+  /** The user message for the current turn, saved so we can append to history on end */
+  pendingUserContent?: string;
+};
+
 export class ChatManager {
   public chatHostMode?: ChatHostMode;
   public chatWindow?: Window;
@@ -56,11 +70,309 @@ export class ChatManager {
     "pdf" | "epub" | "snapshot"
   >;
   public currentSection?: number;
+  /** Per-section sidebar state (keyed by item.id / sectionId) */
+  public sidebarStates: Map<number, SidebarSectionState> = new Map();
 
   getCurrentHostMode(): ChatHostMode {
     const location = this.chatHostMode || getPref("chat.location");
     return location === "window" ? "window" : "sidebar";
   }
+
+  // ── Per-section sidebar state helpers ───────────────────────────────────
+
+  getOrCreateSectionState(sectionId: number): SidebarSectionState {
+    if (!this.sidebarStates.has(sectionId)) {
+      this.sidebarStates.set(sectionId, {
+        conversationHistory: [],
+        isStreaming: false,
+        fullTextEnabled: getPref("chat.autoAttachFullText"),
+      });
+    }
+    return this.sidebarStates.get(sectionId)!;
+  }
+
+  clearSectionHistory(sectionId: number) {
+    const state = this.sidebarStates.get(sectionId);
+    if (state) {
+      state.conversationHistory = [];
+    }
+  }
+
+  /**
+   * Retrieve metadata for the given Zotero item ID.
+   * Returns formatted metadata string including title, abstract, authors, publication, etc.
+   */
+  getItemMetadata(itemId: number): string | undefined {
+    try {
+      const item = Zotero.Items.get(itemId) as any;
+      if (!item) {
+        return undefined;
+      }
+
+      // Get the top-level parent item (not attachment)
+      let targetItem = item;
+      if (item.isAttachment?.()) {
+        const parentID = item.parentID;
+        if (parentID) {
+          const parentItem = Zotero.Items.get(parentID) as any;
+          if (parentItem) {
+            targetItem = parentItem;
+          }
+        }
+      }
+
+      if (!targetItem.isRegularItem?.()) {
+        return undefined;
+      }
+
+      // Extract metadata
+      const metadata: Record<string, string | string[]> = {};
+
+      // Title
+      const title = targetItem.getField("title") as string;
+      if (title) {
+        metadata["Title"] = title;
+      }
+
+      // Authors
+      const creators = targetItem.getCreators?.() || [];
+      if (creators.length > 0) {
+        const authorNames = creators
+          .map((creator: any) => {
+            if (creator.firstName && creator.lastName) {
+              return `${creator.firstName} ${creator.lastName}`;
+            } else if (creator.name) {
+              return creator.name;
+            } else if (creator.lastName) {
+              return creator.lastName;
+            }
+            return undefined;
+          })
+          .filter(Boolean);
+        if (authorNames.length > 0) {
+          metadata["Authors"] = authorNames;
+        }
+      }
+
+      // Abstract
+      const abstract = targetItem.getField("abstractNote") as string;
+      if (abstract) {
+        metadata["Abstract"] = abstract;
+      }
+
+      // Publication
+      const publication =
+        (targetItem.getField("publicationTitle") as string) ||
+        (targetItem.getField("bookTitle") as string) ||
+        (targetItem.getField("journalAbbreviation") as string) ||
+        (targetItem.getField("series") as string);
+      if (publication) {
+        metadata["Publication"] = publication;
+      }
+
+      // Item Type
+      const itemTypeID = targetItem.itemTypeID;
+      if (itemTypeID) {
+        const itemType = Zotero.ItemTypes.getLocalizedString(itemTypeID);
+        if (itemType) {
+          metadata["Item Type"] = itemType;
+        }
+      }
+
+      // Date
+      const date = targetItem.getField("date") as string;
+      if (date) {
+        metadata["Publication Date"] = date;
+      }
+
+      // Build formatted string
+      if (Object.keys(metadata).length === 0) {
+        return undefined;
+      }
+
+      let result = "# Item Metadata\n";
+      for (const [key, value] of Object.entries(metadata)) {
+        if (Array.isArray(value)) {
+          result += `${key}: ${value.join(", ")}\n`;
+        } else {
+          result += `${key}: ${value}\n`;
+        }
+      }
+
+      return result.trim();
+    } catch (e) {
+      ztoolkit.log("getItemMetadata failed:", e);
+      return undefined;
+    }
+  }
+
+  /**
+   * Retrieve the full text of the attachment for the given Zotero item ID.
+   * Truncates to 50,000 characters to keep prompts manageable.
+   */
+  async getItemFullText(itemId: number): Promise<string | undefined> {
+    // ztoolkit.log("[getItemFullText] start, itemId:", itemId);
+    try {
+      const item = Zotero.Items.get(itemId) as any;
+      // ztoolkit.log("[getItemFullText] item:", item, "itemType:", item?.itemType, "isAttachment:", item?.isAttachment?.());
+      if (!item) {
+        // ztoolkit.log("[getItemFullText] item not found");
+        return undefined;
+      }
+
+      // If this is a regular item (not an attachment), try to get its best attachment
+      let targetItem = item;
+      if (item.isRegularItem?.() && !item.isAttachment?.()) {
+        const attachmentIDs: number[] = item.getAttachments?.() ?? [];
+        // ztoolkit.log("[getItemFullText] regular item, attachmentIDs:", attachmentIDs);
+        for (const aid of attachmentIDs) {
+          const att = Zotero.Items.get(aid) as any;
+          // ztoolkit.log("[getItemFullText] checking attachment", aid, "contentType:", att?.attachmentContentType);
+          if (
+            att?.attachmentContentType === "application/pdf" ||
+            att?.attachmentContentType?.startsWith("text/")
+          ) {
+            targetItem = att;
+            break;
+          }
+        }
+        if (targetItem === item) {
+          // fall back to first attachment
+          if (attachmentIDs.length > 0) {
+            targetItem = Zotero.Items.get(attachmentIDs[0]) as any;
+          }
+        }
+      }
+      // ztoolkit.log("[getItemFullText] targetItem:", targetItem?.id, "attachmentText type:", typeof targetItem?.attachmentText);
+
+      // Try built-in attachment text
+      let text: string | undefined;
+      if (typeof targetItem.attachmentText === "string") {
+        text = targetItem.attachmentText;
+        // ztoolkit.log("[getItemFullText] got text via string property, length:", text?.length);
+      } else if (
+        targetItem.attachmentText &&
+        typeof targetItem.attachmentText.then === "function"
+      ) {
+        // ztoolkit.log("[getItemFullText] attachmentText is a Promise, awaiting...");
+        text = await targetItem.attachmentText;
+        // ztoolkit.log("[getItemFullText] awaited attachmentText, result type:", typeof text, "length:", (text as any)?.length);
+      } else {
+        // ztoolkit.log("[getItemFullText] attachmentText is:", targetItem.attachmentText);
+      }
+
+      if (!text) {
+        // ztoolkit.log("[getItemFullText] text is empty/undefined after all attempts");
+        return undefined;
+      }
+      const MAX = 50000;
+      // ztoolkit.log("[getItemFullText] success, text length:", text.length, "truncated:", text.length > MAX);
+      return text.length > MAX ? text.slice(0, MAX) + "\n...[truncated]" : text;
+    } catch (e) {
+      ztoolkit.log("getItemFullText failed:", e);
+      return undefined;
+    }
+  }
+
+  /**
+   * Update the send/stop button in the inputArea inside a section's shadow DOM.
+   * Called after isStreaming changes so the UI reflects current state.
+   */
+  updateSectionInputArea(sectionId: number) {
+    const body = addon.data.sidePaneMap?.get(sectionId);
+    if (!body) return;
+    const root = body.querySelector("#ai-bar-chat-root");
+    if (!root?.shadowRoot) return;
+    const shadowRoot = root.shadowRoot;
+
+    const inputArea = shadowRoot.querySelector(".input-area");
+    if (!inputArea) return;
+
+    const doc = body.ownerDocument;
+    const state = this.sidebarStates.get(sectionId);
+    const isStreaming = state?.isStreaming ?? false;
+    const textarea = inputArea.querySelector(
+      "textarea",
+    ) as HTMLTextAreaElement | null;
+    const hasText = (textarea?.value?.trim()?.length ?? 0) > 0;
+
+    const sendBtn = inputArea.querySelector(
+      ".input-send-btn",
+    ) as HTMLButtonElement | null;
+    if (!sendBtn) return;
+
+    if (isStreaming) {
+      sendBtn.disabled = false;
+      sendBtn.dataset.mode = "stop";
+      sendBtn.classList.remove(
+        "bg-slate-200",
+        "dark:bg-neutral-800",
+        "text-slate-400",
+        "dark:text-neutral-600",
+        "bg-rose-500",
+        "dark:bg-rose-600",
+        "hover:bg-rose-600",
+      );
+      sendBtn.classList.add(
+        "bg-rose-500",
+        "dark:bg-rose-600",
+        "hover:bg-rose-600",
+      );
+      sendBtn.innerHTML = "";
+      const stopIcon = ztoolkit.UI.createElement(
+        doc,
+        "span",
+        IconView({
+          iconMarkup: Icons.Stop,
+          sizeRem: 1.5,
+          extraClasses: ["text-white"],
+        }),
+      );
+      sendBtn.appendChild(stopIcon);
+    } else {
+      sendBtn.dataset.mode = "send";
+      if (hasText) {
+        sendBtn.disabled = false;
+        sendBtn.classList.remove(
+          "bg-slate-200",
+          "dark:bg-neutral-800",
+          "text-slate-400",
+          "dark:text-neutral-600",
+        );
+        sendBtn.classList.add(
+          "bg-rose-500",
+          "dark:bg-rose-600",
+          "hover:bg-rose-600",
+        );
+      } else {
+        sendBtn.disabled = true;
+        sendBtn.classList.remove(
+          "bg-rose-500",
+          "dark:bg-rose-600",
+          "hover:bg-rose-600",
+        );
+        sendBtn.classList.add(
+          "bg-slate-200",
+          "dark:bg-neutral-800",
+          "text-slate-400",
+          "dark:text-neutral-600",
+        );
+      }
+      sendBtn.innerHTML = "";
+      const sendIcon = ztoolkit.UI.createElement(
+        doc,
+        "span",
+        IconView({
+          iconMarkup: Icons.Send,
+          sizeRem: 1.5,
+          extraClasses: ["text-white"],
+        }),
+      );
+      sendBtn.appendChild(sendIcon);
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
 
   ensureRequestMaps() {
     if (!this.requestMap) this.requestMap = new Map();
@@ -118,6 +430,33 @@ export class ChatManager {
     autoCopy?: boolean;
   }): Promise<string> {
     const requestId = crypto.randomUUID();
+    const route = {
+      mode: params.hostMode || this.getCurrentHostMode(),
+      sectionId: params.sectionId,
+    } as const;
+
+    // Per-section state management (sidebar mode)
+    const isSidebarMode =
+      route.mode === "sidebar" && route.sectionId !== undefined;
+    const sectionState = isSidebarMode
+      ? this.getOrCreateSectionState(route.sectionId!)
+      : undefined;
+
+    if (sectionState) {
+      // Abort any existing stream for this section only
+      if (sectionState.abortController) {
+        sectionState.abortController.abort();
+        sectionState.abortController = undefined;
+      }
+      const AC = (
+        typeof AbortController !== "undefined"
+          ? AbortController
+          : (Zotero.getMainWindow() as any).AbortController
+      ) as typeof AbortController;
+      sectionState.abortController = new AC();
+      sectionState.pendingUserContent = params.userPrompt;
+      sectionState.activeRequestId = requestId;
+    }
 
     const messagesPromise: Promise<Message[]> = (async () => {
       let selectionContext: Array<string> | undefined;
@@ -129,28 +468,45 @@ export class ChatManager {
         ztoolkit.log("Get selection context failed:", e);
       }
 
-      return [
-        {
-          role: "system",
-          content: this.buildSystemContent(
-            params.selectedText,
-            selectionContext,
-          ),
-        },
-        {
-          role: "user",
-          content: params.userPrompt,
-        },
-      ];
+      let systemContent = this.buildSystemContent(
+        params.selectedText,
+        selectionContext,
+      );
+
+      // Append item metadata if enabled (after context, before fulltext)
+      if (getPref("chat.autoAttachItemData") && route.sectionId !== undefined) {
+        const itemMetadata = this.getItemMetadata(route.sectionId);
+        if (itemMetadata) {
+          systemContent += "\n\n" + itemMetadata;
+        }
+      }
+
+      // Append full text if enabled for this section (manual toggle) or globally (pref)
+      if (sectionState?.fullTextEnabled && route.sectionId !== undefined) {
+        const fullText = await this.getItemFullText(route.sectionId);
+        if (fullText) {
+          systemContent +=
+            "\n\n# Full Document Text\n<fulldoc>\n" + fullText + "\n</fulldoc>";
+        }
+      }
+
+      const systemMsg: Message = { role: "system", content: systemContent };
+      const userMsg: Message = { role: "user", content: params.userPrompt };
+
+      // Build history slice for sidebar multi-turn
+      if (sectionState && sectionState.conversationHistory.length > 0) {
+        const contextRounds = getPref("chat.contextRounds") ?? 8;
+        const maxHistoryMessages = contextRounds * 2;
+        const history =
+          sectionState.conversationHistory.slice(-maxHistoryMessages);
+        return [systemMsg, ...history, userMsg];
+      }
+
+      return [systemMsg, userMsg];
     })();
 
     this.lastMessagesPromise = messagesPromise;
     this.ensureRequestMaps();
-
-    const route = {
-      mode: params.hostMode || this.getCurrentHostMode(),
-      sectionId: params.sectionId,
-    } as const;
 
     const sourceLabel =
       params.sourceLabel || getReaderSourceLabel(this.currentReader);
@@ -172,20 +528,25 @@ export class ChatManager {
       focusChatWindow();
     }
 
-    await streamLLM(messagesPromise, {
-      onStart: () => {
-        this.onLLMStreamStart({ requestId });
+    await streamLLM(
+      messagesPromise,
+      {
+        onStart: () => {
+          this.onLLMStreamStart({ requestId });
+        },
+        onUpdate: async (fullText) => {
+          await this.onLLMStreamUpdate({ requestId, fullText });
+        },
+        onEnd: () => {
+          this.onLLMStreamEnd({ requestId });
+        },
+        onError: (error) => {
+          this.onLLMStreamError({ requestId, error });
+        },
       },
-      onUpdate: async (fullText) => {
-        await this.onLLMStreamUpdate({ requestId, fullText });
-      },
-      onEnd: () => {
-        this.onLLMStreamEnd({ requestId });
-      },
-      onError: (error) => {
-        this.onLLMStreamError({ requestId, error });
-      },
-    });
+      undefined,
+      sectionState?.abortController,
+    );
 
     return requestId;
   }
@@ -221,6 +582,17 @@ export class ChatManager {
   onLLMStreamStart(data: { requestId: string }) {
     ztoolkit.log("LLM stream started:", data.requestId);
 
+    // Mark section as streaming
+    const requestState = this.requestMap?.get(data.requestId);
+    if (
+      requestState?.hostMode === "sidebar" &&
+      requestState.sectionId !== undefined
+    ) {
+      const sectionState = this.getOrCreateSectionState(requestState.sectionId);
+      sectionState.isStreaming = true;
+      this.updateSectionInputArea(requestState.sectionId);
+    }
+
     const container = this.getMessageContainerByRequest(data.requestId);
     if (!container) return;
 
@@ -239,14 +611,14 @@ export class ChatManager {
       ".chat-message",
     ) as HTMLElement | null;
     if (chatMessage) {
-      const requestState = this.requestMap?.get(data.requestId);
-      const sourceLabel = requestState?.sourceLabel;
+      const chatRequestState = this.requestMap?.get(data.requestId);
+      const sourceLabel = chatRequestState?.sourceLabel;
       const previousSourceLabel = (
         container.lastElementChild as HTMLElement | null
       )?.dataset.sourceLabel;
       const shouldShowSourceLabel =
         !!sourceLabel &&
-        requestState?.hostMode === "window" &&
+        chatRequestState?.hostMode === "window" &&
         previousSourceLabel !== sourceLabel;
 
       if (sourceLabel) {
@@ -274,7 +646,6 @@ export class ChatManager {
     }
 
     container.appendChild(pop);
-    const requestState = this.requestMap?.get(data.requestId);
     if (requestState) {
       requestState.chatPop = pop;
       this.requestMap!.set(data.requestId, requestState);
@@ -319,13 +690,52 @@ export class ChatManager {
           }
         }
       }
+
+      // Append turn to conversation history (sidebar mode)
+      if (
+        requestState?.hostMode === "sidebar" &&
+        requestState.sectionId !== undefined
+      ) {
+        const sectionState = this.sidebarStates.get(requestState.sectionId);
+        if (sectionState && sectionState.activeRequestId === data.requestId) {
+          const userContent = sectionState.pendingUserContent;
+          const assistantContent = (pop as HTMLElement).dataset.markdown || "";
+          if (userContent) {
+            sectionState.conversationHistory.push(
+              { role: "user", content: userContent },
+              { role: "assistant", content: assistantContent },
+            );
+          }
+          sectionState.pendingUserContent = undefined;
+          sectionState.activeRequestId = undefined;
+        }
+        sectionState!.isStreaming = false;
+        sectionState!.abortController = undefined;
+        this.updateSectionInputArea(requestState.sectionId);
+      }
+    } else {
+      // Pop was not created (e.g., container missing), still clear streaming state
+      if (
+        requestState?.hostMode === "sidebar" &&
+        requestState.sectionId !== undefined
+      ) {
+        const sectionState = this.sidebarStates.get(requestState.sectionId);
+        if (sectionState) {
+          sectionState.isStreaming = false;
+          sectionState.abortController = undefined;
+          sectionState.pendingUserContent = undefined;
+          sectionState.activeRequestId = undefined;
+        }
+        this.updateSectionInputArea(requestState.sectionId);
+      }
     }
     this.cleanupRequestData(data.requestId);
   }
 
   onLLMStreamError(data: { requestId: string; error: string }) {
     ztoolkit.log("LLM stream error:", data.requestId, data.error);
-    const pop = this.requestMap?.get(data.requestId)?.chatPop;
+    const requestState = this.requestMap?.get(data.requestId);
+    const pop = requestState?.chatPop;
     if (pop) {
       const actions = pop.querySelector(".chat-actions");
       if (actions) {
@@ -339,6 +749,20 @@ export class ChatManager {
       if (container) {
         container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
       }
+    }
+    // Clear streaming state for sidebar
+    if (
+      requestState?.hostMode === "sidebar" &&
+      requestState.sectionId !== undefined
+    ) {
+      const sectionState = this.sidebarStates.get(requestState.sectionId);
+      if (sectionState) {
+        sectionState.isStreaming = false;
+        sectionState.abortController = undefined;
+        sectionState.pendingUserContent = undefined;
+        sectionState.activeRequestId = undefined;
+      }
+      this.updateSectionInputArea(requestState.sectionId);
     }
     this.cleanupRequestData(data.requestId);
   }

@@ -139,7 +139,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
         "overflow-y-auto",
       );
       shadowRoot.appendChild(messageContainer);
-      shadowRoot.appendChild(InputArea(doc));
+      shadowRoot.appendChild(InputArea(doc, item.id));
 
       // const box = ChatBox(doc, undefined, false);
       // const box2 = box.querySelector(".chat-message") as HTMLElement;
@@ -177,6 +177,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
           if (messageContainer) {
             messageContainer.innerHTML = "";
           }
+          addon.chatManager.clearSectionHistory(item.id);
         },
       },
       // {
