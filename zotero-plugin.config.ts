@@ -1,4 +1,8 @@
 import { defineConfig } from "zotero-plugin-scaffold";
+import stylePlugin from "esbuild-style-plugin";
+import tailwindcss from "tailwindcss";
+import autoprefixer from "autoprefixer";
+import cssnano from "cssnano";
 import pkg from "./package.json";
 
 export default defineConfig({
@@ -27,6 +31,7 @@ export default defineConfig({
       prefix: pkg.config.prefsPrefix,
     },
     esbuildOptions: [
+      // JavaScript bundle
       {
         entryPoints: ["src/index.ts"],
         define: {
@@ -40,14 +45,43 @@ export default defineConfig({
         minifyWhitespace: process.env.NODE_ENV === "production",
         minifyIdentifiers: process.env.NODE_ENV === "production",
         minifySyntax: process.env.NODE_ENV === "production",
-        // 移除调试代码
-        // drop: process.env.NODE_ENV === "production" ? ["console", "debugger"] : [],
         // 启用 Tree Shaking（移除未使用的代码）
         treeShaking: true,
         // 代码分割以优化加载
         splitting: false,
         // 移除死代码
         ignoreAnnotations: false,
+      },
+      // CSS bundle with Tailwind
+      {
+        entryPoints: ["src/styles/app.css"],
+        bundle: true,
+        target: "firefox115",
+        outdir: `.scaffold/build/addon/content`,
+        plugins: [
+          stylePlugin({
+            postcss: {
+              plugins: [
+                tailwindcss,
+                autoprefixer,
+                ...(process.env.NODE_ENV === "production"
+                  ? [
+                      cssnano({
+                        preset: [
+                          "default",
+                          {
+                            discardComments: { removeAll: true },
+                            normalizeDeclarations: true,
+                            normalizeUnicode: true,
+                          },
+                        ],
+                      }),
+                    ]
+                  : []),
+              ],
+            },
+          }),
+        ],
       },
     ],
   },
@@ -57,5 +91,5 @@ export default defineConfig({
   },
 
   // If you need to see a more detailed log, uncomment the following line:
-  // logLevel: "trace",
+  // logLevel: "TRACE",
 });

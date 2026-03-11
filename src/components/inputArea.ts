@@ -29,7 +29,16 @@ import { getString } from "../utils/locale";
 export function InputArea(doc: Document, sectionId: number): HTMLElement {
   // ── outer wrapper (contains input-row + disclaimer) ──────────────────────
   const wrapper = doc.createElement("div");
-  wrapper.classList.add("input-area-wrapper", "max-w-3xl", "w-full", "mx-auto", "my-2", "flex", "flex-col", "gap-1");
+  wrapper.classList.add(
+    "input-area-wrapper",
+    "max-w-3xl",
+    "w-full",
+    "mx-auto",
+    "my-2",
+    "flex",
+    "flex-col",
+    "gap-1",
+  );
 
   // ── input row ─────────────────────────────────────────────────────────────
   const container = doc.createElement("div");
@@ -69,10 +78,18 @@ export function InputArea(doc: Document, sectionId: number): HTMLElement {
     "flex-shrink-0",
   );
   fullTextBtn.appendChild(
-    ztoolkit.UI.createElement(doc, "span", IconView({ iconMarkup: Icons.FileText, sizeRem: 1 })),
+    ztoolkit.UI.createElement(
+      doc,
+      "span",
+      IconView({ iconMarkup: Icons.FileText, sizeRem: 1 }),
+    ),
   );
   if (addon.chatManager.getOrCreateSectionState(sectionId).fullTextEnabled) {
-    fullTextBtn.classList.remove("text-slate-400", "dark:text-neutral-500", "hover:text-rose-500");
+    fullTextBtn.classList.remove(
+      "text-slate-400",
+      "dark:text-neutral-500",
+      "hover:text-rose-500",
+    );
     fullTextBtn.classList.add("text-rose-500", "dark:text-rose-400");
     fullTextBtn.title = getString("input-full-text-tooltip") + " ✓";
   }
@@ -116,7 +133,15 @@ export function InputArea(doc: Document, sectionId: number): HTMLElement {
     "flex-shrink-0",
   );
   sendBtn.appendChild(
-    ztoolkit.UI.createElement(doc, "span", IconView({ iconMarkup: Icons.Send, sizeRem: 1.5, extraClasses: ["text-white"] })),
+    ztoolkit.UI.createElement(
+      doc,
+      "span",
+      IconView({
+        iconMarkup: Icons.Send,
+        sizeRem: 1.5,
+        extraClasses: ["text-white"],
+      }),
+    ),
   );
 
   container.appendChild(fullTextBtn);
@@ -157,20 +182,28 @@ export function InputArea(doc: Document, sectionId: number): HTMLElement {
     if (hasText) {
       sendBtn.disabled = false;
       sendBtn.classList.remove(
-        "bg-slate-200", "dark:bg-neutral-800",
-        "text-slate-400", "dark:text-neutral-600",
+        "bg-slate-200",
+        "dark:bg-neutral-800",
+        "text-slate-400",
+        "dark:text-neutral-600",
       );
       sendBtn.classList.add(
-        "bg-rose-500", "dark:bg-rose-600", "hover:bg-rose-600",
+        "bg-rose-500",
+        "dark:bg-rose-600",
+        "hover:bg-rose-600",
       );
     } else {
       sendBtn.disabled = true;
       sendBtn.classList.remove(
-        "bg-rose-500", "dark:bg-rose-600", "hover:bg-rose-600",
+        "bg-rose-500",
+        "dark:bg-rose-600",
+        "hover:bg-rose-600",
       );
       sendBtn.classList.add(
-        "bg-slate-200", "dark:bg-neutral-800",
-        "text-slate-400", "dark:text-neutral-600",
+        "bg-slate-200",
+        "dark:bg-neutral-800",
+        "text-slate-400",
+        "dark:text-neutral-600",
       );
     }
   }
@@ -203,7 +236,9 @@ export function InputArea(doc: Document, sectionId: number): HTMLElement {
     if (!body) return;
     const root = body.querySelector("#ai-bar-chat-root");
     if (!root?.shadowRoot) return;
-    const messageContainer = root.shadowRoot.querySelector(".message-container") as HTMLElement | null;
+    const messageContainer = root.shadowRoot.querySelector(
+      ".message-container",
+    ) as HTMLElement | null;
     if (!messageContainer) return;
 
     // Append user bubble
@@ -212,7 +247,9 @@ export function InputArea(doc: Document, sectionId: number): HTMLElement {
       annotation: undefined,
       isUser: true,
     }) as HTMLElement;
-    const msgEl = userBubble.querySelector(".chat-message") as HTMLElement | null;
+    const msgEl = userBubble.querySelector(
+      ".chat-message",
+    ) as HTMLElement | null;
     if (msgEl) msgEl.textContent = text;
     messageContainer.appendChild(userBubble);
     scrollToBottom();
@@ -272,12 +309,20 @@ export function InputArea(doc: Document, sectionId: number): HTMLElement {
     const sectionState = addon.chatManager.getOrCreateSectionState(sectionId);
     sectionState.fullTextEnabled = !sectionState.fullTextEnabled;
     if (sectionState.fullTextEnabled) {
-      fullTextBtn.classList.remove("text-slate-400", "dark:text-neutral-500", "hover:text-rose-500");
+      fullTextBtn.classList.remove(
+        "text-slate-400",
+        "dark:text-neutral-500",
+        "hover:text-rose-500",
+      );
       fullTextBtn.classList.add("text-rose-500", "dark:text-rose-400");
       fullTextBtn.title = getString("input-full-text-tooltip") + " ✓";
     } else {
       fullTextBtn.classList.remove("text-rose-500", "dark:text-rose-400");
-      fullTextBtn.classList.add("text-slate-400", "dark:text-neutral-500", "hover:text-rose-500");
+      fullTextBtn.classList.add(
+        "text-slate-400",
+        "dark:text-neutral-500",
+        "hover:text-rose-500",
+      );
       fullTextBtn.title = getString("input-full-text-tooltip");
     }
   });

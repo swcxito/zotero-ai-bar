@@ -98,21 +98,33 @@
     </hbox>
     <hbox align="start" style="margin-top: 6px; gap: 12px">
       <vbox flex="1">
-        <checkbox id="__addonRef__-auto-attach-fulltext" preference="chat.autoAttachFullText"
-          data-l10n-id="pref-auto-attach-fulltext" />
-        <html:small data-l10n-id="pref-auto-attach-fulltext-desc" style="margin-left: 22px; color: #b45309" />
+        <checkbox
+          id="__addonRef__-auto-attach-fulltext"
+          preference="chat.autoAttachFullText"
+          data-l10n-id="pref-auto-attach-fulltext"
+        />
+        <html:small
+          data-l10n-id="pref-auto-attach-fulltext-desc"
+          style="margin-left: 22px; color: #b45309"
+        />
       </vbox>
       <vbox flex="1">
-        <checkbox id="__addonRef__-auto-attach-item-data" preference="chat.autoAttachItemData"
-          data-l10n-id="pref-auto-attach-item-data" />
+        <checkbox
+          id="__addonRef__-auto-attach-item-data"
+          preference="chat.autoAttachItemData"
+          data-l10n-id="pref-auto-attach-item-data"
+        />
       </vbox>
     </hbox>
     <vbox id="__addonRef__-prompt-preview-container" style="margin-top: 10px">
       <hbox align="center" style="margin-bottom: 8px">
         <label data-l10n-id="pref-custom-prompts" style="font-weight: bold" />
         <spacer flex="1" />
-        <button id="__addonRef__-prompt-edit-button" data-l10n-id="pref-edit-prompts" />
-        </hbox>
+        <button
+          id="__addonRef__-prompt-edit-button"
+          data-l10n-id="pref-edit-prompts"
+        />
+      </hbox>
       <hbox
         flex="1"
         align="center"
@@ -175,8 +187,14 @@
         <html:label data-l10n-id="pref-context-rounds" />
         <html:small data-l10n-id="pref-context-rounds-desc" />
       </vbox>
-      <html:input type="number" min="1" max="64" step="1" style="text-align: left; width: 60px"
-        preference="chat.contextRounds" />
+      <html:input
+        type="number"
+        min="1"
+        max="64"
+        step="1"
+        style="text-align: left; width: 60px"
+        preference="chat.contextRounds"
+      />
     </hbox>
   </groupbox>
   <groupbox>
