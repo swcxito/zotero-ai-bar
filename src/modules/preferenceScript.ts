@@ -17,8 +17,10 @@
  */
 
 import { config } from "../../package.json";
-import { getPref } from "../utils/prefs";
+import { getPref, setPref } from "../utils/prefs";
 import { openDialog } from "./modelDialog";
+import { openPromptEditor } from "./promptEditor";
+import { getLocaleID, getString } from "../utils/locale";
 
 export async function registerPrefsScripts(_window: Window) {
   if (!addon.data.prefs) {
@@ -85,6 +87,14 @@ function updatePrefsUI() {
       0.01,
     );
   }
+
+  renderPromptPreview();
+  const promptEditButton = doc.querySelector(makeId("prompt-edit-button"));
+  if (promptEditButton) {
+    promptEditButton.addEventListener("click", () => {
+      openPromptEditor(() => renderPromptPreview());
+    });
+  }
 }
 
 function bindPrefEvents() {
@@ -102,4 +112,182 @@ function bindInputToLabel(
     label.textContent = (Number(input.value) * scale).toFixed(2);
   });
   label.textContent = (initValue * scale).toFixed(2);
+}
+
+async function renderPromptPreview() {
+  const renderLock = ztoolkit.getGlobal("Zotero").Promise.defer();
+  const prefsWindow = addon.data.prefs?.window;
+  if (!prefsWindow) return;
+  const doc = prefsWindow.document;
+  ztoolkit.log("Rendering prompt preview...");
+
+  const orderLabel =
+    (await (doc as any).l10n?.formatValue?.(getLocaleID("pref-order"))) ||
+    getString("pref-order");
+  const nameLabel =
+    (await (doc as any).l10n?.formatValue?.(
+      getLocaleID("pref-prompteditor-name-label"),
+    )) || getString("pref-prompteditor-name-label");
+  const descriptionLabel =
+    (await (doc as any).l10n?.formatValue?.(
+      getLocaleID("pref-prompteditor-description-label"),
+    )) || getString("pref-prompteditor-description-label");
+
+  const columns = [
+    {
+      dataKey: "name",
+      label: nameLabel,
+    },
+    {
+      dataKey: "description",
+      label: descriptionLabel,
+    },
+  ];
+  const tableHelper = new ztoolkit.VirtualizedTable(prefsWindow)
+    .setContainerId(`${config.addonRef}-prompt-table-container`)
+    .setProp({
+      id: `${config.addonRef}-prompt-table`,
+      columns: columns,
+      showHeader: true,
+      multiSelect: true,
+      staticColumns: true,
+      disableFontSizeScaling: true,
+    })
+    .setProp("getRowCount", () => addon.data.userPrompts?.length || 0)
+    .setProp(
+      "getRowData",
+      (index) => {
+        const prompt = addon.data.userPrompts?.at(index);
+        return prompt ? {
+          name: prompt.name,
+          description: prompt.description || "",
+        } : {
+          name: "no data",
+          description: "no data",
+        };
+      },
+    )
+    // Render the table.
+    .render(-1, () => {
+      renderLock.resolve();
+    });
+  await renderLock.promise;
+}
+
+function renderPromptPreviewOld() {
+  const doc = addon.data.prefs?.window.document;
+  if (!doc) return;
+
+  const container = doc.querySelector(
+    makeId("prompt-preview-table"),
+  ) as HTMLElement;
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  const userPrompts = addon.data.userPrompts ?? [];
+
+  if (userPrompts.length === 0) {
+    const noPromptsRow = doc.createElement("hbox");
+    const noPromptsLabel = doc.createElement("label");
+    noPromptsLabel.setAttribute("data-l10n-id", "pref-no-custom-prompts");
+    noPromptsRow.appendChild(noPromptsLabel);
+    container.appendChild(noPromptsRow);
+    return;
+  }
+
+  container.style.border = "1px solid #ccc";
+  container.style.borderRadius = "4px";
+
+  const headerRow = doc.createElement("hbox");
+  headerRow.setAttribute("align", "center");
+  headerRow.style.fontWeight = "bold";
+  headerRow.style.gap = "12px";
+  headerRow.style.padding = "8px 12px";
+  headerRow.style.backgroundColor = "#f5f5f5";
+  headerRow.style.borderBottom = "1px solid #ccc";
+
+  const orderHeader = doc.createElement("label");
+  orderHeader.textContent = "Order";
+  orderHeader.style.width = "64px";
+  orderHeader.style.textAlign = "center";
+
+  const nameHeader = doc.createElement("label");
+  nameHeader.textContent = "Name";
+  nameHeader.style.minWidth = "120px";
+
+  const descHeader = doc.createElement("label");
+  descHeader.textContent = "Description";
+  descHeader.setAttribute("flex", "1");
+
+  headerRow.appendChild(orderHeader);
+  headerRow.appendChild(nameHeader);
+  headerRow.appendChild(descHeader);
+  container.appendChild(headerRow);
+
+  userPrompts.forEach((prompt, index) => {
+    const row = doc.createElement("hbox");
+    row.setAttribute("align", "center");
+    row.style.gap = "12px";
+    row.style.padding = "8px 12px";
+    row.style.backgroundColor = index % 2 === 0 ? "#ffffff" : "#fafafa";
+    row.style.borderBottom =
+      index === userPrompts.length - 1 ? "none" : "1px solid #e0e0e0";
+
+    const buttonsContainer = doc.createElement("hbox");
+    buttonsContainer.setAttribute("align", "center");
+    buttonsContainer.style.gap = "4px";
+    buttonsContainer.style.width = "64px";
+    buttonsContainer.style.justifyContent = "center";
+
+    const upButton = doc.createElement("button");
+    upButton.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`;
+    upButton.disabled = index === 0;
+    upButton.addEventListener("click", () => {
+      if (index === 0) return;
+      const newPrompts = [...userPrompts];
+      [newPrompts[index - 1], newPrompts[index]] = [
+        newPrompts[index],
+        newPrompts[index - 1],
+      ];
+      addon.data.userPrompts = newPrompts;
+      setPref("prompt.userPrompts", JSON.stringify(newPrompts));
+      renderPromptPreview();
+    });
+
+    const downButton = doc.createElement("button");
+    downButton.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+    downButton.disabled = index === userPrompts.length - 1;
+    downButton.addEventListener("click", () => {
+      if (index === userPrompts.length - 1) return;
+      const newPrompts = [...userPrompts];
+      [newPrompts[index], newPrompts[index + 1]] = [
+        newPrompts[index + 1],
+        newPrompts[index],
+      ];
+      addon.data.userPrompts = newPrompts;
+      setPref("prompt.userPrompts", JSON.stringify(newPrompts));
+      renderPromptPreview();
+    });
+
+    buttonsContainer.appendChild(upButton);
+    buttonsContainer.appendChild(downButton);
+
+    const nameLabel = doc.createElement("label");
+    nameLabel.textContent = prompt.name;
+    nameLabel.style.fontWeight = "bold";
+    nameLabel.style.minWidth = "120px";
+
+    const descLabel = doc.createElement("label");
+    descLabel.textContent = prompt.description || "";
+    descLabel.setAttribute("flex", "1");
+    descLabel.style.overflow = "hidden";
+    descLabel.style.textOverflow = "ellipsis";
+    descLabel.style.whiteSpace = "nowrap";
+
+    row.appendChild(buttonsContainer);
+    row.appendChild(nameLabel);
+    row.appendChild(descLabel);
+    container.appendChild(row);
+  });
 }

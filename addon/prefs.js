@@ -10,6 +10,7 @@ pref("extend-selection-context", true);
 pref("extend-selection-size", 70);
 
 pref("llm.providerConfigs", "");
+pref("prompt.userPrompts", "");
 pref("llm.modelId", "");
 
 pref("chat.formulaOptimization", true);

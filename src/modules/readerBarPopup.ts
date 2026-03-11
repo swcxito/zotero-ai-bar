@@ -23,7 +23,7 @@ import { getPref } from "../utils/prefs";
 import { aiBarCommands } from "../utils/prompts";
 import { AiActionButton } from "../components/aiActionButton";
 import { ModelInfo } from "../components/modelInfo";
-import { ExpandButton } from "../components/expandButton";
+import { ExpandButton, ExpandMenuItem } from "../components/expandButton";
 
 export function getReaderSourceLabel(
   reader?: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">,
@@ -208,6 +208,36 @@ function renderAIBar(doc: Document): DocumentFragment {
       );
   };
 
+  // Build menu items: built-in + user prompts
+  const expandMenuItems: ExpandMenuItem[] = [
+    {
+      id: "summarize",
+      icon: aiBarCommands.summarize.icon,
+      label: getString(aiBarCommands.summarize.label),
+      onClick: () => handleButtonAction("summarize"),
+    },
+  ];
+
+  // Add user prompts from addon.data.userPrompts
+  const userPrompts = addon.data.userPrompts || [];
+  for (const up of userPrompts) {
+    expandMenuItems.push({
+      id: `user-${up.id}`,
+      icon: "✨",
+      label: up.name,
+      onClick: async () => {
+        if (!addon.data.selectedText) return;
+        await addon.chatManager.sendChatRequest({
+          userPrompt: up.prompt,
+          selectedText: addon.data.selectedText,
+          sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
+          hostMode: addon.chatManager.getCurrentHostMode(),
+          sectionId: addon.chatManager.currentSection,
+        });
+      },
+    });
+  }
+
   return ztoolkit.UI.createElement(doc, "fragment", {
     children: [
       {
@@ -219,14 +249,7 @@ function renderAIBar(doc: Document): DocumentFragment {
           ExpandButton({
             label: getString("reader-bar-expand"),
             icon: "🔽",
-            menuItems: [
-              {
-                id: "summarize",
-                icon: aiBarCommands.summarize.icon,
-                label: getString(aiBarCommands.summarize.label),
-                onClick: () => handleButtonAction("summarize"),
-              },
-            ],
+            menuItems: expandMenuItems,
           }),
           // Ask (Input Group)
           {

@@ -22,14 +22,18 @@ import { IconView } from "./iconView";
 
 export interface InlineButtonProps {
   onClicked: (e: Event) => void;
+  label?: string;
+  classList?: string[];
 }
 
 export function InlineButton({
   onClicked,
+  label = "Add Model",
+  classList,
 }: InlineButtonProps): TagElementProps {
   return {
     tag: "button",
-    classList: [
+    classList: classList ?? [
       "w-full",
       "flex",
       "items-center",
@@ -56,7 +60,11 @@ export function InlineButton({
     ],
     children: [
       IconView({ iconMarkup: Icons.Add, sizeRem: 1 }),
-      { tag: "span", properties: { textContent: "Add Model" } },
+      {
+        tag: "span",
+        classList: ["inline-button-label"],
+        properties: { textContent: label },
+      },
     ],
     listeners: [
       {

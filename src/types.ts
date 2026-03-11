@@ -47,3 +47,10 @@ export interface UserProviderConfig extends UserProvider {
   apiKey: string; // API Key
   models: UserProviderModel[]; // 模型列表
 }
+
+export interface UserPrompt {
+  id: string; // UUID via crypto.randomUUID()
+  name: string; // Display name (e.g., "Critique Method")
+  description: string; // Short description shown in table/menu
+  prompt: string; // The actual prompt content text
+}

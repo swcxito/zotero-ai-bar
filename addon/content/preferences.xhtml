@@ -3,6 +3,12 @@
 </linkset>
 <html:style>
   button { justify-content: center; }
+#__addonRef__-prompt-table-container tbody tr:nth-child(even):not(.selected),
+#__addonRef__-prompt-table-container .row:nth-child(even):not(.selected),
+#__addonRef__-prompt-table-container [role="row"]:nth-child(even):not([aria-selected="true"]),
+#__addonRef__-prompt-table-container .virtualized-table-body > div:nth-child(even):not(.selected) {
+background-color: rgba(0, 0, 0, 0.03);
+}
 </html:style>
 <groupbox
   onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
@@ -91,31 +97,17 @@
         <label data-l10n-id="pref-extend-selection-unit" />
       </label>
     </hbox>
-    <!--    <label data-l10n-id="pref-current-prompt" />-->
-    <!--    <hbox flex="1" align="center" class="virtualized-table-container">-->
-    <!--      <html:div id="__addonRef__-table-container" />-->
-    <!--    </hbox>-->
-    <!--    <vbox id="__addonRef__-prompt-editor">-->
-    <!--      <label data-l10n-id="pref-prompt-name" />-->
-    <!--      <br />-->
-    <!--      <html:input type="text" id="__addonRef__-prompt-name-input" />-->
-    <!--      <label data-l10n-id="pref-prompt-content" />-->
-    <!--      <html:textarea id="__addonRef__-prompt-content-input" />-->
-    <!--      <hbox-->
-    <!--        gap="10px"-->
-    <!--        padding="5px 0"-->
-    <!--        style="width: 100%; justify-content: flex-end"-->
-    <!--      >-->
-    <!--        <button-->
-    <!--          id="__addonRef__-update-prompt-button"-->
-    <!--          data-l10n-id="pref-prompt-save"-->
-    <!--        />-->
-    <!--        <button-->
-    <!--          id="__addonRef__-delete-prompt-button"-->
-    <!--          data-l10n-id="pref-prompt-cancel"-->
-    <!--        />-->
-    <!--      </hbox>-->
-    <!--    </vbox>-->
+    <vbox id="__addonRef__-prompt-preview-container" style="margin-top: 10px">
+      <label data-l10n-id="pref-custom-prompts" style="font-weight: bold" />
+      <hbox flex="1" align="center" class="virtualized-table-container"
+        style="max-height: 180px; overflow: auto; padding: 6px 8px">
+        <html:div id="__addonRef__-prompt-table-container" style="width: 100%" />
+      </hbox>
+      <hbox align="center" style="margin-top: 8px">
+        <spacer flex="1" />
+        <button id="__addonRef__-prompt-edit-button" data-l10n-id="pref-edit-prompts" />
+      </hbox>
+    </vbox>
   </groupbox>
   <groupbox>
     <label>
