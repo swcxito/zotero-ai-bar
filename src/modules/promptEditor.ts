@@ -4,7 +4,7 @@ import { UserPrompt } from "../types";
 import { setPref } from "../utils/prefs";
 import { getLocaleID, getString } from "../utils/locale";
 
-export async function openPromptEditor(onClosed: () => void = () => { }) {
+export async function openPromptEditor(onClosed: () => void = () => {}) {
   const windowArgs = {
     onBodyLoaded: onPromptEditorLoad,
     onWindowClosed: onClosed,
