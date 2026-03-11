@@ -57,21 +57,32 @@ function getRefreshRateFromPref() {
  * @param messages List of messages.
  * @param callbacks Callbacks for stream events.
  * @param refreshRate Update UI every N chunks.
+ * @param externalController If provided, use this AbortController instead of the global one.
  */
 export async function streamLLM(
   messagesOrPromise: Message[] | Promise<Message[]>,
   callbacks: StreamCallbacks,
   refreshRate: number = getRefreshRateFromPref(),
+  externalController?: InstanceType<typeof AbortController>,
 ) {
-  // Cancel previous request if exists
-  if (addon.chatManager.abortController) {
-    addon.chatManager.abortController.abort();
-    addon.chatManager.abortController = undefined;
-  }
-
   const AC = getAbortController();
-  const controller = new AC();
-  addon.chatManager.abortController = controller;
+  let controller: InstanceType<typeof AbortController>;
+  let useGlobal: boolean;
+
+  if (externalController) {
+    // Per-section mode: use the provided controller, leave global one untouched
+    controller = externalController;
+    useGlobal = false;
+  } else {
+    // Legacy global mode: cancel previous global request
+    if (addon.chatManager.abortController) {
+      addon.chatManager.abortController.abort();
+      addon.chatManager.abortController = undefined;
+    }
+    controller = new AC();
+    addon.chatManager.abortController = controller;
+    useGlobal = true;
+  }
 
   try {
     callbacks.onStart?.();
@@ -210,7 +221,7 @@ export async function streamLLM(
     }
     callbacks.onError?.(error instanceof Error ? error.message : String(error));
   } finally {
-    if (addon.chatManager.abortController === controller) {
+    if (useGlobal && addon.chatManager.abortController === controller) {
       addon.chatManager.abortController = undefined;
     }
   }

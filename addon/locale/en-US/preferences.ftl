@@ -53,4 +53,11 @@ pref-prompteditor-button-save = Save
 pref-prompteditor-button-add = Add Prompt
 pref-prompteditor-empty-state = No custom prompts yet.
 
+pref-context-rounds = Context History Rounds
+pref-context-rounds-desc = Max conversation rounds to keep per document (sidebar mode)
+pref-auto-attach-fulltext =
+    .label = Auto-enable Full Text Button
+pref-auto-attach-fulltext-desc = When enabled, the full document text will be automatically appended to each request. This will significantly increase token usage.
+pref-auto-attach-item-data =
+    .label = Attach Item Data
 pref-help = { $name } Build { $version } { $time }

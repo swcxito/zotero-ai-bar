@@ -21,6 +21,9 @@ declare namespace _ZoteroTypes {
       "prompt.userPrompts": string;
       "llm.modelId": string;
       "chat.formulaOptimization": boolean;
+      "chat.contextRounds": number;
+      "chat.autoAttachFullText": boolean;
+      "chat.autoAttachItemData": boolean;
     };
   }
 }
