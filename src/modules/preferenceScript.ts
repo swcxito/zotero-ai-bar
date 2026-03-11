@@ -154,19 +154,18 @@ async function renderPromptPreview() {
       disableFontSizeScaling: true,
     })
     .setProp("getRowCount", () => addon.data.userPrompts?.length || 0)
-    .setProp(
-      "getRowData",
-      (index) => {
-        const prompt = addon.data.userPrompts?.at(index);
-        return prompt ? {
-          name: prompt.name,
-          description: prompt.description || "",
-        } : {
-          name: "no data",
-          description: "no data",
-        };
-      },
-    )
+    .setProp("getRowData", (index) => {
+      const prompt = addon.data.userPrompts?.at(index);
+      return prompt
+        ? {
+            name: prompt.name,
+            description: prompt.description || "",
+          }
+        : {
+            name: "no data",
+            description: "no data",
+          };
+    })
     // Render the table.
     .render(-1, () => {
       renderLock.resolve();

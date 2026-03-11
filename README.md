@@ -15,13 +15,31 @@ If you find this project helpful, please consider supporting its development and
 [<img alt="&quot;Buy Me A Coffee&quot;" height="60px" src="docs/assets/red-button.png"/>](https://www.buymeacoffee.com/fukeke)
 [<img alt="Afdian" src="docs/assets/afdian-btn-en.png" height="60px"/>](https://afdian.com/a/fukeke)
 
-## What's new in v0.3.0
+## What's New in v0.4.0 (Planned)
+
+Changes below are summarized from commits after `v0.3.4`.
+
+- Added custom prompt management and a dedicated prompt editor page.
+- Added smart copy support and improved response interaction.
+- Added formula block optimization options for better math rendering/handling.
+- Refactored chat flow with `ChatManager` and moved request utilities for cleaner architecture.
+- Added standalone chat window support and chat window host integration.
+- Added UI settings options and improved interface consistency.
+- Continued prompt quality improvements and style fixes.
+
+## What's New in v0.3
 
 - model selector on the toolbar, no need to open settings page to switch models.
   ![img.png](docs/assets/img.png)
 
 - Retry button for failed requests, no need to re-enter the prompt.
   ![img.png](docs/assets/retry.png)
+
+- Added and refined provider/model support, including compatibility updates for Qwen and MiniMax.
+- Improved Zotero 7 compatibility and registration parameter handling.
+- Added stream update speed settings with localization support.
+- Enhanced prompt behavior and selected-text analysis quality.
+- Improved formula rendering and multiple UI/component details for better stability and consistency.
 
 ## Features
 
@@ -84,7 +102,7 @@ Note: Requests are currently mutually exclusive. Starting a new request will can
 - [x] ~~Basic Settings~~
 - [x] ~~Documentation~~
 - [ ] Beautify Toolbar
-- [ ] Custom Prompts
+- [x] ~~Custom Prompts~~
 - [ ] Add Notes
 - [ ] Regenerate Response
 - [x] ~~Standalone Window Option~~
