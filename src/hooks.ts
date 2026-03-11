@@ -6,6 +6,7 @@ import {
   registerReaderInitializer,
 } from "./modules/readerBarPopup";
 import { onModelDialogLoad } from "./modules/modelDialog";
+import { onPromptEditorLoad } from "./modules/promptEditor";
 import { getPref, registerPrefs } from "./utils/prefs";
 import { registerReaderItemPaneSection } from "./modules/readerItemPane";
 import { clearDeadChatWindowRef, isWindowAlive } from "./utils/window";
@@ -50,6 +51,13 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   const llmConfig = getPref("llm.providerConfigs");
   if (llmConfig)
     addon.data.userProviderConfigs = JSON.parse(getPref("llm.providerConfigs"));
+
+  // Load user custom prompts
+  const userPromptsConfig = getPref("prompt.userPrompts");
+  if (userPromptsConfig) {
+    addon.data.userPrompts = JSON.parse(userPromptsConfig);
+  }
+
   if (addon.chatManager.getCurrentHostMode() === "sidebar") {
     await registerReaderItemPaneSection();
   }
@@ -110,6 +118,9 @@ async function onPrefsEvent(type: string, data: { [key: string]: any }) {
     case "modelDialogLoad":
       onModelDialogLoad(data.window);
       ztoolkit.log("model dialog load hook called");
+      break;
+    case "promptEditorLoad":
+      onPromptEditorLoad(data.window);
       break;
     default:
       return;

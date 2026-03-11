@@ -2,7 +2,7 @@ import { config } from "../package.json";
 import { ColumnOptions, DialogHelper } from "zotero-plugin-toolkit";
 import hooks from "./hooks";
 import { createZToolkit } from "./utils/ztoolkit";
-import { UserProviderConfig } from "./types";
+import { UserProviderConfig, UserPrompt } from "./types";
 import { ChatManager } from "./modules/chatManager";
 
 class Addon {
@@ -25,6 +25,7 @@ class Addon {
     selectedText?: string;
     selectionContextPromise?: Promise<Array<string> | undefined>;
     userProviderConfigs?: UserProviderConfig[];
+    userPrompts?: UserPrompt[];
     sidePaneMap?: Map<number, HTMLElement>;
   };
   // Chat state and logic
