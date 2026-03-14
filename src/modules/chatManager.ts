@@ -743,7 +743,7 @@ export class ChatManager {
       }
       const chatMessage = pop.querySelector(".chat-message-content");
       if (chatMessage) {
-        chatMessage.innerHTML = `<div style="color: red; white-space: pre-wrap; word-break: break-word;">${data.error}</div>`;
+        chatMessage.innerHTML = `<div class="ai-bar-error-text">${data.error}</div>`;
       }
       const container = pop.parentElement;
       if (container) {

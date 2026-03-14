@@ -21,6 +21,7 @@ export interface DropdownMenuItem {
   label: string;
   selected?: boolean;
   iconText?: string;
+  iconMarkup?: string;
   renderLeading?: (doc: Document) => HTMLElement | null;
   onClick?: () => void;
 }
@@ -107,6 +108,11 @@ export function openDropdownMenu({
           if (leading) {
             itemEl.appendChild(leading);
           }
+        } else if (item.iconMarkup) {
+          const icon = doc.createElement("span");
+          icon.className = "dropdown-item-icon-text";
+          icon.innerHTML = item.iconMarkup;
+          itemEl.appendChild(icon);
         } else if (item.iconText) {
           const icon = doc.createElement("span");
           icon.className = "dropdown-item-icon-text";

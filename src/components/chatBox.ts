@@ -37,6 +37,7 @@ export function ChatBox({
     tag: "div",
     classList: [
       "w-full",
+      "flex",
       "animate-in",
       "fade-in",
       "slide-in-from-bottom-3",

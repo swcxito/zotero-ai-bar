@@ -24,6 +24,7 @@ import {
   toggleDropdownMenu,
 } from "./dropdownMenu";
 import { ActionButton } from "./actionButton";
+import { Icons } from "./common";
 
 export interface ExpandMenuItem {
   id: string;
@@ -41,7 +42,7 @@ export interface ExpandButtonProps {
 
 export function ExpandButton({
   label,
-  icon = "🔽",
+  icon = Icons.Chevron,
   className = "",
   menuItems = [],
 }: ExpandButtonProps = {}): TagElementProps {
@@ -72,7 +73,7 @@ export function ExpandButton({
           items: menuItems.map((item) => ({
             id: item.id,
             label: item.label,
-            iconText: item.icon,
+            iconMarkup: item.icon,
             onClick: item.onClick,
           })),
         },
@@ -109,7 +110,7 @@ export function ExpandButton({
           items: menuItems.map((item) => ({
             id: item.id,
             label: item.label,
-            iconText: item.icon,
+            iconMarkup: item.icon,
             onClick: item.onClick,
           })),
         },
@@ -143,7 +144,8 @@ export function ExpandButton({
       : undefined,
     children: [
       ActionButton({
-        label: `${icon}${finalLabel}`,
+        label: finalLabel,
+        icon,
         className: "ai-btn expand-trigger-btn",
         onClick: (e, btn) => {
           e.stopPropagation();

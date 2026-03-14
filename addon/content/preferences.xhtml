@@ -8,6 +8,7 @@
   [role="row"]:nth-child(even):not([aria-selected="true"]),
   #__addonRef__-prompt-table-container .virtualized-table-body >
   div:nth-child(even):not(.selected) { background-color: rgba(0, 0, 0, 0.03); }
+  .pref-warning-text { color: #b45309; }
 </html:style>
 <groupbox
   onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
@@ -105,7 +106,8 @@
         />
         <html:small
           data-l10n-id="pref-auto-attach-fulltext-desc"
-          style="margin-left: 22px; color: #b45309"
+          style="margin-left: 22px"
+          class="pref-warning-text"
         />
       </vbox>
       <vbox flex="1">
