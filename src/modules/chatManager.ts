@@ -44,6 +44,7 @@ type RequestState = {
   sectionId?: number;
   sourceLabel: string;
   autoCopy?: boolean;
+  stopAutoScroll?: boolean;
 };
 
 /** Per-section (per-document tab) state for sidebar chat */
@@ -516,6 +517,7 @@ export class ChatManager {
       sectionId: route.sectionId,
       sourceLabel,
       autoCopy: params.autoCopy,
+      stopAutoScroll: false,
     });
     this.lastRequest = {
       hostMode: route.mode,
@@ -561,6 +563,7 @@ export class ChatManager {
       hostMode: this.lastRequest?.hostMode || this.getCurrentHostMode(),
       sectionId: this.lastRequest?.sectionId ?? this.currentSection,
       sourceLabel: this.lastRequest?.sourceLabel || "Unknown Source",
+      stopAutoScroll: false,
     });
 
     await streamLLM(messagesPromise, {
@@ -654,7 +657,8 @@ export class ChatManager {
   }
 
   async onLLMStreamUpdate(data: { requestId: string; fullText: string }) {
-    const pop = this.requestMap?.get(data.requestId)?.chatPop;
+    const requestState = this.requestMap?.get(data.requestId);
+    const pop = requestState?.chatPop;
     if (pop) {
       const chatMessage = pop.querySelector(".chat-message-content");
       if (chatMessage) {
@@ -663,6 +667,20 @@ export class ChatManager {
       }
       const container = pop.parentElement;
       if (container) {
+        if (requestState?.stopAutoScroll) {
+          return;
+        }
+
+        const containerTop = container.getBoundingClientRect().top;
+        const popTop = (pop as HTMLElement).getBoundingClientRect().top;
+
+        // Stop auto-scroll for this response once the latest reply reaches container top.
+        if (popTop <= containerTop) {
+          requestState.stopAutoScroll = true;
+          this.requestMap!.set(data.requestId, requestState);
+          return;
+        }
+
         container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
       }
     }
@@ -676,6 +694,10 @@ export class ChatManager {
       const actions = pop.querySelector(".chat-actions");
       if (actions) {
         actions.classList.remove("hidden");
+        const container = pop.parentElement;
+        if (container && !requestState?.stopAutoScroll) {
+          container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+        }
       }
 
       // Auto-copy to clipboard if flag is set
@@ -740,13 +762,20 @@ export class ChatManager {
       const actions = pop.querySelector(".chat-actions");
       if (actions) {
         actions.classList.remove("hidden");
+        const actionsContainer = pop.parentElement;
+        if (actionsContainer && !requestState?.stopAutoScroll) {
+          actionsContainer.scrollTo({
+            top: actionsContainer.scrollHeight,
+            behavior: "smooth",
+          });
+        }
       }
       const chatMessage = pop.querySelector(".chat-message-content");
       if (chatMessage) {
         chatMessage.innerHTML = `<div class="ai-bar-error-text">${data.error}</div>`;
       }
       const container = pop.parentElement;
-      if (container) {
+      if (container && !requestState?.stopAutoScroll) {
         container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
       }
     }
