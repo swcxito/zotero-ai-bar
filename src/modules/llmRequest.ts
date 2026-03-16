@@ -217,6 +217,7 @@ export async function streamLLM(
   } catch (error: any) {
     if (error.name === "AbortError") {
       ztoolkit.log("LLM Request Cancelled");
+      callbacks.onEnd?.();
       return;
     }
     callbacks.onError?.(error instanceof Error ? error.message : String(error));
