@@ -32,6 +32,37 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#39;");
 }
 
+const ALLOWED_RAW_HTML_TAGS = ["sub"] as const;
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function protectAllowedHtmlPairs(
+  text: string,
+  allowedTags: readonly string[],
+): { text: string; tokenMap: Map<string, string> } {
+  const tokenMap = new Map<string, string>();
+  let withTokens = text;
+
+  allowedTags.forEach((tag, index) => {
+    const safeTag = escapeRegExp(tag);
+    let pairIndex = 0;
+    const pairPattern = new RegExp(
+      `<${safeTag}>[\\s\\S]*?<\\/${safeTag}>`,
+      "gi",
+    );
+
+    withTokens = withTokens.replace(pairPattern, (matched) => {
+      const pairToken = `__ZAIBAR_ALLOW_TAG_${index}_PAIR_${pairIndex++}__`;
+      tokenMap.set(pairToken, matched);
+      return pairToken;
+    });
+  });
+
+  return { text: withTokens, tokenMap };
+}
+
 marked.use(
   // 代码高亮扩展（必须在 KaTeX 之前）
   markedHighlight({
@@ -132,7 +163,16 @@ export async function renderMarkdown(markdown: string): Promise<string> {
       text = optimizeFormulas(text);
     }
 
-    const html = await marked.parse(text);
+    const { text: protectedText, tokenMap } = protectAllowedHtmlPairs(
+      text,
+      ALLOWED_RAW_HTML_TAGS,
+    );
+
+    let html = await marked.parse(protectedText);
+
+    tokenMap.forEach((value, token) => {
+      html = html.replaceAll(token, value);
+    });
 
     // 针对 Zotero 的 innerHTML 安全检查，补全 math 和 svg 的命名空间
     // 避免 "Removed unsafe attribute. Element: svg. Attribute: xmlns." 警告
