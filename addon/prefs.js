@@ -17,3 +17,4 @@ pref("chat.formulaOptimization", true);
 pref("chat.contextRounds", 8);
 pref("chat.autoAttachFullText", false);
 pref("chat.autoAttachItemData", false);
+pref("chat.openOnStartup", false);

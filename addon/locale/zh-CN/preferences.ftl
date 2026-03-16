@@ -18,6 +18,8 @@ pref-chat-location-window =
     .label = 独立窗口
 pref-chat-window-always-on-top =
     .label = 置顶聊天窗口
+pref-chat-open-on-startup =
+    .label = 启动时打开窗口
 pref-provider = 模型提供商
 pref-model-name = 模型名称
 # 提示词选项

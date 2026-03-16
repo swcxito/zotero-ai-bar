@@ -24,6 +24,7 @@ declare namespace _ZoteroTypes {
       "chat.contextRounds": number;
       "chat.autoAttachFullText": boolean;
       "chat.autoAttachItemData": boolean;
+      "chat.openOnStartup": boolean;
     };
   }
 }

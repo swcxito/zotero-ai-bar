@@ -22,6 +22,7 @@ export type FluentMessageId =
   | 'pref-chat-location-desc'
   | 'pref-chat-location-sidebar'
   | 'pref-chat-location-window'
+  | 'pref-chat-open-on-startup'
   | 'pref-chat-window-always-on-top'
   | 'pref-context-rounds'
   | 'pref-context-rounds-desc'

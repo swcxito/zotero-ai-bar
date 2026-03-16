@@ -18,6 +18,8 @@ pref-chat-location-window =
     .label = Separate Window
 pref-chat-window-always-on-top =
     .label = Keep chat window on top
+pref-chat-open-on-startup =
+    .label = Open window on startup
 pref-provider = Model Provider
 pref-model-name = Model Name
 
