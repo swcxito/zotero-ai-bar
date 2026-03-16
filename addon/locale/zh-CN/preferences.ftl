@@ -2,6 +2,7 @@
 pref-model-setting = 模型设置
 pref-model-select = 模型选择
 pref-edit-models = 编辑模型
+pref-docs-link = 点击查看设置文档
 pref-temperature = Temperature
 pref-max-tokens = Max Tokens
 pref-stream-update-speed = 对话更新速度

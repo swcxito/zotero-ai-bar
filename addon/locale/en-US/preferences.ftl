@@ -2,6 +2,7 @@
 pref-model-setting = Model Settings
 pref-model-select = Model Selection
 pref-edit-models = Edit Models
+pref-docs-link = Click to View Settings Documentation
 pref-temperature = Temperature
 pref-max-tokens = Max Tokens
 pref-stream-update-speed = Chat Update Speed

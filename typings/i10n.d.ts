@@ -26,6 +26,7 @@ export type FluentMessageId =
   | 'pref-context-rounds'
   | 'pref-context-rounds-desc'
   | 'pref-custom-prompts'
+  | 'pref-docs-link'
   | 'pref-edit-models'
   | 'pref-edit-prompts'
   | 'pref-extend-selection-context'
