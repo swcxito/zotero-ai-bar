@@ -145,7 +145,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
     // Optional, Called when the section is toggled. Can happen anytime even if the section is not visible or not rendered
     onToggle: ({ item, body }) => {
       // ztoolkit.log("Section toggled!", item?.id);
-      resizeReaderItemPaneHeight(body, "fit");
+      resizeReaderItemPaneHeight(body, "maximize");
     },
     // Optional, Buttons to be shown in the section header
     sectionButtons: [
@@ -179,7 +179,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
 //     #ai-bar-chat-root
 export function resizeReaderItemPaneHeight(
   body: HTMLElement,
-  resizePolicy: "maximize" | "fit" = "maximize",
+  resizePolicy: "maximize" | "fit" | "auto" = "maximize",
 ) {
   const itemPaneHeader = body.ownerDocument.querySelector(
     "#zotero-item-pane-header",
@@ -194,11 +194,21 @@ export function resizeReaderItemPaneHeight(
   const sectionHeaderHeight = sectionHeader ? sectionHeader.offsetHeight : 0;
   const sectionHeaderDist = sectionHeader.getBoundingClientRect().bottom;
 
+  const root = body.querySelector("#ai-bar-chat-root") as HTMLElement | null;
+  const messageContainer = root?.shadowRoot?.querySelector(
+    ".message-container",
+  ) as HTMLElement | null;
+  const resolvedPolicy =
+    resizePolicy === "auto"
+      ? messageContainer && messageContainer.childElementCount > 0
+        ? "maximize"
+        : "fit"
+      : resizePolicy;
+
   const calcHeight =
-    resizePolicy === "maximize"
+    resolvedPolicy === "maximize"
       ? bottomDist + sectionHeaderHeight + 12
       : sectionHeaderDist + 6;
-  const root = body.querySelector("#ai-bar-chat-root") as HTMLElement;
-  root.style.height = `calc(100vh - ${calcHeight}px)`;
-  body?.scrollIntoView({ behavior: "smooth", block: "end" });
+  if (root) root.style.height = `calc(100vh - ${calcHeight}px)`;
+  body?.scrollIntoView({ behavior: "smooth", block: "start" });
 }

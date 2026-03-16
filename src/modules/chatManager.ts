@@ -696,7 +696,10 @@ export class ChatManager {
         actions.classList.remove("hidden");
         const container = pop.parentElement;
         if (container && !requestState?.stopAutoScroll) {
-          container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+          container.scrollTo({
+            top: container.scrollHeight,
+            behavior: "smooth",
+          });
         }
       }
 
