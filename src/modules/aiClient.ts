@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: AGPL-3.0-only
- * llmRequest.ts
+ * aiClient.ts
  *
  * This file is part of Zotero AI Bar.
  * Zotero AI Bar - A handy AI assistant integration for Zotero
@@ -16,13 +16,13 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { getPref } from "../utils/prefs";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { streamText } from "ai";
+import type { ModelMessage } from "ai";
 import { UserProviderConfig, UserProviderModel } from "../types";
+import { getPref } from "../utils/prefs";
 
-export interface Message {
-  role: string;
-  content: string;
-}
+export type { ModelMessage as Message } from "ai";
 
 export interface StreamCallbacks {
   onStart?: () => void;
@@ -51,30 +51,38 @@ function getRefreshRateFromPref() {
   }
 }
 
-// TODO： 区分HTTP网络错误和API返回的错误信息，提供更具体的错误反馈。
-/**
- * Send a streaming request to the LLM.
- * @param messages List of messages.
- * @param callbacks Callbacks for stream events.
- * @param refreshRate Update UI every N chunks.
- * @param externalController If provided, use this AbortController instead of the global one.
- */
-export async function streamLLM(
-  messagesOrPromise: Message[] | Promise<Message[]>,
+function applyProviderSpecificFlags(
+  provider: UserProviderConfig,
+  model: UserProviderModel,
+  body: Record<string, unknown>,
+) {
+  if (provider.key === "ZHIPU" || provider.key === "ZAI") {
+    body.thinking = { type: "disabled" };
+  } else if (
+    provider.key === "ALIBABA_CLOUD" &&
+    model.name.startsWith("qwen")
+  ) {
+    body.enable_thinking = false;
+    body.enable_search = true;
+  } else if (provider.key === "MINIMAX") {
+    body.reasoning_split = true;
+  }
+}
+
+export async function streamChat(
+  messagesOrPromise: ModelMessage[] | Promise<ModelMessage[]>,
   callbacks: StreamCallbacks,
   refreshRate: number = getRefreshRateFromPref(),
   externalController?: InstanceType<typeof AbortController>,
-) {
+): Promise<void> {
   const AC = getAbortController();
   let controller: InstanceType<typeof AbortController>;
   let useGlobal: boolean;
 
   if (externalController) {
-    // Per-section mode: use the provided controller, leave global one untouched
     controller = externalController;
     useGlobal = false;
   } else {
-    // Legacy global mode: cancel previous global request
     if (addon.chatManager.abortController) {
       addon.chatManager.abortController.abort();
       addon.chatManager.abortController = undefined;
@@ -96,7 +104,6 @@ export async function streamLLM(
     let provider: UserProviderConfig | undefined;
     let model: UserProviderModel | undefined;
 
-    // Find model and provider
     for (const conf of configs) {
       if (conf.models) {
         const found = conf.models.find((m) => {
@@ -122,100 +129,60 @@ export async function streamLLM(
     const temp = temp100 / 100;
     const maxTokens = getPref("llm.maxTokens") || 2000;
 
-    // Remove trailing slash and append /chat/completions
-    const url = provider.baseUrl.replace(/\/$/, "") + "/chat/completions";
-
-    const body: Record<string, unknown> = {
-      model: model.name,
-      messages: messages,
-      temperature: temp,
-      max_tokens: maxTokens,
-      stream: true,
-    };
-
-    if (provider.key === "ZHIPU" || provider.key === "ZAI") {
-      body.thinking = { type: "disabled" };
-    } else if (
-      provider.key === "ALIBABA_CLOUD" &&
-      model.name.startsWith("qwen")
-    ) {
-      body.enable_thinking = false;
-      body.enable_search = true;
-    } else if (provider.key === "MINIMAX") {
-      body.reasoning_split = true;
-    }
-
-    const response = await fetch(url, {
-      method: "POST",
+    const client = createOpenAICompatible({
+      baseURL: provider.baseUrl.replace(/\/$/, ""),
+      name: provider.name || provider.key || "openai-compatible",
+      apiKey: provider.apiKey,
       headers: {
-        "Content-Type": "application/json",
         Authorization: `Bearer ${provider.apiKey}`,
       },
-      body: JSON.stringify(body),
-      signal: controller.signal,
+      fetch: async (input, init) => {
+        let nextInit = init;
+
+        if (init?.body && typeof init.body === "string") {
+          try {
+            const parsed = JSON.parse(init.body) as Record<string, unknown>;
+            applyProviderSpecificFlags(provider, model, parsed);
+            nextInit = {
+              ...init,
+              body: JSON.stringify(parsed),
+            };
+          } catch {}
+        }
+
+        return fetch(input, nextInit);
+      },
     });
 
-    if (!response.ok) {
-      let errText = await response.text();
-      try {
-        const json = JSON.parse(errText);
-        if (json.error && json.error.message) errText = json.error.message;
-      } catch {
-        // use raw text
-      }
-      throw new Error(`API Error ${response.status}: ${errText}`);
-    }
+    const result = streamText({
+      model: client.chatModel(model.name),
+      messages,
+      temperature: temp,
+      maxOutputTokens: maxTokens,
+      abortSignal: controller.signal,
+    });
 
-    if (!response.body) throw new Error("No response body.");
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
     let fullText = "";
     let started = false;
     let count = 0;
-    let buffer = "";
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    for await (const textPart of result.textStream) {
+      if (!textPart) continue;
+      started = true;
+      fullText += textPart;
+      count++;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data: ")) continue;
-
-        const dataStr = trimmed.slice(6);
-        if (dataStr === "[DONE]") continue;
-
-        try {
-          const json = JSON.parse(dataStr);
-          const content = json.choices?.[0]?.delta?.content;
-          if (content) {
-            if (!started) {
-              started = true;
-            }
-            fullText += content;
-            count++;
-            if (count % refreshRate === 0) {
-              await callbacks.onUpdate?.(fullText);
-            }
-          }
-        } catch (e) {
-          // Ignore parse errors for partial chunks
-        }
+      if (count % refreshRate === 0) {
+        await callbacks.onUpdate?.(fullText);
       }
     }
 
-    // Final update - ensure all content including trailing newlines are flushed
     if (fullText || started) {
       await callbacks.onUpdate?.(fullText);
     }
     callbacks.onEnd?.();
-  } catch (error: any) {
-    if (error.name === "AbortError") {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "AbortError") {
       ztoolkit.log("LLM Request Cancelled");
       callbacks.onEnd?.();
       return;
