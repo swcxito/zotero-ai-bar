@@ -138,6 +138,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
         "flex-1",
         "overflow-y-auto",
       );
+      messageContainer.style.userSelect = "text";
       shadowRoot.appendChild(messageContainer);
       shadowRoot.appendChild(InputArea(doc, item.id));
       setSectionButtonStatus("clear", { hidden: false });

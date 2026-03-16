@@ -1,6 +1,6 @@
 /*
- * SPDX-License-Identifier: AGPL-3.0-only
- * app.css
+* SPDX-License-Identifier: AGPL-3.0-only
+* app.css
  *
  * This file is part of Zotero AI Bar.
  * Zotero AI Bar - A handy AI assistant integration for Zotero
@@ -20,6 +20,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 聊天消息选中区域样式：浅色/深色模式兼容 */
+.message-container ::selection {
+  background: rgba(0, 0, 0, 0.32);
+  color: inherit;
+}
+
+@media (prefers-color-scheme: dark) {
+  .message-container ::selection {
+    background: rgba(255, 255, 255, 0.38);
+    color: inherit;
+  }
+}
+
 @keyframes ripple {
   to {
     transform: scale(4);
@@ -37,8 +50,10 @@
     background: rgba(244, 63, 94, 0.3);
   }
 
-  .dark .ripple {
-    background: rgba(255, 255, 255, 0.3);
+  @media (prefers-color-scheme: dark) {
+    .ripple {
+      background: rgba(255, 255, 255, 0.3);
+    }
   }
 
   body::-webkit-scrollbar {

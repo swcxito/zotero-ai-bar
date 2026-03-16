@@ -639,6 +639,7 @@ export class ChatManager {
           "mb-1",
         );
         sourceEl.textContent = `Source: ${sourceLabel}`;
+        sourceEl.style.userSelect = "none";
         chatMessage.appendChild(sourceEl);
       }
 
