@@ -2,7 +2,7 @@ import { config } from "../../package.json";
 import { InlineButton } from "../components/inlineButton";
 import { UserPrompt } from "../types";
 import { setPref } from "../utils/prefs";
-import { getLocaleID, getString } from "../utils/locale";
+import { getLocaleID } from "../utils/locale";
 
 export async function openPromptEditor(onClosed: () => void = () => {}) {
   const windowArgs = {
@@ -58,7 +58,14 @@ export class PromptEditor {
       const emptyState = this.doc.createElement("div");
       emptyState.className =
         "rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-600 dark:text-zinc-400";
-      emptyState.textContent = getString("pref-prompteditor-empty-state");
+      emptyState.textContent = "No custom prompts yet.";
+      void (this.doc as any).l10n
+        ?.formatValue?.(getLocaleID("pref-prompteditor-empty-state"))
+        .then((value: string) => {
+          if (value) {
+            emptyState.textContent = value;
+          }
+        });
       this.promptList.appendChild(emptyState);
       return;
     }

@@ -128,9 +128,13 @@ export function ensureChatWindowUI(doc: Document) {
     "px-1",
     "pb-2",
   );
+  messageContainer.style.userSelect = "text";
 
   const inputArea = InputArea(doc, addon.chatManager.currentSection!);
   bindInputArea(doc, inputArea);
+
+  // 让除消息容器外其它部分不可选
+  inputArea.style.userSelect = "none";
 
   root.appendChild(messageContainer);
   root.appendChild(inputArea);

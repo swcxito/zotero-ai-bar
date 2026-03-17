@@ -50,6 +50,7 @@ export function IconView({
         alignItems: "center",
         justifyContent: "center",
         flexShrink: "0",
+        lineHeight: "0",
       },
       classList: extraClasses,
       properties: { innerHTML: finalMarkup },

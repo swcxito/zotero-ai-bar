@@ -91,7 +91,7 @@ export function InputArea(doc: Document, sectionId: number): HTMLElement {
       "hover:text-rose-500",
     );
     fullTextBtn.classList.add("text-rose-500", "dark:text-rose-400");
-    fullTextBtn.title = getString("input-full-text-tooltip") + " ✓";
+    fullTextBtn.title = getString("input-full-text-tooltip");
   }
 
   // ── textarea ──────────────────────────────────────────────────────────────
@@ -315,7 +315,7 @@ export function InputArea(doc: Document, sectionId: number): HTMLElement {
         "hover:text-rose-500",
       );
       fullTextBtn.classList.add("text-rose-500", "dark:text-rose-400");
-      fullTextBtn.title = getString("input-full-text-tooltip") + " ✓";
+      fullTextBtn.title = getString("input-full-text-tooltip");
     } else {
       fullTextBtn.classList.remove("text-rose-500", "dark:text-rose-400");
       fullTextBtn.classList.add(

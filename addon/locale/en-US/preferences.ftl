@@ -2,6 +2,7 @@
 pref-model-setting = Model Settings
 pref-model-select = Model Selection
 pref-edit-models = Edit Models
+pref-docs-link = Click to View Settings Documentation
 pref-temperature = Temperature
 pref-max-tokens = Max Tokens
 pref-stream-update-speed = Chat Update Speed
@@ -17,6 +18,8 @@ pref-chat-location-window =
     .label = Separate Window
 pref-chat-window-always-on-top =
     .label = Keep chat window on top
+pref-chat-open-on-startup =
+    .label = Open window on startup
 pref-provider = Model Provider
 pref-model-name = Model Name
 

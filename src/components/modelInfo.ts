@@ -146,9 +146,6 @@ export function ModelInfo(): TagElementProps {
     id: "ai-bar-model-info",
     classList: ["model-info-container"],
     children: children,
-    styles: {
-      position: "relative",
-    },
     listeners: [
       {
         type: "click",

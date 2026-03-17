@@ -39,8 +39,12 @@ export function CardModelRow({ doc, data }: CardModelRowProps) {
       "duration-300",
       "bg-zinc-50",
       "dark:bg-zinc-800",
-      "ring-2",
-      "ring-rose-100",
+      "hover:ring-2",
+      "hover:ring-rose-100",
+      "dark:hover:ring-rose-900/50",
+      "focus-within:ring-2",
+      "focus-within:ring-rose-100",
+      "dark:focus-within:ring-rose-900/50",
     ],
     children: [
       {

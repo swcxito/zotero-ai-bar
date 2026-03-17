@@ -8,6 +8,7 @@ import {
 import { onModelDialogLoad } from "./modules/modelDialog";
 import { onPromptEditorLoad } from "./modules/promptEditor";
 import { getPref, registerPrefs } from "./utils/prefs";
+import { ensureChatWindowReady } from "./utils/window";
 import { registerReaderItemPaneSection } from "./modules/readerItemPane";
 import { clearDeadChatWindowRef, isWindowAlive } from "./utils/window";
 
@@ -22,6 +23,13 @@ async function onStartup() {
 
   addon.chatManager.chatHostMode = addon.chatManager.getCurrentHostMode();
   addon.chatManager.ensureRequestMaps();
+
+  if (
+    getPref("chat.openOnStartup") === true &&
+    addon.chatManager.getCurrentHostMode() === "window"
+  ) {
+    await ensureChatWindowReady();
+  }
 
   registerReaderInitializer();
 

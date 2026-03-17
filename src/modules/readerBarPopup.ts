@@ -24,6 +24,7 @@ import { aiBarCommands } from "../utils/prompts";
 import { AiActionButton } from "../components/aiActionButton";
 import { ModelInfo } from "../components/modelInfo";
 import { ExpandButton, ExpandMenuItem } from "../components/expandButton";
+import { Icons } from "../components/common";
 
 export function getReaderSourceLabel(
   reader?: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">,
@@ -223,7 +224,7 @@ function renderAIBar(doc: Document): DocumentFragment {
   for (const up of userPrompts) {
     expandMenuItems.push({
       id: `user-${up.id}`,
-      icon: "✨",
+      icon: Icons.Sparkle,
       label: up.name,
       onClick: async () => {
         if (!addon.data.selectedText) return;
@@ -248,7 +249,6 @@ function renderAIBar(doc: Document): DocumentFragment {
           ...createCommandButtons(),
           ExpandButton({
             label: getString("reader-bar-expand"),
-            icon: "🔽",
             menuItems: expandMenuItems,
           }),
           // Ask (Input Group)

@@ -45,6 +45,10 @@
   font-weight: 500;
   max-width: 150px;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 /* AI Button - Light Mode */
@@ -96,7 +100,7 @@
   gap: 6px;
   padding: 5px 8px;
   backdrop-filter: blur(12px);
-  border-radius: 8px;
+  border-radius: 12px;
   z-index: 9999;
   pointer-events: auto;
   width: max-content;
@@ -253,6 +257,9 @@
   flex-shrink: 0;
   overflow: visible;
   border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 4px;
 }
 
 /* Model Info Icon */
@@ -320,12 +327,6 @@
 }
 
 /* Model Info Dropdown */
-.model-info-container {
-  cursor: pointer;
-  transition: all 0.2s;
-  border-radius: 4px;
-  padding: 4px;
-}
 
 /* Light Mode */
 @media (prefers-color-scheme: light) {
@@ -344,7 +345,7 @@
 .model-dropdown-menu {
   position: absolute;
   z-index: 10001;
-  border-radius: 6px;
+  border-radius: 10px;
   overflow-y: auto;
   max-height: 300px;
   box-shadow:
@@ -415,10 +416,11 @@
   position: relative;
 }
 
-.expand-trigger-btn .btn-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+/* Error text for failed AI responses */
+.ai-bar-error-text {
+  color: #e11d48;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .dropdown-item-icon-text {

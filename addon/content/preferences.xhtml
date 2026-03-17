@@ -8,15 +8,41 @@
   [role="row"]:nth-child(even):not([aria-selected="true"]),
   #__addonRef__-prompt-table-container .virtualized-table-body >
   div:nth-child(even):not(.selected) { background-color: rgba(0, 0, 0, 0.03); }
+  .pref-warning-text { color: #b45309; }
 </html:style>
 <groupbox
   onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
 >
+  <hbox align="center" style="margin-bottom: 12px">
+    <html:a
+      id="__addonRef__-docs-link"
+      href="https://zotero.fukeke.com/reference/model-settings"
+      style="
+        color: rgb(244, 63, 94);
+        text-decoration: underline;
+        font-size: 1.1em;
+        cursor: pointer;
+      "
+      data-l10n-id="pref-docs-link"
+      onclick="
+        var locale = Zotero.locale || 'en';
+        var url = locale.startsWith('zh')
+          ? 'https://zotero.fukeke.com/zh-cn/reference/model-settings/'
+          : 'https://zotero.fukeke.com/en/reference/model-settings/';
+        Zotero.launchURL(url);
+        return false;
+      "
+    />
+  </hbox>
   <groupbox calss="model-settings">
     <label>
       <html:h2 data-l10n-id="pref-model-setting" />
     </label>
-    <hbox align="center" id="__addonRef__-model-selecter-container">
+    <hbox
+      align="center"
+      id="__addonRef__-model-selecter-container"
+      style="margin-top: 8px"
+    >
       <label data-l10n-id="pref-model-select" />
       <vbox flex="1">
         <html:select
@@ -105,7 +131,8 @@
         />
         <html:small
           data-l10n-id="pref-auto-attach-fulltext-desc"
-          style="margin-left: 22px; color: #b45309"
+          style="margin-left: 22px"
+          class="pref-warning-text"
         />
       </vbox>
       <vbox flex="1">
@@ -175,11 +202,16 @@
         <radio value="window" data-l10n-id="pref-chat-location-window" />
       </radiogroup>
     </hbox>
-    <hbox align="center" style="margin-top: 10px">
+    <hbox align="center" style="margin-top: 10px; gap: 20px">
       <checkbox
         id="__addonRef__-chat-window-always-on-top"
         preference="chat.windowAlwaysOnTop"
         data-l10n-id="pref-chat-window-always-on-top"
+      />
+      <checkbox
+        id="__addonRef__-chat-open-on-startup"
+        preference="chat.openOnStartup"
+        data-l10n-id="pref-chat-open-on-startup"
       />
     </hbox>
     <hbox align="center" style="margin-top: 10px">
