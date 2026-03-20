@@ -51,7 +51,6 @@ function getRefreshRateFromPref() {
   }
 }
 
-// TODO： 区分HTTP网络错误和API返回的错误信息，提供更具体的错误反馈。
 /**
  * Send a streaming request to the LLM.
  * @param messages List of messages.

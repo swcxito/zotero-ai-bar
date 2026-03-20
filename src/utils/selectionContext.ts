@@ -17,7 +17,6 @@
  */
 
 // src/modules/selectionContext.ts
-// TODO fix unexpected empty context result when selection is after page5
 
 import { get } from "http";
 import { getPref } from "./prefs";
@@ -56,7 +55,7 @@ export async function getSelectionContext(
       selectedPageIndexes,
     );
     // ztoolkit.log("full-text", fullText);
-    //TODO: get context by search
+    // get context by search
     if (lineCount <= 40) {
       // search in fullText
       const matches = countOccurrencesInFullText(fullText.text, selectedText);
@@ -97,7 +96,8 @@ export async function getSelectionContext(
       }
     }
   }
-  //TODO: get context by index
+  //TODO: get context by index epub
+
   // const word = getWordNearIndex(text.text, index.offset!);
   // ztoolkit.log(word, "word near cursor");
   // ztoolkit.log(reader._iframeWindow);

@@ -26,6 +26,10 @@ import { ModelInfo } from "../components/modelInfo";
 import { ExpandButton, ExpandMenuItem } from "../components/expandButton";
 import { Icons } from "../components/common";
 
+// TODO 等待内容获取完整后再发请求
+
+// TODO 支持其它格式
+
 export function getReaderSourceLabel(
   reader?: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">,
 ) {
@@ -78,7 +82,7 @@ export function getReaderSourceLabel(
   return getString("item-section-head-text");
 }
 
-// must call once in mainwindow otherwise css file won't be loaded in reader popup
+// must call once in main window otherwise CSS file won't be loaded in reader popup
 export function registerAIBarStyleSheet(win: _ZoteroTypes.MainWindow) {
   const doc = win.document;
   const styles = ztoolkit.UI.createElement(doc, "link", {
