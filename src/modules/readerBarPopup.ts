@@ -240,7 +240,7 @@ function renderAIBar(doc: Document): DocumentFragment {
           sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
           hostMode: addon.chatManager.getCurrentHostMode(),
           sectionId: addon.chatManager.currentSection,
-          isFromPopup: true
+          isFromPopup: true,
         });
       },
     });

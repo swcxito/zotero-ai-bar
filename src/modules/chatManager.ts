@@ -502,7 +502,7 @@ export class ChatManager {
         const contextRounds = getPref("chat.contextRounds") ?? 8;
         const maxHistoryMessages = contextRounds * 2;
         // new session in new click
-        if(params.isFromPopup){
+        if (params.isFromPopup) {
           sectionState.conversationHistory = [];
         }
         const history =
