@@ -161,6 +161,7 @@ function renderAIBar(doc: Document): DocumentFragment {
         sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
         hostMode: addon.chatManager.getCurrentHostMode(),
         sectionId: addon.chatManager.currentSection,
+        isFromPopup: true,
       });
 
       container.style.display = "none";
@@ -188,6 +189,7 @@ function renderAIBar(doc: Document): DocumentFragment {
       sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
       hostMode: addon.chatManager.getCurrentHostMode(),
       sectionId: addon.chatManager.currentSection,
+      isFromPopup: true,
     };
 
     // Enable auto-copy for smartCopy command only
@@ -238,6 +240,7 @@ function renderAIBar(doc: Document): DocumentFragment {
           sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
           hostMode: addon.chatManager.getCurrentHostMode(),
           sectionId: addon.chatManager.currentSection,
+          isFromPopup: true
         });
       },
     });

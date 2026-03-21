@@ -429,6 +429,7 @@ export class ChatManager {
     hostMode?: ChatHostMode;
     sectionId?: number;
     autoCopy?: boolean;
+    isFromPopup?: boolean;
   }): Promise<string> {
     const requestId = crypto.randomUUID();
     const route = {
@@ -473,6 +474,8 @@ export class ChatManager {
         params.selectedText,
         selectionContext,
       );
+      // ztoolkit.log("Sending selection:", params.selectedText)
+      // ztoolkit.log("Contexts", selectionContext);
 
       // Append item metadata if enabled (after context, before fulltext)
       if (getPref("chat.autoAttachItemData") && route.sectionId !== undefined) {
@@ -498,6 +501,10 @@ export class ChatManager {
       if (sectionState && sectionState.conversationHistory.length > 0) {
         const contextRounds = getPref("chat.contextRounds") ?? 8;
         const maxHistoryMessages = contextRounds * 2;
+        // new session in new click
+        if(params.isFromPopup){
+          sectionState.conversationHistory = [];
+        }
         const history =
           sectionState.conversationHistory.slice(-maxHistoryMessages);
         return [systemMsg, ...history, userMsg];
