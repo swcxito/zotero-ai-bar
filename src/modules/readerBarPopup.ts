@@ -141,9 +141,6 @@ function renderAIBar(doc: Document): DocumentFragment {
     container.querySelectorAll("button, textarea").forEach((el: Element) => {
       (el as HTMLButtonElement | HTMLTextAreaElement).disabled = true;
     });
-    container.querySelectorAll(".ai-send-btn").forEach((el: Element) => {
-      (el as HTMLElement).classList.add("disabled");
-    });
   };
 
   const handleAsk = async (
@@ -350,9 +347,10 @@ function renderAIBar(doc: Document): DocumentFragment {
                 ],
               },
               {
-                tag: "div",
+                tag: "button",
                 classList: ["ai-send-btn"],
                 properties: {
+                  type: "button",
                   innerHTML: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`,
                 },
                 listeners: [
@@ -360,8 +358,7 @@ function renderAIBar(doc: Document): DocumentFragment {
                     type: "click",
                     listener: (e: Event) => {
                       e.stopPropagation();
-                      const btn = e.currentTarget as HTMLElement;
-                      if (btn.classList.contains("disabled")) return;
+                      const btn = e.currentTarget as HTMLButtonElement;
                       const input =
                         btn.previousElementSibling as HTMLTextAreaElement;
                       const bar = btn.closest(

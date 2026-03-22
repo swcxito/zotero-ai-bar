@@ -233,6 +233,8 @@
   opacity: 0.8;
   transition: opacity 0.2s;
   margin-bottom: 2px;
+  background: none;
+  border: none;
 }
 
 .ai-bar-container .ai-send-btn:hover {
@@ -240,7 +242,7 @@
   cursor: pointer;
 }
 
-.ai-bar-container .ai-send-btn.disabled {
+.ai-bar-container .ai-send-btn:disabled {
   opacity: 0.6;
   cursor: default;
   pointer-events: none;

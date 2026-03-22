@@ -43,9 +43,6 @@ export function AiActionButton({
           .forEach((el: Element) => {
             (el as HTMLButtonElement | HTMLTextAreaElement).disabled = true;
           });
-        container.querySelectorAll(".ai-send-btn").forEach((el: Element) => {
-          (el as HTMLElement).classList.add("disabled");
-        });
       }
 
       e.stopPropagation();
