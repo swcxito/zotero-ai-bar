@@ -46,10 +46,6 @@ export function AiActionButton({
       }
 
       e.stopPropagation();
-      setTimeout(() => {
-        const bar = btn.closest(".ai-bar-container") as HTMLElement;
-        if (bar) bar.style.display = "none";
-      }, 300);
 
       await onClick(e);
     },

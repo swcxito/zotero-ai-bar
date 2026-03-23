@@ -26,8 +26,6 @@ import { ModelInfo } from "../components/modelInfo";
 import { ExpandButton, ExpandMenuItem } from "../components/expandButton";
 import { Icons } from "../components/common";
 
-// TODO 等待内容获取完整后再发请求
-
 // TODO 支持其它格式
 
 export function getReaderSourceLabel(
@@ -82,7 +80,11 @@ export function getReaderSourceLabel(
   return getString("item-section-head-text");
 }
 
-// must call once in main window otherwise CSS file won't be loaded in reader popup
+/**
+ * must call once in main window otherwise CSS file won't be loaded in reader popup.
+ * register CSS in main window so that it can be read by reader popup.
+ * CSS cannot be loaded if we inject it directly in reader popup.
+ **/
 export function registerAIBarStyleSheet(win: _ZoteroTypes.MainWindow) {
   const doc = win.document;
   const styles = ztoolkit.UI.createElement(doc, "link", {
@@ -112,6 +114,7 @@ export function registerReaderInitializer() {
       // ztoolkit.log(append);
       // ztoolkit.log("annotation", params.annotation);
       ztoolkit.log("Creating Ask AI Bar");
+      // todo check is needed here
       addon.chatManager.currentAnnotation = params.annotation;
       addon.chatManager.currentReader = reader;
       if (reader._internalReader._type === "pdf") append(renderAIBar(doc));
@@ -121,7 +124,7 @@ export function registerReaderInitializer() {
 }
 
 function renderAIBar(doc: Document): DocumentFragment {
-  // Insert styles
+  // ── Insert styles ────────────────
   if (
     !doc.querySelector(
       `link[href="chrome://${addon.data.config.addonRef}/content/zoteroAIBar.css"]`,
@@ -137,79 +140,40 @@ function renderAIBar(doc: Document): DocumentFragment {
     doc.head?.appendChild(styles);
   }
 
-  const disableAll = (container: HTMLElement) => {
-    container.querySelectorAll("button, textarea").forEach((el: Element) => {
-      (el as HTMLButtonElement | HTMLTextAreaElement).disabled = true;
-    });
-  };
+  function handleAction(input: string) {
+    if (!input) return;
+    ztoolkit.log("Action:", input, addon.data.selectedText);
+    const command = aiBarCommands[input];
 
-  const handleAsk = async (
-    input: HTMLTextAreaElement,
-    container: HTMLElement,
-  ) => {
-    const text = input.value.trim();
-    if (text && addon.data.selectedText) {
-      ztoolkit.log("Ask:", text, "Context:", addon.data.selectedText);
-      disableAll(container);
+    if (!addon.data.selectedText && command) return;
 
-      await addon.chatManager.sendChatRequest({
-        userPrompt: text,
-        selectedText: addon.data.selectedText,
-        sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
-        hostMode: addon.chatManager.getCurrentHostMode(),
-        sectionId: addon.chatManager.currentSection,
-        isFromPopup: true,
-      });
+    hideContainerOnTimeout();
+    disableAll();
 
-      container.style.display = "none";
-    }
-  };
-
-  const handleButtonAction = async (commandId: string) => {
-    if (!addon.data.selectedText) return;
-    ztoolkit.log("Action:", commandId, addon.data.selectedText);
-
-    const command = aiBarCommands[commandId];
-    if (!command) {
-      ztoolkit.log("Unknown command:", commandId);
-      return;
-    }
-
-    const prompt = command.getPrompt(Zotero.locale);
-    // ztoolkit.log("Generated Prompt:", prompt);
-
-    const requestParams: Parameters<
-      typeof addon.chatManager.sendChatRequest
-    >[0] = {
-      userPrompt: prompt,
+    addon.chatManager.sendChatRequest({
+      // If input matches a command, use the command's prompt; otherwise treat input as a custom prompt
+      userPrompt: command?.getPrompt(Zotero.locale) ?? input,
       selectedText: addon.data.selectedText,
       sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
       hostMode: addon.chatManager.getCurrentHostMode(),
       sectionId: addon.chatManager.currentSection,
       isFromPopup: true,
-    };
-
-    // Enable auto-copy for smartCopy command only
-    if (commandId === "smartCopy") {
-      requestParams.autoCopy = true;
-    }
-
-    await addon.chatManager.sendChatRequest(requestParams);
-  };
+      // Enable auto-copy for smartCopy command only
+      autoCopy: input === "smartCopy",
+    });
+  }
 
   // Create AI buttons from commands in specific order: explain, translate, smartCopy
   const createCommandButtons = () => {
     const commandOrder = ["explain", "translate", "smartCopy"];
-    return commandOrder
-      .map((id) => aiBarCommands[id])
-      .filter(Boolean)
-      .map((command) =>
-        AiActionButton({
-          label: getString(command.label),
-          icon: command.icon,
-          onClick: async () => handleButtonAction(command.id),
-        }),
-      );
+    return commandOrder.map((id) => {
+      const command = aiBarCommands[id];
+      return AiActionButton({
+        label: getString(command.label),
+        icon: command.icon,
+        onClick: async () => handleAction(command.id),
+      });
+    });
   };
 
   // Build menu items: built-in + user prompts
@@ -218,7 +182,7 @@ function renderAIBar(doc: Document): DocumentFragment {
       id: "summarize",
       icon: aiBarCommands.summarize.icon,
       label: getString(aiBarCommands.summarize.label),
-      onClick: () => handleButtonAction("summarize"),
+      onClick: () => handleAction("summarize"),
     },
   ];
 
@@ -243,7 +207,7 @@ function renderAIBar(doc: Document): DocumentFragment {
     });
   }
 
-  return ztoolkit.UI.createElement(doc, "fragment", {
+  const fragment = ztoolkit.UI.createElement(doc, "fragment", {
     children: [
       {
         tag: "div",
@@ -272,6 +236,7 @@ function renderAIBar(doc: Document): DocumentFragment {
                     listener: (e: Event) => {
                       const input = e.currentTarget as HTMLTextAreaElement;
                       // Add overlay element to prevent reader's global keydown handler
+                      // making sure backspace will ont close popup.
                       if (!doc.querySelector(".context-menu-overlay")) {
                         const overlay = doc.createElement("div");
                         overlay.className = "context-menu-overlay";
@@ -321,27 +286,11 @@ function renderAIBar(doc: Document): DocumentFragment {
                     type: "keydown",
                     listener: (e: Event) => {
                       const ke = e as KeyboardEvent;
-                      // Prevent all keyboard events from bubbling up to parent
-                      // This ensures backspace and other keys don't close the popup
-                      ke.stopPropagation();
-                      ke.stopImmediatePropagation();
-
                       if (ke.key === "Enter" && !ke.shiftKey) {
                         ke.preventDefault();
                         const input = ke.currentTarget as HTMLTextAreaElement;
-                        const bar = input.closest(
-                          ".ai-bar-container",
-                        ) as HTMLElement;
-                        handleAsk(input, bar);
+                        handleAction(input.value.trim());
                       }
-                    },
-                  },
-                  {
-                    type: "keyup",
-                    listener: (e: Event) => {
-                      // Also prevent keyup events from bubbling
-                      e.stopPropagation();
-                      e.stopImmediatePropagation();
                     },
                   },
                 ],
@@ -357,14 +306,11 @@ function renderAIBar(doc: Document): DocumentFragment {
                   {
                     type: "click",
                     listener: (e: Event) => {
-                      e.stopPropagation();
+                      // e.stopPropagation();
                       const btn = e.currentTarget as HTMLButtonElement;
                       const input =
                         btn.previousElementSibling as HTMLTextAreaElement;
-                      const bar = btn.closest(
-                        ".ai-bar-container",
-                      ) as HTMLElement;
-                      handleAsk(input, bar);
+                      handleAction(input.value.trim());
                     },
                   },
                 ],
@@ -375,4 +321,17 @@ function renderAIBar(doc: Document): DocumentFragment {
       },
     ],
   });
+  const container = fragment.querySelector(".ai-bar-container") as HTMLElement;
+  function hideContainerOnTimeout(delay: number = 500) {
+    setTimeout(() => {
+      container.style.display = "none";
+    }, delay);
+  }
+  // for click end
+  const disableAll = () => {
+    container.querySelectorAll("button, textarea").forEach((el: Element) => {
+      (el as HTMLButtonElement | HTMLTextAreaElement).disabled = true;
+    });
+  };
+  return fragment;
 }
