@@ -16,6 +16,8 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+// todo 拆分文件
+// TODO 优化provider管理，适配sdk
 import { ChatBox } from "../components/chatBox";
 import { Icons } from "../components/common";
 import { IconView } from "../components/iconView";

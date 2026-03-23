@@ -57,6 +57,8 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   );
 
   const llmConfig = getPref("llm.providerConfigs");
+  //TODO 添加配置转换层，兼容老版本配置格式
+  ztoolkit.log("llmConfig: ", llmConfig);
   if (llmConfig)
     addon.data.userProviderConfigs = JSON.parse(getPref("llm.providerConfigs"));
 
