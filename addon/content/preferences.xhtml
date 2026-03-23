@@ -167,6 +167,55 @@
   </groupbox>
   <groupbox>
     <label>
+      <html:h2 data-l10n-id="pref-translate" />
+    </label>
+    <hbox align="center" style="margin-top: 8px">
+      <checkbox
+        id="__addonRef__-auto-translate"
+        preference="translate.enableAuto"
+        data-l10n-id="pref-auto-translate"
+        style="flex: 1"
+      />
+    </hbox>
+    <hbox align="center" style="margin-top: 10px">
+      <vbox flex="1">
+        <html:label data-l10n-id="pref-auto-translate-mode" />
+      </vbox>
+      <radiogroup
+        preference="translate.extendContext"
+        orient="horizontal"
+        style="gap: 10px"
+      >
+        <radio value="follow" data-l10n-id="pref-auto-translate-mode-follow" />
+        <radio value="always" data-l10n-id="pref-auto-translate-mode-always" />
+        <!--        TODO edit chat manager to fit this-->
+        <radio value="never" data-l10n-id="pref-auto-translate-mode-never" />
+      </radiogroup>
+    </hbox>
+    <hbox align="center" style="margin-top: 10px">
+      <checkbox
+        id="__addonRef__-use-translate-model"
+        preference="translate.useAlternativeModel"
+        data-l10n-id="pref-use-translate-model"
+        style="flex: 1"
+      />
+      <label style="flex: 1">
+        <label data-l10n-id="pref-translate-model-select" />
+        <vbox flex="1">
+          <html:select
+            class="select"
+            id="__addonRef__-translate-model-selector"
+            style="width: 100%; min-width: 0"
+            preference="translate.modelId"
+          >
+            <html:option value="" data-l10n-id="pref-translate-model-default" />
+          </html:select>
+        </vbox>
+      </label>
+    </hbox>
+  </groupbox>
+  <groupbox>
+    <label>
       <html:h2 data-l10n-id="pref-ui" />
     </label>
     <hbox align="center">

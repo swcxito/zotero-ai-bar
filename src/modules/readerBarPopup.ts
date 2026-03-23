@@ -19,7 +19,7 @@
 import { config } from "../../package.json";
 import { getSelectionContext } from "../utils/selectionContext";
 import { getString } from "../utils/locale";
-import { getPref } from "../utils/prefs";
+import { getPref, setPref } from "../utils/prefs";
 import { aiBarCommands } from "../utils/prompts";
 import { AiActionButton } from "../components/aiActionButton";
 import { ModelInfo } from "../components/modelInfo";
@@ -97,6 +97,47 @@ export function registerAIBarStyleSheet(win: _ZoteroTypes.MainWindow) {
   doc.documentElement?.appendChild(styles);
 }
 
+function smartAutoTranslate(
+  reader: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">,
+  params: { annotation: _ZoteroTypes.Annotations.AnnotationJson },
+) {
+  if (getPref("translate.enableAuto")) {
+    const autoTranslateContext = getPref("translate.extendContext");
+    const isExtendContextEnabled = getPref("extend-selection-context");
+    const followContextSetting =
+      autoTranslateContext === "follow" ||
+      (autoTranslateContext === "always" && isExtendContextEnabled) ||
+      (autoTranslateContext === "never" && !isExtendContextEnabled);
+    const selectionContextPromise = followContextSetting
+      ? addon.data.selectionContextPromise
+      : autoTranslateContext === "always"
+        ? getSelectionContext(reader, params)
+        : Promise.resolve(undefined);
+    const useTranslateModel = getPref("translate.useAlternativeModel");
+    const translateModelId = getPref("translate.modelId");
+    const originalModelId = getPref("llm.modelId");
+    if (useTranslateModel && translateModelId) {
+      setPref("llm.modelId", translateModelId);
+    }
+    addon.chatManager
+      .sendChatRequest({
+        userPrompt: aiBarCommands.translate.getPrompt(Zotero.locale),
+        selectedText: addon.data.selectedText,
+        sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
+        hostMode: addon.chatManager.getCurrentHostMode(),
+        sectionId: addon.chatManager.currentSection,
+        isFromPopup: true,
+        contextPromise: selectionContextPromise,
+      })
+      // todo remove this temp resolution after chatManager is reconstructed.
+      .finally(() => {
+        if (useTranslateModel && translateModelId) {
+          setPref("llm.modelId", originalModelId);
+        }
+      });
+  }
+}
+
 export function registerReaderInitializer() {
   Zotero.Reader.registerEventListener(
     "renderTextSelectionPopup",
@@ -117,7 +158,10 @@ export function registerReaderInitializer() {
       // todo check is needed here
       addon.chatManager.currentAnnotation = params.annotation;
       addon.chatManager.currentReader = reader;
-      if (reader._internalReader._type === "pdf") append(renderAIBar(doc));
+      if (reader._internalReader._type === "pdf") {
+        append(renderAIBar(doc));
+        smartAutoTranslate(reader, params);
+      }
     },
     config.addonID,
   );

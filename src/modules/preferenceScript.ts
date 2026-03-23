@@ -56,6 +56,29 @@ function updateModelSelector(modelSelector: HTMLSelectElement, doc: Document) {
   }
 }
 
+function updateTranslateModelSelector(
+  modelSelector: HTMLSelectElement,
+  doc: Document,
+) {
+  const currentValue = modelSelector.value;
+  const defaultOption = modelSelector.querySelector('option[value=""]');
+  modelSelector.innerHTML = "";
+  if (defaultOption) {
+    modelSelector.appendChild(defaultOption);
+  }
+  const providers = addon.data.userProviderConfigs;
+  for (const provider of providers ?? []) {
+    for (const model of provider.models ?? []) {
+      if (!model.id) continue;
+      const option = doc.createElement("option");
+      option.value = model.id;
+      option.textContent = `${model.name} (${provider.name})`;
+      modelSelector.appendChild(option);
+    }
+  }
+  modelSelector.value = currentValue;
+}
+
 function updatePrefsUI() {
   const doc = addon.data.prefs?.window.document;
   if (!doc) return;
@@ -86,6 +109,13 @@ function updatePrefsUI() {
       getPref("llm.temperature100"),
       0.01,
     );
+  }
+
+  const translateModelSelector = doc.querySelector(
+    makeId("translate-model-selector"),
+  ) as HTMLSelectElement;
+  if (translateModelSelector) {
+    updateTranslateModelSelector(translateModelSelector, doc);
   }
 
   renderPromptPreview();

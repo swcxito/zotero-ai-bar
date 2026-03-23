@@ -430,6 +430,8 @@ export class ChatManager {
     sectionId?: number;
     autoCopy?: boolean;
     isFromPopup?: boolean;
+    //todo refine this patch
+    contextPromise?: Promise<string[] | undefined>;
   }): Promise<string> {
     const requestId = crypto.randomUUID();
     const route = {
@@ -463,7 +465,9 @@ export class ChatManager {
     const messagesPromise: Promise<Message[]> = (async () => {
       let selectionContext: Array<string> | undefined;
       try {
-        if (addon.data.selectionContextPromise) {
+        if (params.contextPromise) {
+          selectionContext = await params.contextPromise;
+        } else if (addon.data.selectionContextPromise) {
           selectionContext = await addon.data.selectionContextPromise;
         }
       } catch (e) {
