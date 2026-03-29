@@ -22,6 +22,9 @@ import { ChatBox } from './chatBox';
 import { getString } from '../utils/locale';
 import { Session } from '../modules/chatManager';
 
+import { startCaptureMode } from "../modules/capture";
+import { getReaderByTabId } from "../modules/tabObserver";
+
 /**
  * Build the InputArea widget and wire up all interactive logic.
  * @param doc   The owner Document (from the Zotero item-pane body).
@@ -76,6 +79,29 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
     fullTextBtn.title = getString('input-full-text-tooltip');
   }
 
+  // ── screenshot button (left) ──────────────────────────────────────────
+  const screenshotBtn = doc.createElement("button");
+  screenshotBtn.title = "Screenshot";
+  screenshotBtn.classList.add(
+    "input-screenshot-btn",
+    "flex",
+    "justify-center",
+    "p-2.5",
+    "rounded-xl",
+    "text-slate-400",
+    "dark:text-neutral-500",
+    "hover:text-rose-500",
+    "transition-colors",
+    "flex-shrink-0",
+  );
+  screenshotBtn.appendChild(
+    ztoolkit.UI.createElement(
+      doc,
+      "span",
+      IconView({ iconMarkup: Icons.Screenshot, sizeRem: 1 }),
+    ),
+  );
+
   // ── textarea ──────────────────────────────────────────────────────────────
   const textarea = doc.createElement('textarea') as HTMLTextAreaElement;
   textarea.rows = 1;
@@ -127,6 +153,7 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
   );
 
   container.appendChild(fullTextBtn);
+  container.appendChild(screenshotBtn);
   container.appendChild(textarea);
   container.appendChild(sendBtn);
 
@@ -268,6 +295,19 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
       fullTextBtn.classList.remove('text-rose-500', 'dark:text-rose-400');
       fullTextBtn.classList.add('text-slate-400', 'dark:text-neutral-500', 'hover:text-rose-500');
       fullTextBtn.title = getString('input-full-text-tooltip');
+    }
+  });
+
+  screenshotBtn.addEventListener("click", () => {
+    if (addon.chatManager.currentTabID) {
+      const reader = getReaderByTabId(addon.chatManager.currentTabID);
+      if (!reader) {
+        ztoolkit.log("[InputArea] No reader available for capture");
+        return;
+      }
+      if (reader?._type === "pdf") {
+        startCaptureMode(reader as _ZoteroTypes.ReaderInstance<"pdf">);
+      }
     }
   });
 
