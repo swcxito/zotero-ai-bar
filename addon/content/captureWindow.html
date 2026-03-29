@@ -1,0 +1,131 @@
+<!doctype html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Screenshot Preview</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #f3f4f6;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      #toolbar {
+        background: white;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      #toolbar button {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      #copy-btn {
+        background: #f3f4f6;
+        color: #374151;
+      }
+
+      #copy-btn:hover {
+        background: #e5e7eb;
+      }
+
+      #close-btn {
+        background: transparent;
+        color: #6b7280;
+        margin-left: auto;
+      }
+
+      #close-btn:hover {
+        background: #f3f4f6;
+      }
+
+      #info {
+        color: #6b7280;
+        font-size: 13px;
+        margin-left: 16px;
+      }
+
+      #image-container {
+        flex: 1;
+        overflow: auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: #e5e7eb;
+      }
+
+      #captured-image {
+        max-width: 100%;
+        max-height: 100%;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="toolbar">
+
+      <button id="copy-btn">Copy</button>
+      <button id="close-btn">Close</button>
+      <span id="info"></span>
+    </div>
+    <div id="image-container">
+      <img id="captured-image" alt="Screenshot" />
+    </div>
+
+    <script>
+      window.addEventListener("load", () => {
+        const imageData = window.arguments?.[0]?.imageData;
+        const img = document.getElementById("captured-image");
+        const info = document.getElementById("info");
+
+        if (!imageData) {
+          info.textContent = "No image data";
+          return;
+        }
+
+        img.src = imageData;
+
+        img.onload = () => {
+          info.textContent = `${img.naturalWidth} × ${img.naturalHeight} px`;
+        };
+
+        document.getElementById("close-btn").addEventListener("click", () => {
+          window.close();
+        });
+
+        document.getElementById("copy-btn").addEventListener("click", () => {
+          if (navigator.clipboard) {
+            fetch(imageData)
+              .then((res) => res.blob())
+              .then((blob) => {
+                const item = new ClipboardItem({ "image/png": blob });
+                navigator.clipboard.write([item]);
+              });
+          }
+        });
+
+      });
+    </script>
+  </body>
+</html>
