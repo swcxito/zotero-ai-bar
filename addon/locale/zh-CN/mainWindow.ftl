@@ -3,6 +3,8 @@ item-section-example2-head-text =
 
 item-section-button-tooltip =
     .tooltiptext = 清空对话
+item-section-test-tooltip =
+    .tooltiptext = 测试
 item-section-head-text =
     .label = AI-Bar 速答
 item-section-sidenav-tooltip =

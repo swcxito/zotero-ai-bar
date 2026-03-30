@@ -25,6 +25,7 @@ import { AiActionButton } from "../components/aiActionButton";
 import { ModelInfo } from "../components/modelInfo";
 import { ExpandButton, ExpandMenuItem } from "../components/expandButton";
 import { Icons } from "../components/common";
+import { testImage } from "../utils/figureContext";
 
 // TODO 支持其它格式
 
@@ -161,6 +162,7 @@ export function registerReaderInitializer() {
       if (reader._internalReader._type === "pdf") {
         append(renderAIBar(doc));
         smartAutoTranslate(reader, params);
+        // testImage(reader.itemID!);
       }
     },
     config.addonID,

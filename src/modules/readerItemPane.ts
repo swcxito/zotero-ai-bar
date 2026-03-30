@@ -19,7 +19,8 @@
 import { getLocaleID } from "../utils/locale";
 import { config } from "../../package.json";
 import { InputArea } from "../components/inputArea";
-
+import {testImage} from "../utils/figureContext";
+// TODO 区分同一条目的不同子条目（parentItemID，itemID）
 export function injectCSS(doc: Document | ShadowRoot, filename: string) {
   // 获取插件内资源的 URL
   const url = `chrome://${config.addonRef}/content/styles/${filename}`;
@@ -170,6 +171,14 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
           }
           addon.chatManager.clearSectionHistory(currentTab);
         },
+      },
+      {
+        type: "test",
+        icon: "chrome://zotero/skin/16/universal/report.svg",
+        l10nID: getLocaleID("item-section-test-tooltip"),
+        onClick: ({ item, paneID }) => {
+          testImage(item);
+        }
       },
     ],
   });

@@ -14,6 +14,7 @@ export type FluentMessageId =
   | 'item-section-example2-head-text'
   | 'item-section-head-text'
   | 'item-section-sidenav-tooltip'
+  | 'item-section-test-tooltip'
   | 'pref-advanced'
   | 'pref-auto-attach-fulltext'
   | 'pref-auto-attach-fulltext-desc'

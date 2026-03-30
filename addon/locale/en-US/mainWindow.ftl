@@ -7,3 +7,5 @@ item-section-head-text =
 .label = AI-Bar Answer
 item-section-sidenav-tooltip =
 .tooltiptext = Scroll to AI-Bar Assistant
+item-section-test-tooltip =
+.tooltiptext = 测试
