@@ -177,7 +177,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
         icon: "chrome://zotero/skin/16/universal/report.svg",
         l10nID: getLocaleID("item-section-test-tooltip"),
         onClick: ({ item, paneID }) => {
-          testImage(item);
+          testImage();
         }
       },
     ],
