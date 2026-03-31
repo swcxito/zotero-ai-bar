@@ -72,7 +72,7 @@ async function submitFromWindowInput(
     userPrompt: content,
     sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
     hostMode: "window",
-    sectionId: addon.chatManager.currentSection,
+    sectionId: addon.chatManager.currentTabID,
   });
 }
 
@@ -130,7 +130,7 @@ export function ensureChatWindowUI(doc: Document) {
   );
   messageContainer.style.userSelect = "text";
 
-  const inputArea = InputArea(doc, addon.chatManager.currentSection!);
+  const inputArea = InputArea(doc, addon.chatManager.currentTabID!);
   bindInputArea(doc, inputArea);
 
   // 让除消息容器外其它部分不可选

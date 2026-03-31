@@ -26,7 +26,7 @@ import { getString } from "../utils/locale";
  * @param doc   The owner Document (from the Zotero item-pane body).
  * @param sectionId  The Zotero item ID that identifies this sidebar section.
  */
-export function InputArea(doc: Document, sectionId: number): HTMLElement {
+export function InputArea(doc: Document, sectionId: string): HTMLElement {
   // ── outer wrapper (contains input-row + disclaimer) ──────────────────────
   const wrapper = doc.createElement("div");
   wrapper.classList.add(

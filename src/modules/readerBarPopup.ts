@@ -125,7 +125,7 @@ function smartAutoTranslate(
         selectedText: addon.data.selectedText,
         sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
         hostMode: addon.chatManager.getCurrentHostMode(),
-        sectionId: addon.chatManager.currentSection,
+        sectionId: addon.chatManager.currentTabID,
         isFromPopup: true,
         contextPromise: selectionContextPromise,
       })
@@ -200,7 +200,7 @@ function renderAIBar(doc: Document): DocumentFragment {
       selectedText: addon.data.selectedText,
       sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
       hostMode: addon.chatManager.getCurrentHostMode(),
-      sectionId: addon.chatManager.currentSection,
+      sectionId: addon.chatManager.currentTabID,
       isFromPopup: true,
       // Enable auto-copy for smartCopy command only
       autoCopy: input === "smartCopy",
@@ -244,7 +244,7 @@ function renderAIBar(doc: Document): DocumentFragment {
           selectedText: addon.data.selectedText,
           sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
           hostMode: addon.chatManager.getCurrentHostMode(),
-          sectionId: addon.chatManager.currentSection,
+          sectionId: addon.chatManager.currentTabID,
           isFromPopup: true,
         });
       },

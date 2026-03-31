@@ -11,6 +11,7 @@ import { getPref, registerPrefs } from "./utils/prefs";
 import { ensureChatWindowReady } from "./utils/window";
 import { registerReaderItemPaneSection } from "./modules/readerItemPane";
 import { clearDeadChatWindowRef, isWindowAlive } from "./utils/window";
+import { registerTabObserver } from "./modules/tabObserver";
 
 async function onStartup() {
   await Promise.all([
@@ -32,9 +33,7 @@ async function onStartup() {
   }
 
   registerReaderInitializer();
-
   registerPrefs();
-
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
   );
@@ -43,12 +42,13 @@ async function onStartup() {
   // outside the plugin (e.g. scaffold testing process)
   addon.data.initialized = true;
 }
-
 async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   // Create ztoolkit for every window
   addon.data.ztoolkit = createZToolkit();
-
   // UIExampleFactory.registerStyleSheet(win);
+
+  registerTabObserver();
+  addon.chatManager.currentTabID = win.Zotero_Tabs.selectedID;
   registerAIBarStyleSheet(win);
   // await HelperExampleFactory.dialogExample();
 

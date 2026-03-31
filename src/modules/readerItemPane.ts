@@ -92,8 +92,6 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
     },
     // Optional, Called when the section data changes (setting item/mode/tabType/inTrash), must be synchronous. return false to cancel the change
     onItemChange: ({ item, setEnabled, tabType }) => {
-      ztoolkit.log(`Section item data changed to ${item?.id}`);
-      addon.chatManager.currentSection = item?.id;
       setEnabled(tabType === "reader");
       return true;
     },
@@ -117,8 +115,9 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
       setSectionSummary,
       setSectionButtonStatus,
     }) => {
-      if (item && addon.data.sidePaneMap)
-        addon.data.sidePaneMap.set(item.id, body);
+      if (item && addon.data.sidePaneMap && addon.chatManager.currentTabID) {
+        addon.data.sidePaneMap.set(addon.chatManager.currentTabID, body);
+      }
       const root = body.querySelector("#ai-bar-chat-root") as HTMLElement;
       const shadowRoot = root.attachShadow({ mode: "open" });
       resizeReaderItemPaneHeight(body, "fit");
@@ -140,7 +139,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
       );
       messageContainer.style.userSelect = "text";
       shadowRoot.appendChild(messageContainer);
-      shadowRoot.appendChild(InputArea(doc, item.id));
+      shadowRoot.appendChild(InputArea(doc, addon.chatManager.currentTabID!));
       setSectionButtonStatus("clear", { hidden: false });
     },
     // Optional, Called when the section is toggled. Can happen anytime even if the section is not visible or not rendered
@@ -154,8 +153,10 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
         type: "clear",
         icon: "chrome://zotero/skin/16/universal/empty-trash.svg",
         l10nID: getLocaleID("item-section-button-tooltip"),
-        onClick: ({ item, paneID }) => {
-          const body = addon.data.sidePaneMap?.get(item.id);
+        onClick: () => {
+          const currentTab = addon.chatManager.currentTabID;
+          if (!currentTab) return;
+          const body = addon.data.sidePaneMap?.get(currentTab);
           if (!body) return;
 
           const root = body.querySelector("#ai-bar-chat-root");
@@ -167,7 +168,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
           if (messageContainer) {
             messageContainer.innerHTML = "";
           }
-          addon.chatManager.clearSectionHistory(item.id);
+          addon.chatManager.clearSectionHistory(currentTab);
         },
       },
     ],

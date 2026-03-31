@@ -41,7 +41,7 @@ export type ChatHostMode = "sidebar" | "window";
 type RequestState = {
   chatPop?: Element;
   hostMode: ChatHostMode;
-  sectionId?: number;
+  sectionId?: string;
   sourceLabel: string;
   autoCopy?: boolean;
   stopAutoScroll?: boolean;
@@ -70,9 +70,9 @@ export class ChatManager {
   public currentReader?: _ZoteroTypes.ReaderInstance<
     "pdf" | "epub" | "snapshot"
   >;
-  public currentSection?: number;
+  public currentTabID?: string;
   /** Per-section sidebar state (keyed by item.id / sectionId) */
-  public sidebarStates: Map<number, SidebarSectionState> = new Map();
+  public sidebarStates: Map<string, SidebarSectionState> = new Map();
 
   getCurrentHostMode(): ChatHostMode {
     const location = this.chatHostMode || getPref("chat.location");
@@ -81,7 +81,7 @@ export class ChatManager {
 
   // ── Per-section sidebar state helpers ───────────────────────────────────
 
-  getOrCreateSectionState(sectionId: number): SidebarSectionState {
+  getOrCreateSectionState(sectionId: string): SidebarSectionState {
     if (!this.sidebarStates.has(sectionId)) {
       this.sidebarStates.set(sectionId, {
         conversationHistory: [],
@@ -92,7 +92,7 @@ export class ChatManager {
     return this.sidebarStates.get(sectionId)!;
   }
 
-  clearSectionHistory(sectionId: number) {
+  clearSectionHistory(sectionId: string) {
     const state = this.sidebarStates.get(sectionId);
     if (state) {
       state.conversationHistory = [];
@@ -103,7 +103,7 @@ export class ChatManager {
    * Retrieve metadata for the given Zotero item ID.
    * Returns formatted metadata string including title, abstract, authors, publication, etc.
    */
-  getItemMetadata(itemId: number): string | undefined {
+  getItemMetadata(itemId: string): string | undefined {
     try {
       const item = Zotero.Items.get(itemId) as any;
       if (!item) {
@@ -211,7 +211,7 @@ export class ChatManager {
    * Retrieve the full text of the attachment for the given Zotero item ID.
    * Truncates to 50,000 characters to keep prompts manageable.
    */
-  async getItemFullText(itemId: number): Promise<string | undefined> {
+  async getItemFullText(itemId: string): Promise<string | undefined> {
     // ztoolkit.log("[getItemFullText] start, itemId:", itemId);
     try {
       const item = Zotero.Items.get(itemId) as any;
@@ -279,7 +279,7 @@ export class ChatManager {
    * Update the send/stop button in the inputArea inside a section's shadow DOM.
    * Called after isStreaming changes so the UI reflects current state.
    */
-  updateSectionInputArea(sectionId: number) {
+  updateSectionInputArea(sectionId: string) {
     const body = addon.data.sidePaneMap?.get(sectionId);
     if (!body) return;
     const root = body.querySelector("#ai-bar-chat-root");
@@ -392,7 +392,7 @@ export class ChatManager {
     }
 
     if (!addon.data.sidePaneMap) return null;
-    const sectionId = requestState?.sectionId ?? this.currentSection;
+    const sectionId = requestState?.sectionId ?? this.currentTabID;
     if (sectionId === undefined) return null;
     const body = addon.data.sidePaneMap.get(sectionId);
     if (!body) return null;
@@ -427,7 +427,7 @@ export class ChatManager {
     selectedText?: string;
     sourceLabel?: string;
     hostMode?: ChatHostMode;
-    sectionId?: number;
+    sectionId?: string;
     autoCopy?: boolean;
     isFromPopup?: boolean;
     //todo refine this patch
@@ -572,7 +572,7 @@ export class ChatManager {
     this.ensureRequestMaps();
     this.requestMap!.set(requestId, {
       hostMode: this.lastRequest?.hostMode || this.getCurrentHostMode(),
-      sectionId: this.lastRequest?.sectionId ?? this.currentSection,
+      sectionId: this.lastRequest?.sectionId ?? this.currentTabID,
       sourceLabel: this.lastRequest?.sourceLabel || "Unknown Source",
       stopAutoScroll: false,
     });

@@ -26,7 +26,7 @@ class Addon {
     selectionContextPromise?: Promise<Array<string> | undefined>;
     userProviderConfigs?: UserProviderConfig[];
     userPrompts?: UserPrompt[];
-    sidePaneMap?: Map<number, HTMLElement>;
+    sidePaneMap?: Map<string, HTMLElement>;
   };
   // Chat state and logic
   public chatManager: ChatManager;
