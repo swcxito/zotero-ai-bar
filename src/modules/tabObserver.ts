@@ -31,3 +31,14 @@ export function registerTabObserver() {
     "myObserverID",
   );
 }
+
+export function getReaderByTabId(id: string) {
+  const readers = Zotero.Reader._readers;
+  for (const reader of readers) {
+    // ztoolkit.log("reader", reader.tabID);
+    if(reader.tabID === id) {
+      return reader;
+    }
+  }
+  return null
+}
