@@ -33,7 +33,7 @@ export function AiActionButton({
   return ActionButton({
     label: label,
     icon: icon,
-    className: "ai-btn",
+    classList: ["ai-btn"],
     onClick: async (e, btn) => {
       if ((btn as HTMLButtonElement).disabled) return;
 

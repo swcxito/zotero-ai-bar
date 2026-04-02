@@ -17,14 +17,14 @@
  */
 
 import { TagElementProps } from "zotero-plugin-toolkit";
-import { getString } from "../utils/locale";
+import { getString } from "../../utils/locale";
 import {
   closeDropdownMenu,
   openDropdownMenu,
   toggleDropdownMenu,
-} from "./dropdownMenu";
+} from "../dropdownMenu";
 import { ActionButton } from "./actionButton";
-import { Icons } from "./common";
+import { Icons } from "../common";
 
 export interface ExpandMenuItem {
   id: string;
@@ -36,14 +36,14 @@ export interface ExpandMenuItem {
 export interface ExpandButtonProps {
   label?: string;
   icon?: string;
-  className?: string;
+  classList?: string[];
   menuItems?: ExpandMenuItem[];
 }
 
 export function ExpandButton({
   label,
   icon = Icons.Chevron,
-  className = "",
+  classList = [],
   menuItems = [],
 }: ExpandButtonProps = {}): TagElementProps {
   const finalLabel = label || getString("reader-bar-expand");
@@ -120,7 +120,7 @@ export function ExpandButton({
 
   return {
     tag: "div",
-    classList: ["expand-container", ...(className ? className.split(" ") : [])],
+    classList: ["expand-container", ...classList],
     id: instanceId,
     listeners: hasItems
       ? [
@@ -146,7 +146,7 @@ export function ExpandButton({
       ActionButton({
         label: finalLabel,
         icon,
-        className: "ai-btn expand-trigger-btn",
+        classList: ["ai-btn", "expand-trigger-btn"],
         onClick: (e, btn) => {
           e.stopPropagation();
           const container = (btn as HTMLElement).closest(

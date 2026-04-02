@@ -18,7 +18,7 @@
 
 import { Icons } from "./common";
 import { getString } from "../utils/locale";
-import { ActionButton } from "./actionButton";
+import { ActionButton } from "./buttons/actionButton";
 
 export interface ChatBoxProps {
   doc: Document;

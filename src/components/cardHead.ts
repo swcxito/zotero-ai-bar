@@ -20,6 +20,7 @@ import { ElementProps, TagElementProps } from "zotero-plugin-toolkit";
 import { getLogoUrl } from "../utils/providerInfo";
 import { Icons } from "./common";
 import { UserProvider } from "../types";
+import { ButtonBase } from "./buttons/buttonBase";
 import { IconView } from "./iconView";
 
 export interface CardHeadProps {
@@ -146,8 +147,8 @@ export function CardHead({
             tag: "div",
             classList: ["flex", "items-center", "gap-1", "shrink-0"],
             children: [
-              {
-                tag: "button",
+              ButtonBase({
+                iconMarkup: Icons.Delete,
                 classList: [
                   "p-2",
                   "text-zinc-500",
@@ -158,11 +159,10 @@ export function CardHead({
                   "hover:bg-white/50",
                   "dark:hover:bg-red-950",
                 ],
-                children: [IconView({ iconMarkup: Icons.Delete, sizeRem: 1 })],
-                listeners: [{ type: "click", listener: onDeleteClicked }],
-              },
-              {
-                tag: "button",
+                onClick: () => onDeleteClicked(),
+              }),
+              ButtonBase({
+                iconMarkup: Icons.Chevron,
                 classList: [
                   "p-2",
                   "text-zinc-500",
@@ -174,21 +174,13 @@ export function CardHead({
                   "hover:bg-white/50",
                   "dark:hover:bg-zinc-800",
                 ],
-                children: [
-                  {
-                    tag: "div",
-                    classList: [
-                      "transition-transform",
-                      "duration-300",
-                      "ease-in-out",
-                    ],
-                    children: [
-                      IconView({ iconMarkup: Icons.Chevron, sizeRem: 1 }),
-                    ],
-                  },
+                iconExtraClasses: [
+                  "transition-transform",
+                  "duration-300",
+                  "ease-in-out",
                 ],
-                listeners: [{ type: "click", listener: onToggleCollapse }],
-              },
+                onClick: (e) => onToggleCollapse(e),
+              }),
             ],
           },
         ],

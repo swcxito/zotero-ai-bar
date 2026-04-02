@@ -17,8 +17,8 @@
  */
 
 import { UserProviderModel } from "../types";
+import { ButtonBase } from "./buttons/buttonBase";
 import { Icons } from "./common";
-import { IconView } from "./iconView";
 
 export interface CardModelRowProps {
   doc: Document;
@@ -67,8 +67,8 @@ export function CardModelRow({ doc, data }: CardModelRowProps) {
         tag: "div",
         classList: ["relative", "flex-1", "flex", "items-center"],
         children: [
-          {
-            tag: "button",
+          ButtonBase({
+            iconMarkup: Icons.QuickInput,
             classList: [
               "p-1.5",
               "mr-2",
@@ -81,9 +81,8 @@ export function CardModelRow({ doc, data }: CardModelRowProps) {
               "hover:bg-white",
               "dark:hover:bg-zinc-700",
             ],
-            properties: { title: "Quick Select" },
-            children: [IconView({ iconMarkup: Icons.QuickInput, sizeRem: 1 })],
-          },
+            title: "Quick Select",
+          }),
           {
             tag: "input",
             classList: [
@@ -108,8 +107,8 @@ export function CardModelRow({ doc, data }: CardModelRowProps) {
           },
         ],
       },
-      {
-        tag: "button",
+      ButtonBase({
+        iconMarkup: Icons.Delete,
         classList: [
           "p-2",
           "text-gray-300",
@@ -119,16 +118,10 @@ export function CardModelRow({ doc, data }: CardModelRowProps) {
           "rounded-lg",
           "shrink-0",
         ],
-        properties: { title: "Delete Model" },
-        children: [IconView({ iconMarkup: Icons.Delete, sizeRem: 1 })],
-        listeners: [
-          {
-            type: "click",
-            listener: (e: Event) =>
-              (e.currentTarget as HTMLElement).parentElement?.remove(),
-          },
-        ],
-      },
+        title: "Delete Model",
+        onClick: (e) =>
+          (e.currentTarget as HTMLElement).parentElement?.remove(),
+      }),
     ],
   });
   (row as any).getData = (): UserProviderModel => {

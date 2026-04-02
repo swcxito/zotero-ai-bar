@@ -21,9 +21,12 @@ import { getSelectionContext } from "../utils/selectionContext";
 import { getString } from "../utils/locale";
 import { getPref, setPref } from "../utils/prefs";
 import { aiBarCommands } from "../utils/prompts";
-import { AiActionButton } from "../components/aiActionButton";
+import { AiActionButton } from "../components/buttons/aiActionButton";
 import { ModelInfo } from "../components/modelInfo";
-import { ExpandButton, ExpandMenuItem } from "../components/expandButton";
+import {
+  ExpandButton,
+  ExpandMenuItem,
+} from "../components/buttons/expandButton";
 import { Icons } from "../components/common";
 
 // TODO 支持其它格式

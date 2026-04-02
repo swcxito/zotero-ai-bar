@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: AGPL-3.0-only
- * logoButton.ts
+ * providerLogoButton.ts
  *
  * This file is part of Zotero AI Bar.
  * Zotero AI Bar - A handy AI assistant integration for Zotero
@@ -17,7 +17,8 @@
  */
 
 import { TagElementProps } from "zotero-plugin-toolkit";
-import { IconView } from "./iconView";
+import { ButtonBase } from "./buttonBase";
+import { BUTTON_VARIANTS } from "./buttonVariants";
 
 export interface LogoButtonProps {
   text: string;
@@ -30,38 +31,10 @@ export function ProviderLogoButton({
   iconUrl,
   onClick,
 }: LogoButtonProps): TagElementProps {
-  return {
-    tag: "button",
-    namespace: "html",
-    classList: [
-      "flex",
-      "w-full",
-      "items-center",
-      "gap-3",
-      "px-4",
-      "py-1.5",
-      "text-left",
-      "text-sm",
-      "text-zinc-700",
-      "transition-colors",
-      "hover:bg-rose-400",
-      "hover:text-white",
-      "dark:text-zinc-200",
-    ],
-    children: [
-      IconView({ iconMarkup: iconUrl ?? "", sizeRem: 1 }),
-      {
-        tag: "span",
-        namespace: "html",
-        properties: { innerText: text },
-      },
-    ],
-    listeners: [
-      {
-        type: "click",
-        listener: onClick,
-      },
-    ],
-    // styles: { width: "100%" }
-  };
+  return ButtonBase({
+    label: text,
+    iconMarkup: iconUrl,
+    onClick: onClick ? () => onClick() : undefined,
+    classList: [...BUTTON_VARIANTS.providerLogo],
+  });
 }

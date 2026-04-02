@@ -17,8 +17,9 @@
  */
 
 import { TagElementProps } from "zotero-plugin-toolkit";
-import { Icons } from "./common";
-import { IconView } from "./iconView";
+import { ButtonBase } from "./buttonBase";
+import { BUTTON_VARIANTS } from "./buttonVariants";
+import { Icons } from "../common";
 
 export interface InlineButtonProps {
   onClicked: (e: Event) => void;
@@ -31,46 +32,11 @@ export function InlineButton({
   label = "Add Model",
   classList,
 }: InlineButtonProps): TagElementProps {
-  return {
-    tag: "button",
-    classList: classList ?? [
-      "w-full",
-      "flex",
-      "items-center",
-      "justify-center",
-      "gap-2",
-      "py-3",
-      "border",
-      "border-dashed",
-      "border-gray-200",
-      "dark:border-zinc-800",
-      "rounded-xl",
-      "text-xs",
-      "text-zinc-700",
-      "dark:text-zinc-400",
-      "hover:text-rose-600",
-      "hover:border-rose-400",
-      "hover:bg-rose-50",
-      "dark:hover:bg-rose-950",
-      "transition-all",
-      "duration-200",
-      "font-medium",
-      "mt-2",
-      "mb-4",
-    ],
-    children: [
-      IconView({ iconMarkup: Icons.Add, sizeRem: 1 }),
-      {
-        tag: "span",
-        classList: ["inline-button-label"],
-        properties: { textContent: label },
-      },
-    ],
-    listeners: [
-      {
-        type: "click",
-        listener: onClicked,
-      },
-    ],
-  };
+  return ButtonBase({
+    label,
+    iconMarkup: Icons.Add,
+    classList: classList ?? [...BUTTON_VARIANTS.inline],
+    labelClassList: ["inline-button-label"],
+    onClick: (e) => onClicked(e),
+  });
 }

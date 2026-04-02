@@ -23,7 +23,7 @@
 // }
 
 import { config } from "../../package.json";
-import { ProviderLogoButton } from "../components/providerLogoButton";
+import { ProviderLogoButton } from "../components/buttons/providerLogoButton";
 import { PROVIDERS } from "../utils/providerInfo";
 import { getString } from "../utils/locale";
 import { ProviderCard } from "../components/providerCard";

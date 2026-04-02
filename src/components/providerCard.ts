@@ -19,7 +19,7 @@
 import { UserProvider, UserProviderConfig, UserProviderModel } from "../types";
 import { CardHead } from "./cardHead";
 import { CardModelRow } from "./modelRow";
-import { InlineButton } from "./inlineButton";
+import { InlineButton } from "./buttons/inlineButton";
 
 export interface ProviderCardProps {
   data: UserProvider;
