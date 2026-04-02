@@ -16,7 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-// async function regiestModelDialog()  {
+// async function registerModelDialog()  {
 //   const dialog= new ztoolkit.Dialog(
 //
 //   )

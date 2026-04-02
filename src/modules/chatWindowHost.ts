@@ -51,7 +51,6 @@ async function submitFromWindowInput(
 
   const userMessage = ChatBox({
     doc,
-    annotation: addon.data.selection.currentAnnotation,
     isUser: true,
   }) as HTMLElement;
   const userMessageNode = userMessage.querySelector(

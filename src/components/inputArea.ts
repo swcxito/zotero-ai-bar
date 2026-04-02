@@ -244,7 +244,6 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
     // Append user bubble
     const userBubble = ChatBox({
       doc,
-      annotation: undefined,
       isUser: true,
     }) as HTMLElement;
     const msgEl = userBubble.querySelector(

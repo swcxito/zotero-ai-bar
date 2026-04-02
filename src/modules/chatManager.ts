@@ -614,7 +614,6 @@ export class ChatManager {
 
     const pop = ChatBox({
       doc,
-      annotation: addon.data.selection.currentAnnotation,
       isUser: false,
       onRegenerate: () => this.regenerateResponse(),
     }) as HTMLElement;

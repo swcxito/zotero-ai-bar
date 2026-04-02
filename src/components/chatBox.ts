@@ -22,14 +22,12 @@ import { ActionButton } from "./buttons/actionButton";
 
 export interface ChatBoxProps {
   doc: Document;
-  annotation: _ZoteroTypes.Annotations.AnnotationJson | undefined;
   isUser?: boolean;
   onRegenerate?: () => void;
 }
 
 export function ChatBox({
   doc,
-  annotation,
   isUser = false,
   onRegenerate,
 }: ChatBoxProps): Element {
