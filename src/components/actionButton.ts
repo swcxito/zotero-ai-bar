@@ -92,9 +92,7 @@ export function ActionButton({
           const size = Math.max(rect.width, rect.height);
           const mouseEvent = e as MouseEvent;
           const hasPointerPosition =
-            typeof mouseEvent.clientX === "number" &&
-            typeof mouseEvent.clientY === "number" &&
-            (mouseEvent.clientX !== 0 || mouseEvent.clientY !== 0);
+            mouseEvent.clientX !== 0 || mouseEvent.clientY !== 0;
           const clickX = hasPointerPosition
             ? mouseEvent.clientX - rect.left
             : rect.width / 2;

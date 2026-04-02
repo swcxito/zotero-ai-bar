@@ -16,6 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 import { FluentMessageId } from "../../typings/i10n";
+import { Icons } from "../components/common";
 
 export const SYSTEM_PROMPT_PREFIX = `# Role
 You are an intelligent and professional research assistant embedded in Zotero. Your goal is to assist researchers by analyzing document fragments.
@@ -24,7 +25,7 @@ You are an intelligent and professional research assistant embedded in Zotero. Y
 Answer user queries based on the provided document content. The specific user selection is wrapped in <selected>...</selected> tags. The text surrounding these tags is context.
 
 # Constraints
-1. **Scope:** Process ONLY the content inside <selected>...</selected>. Use the surrounding text ONLY for context (e.g., to determine disambiguation or part of speech). When quotting the selection, use natural language like "the text you selected" instead of the <selected> tags. DO NOT include the <selected> tags in your response.
+1. **Scope:** Process ONLY the content inside <selected>...</selected>. Use the surrounding text ONLY for context (e.g., to determine disambiguation or part of speech). When quoting the selection, use natural language like "the text you selected" instead of the <selected> tags. DO NOT include the <selected> tags in your response.
 2. **Accuracy:** Do not hallucinate or make up facts not present in the source.
 3. **No Conversational Filler:** Do not output "Here is the translation" or "Sure". Go straight to the answer.
 4. **Formatting:**
@@ -55,7 +56,7 @@ export interface AIBarCommand {
 export const aiBarCommands: Record<string, AIBarCommand> = {
   explain: {
     id: "explain",
-    icon: "📖",
+    icon: Icons.Book,
     label: "reader-bar-explain",
     getPrompt: (targetLanguage: string) =>
       `${targetLanguage ? `\n**IMPORTANT: You must output your entire explanation in ${targetLanguage}.**\n` : ""}
@@ -84,14 +85,14 @@ Please analyze the <selected> text and choose the most appropriate explanation s
   },
   summarize: {
     id: "summarize",
-    icon: "📝",
+    icon: Icons.Summary,
     label: "reader-bar-summarize",
     getPrompt: (targetLanguage: string) =>
       `Summarize the <selected> text concisely${targetLanguage ? ` in ${targetLanguage}` : ""}, highlighting the key points.`,
   },
   translate: {
     id: "translate",
-    icon: "🌐",
+    icon: Icons.Translate,
     label: "reader-bar-translate",
     getPrompt: (targetLanguage: string) => `
 # Task
@@ -125,7 +126,7 @@ IF the selection is a single word:
 <Part of Speech>. <Other Common Meaning 2>
 
 # Examples
-It is a example of how to format your response based on the selection type.
+It is an example of how to format your response based on the selection type.
 The following examples using English to Chinese translation are for illustration only, please translate into ${targetLanguage} in your response.
 ## Example (Word):
 Context: Work adopted a <selected>single</selected> green micro-LED.
@@ -158,7 +159,7 @@ Output:
   },
   smartCopy: {
     id: "smartCopy",
-    icon: "📋",
+    icon: Icons.SmartCopy,
     label: "reader-bar-smart-copy",
     getPrompt: () => `
 # Task
@@ -186,7 +187,7 @@ Remove common PDF/document noise:
 - Reference markers that break flow (keep inline citations if part of sentence)
 
 ## 4. Formula Formatting
-Convert mathematical expressions to LaTeX markdown:
+Convert mathematical expressions to LaTeX Markdown:
 
 **Inline formulas**: \` $ formula $ \` (spaces around)
 Example: The energy $ E = mc^2 $ shows...

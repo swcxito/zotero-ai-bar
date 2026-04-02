@@ -19,19 +19,14 @@
 import { TagElementProps } from "zotero-plugin-toolkit";
 import { getPref, setPref } from "../utils/prefs";
 import { analyzeModelName, getModelIconPath } from "../utils/modelAnalyzer";
-import { UserProviderConfig, UserProviderModel } from "../types";
 import { getString } from "../utils/locale";
 import { IconView } from "./iconView";
 import { DropdownMenuGroup, toggleDropdownMenu } from "./dropdownMenu";
 
-/**
- * Update the model info display
- */
-function updateModelInfoDisplay(container: HTMLElement) {
+function buildCurrentModelInfoChildren(): TagElementProps[] {
   const modelId = getPref("llm.modelId") || "";
-
-  // Find model name from userProviderConfigs
   let modelName = "";
+
   if (modelId && addon.data.userProviderConfigs) {
     for (const provider of addon.data.userProviderConfigs) {
       const model = provider.models?.find((m) => m.id === modelId);
@@ -45,81 +40,14 @@ function updateModelInfoDisplay(container: HTMLElement) {
   const modelAnalysis = analyzeModelName(modelName);
   const iconPath = getModelIconPath(modelAnalysis.family);
 
-  container.innerHTML = "";
-
-  // Add model icon
-  ztoolkit.UI.appendElement(
+  const children: TagElementProps[] = [
     IconView({
       iconMarkup: iconPath,
       extraClasses: ["model-info-icon"],
       sizeRem: 1.5,
     }),
-    container,
-  );
+  ];
 
-  // Add version text if available
-  if (modelAnalysis.version) {
-    ztoolkit.UI.appendElement(
-      {
-        tag: "span",
-        classList: ["model-info-version"],
-        properties: {
-          textContent: modelAnalysis.version,
-        },
-      },
-      container,
-    );
-  }
-
-  // Add type text if available
-  if (modelAnalysis.type) {
-    ztoolkit.UI.appendElement(
-      {
-        tag: "span",
-        classList: ["model-info-type"],
-        properties: {
-          textContent: modelAnalysis.type,
-        },
-      },
-      container,
-    );
-  }
-}
-
-/**
- * Create a model info display component
- * Shows model icon, type, and version based on user configuration
- */
-export function ModelInfo(): TagElementProps {
-  const modelId = getPref("llm.modelId") || "";
-
-  // Find model name from userProviderConfigs
-  let modelName = "";
-  if (modelId && addon.data.userProviderConfigs) {
-    for (const provider of addon.data.userProviderConfigs) {
-      const model = provider.models?.find((m) => m.id === modelId);
-      if (model?.name) {
-        modelName = model.name;
-        break;
-      }
-    }
-  }
-
-  const modelAnalysis = analyzeModelName(modelName);
-  const iconPath = getModelIconPath(modelAnalysis.family);
-
-  const children: TagElementProps[] = [];
-
-  // Add model icon
-  children.push(
-    IconView({
-      iconMarkup: iconPath,
-      extraClasses: ["model-info-icon"],
-      sizeRem: 1.5,
-    }),
-  );
-
-  // Add version text if available (top-right corner)
   if (modelAnalysis.version) {
     children.push({
       tag: "span",
@@ -130,7 +58,6 @@ export function ModelInfo(): TagElementProps {
     });
   }
 
-  // Add type text if available (bottom-right corner)
   if (modelAnalysis.type) {
     children.push({
       tag: "span",
@@ -140,6 +67,29 @@ export function ModelInfo(): TagElementProps {
       },
     });
   }
+
+  return children;
+}
+
+/**
+ * Update the model info display
+ */
+function updateModelInfoDisplay(container: HTMLElement) {
+  const children = buildCurrentModelInfoChildren();
+
+  container.innerHTML = "";
+
+  for (const child of children) {
+    ztoolkit.UI.appendElement(child, container);
+  }
+}
+
+/**
+ * Create a model info display component
+ * Shows model icon, type, and version based on user configuration
+ */
+export function ModelInfo(): TagElementProps {
+  const children = buildCurrentModelInfoChildren();
 
   return {
     tag: "div",

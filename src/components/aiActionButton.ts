@@ -31,7 +31,8 @@ export function AiActionButton({
   onClick,
 }: AIButtonProps): TagElementProps {
   return ActionButton({
-    label: icon ? `${icon}${label}` : label,
+    label: label,
+    icon: icon,
     className: "ai-btn",
     onClick: async (e, btn) => {
       if ((btn as HTMLButtonElement).disabled) return;
