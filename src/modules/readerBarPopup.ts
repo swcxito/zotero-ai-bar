@@ -97,6 +97,37 @@ export function registerAIBarStyleSheet(win: _ZoteroTypes.MainWindow) {
   doc.documentElement?.appendChild(styles);
 }
 
+// entry point for reader popup
+export function registerReaderInitializer() {
+  Zotero.Reader.registerEventListener(
+    "renderTextSelectionPopup",
+    ({ reader, doc, params, append }) => {
+      // addon.hooks.onReaderPopupShow(event);
+      addon.data.selection.text = params.annotation.text?.trim();
+      ztoolkit.log(addon.data.selection.text, "selected");
+      if (getPref("extend-selection-context")) {
+        addon.data.selection.contextPromise = getSelectionContext(
+          reader,
+          params,
+        );
+      } else {
+        addon.data.selection.contextPromise = Promise.resolve(undefined);
+      }
+      // ztoolkit.log(doc);
+      // ztoolkit.log(append);
+      // ztoolkit.log("annotation", params.annotation);
+      ztoolkit.log("Creating Ask AI Bar");
+      addon.data.selection.currentAnnotation = params.annotation;
+      addon.data.selection.currentReader = reader;
+      if (reader._internalReader._type === "pdf") {
+        append(renderAIBar(doc));
+        smartAutoTranslate(reader, params);
+      }
+    },
+    config.addonID,
+  );
+}
+
 function smartAutoTranslate(
   reader: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">,
   params: { annotation: _ZoteroTypes.Annotations.AnnotationJson },
@@ -109,7 +140,7 @@ function smartAutoTranslate(
       (autoTranslateContext === "always" && isExtendContextEnabled) ||
       (autoTranslateContext === "never" && !isExtendContextEnabled);
     const selectionContextPromise = followContextSetting
-      ? addon.data.selectionContextPromise
+      ? addon.data.selection.contextPromise
       : autoTranslateContext === "always"
         ? getSelectionContext(reader, params)
         : Promise.resolve(undefined);
@@ -122,8 +153,8 @@ function smartAutoTranslate(
     addon.chatManager
       .sendChatRequest({
         userPrompt: aiBarCommands.translate.getPrompt(Zotero.locale),
-        selectedText: addon.data.selectedText,
-        sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
+        selectedText: addon.data.selection.text,
+        sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
         hostMode: addon.chatManager.getCurrentHostMode(),
         sectionId: addon.chatManager.currentTabID,
         isFromPopup: true,
@@ -136,35 +167,6 @@ function smartAutoTranslate(
         }
       });
   }
-}
-
-export function registerReaderInitializer() {
-  Zotero.Reader.registerEventListener(
-    "renderTextSelectionPopup",
-    ({ reader, doc, params, append }) => {
-      // addon.hooks.onReaderPopupShow(event);
-      addon.data.selectedText = params.annotation.text?.trim();
-      ztoolkit.log(addon.data.selectedText, "selected");
-      if (getPref("extend-selection-context"))
-        addon.data.selectionContextPromise = getSelectionContext(
-          reader,
-          params,
-        );
-      else addon.data.selectionContextPromise = Promise.resolve(undefined);
-      // ztoolkit.log(doc);
-      // ztoolkit.log(append);
-      // ztoolkit.log("annotation", params.annotation);
-      ztoolkit.log("Creating Ask AI Bar");
-      // todo check is needed here
-      addon.chatManager.currentAnnotation = params.annotation;
-      addon.chatManager.currentReader = reader;
-      if (reader._internalReader._type === "pdf") {
-        append(renderAIBar(doc));
-        smartAutoTranslate(reader, params);
-      }
-    },
-    config.addonID,
-  );
 }
 
 function renderAIBar(doc: Document): DocumentFragment {
@@ -186,10 +188,10 @@ function renderAIBar(doc: Document): DocumentFragment {
 
   function handleAction(input: string) {
     if (!input) return;
-    ztoolkit.log("Action:", input, addon.data.selectedText);
+    ztoolkit.log("Action:", input);
     const command = aiBarCommands[input];
 
-    if (!addon.data.selectedText && command) return;
+    if (!addon.data.selection.text && command) return;
 
     hideContainerOnTimeout();
     disableAll();
@@ -197,8 +199,8 @@ function renderAIBar(doc: Document): DocumentFragment {
     addon.chatManager.sendChatRequest({
       // If input matches a command, use the command's prompt; otherwise treat input as a custom prompt
       userPrompt: command?.getPrompt(Zotero.locale) ?? input,
-      selectedText: addon.data.selectedText,
-      sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
+      selectedText: addon.data.selection.text,
+      sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
       hostMode: addon.chatManager.getCurrentHostMode(),
       sectionId: addon.chatManager.currentTabID,
       isFromPopup: true,
@@ -208,7 +210,7 @@ function renderAIBar(doc: Document): DocumentFragment {
   }
 
   // Create AI buttons from commands in specific order: explain, translate, smartCopy
-  const createCommandButtons = () => {
+  const CommandButtons = () => {
     const commandOrder = ["explain", "translate", "smartCopy"];
     return commandOrder.map((id) => {
       const command = aiBarCommands[id];
@@ -238,11 +240,11 @@ function renderAIBar(doc: Document): DocumentFragment {
       icon: Icons.Sparkle,
       label: up.name,
       onClick: async () => {
-        if (!addon.data.selectedText) return;
+        if (!addon.data.selection.text) return;
         await addon.chatManager.sendChatRequest({
           userPrompt: up.prompt,
-          selectedText: addon.data.selectedText,
-          sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
+          selectedText: addon.data.selection.text,
+          sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
           hostMode: addon.chatManager.getCurrentHostMode(),
           sectionId: addon.chatManager.currentTabID,
           isFromPopup: true,
@@ -258,7 +260,7 @@ function renderAIBar(doc: Document): DocumentFragment {
         classList: ["ai-bar-container"],
         children: [
           ModelInfo(),
-          ...createCommandButtons(),
+          ...CommandButtons(),
           ExpandButton({
             label: getString("reader-bar-expand"),
             menuItems: expandMenuItems,
@@ -277,8 +279,7 @@ function renderAIBar(doc: Document): DocumentFragment {
                 listeners: [
                   {
                     type: "focus",
-                    listener: (e: Event) => {
-                      const input = e.currentTarget as HTMLTextAreaElement;
+                    listener: () => {
                       // Add overlay element to prevent reader's global keydown handler
                       // making sure backspace will ont close popup.
                       if (!doc.querySelector(".context-menu-overlay")) {

@@ -31,7 +31,7 @@ export async function getSelectionContext(
   const itemID = reader.itemID;
   const selected = params.annotation;
   const selectedText = selected.text.trim();
-  addon.data.selectedText = selectedText;
+  addon.data.selection.text = selectedText;
   let selectionContext: Array<string> | undefined;
   const isCrossPage = !!(
     selected.position?.rects && selected.position?.nextPageRects

@@ -51,7 +51,7 @@ async function submitFromWindowInput(
 
   const userMessage = ChatBox({
     doc,
-    annotation: addon.chatManager.currentAnnotation,
+    annotation: addon.data.selection.currentAnnotation,
     isUser: true,
   }) as HTMLElement;
   const userMessageNode = userMessage.querySelector(
@@ -70,7 +70,7 @@ async function submitFromWindowInput(
 
   await addon.chatManager.sendChatRequest({
     userPrompt: content,
-    sourceLabel: getReaderSourceLabel(addon.chatManager.currentReader),
+    sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
     hostMode: "window",
     sectionId: addon.chatManager.currentTabID,
   });

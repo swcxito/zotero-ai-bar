@@ -68,10 +68,6 @@ export class ChatManager {
   public lastMessagesPromise?: Promise<Message[]>;
   public lastRequest?: Omit<RequestState, "chatPop">;
   public requestMap?: Map<string, RequestState>;
-  public currentAnnotation?: _ZoteroTypes.Annotations.AnnotationJson;
-  public currentReader?: _ZoteroTypes.ReaderInstance<
-    "pdf" | "epub" | "snapshot"
-  >;
   public currentTabID?: string;
   /** Per-section sidebar state (keyed by item.id / sectionId) */
   public sidebarStates: Map<string, SidebarSectionState> = new Map();
@@ -469,8 +465,8 @@ export class ChatManager {
       try {
         if (params.contextPromise) {
           selectionContext = await params.contextPromise;
-        } else if (addon.data.selectionContextPromise) {
-          selectionContext = await addon.data.selectionContextPromise;
+        } else if (addon.data.selection.contextPromise) {
+          selectionContext = await addon.data.selection.contextPromise;
         }
       } catch (e) {
         ztoolkit.log("Get selection context failed:", e);
@@ -523,7 +519,8 @@ export class ChatManager {
     this.ensureRequestMaps();
 
     const sourceLabel =
-      params.sourceLabel || getReaderSourceLabel(this.currentReader);
+      params.sourceLabel ||
+      getReaderSourceLabel(addon.data.selection.currentReader);
 
     this.requestMap!.set(requestId, {
       hostMode: route.mode,
@@ -617,7 +614,7 @@ export class ChatManager {
 
     const pop = ChatBox({
       doc,
-      annotation: this.currentAnnotation,
+      annotation: addon.data.selection.currentAnnotation,
       isUser: false,
       onRegenerate: () => this.regenerateResponse(),
     }) as HTMLElement;

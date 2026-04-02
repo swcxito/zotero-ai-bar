@@ -22,8 +22,12 @@ class Addon {
       rows: Array<{ [dataKey: string]: string }>;
     };
     dialog?: DialogHelper;
-    selectedText?: string;
-    selectionContextPromise?: Promise<Array<string> | undefined>;
+    selection: {
+      text?: string;
+      contextPromise?: Promise<Array<string> | undefined>;
+      currentAnnotation?: _ZoteroTypes.Annotations.AnnotationJson;
+      currentReader?: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">;
+    };
     userProviderConfigs?: UserProviderConfig[];
     userPrompts?: UserPrompt[];
     sidePaneMap?: Map<string, HTMLElement>;
@@ -42,6 +46,7 @@ class Addon {
       env: __env__,
       initialized: false,
       ztoolkit: createZToolkit(),
+      selection: {},
     };
     this.chatManager = new ChatManager();
     this.hooks = hooks;
