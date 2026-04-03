@@ -53,7 +53,7 @@ function getRefreshRateFromPref() {
 
 /**
  * Send a streaming request to the LLM.
- * @param messages List of messages.
+ * @param messagesOrPromise
  * @param callbacks Callbacks for stream events.
  * @param refreshRate Update UI every N chunks.
  * @param externalController If provided, use this AbortController instead of the global one.

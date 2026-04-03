@@ -21,6 +21,7 @@
 import { ChatBox } from "../components/chatBox";
 import { Icons } from "../components/common";
 import { IconView } from "../components/iconView";
+import { getItemFullText, getItemMetadata } from "../utils/itemContext";
 import { renderMarkdown } from "../utils/markdown";
 import { streamLLM } from "./llmRequest";
 import type { Message } from "./llmRequest";
@@ -49,6 +50,13 @@ type RequestState = {
   stopAutoScroll?: boolean;
 };
 
+type BuildSystemContentParams = {
+  selectedText?: string;
+  selectionContext?: string[];
+  sectionId?: string;
+  fullTextEnabled?: boolean;
+};
+
 /** Per-section (per-document tab) state for sidebar chat */
 export type SidebarSectionState = {
   conversationHistory: Message[];
@@ -74,6 +82,7 @@ export class ChatManager {
 
   getCurrentHostMode(): ChatHostMode {
     const location = this.chatHostMode || getPref("chat.location");
+    ztoolkit.log("Current chat host mode:", location);
     return location === "window" ? "window" : "sidebar";
   }
 
@@ -94,182 +103,6 @@ export class ChatManager {
     const state = this.sidebarStates.get(sectionId);
     if (state) {
       state.conversationHistory = [];
-    }
-  }
-
-  /**
-   * Retrieve metadata for the given Zotero item ID.
-   * Returns formatted metadata string including title, abstract, authors, publication, etc.
-   */
-  getItemMetadata(itemId: string): string | undefined {
-    try {
-      const item = Zotero.Items.get(itemId) as any;
-      if (!item) {
-        return undefined;
-      }
-
-      // Get the top-level parent item (not attachment)
-      let targetItem = item;
-      if (item.isAttachment?.()) {
-        const parentID = item.parentID;
-        if (parentID) {
-          const parentItem = Zotero.Items.get(parentID) as any;
-          if (parentItem) {
-            targetItem = parentItem;
-          }
-        }
-      }
-
-      if (!targetItem.isRegularItem?.()) {
-        return undefined;
-      }
-
-      // Extract metadata
-      const metadata: Record<string, string | string[]> = {};
-
-      // Title
-      const title = targetItem.getField("title") as string;
-      if (title) {
-        metadata["Title"] = title;
-      }
-
-      // Authors
-      const creators = targetItem.getCreators?.() || [];
-      if (creators.length > 0) {
-        const authorNames = creators
-          .map((creator: any) => {
-            if (creator.firstName && creator.lastName) {
-              return `${creator.firstName} ${creator.lastName}`;
-            } else if (creator.name) {
-              return creator.name;
-            } else if (creator.lastName) {
-              return creator.lastName;
-            }
-            return undefined;
-          })
-          .filter(Boolean);
-        if (authorNames.length > 0) {
-          metadata["Authors"] = authorNames;
-        }
-      }
-
-      // Abstract
-      const abstract = targetItem.getField("abstractNote") as string;
-      if (abstract) {
-        metadata["Abstract"] = abstract;
-      }
-
-      // Publication
-      const publication =
-        (targetItem.getField("publicationTitle") as string) ||
-        (targetItem.getField("bookTitle") as string) ||
-        (targetItem.getField("journalAbbreviation") as string) ||
-        (targetItem.getField("series") as string);
-      if (publication) {
-        metadata["Publication"] = publication;
-      }
-
-      // Item Type
-      const itemTypeID = targetItem.itemTypeID;
-      if (itemTypeID) {
-        const itemType = Zotero.ItemTypes.getLocalizedString(itemTypeID);
-        if (itemType) {
-          metadata["Item Type"] = itemType;
-        }
-      }
-
-      // Date
-      const date = targetItem.getField("date") as string;
-      if (date) {
-        metadata["Publication Date"] = date;
-      }
-
-      // Build formatted string
-      if (Object.keys(metadata).length === 0) {
-        return undefined;
-      }
-
-      let result = "# Item Metadata\n";
-      for (const [key, value] of Object.entries(metadata)) {
-        if (Array.isArray(value)) {
-          result += `${key}: ${value.join(", ")}\n`;
-        } else {
-          result += `${key}: ${value}\n`;
-        }
-      }
-
-      return result.trim();
-    } catch (e) {
-      ztoolkit.log("getItemMetadata failed:", e);
-      return undefined;
-    }
-  }
-
-  /**
-   * Retrieve the full text of the attachment for the given Zotero item ID.
-   * Truncates to 50,000 characters to keep prompts manageable.
-   */
-  async getItemFullText(itemId: string): Promise<string | undefined> {
-    // ztoolkit.log("[getItemFullText] start, itemId:", itemId);
-    try {
-      const item = Zotero.Items.get(itemId) as any;
-      // ztoolkit.log("[getItemFullText] item:", item, "itemType:", item?.itemType, "isAttachment:", item?.isAttachment?.());
-      if (!item) {
-        // ztoolkit.log("[getItemFullText] item not found");
-        return undefined;
-      }
-
-      // If this is a regular item (not an attachment), try to get its best attachment
-      let targetItem = item;
-      if (item.isRegularItem?.() && !item.isAttachment?.()) {
-        const attachmentIDs: number[] = item.getAttachments?.() ?? [];
-        // ztoolkit.log("[getItemFullText] regular item, attachmentIDs:", attachmentIDs);
-        for (const aid of attachmentIDs) {
-          const att = Zotero.Items.get(aid) as any;
-          // ztoolkit.log("[getItemFullText] checking attachment", aid, "contentType:", att?.attachmentContentType);
-          if (
-            att?.attachmentContentType === "application/pdf" ||
-            att?.attachmentContentType?.startsWith("text/")
-          ) {
-            targetItem = att;
-            break;
-          }
-        }
-        if (targetItem === item) {
-          // fall back to first attachment
-          if (attachmentIDs.length > 0) {
-            targetItem = Zotero.Items.get(attachmentIDs[0]) as any;
-          }
-        }
-      }
-      // ztoolkit.log("[getItemFullText] targetItem:", targetItem?.id, "attachmentText type:", typeof targetItem?.attachmentText);
-
-      // Try built-in attachment text
-      let text: string | undefined;
-      if (typeof targetItem.attachmentText === "string") {
-        text = targetItem.attachmentText;
-        // ztoolkit.log("[getItemFullText] got text via string property, length:", text?.length);
-      } else if (
-        targetItem.attachmentText &&
-        typeof targetItem.attachmentText.then === "function"
-      ) {
-        // ztoolkit.log("[getItemFullText] attachmentText is a Promise, awaiting...");
-        text = await targetItem.attachmentText;
-        // ztoolkit.log("[getItemFullText] awaited attachmentText, result type:", typeof text, "length:", (text as any)?.length);
-      } else {
-        // ztoolkit.log("[getItemFullText] attachmentText is:", targetItem.attachmentText);
-      }
-
-      if (!text) {
-        // ztoolkit.log("[getItemFullText] text is empty/undefined after all attempts");
-        return undefined;
-      }
-      const MAX = 50000;
-      // ztoolkit.log("[getItemFullText] success, text length:", text.length, "truncated:", text.length > MAX);
-      return text.length > MAX ? text.slice(0, MAX) + "\n...[truncated]" : text;
-    } catch (e) {
-      ztoolkit.log("getItemFullText failed:", e);
-      return undefined;
     }
   }
 
@@ -405,22 +238,36 @@ export class ChatManager {
     this.requestMap?.delete(requestId);
   }
 
-  buildSystemContent(
-    selectedText?: string,
-    selectionContext?: Array<string>,
-  ): string {
+  async buildSystemContent(params: BuildSystemContentParams): Promise<string> {
+    const { selectedText, selectionContext, sectionId, fullTextEnabled } =
+      params;
     const contextLeft = selectionContext?.[0] || "";
     const contextRight = selectionContext?.[2] || "";
-    if (!selectedText) {
-      return `${SYSTEM_PROMPT_PREFIX}${contextLeft}\n${contextRight}`.trim();
+    let systemContent = !selectedText
+      ? `${SYSTEM_PROMPT_PREFIX}${contextLeft}\n${contextRight}`.trim()
+      : SYSTEM_PROMPT_PREFIX +
+      `${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`;
+
+    // Append item metadata if enabled (after context, before fulltext)
+    if (getPref("chat.autoAttachItemData") && sectionId !== undefined) {
+      const itemMetadata = getItemMetadata(sectionId);
+      if (itemMetadata) {
+        systemContent += "\n\n" + itemMetadata;
+      }
     }
-    return (
-      SYSTEM_PROMPT_PREFIX +
-      `${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`
-    );
+
+    // Append full text if enabled for this section (manual toggle) or globally (pref)
+    if (fullTextEnabled && sectionId !== undefined) {
+      const fullText = await getItemFullText(sectionId);
+      if (fullText) {
+        systemContent +=
+          "\n\n# Full Document Text\n<fulldoc>\n" + fullText + "\n</fulldoc>";
+      }
+    }
+
+    return systemContent;
   }
-  // todo sel text, host, section id is useless;
-  //todo
+
   async sendChatRequest(params: {
     userPrompt: string;
     sourceLabel?: string;
@@ -430,12 +277,11 @@ export class ChatManager {
     contextPromise?: Promise<string[] | undefined>;
   }): Promise<string> {
     const selectedText = addon.data.selection.text;
-    const hostMode = addon.chatManager.getCurrentHostMode();
     const sectionId = params.sectionId ?? addon.chatManager.currentTabID;
 
     const requestId = crypto.randomUUID();
     const route = {
-      mode: hostMode || this.getCurrentHostMode(),
+      mode: this.getCurrentHostMode(),
       sectionId: sectionId,
     } as const;
 
@@ -474,29 +320,14 @@ export class ChatManager {
         ztoolkit.log("Get selection context failed:", e);
       }
 
-      let systemContent = this.buildSystemContent(
+      const systemContent = await this.buildSystemContent({
         selectedText,
         selectionContext,
-      );
+        sectionId: route.sectionId,
+        fullTextEnabled: sectionState?.fullTextEnabled,
+      });
       // ztoolkit.log("Sending selection:", params.selectedText)
       // ztoolkit.log("Contexts", selectionContext);
-
-      // Append item metadata if enabled (after context, before fulltext)
-      if (getPref("chat.autoAttachItemData") && route.sectionId !== undefined) {
-        const itemMetadata = this.getItemMetadata(route.sectionId);
-        if (itemMetadata) {
-          systemContent += "\n\n" + itemMetadata;
-        }
-      }
-
-      // Append full text if enabled for this section (manual toggle) or globally (pref)
-      if (sectionState?.fullTextEnabled && route.sectionId !== undefined) {
-        const fullText = await this.getItemFullText(route.sectionId);
-        if (fullText) {
-          systemContent +=
-            "\n\n# Full Document Text\n<fulldoc>\n" + fullText + "\n</fulldoc>";
-        }
-      }
 
       const systemMsg: Message = { role: "system", content: systemContent };
       const userMsg: Message = { role: "user", content: params.userPrompt };
