@@ -70,7 +70,6 @@ async function submitFromWindowInput(
   await addon.chatManager.sendChatRequest({
     userPrompt: content,
     sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
-    hostMode: "window",
     sectionId: addon.chatManager.currentTabID,
   });
 }

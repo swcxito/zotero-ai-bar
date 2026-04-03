@@ -156,10 +156,7 @@ function smartAutoTranslate(
     addon.chatManager
       .sendChatRequest({
         userPrompt: aiBarCommands.translate.getPrompt(Zotero.locale),
-        selectedText: addon.data.selection.text,
         sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
-        hostMode: addon.chatManager.getCurrentHostMode(),
-        sectionId: addon.chatManager.currentTabID,
         isFromPopup: true,
         contextPromise: selectionContextPromise,
       })
@@ -202,13 +199,10 @@ function renderAIBar(doc: Document): DocumentFragment {
     addon.chatManager.sendChatRequest({
       // If input matches a command, use the command's prompt; otherwise treat input as a custom prompt
       userPrompt: command?.getPrompt(Zotero.locale) ?? input,
-      selectedText: addon.data.selection.text,
       sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
-      hostMode: addon.chatManager.getCurrentHostMode(),
-      sectionId: addon.chatManager.currentTabID,
       isFromPopup: true,
       // Enable auto-copy for smartCopy command only
-      autoCopy: input === "smartCopy",
+      doesCopyResponse: input === "smartCopy",
     });
   }
 
@@ -247,10 +241,7 @@ function renderAIBar(doc: Document): DocumentFragment {
         if (!addon.data.selection.text) return;
         await addon.chatManager.sendChatRequest({
           userPrompt: up.prompt,
-          selectedText: addon.data.selection.text,
           sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
-          hostMode: addon.chatManager.getCurrentHostMode(),
-          sectionId: addon.chatManager.currentTabID,
           isFromPopup: true,
         });
       },

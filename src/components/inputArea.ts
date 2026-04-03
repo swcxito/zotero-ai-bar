@@ -262,7 +262,6 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
     try {
       await addon.chatManager.sendChatRequest({
         userPrompt: text,
-        hostMode: "sidebar",
         sectionId,
       });
     } catch (e) {

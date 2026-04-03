@@ -419,22 +419,24 @@ export class ChatManager {
       `${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`
     );
   }
-
+  // todo sel text, host, section id is useless;
+  //todo
   async sendChatRequest(params: {
     userPrompt: string;
-    selectedText?: string;
     sourceLabel?: string;
-    hostMode?: ChatHostMode;
-    sectionId?: string;
-    autoCopy?: boolean;
+    doesCopyResponse?: boolean;
     isFromPopup?: boolean;
-    //todo refine this patch
+    sectionId?: string;
     contextPromise?: Promise<string[] | undefined>;
   }): Promise<string> {
+    const selectedText = addon.data.selection.text;
+    const hostMode = addon.chatManager.getCurrentHostMode();
+    const sectionId = params.sectionId ?? addon.chatManager.currentTabID;
+
     const requestId = crypto.randomUUID();
     const route = {
-      mode: params.hostMode || this.getCurrentHostMode(),
-      sectionId: params.sectionId,
+      mode: hostMode || this.getCurrentHostMode(),
+      sectionId: sectionId,
     } as const;
 
     // Per-section state management (sidebar mode)
@@ -473,7 +475,7 @@ export class ChatManager {
       }
 
       let systemContent = this.buildSystemContent(
-        params.selectedText,
+        selectedText,
         selectionContext,
       );
       // ztoolkit.log("Sending selection:", params.selectedText)
@@ -526,7 +528,7 @@ export class ChatManager {
       hostMode: route.mode,
       sectionId: route.sectionId,
       sourceLabel,
-      autoCopy: params.autoCopy,
+      autoCopy: params.doesCopyResponse,
       stopAutoScroll: false,
     });
     this.lastRequest = {
