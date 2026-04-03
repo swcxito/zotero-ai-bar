@@ -16,13 +16,26 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+function getItemFromTab(tabId?: string): any | undefined {
+  const selectedTabID = tabId || addon.chatManager.currentTabID;
+  const reader = selectedTabID
+    ? (Zotero.Reader.getByTabID(selectedTabID) as any)
+    : undefined;
+  const itemID = reader?.itemID;
+  if (itemID) {
+    return Zotero.Items.get(itemID) as any;
+  }
+
+  return undefined;
+}
+
 /**
  * Retrieve metadata for the given Zotero item ID.
  * Returns formatted metadata string including title, abstract, authors, publication, etc.
  */
-export function getItemMetadata(itemId: string): string | undefined {
+export function getItemMetadata(tabId: string): string | undefined {
     try {
-        const item = Zotero.Items.get(itemId) as any;
+        const item = getItemFromTab(tabId);
         if (!item) {
             return undefined;
         }
@@ -129,10 +142,10 @@ export function getItemMetadata(itemId: string): string | undefined {
  * Truncates to 50,000 characters to keep prompts manageable.
  */
 export async function getItemFullText(
-    itemId: string,
+    tabId: string,
 ): Promise<string | undefined> {
     try {
-        const item = Zotero.Items.get(itemId) as any;
+        const item = getItemFromTab(tabId) as any;
         if (!item) {
             return undefined;
         }
