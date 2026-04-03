@@ -21,7 +21,7 @@ import { getSelectionContext } from "../utils/selectionContext";
 import { getString } from "../utils/locale";
 import { getPref, setPref } from "../utils/prefs";
 import { aiBarCommands } from "../utils/prompts";
-import { AiActionButton } from "../components/buttons/aiActionButton";
+import { ActionButton } from "../components/buttons/actionButton";
 import { ModelInfo } from "../components/modelInfo";
 import {
   ExpandButton,
@@ -217,9 +217,10 @@ function renderAIBar(doc: Document): DocumentFragment {
     const commandOrder = ["explain", "translate", "smartCopy"];
     return commandOrder.map((id) => {
       const command = aiBarCommands[id];
-      return AiActionButton({
+      return ActionButton({
         label: getString(command.label),
         icon: command.icon,
+        classList: ["ai-btn"],
         onClick: async () => handleAction(command.id),
       });
     });
