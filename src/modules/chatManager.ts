@@ -100,12 +100,41 @@ export class ChatManager {
   }
 
   /**
-   * Retrieve metadata for the given Zotero item ID.
+   * Resolve a Zotero item from tabId.
+   * Priority:
+   * 1) reader from provided tabId
+   * 2) reader from currently selected tab
+   * 3) currentReader fallback (same current tab)
+   */
+  getItemFromTab(tabId?: string): any | undefined {
+    const mainWin = Zotero.getMainWindow() as any;
+    const selectedTabID = tabId || mainWin?.Zotero_Tabs?.selectedID;
+    const reader = selectedTabID
+      ? (Zotero.Reader.getByTabID(selectedTabID) as any)
+      : undefined;
+    const itemID = reader?.itemID;
+    if (itemID) {
+      return Zotero.Items.get(itemID) as any;
+    }
+
+    // Fallback for cases where currentReader is already tracked but lookup misses.
+    if (!tabId || tabId === this.currentTabID) {
+      const fallbackItemID = (this.currentReader as any)?.itemID;
+      if (fallbackItemID) {
+        return Zotero.Items.get(fallbackItemID) as any;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Retrieve metadata for the given reader tab ID.
    * Returns formatted metadata string including title, abstract, authors, publication, etc.
    */
-  getItemMetadata(itemId: string): string | undefined {
+  getItemMetadata(tabId: string): string | undefined {
     try {
-      const item = Zotero.Items.get(itemId) as any;
+      const item = this.getItemFromTab(tabId);
       if (!item) {
         return undefined;
       }
@@ -208,13 +237,13 @@ export class ChatManager {
   }
 
   /**
-   * Retrieve the full text of the attachment for the given Zotero item ID.
+   * Retrieve the full text of the attachment for the given reader tab ID.
    * Truncates to 50,000 characters to keep prompts manageable.
    */
-  async getItemFullText(itemId: string): Promise<string | undefined> {
+  async getItemFullText(tabId: string): Promise<string | undefined> {
     // ztoolkit.log("[getItemFullText] start, itemId:", itemId);
     try {
-      const item = Zotero.Items.get(itemId) as any;
+      const item = this.getItemFromTab(tabId);
       // ztoolkit.log("[getItemFullText] item:", item, "itemType:", item?.itemType, "isAttachment:", item?.isAttachment?.());
       if (!item) {
         // ztoolkit.log("[getItemFullText] item not found");
