@@ -60,8 +60,8 @@ function injectDebugTailwindScript(root: ShadowRoot) {
 
 export async function registerReaderItemPaneSection() {
   // Setup LLM callbacks to update UI
-  if (!addon.data.sidePaneMap) {
-    addon.data.sidePaneMap = new Map();
+  if (!addon.data.sidePaneBodyMap) {
+    addon.data.sidePaneBodyMap = new Map<string, HTMLElement>();
   }
 
   Zotero.ItemPaneManager.registerSection({
@@ -115,8 +115,12 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
       setSectionSummary,
       setSectionButtonStatus,
     }) => {
-      if (item && addon.data.sidePaneMap && addon.chatManager.currentTabID) {
-        addon.data.sidePaneMap.set(addon.chatManager.currentTabID, body);
+      if (
+        item &&
+        addon.data.sidePaneBodyMap &&
+        addon.chatManager.currentTabID
+      ) {
+        addon.data.sidePaneBodyMap.set(addon.chatManager.currentTabID, body);
       }
       const root = body.querySelector("#ai-bar-chat-root") as HTMLElement;
       const shadowRoot = root.attachShadow({ mode: "open" });
@@ -156,13 +160,12 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
         onClick: () => {
           const currentTab = addon.chatManager.currentTabID;
           if (!currentTab) return;
-          const body = addon.data.sidePaneMap?.get(currentTab);
+          const body = addon.data.sidePaneBodyMap?.get(currentTab);
           if (!body) return;
 
           const root = body.querySelector("#ai-bar-chat-root");
           if (!root || !root.shadowRoot) return;
           const shadowRoot = root.shadowRoot;
-          const doc = body.ownerDocument;
           const messageContainer =
             shadowRoot.querySelector(".message-container");
           if (messageContainer) {

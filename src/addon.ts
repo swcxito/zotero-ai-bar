@@ -30,7 +30,8 @@ class Addon {
     };
     userProviderConfigs?: UserProviderConfig[];
     userPrompts?: UserPrompt[];
-    sidePaneMap?: Map<string, HTMLElement>;
+    // map tab IDs to their side pane root elements
+    sidePaneBodyMap?: Map<string, HTMLElement>;
   };
   // Chat state and logic
   public chatManager: ChatManager;

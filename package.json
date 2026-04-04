@@ -31,7 +31,10 @@
     "update-deps": "npm update --save"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.66",
     "@ai-sdk/openai-compatible": "^2.0.37",
+    "ai": "^6.0.145",
+    "dotenv": "^17.4.0",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.28",
     "marked": "^17.0.1",
@@ -39,6 +42,7 @@
     "marked-katex-extension": "^5.1.6",
     "marked-xhtml": "^1.0.14",
     "pnpm": "^10.28.2",
+    "zod": "^4.3.6",
     "zotero-plugin-toolkit": "^5.1.0-beta.13"
   },
   "devDependencies": {

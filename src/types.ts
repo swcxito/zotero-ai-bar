@@ -25,10 +25,14 @@ export interface ProviderInfo {
 }
 
 export interface UserProviderModel {
-  id?: string; // 模型唯一 ID (UUID)
-  name: string; // 模型名称
-  enable?: boolean; // 是否启用
-  providerId?: string; // 所属 Provider ID
+  // 模型唯一 ID (UUID)
+  id?: string;
+  // 模型名称
+  name: string;
+  // 是否启用
+  enable?: boolean;
+  // 所属 Provider ID
+  providerId?: string;
 }
 
 export interface UserProvider {
