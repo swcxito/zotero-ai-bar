@@ -50,7 +50,8 @@ export function onLLMStreamStartV2(session: Session) {
   const chatMessage = pop.querySelector(".chat-message") as HTMLElement | null;
   if (chatMessage) {
     const sourceLabel = session.sourceLabel;
-    const shouldShowSourceLabel = !!sourceLabel && !!session.pending.isNewSource;
+    const shouldShowSourceLabel =
+      !!sourceLabel && !!session.pending.isNewSource;
 
     if (sourceLabel) {
       pop.dataset.sourceLabel = sourceLabel;

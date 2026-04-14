@@ -88,7 +88,7 @@ export class ChatManager {
 
     // Append item metadata if enabled (after context, before fulltext)
     if (getPref("chat.autoAttachItemData") && sectionId !== undefined) {
-      ztoolkit.log("getting item metadata")
+      ztoolkit.log("getting item metadata");
       const itemMetadata = getItemMetadata(sectionId);
       if (itemMetadata) {
         systemContent += "\n\n" + itemMetadata;

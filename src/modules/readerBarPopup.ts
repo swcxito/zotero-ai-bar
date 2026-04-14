@@ -123,7 +123,7 @@ export function registerReaderInitializer() {
       addon.data.selection.currentAnnotation = params.annotation;
       addon.data.selection.currentReader = reader;
       if (reader._internalReader._type === "pdf") {
-        append(renderAIBar(doc));
+        append(renderAIBar(doc, reader));
         smartAutoTranslate(reader, params);
       }
     },
@@ -169,7 +169,10 @@ function smartAutoTranslate(
   }
 }
 
-function renderAIBar(doc: Document): DocumentFragment {
+function renderAIBar(
+  doc: Document,
+  reader: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">,
+): DocumentFragment {
   // ── Insert styles ────────────────
   if (
     !doc.querySelector(
@@ -277,6 +280,7 @@ function renderAIBar(doc: Document): DocumentFragment {
                     listener: () => {
                       // Add overlay element to prevent reader's global keydown handler
                       // making sure backspace will ont close popup.
+                      // only for Zotero 8
                       if (!doc.querySelector(".context-menu-overlay")) {
                         const overlay = doc.createElement("div");
                         overlay.className = "context-menu-overlay";
@@ -367,6 +371,28 @@ function renderAIBar(doc: Document): DocumentFragment {
       container.style.display = "none";
     }, delay);
   }
+
+  function adjustPopupPosition() {
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const docWidth = doc.documentElement.clientWidth;
+    const margin = 10;
+
+    let shiftX = 0;
+    if (rect.left < margin) {
+      shiftX = margin - rect.left;
+    } else if (rect.right > docWidth - margin) {
+      shiftX = docWidth - margin - rect.right;
+    }
+
+    if (shiftX !== 0) {
+      container.style.transform = `translateX(calc(-50% + ${shiftX}px))`;
+    }
+  }
+
+  // Adjust popup position if it exceeds the reader boundaries.
+  setTimeout(adjustPopupPosition, 0);
+
   // for click end
   const disableAll = () => {
     container.querySelectorAll("button, textarea").forEach((el: Element) => {
