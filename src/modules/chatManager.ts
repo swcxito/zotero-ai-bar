@@ -23,9 +23,10 @@ import { getItemFullText, getItemMetadata } from "../utils/itemContext";
 import { getPref } from "../utils/prefs";
 import { SYSTEM_PROMPT_PREFIX } from "../utils/prompts";
 import { ensureChatWindowReady, focusChatWindow } from "../utils/window";
-import { getReaderSourceLabel } from "./readerBarPopup";
 import { streamLLMV2 } from "./llm";
 import type { ModelMessage, SystemModelMessage, UserModelMessage } from "ai";
+import { getItemIdFromTab } from "./tabObserver";
+import type { ItemMetadata } from "../utils/itemContext";
 
 export type ChatHostMode = "sidebar" | "window";
 
@@ -48,13 +49,40 @@ export class Session {
   }
 }
 
+type ChatRequestParams =
+  | {
+      userPrompt: string;
+      sourceLabel?: string;
+      doesCopyResponse?: boolean;
+      isFromPopup?: boolean;
+      itemId: number;
+      tabId?: string;
+      contextPromise?: Promise<string[] | undefined>;
+    }
+  | {
+      userPrompt: string;
+      sourceLabel?: string;
+      doesCopyResponse?: boolean;
+      isFromPopup?: boolean;
+      itemId?: number;
+      tabId: string;
+      contextPromise?: Promise<string[] | undefined>;
+    };
+
 export class ChatManager {
   public chatHostMode?: ChatHostMode;
   public chatWindow?: Window;
-  public currentTabID?: string;
+  public currentTabID: string;
   /** Per-section sidebar state (keyed by item.id / sectionId) */
 
   public sessionsMap: Map<string, Session> = new Map();
+
+  constructor(currentTabID: string) {
+    if (!currentTabID.trim()) {
+      throw new Error("currentTabID must be a non-empty string.");
+    }
+    this.currentTabID = currentTabID;
+  }
 
   clearSectionHistory(sectionId: string) {
     const session = this.sessionsMap.get(sectionId);
@@ -74,11 +102,17 @@ export class ChatManager {
   async buildSystemContent(params: {
     selectedText?: string;
     selectionContext?: string[];
-    sectionId?: string;
+    metadata?: ItemMetadata;
+    itemId?: number;
     fullTextEnabled?: boolean;
   }): Promise<string> {
-    const { selectedText, selectionContext, sectionId, fullTextEnabled } =
-      params;
+    const {
+      selectedText,
+      selectionContext,
+      metadata,
+      itemId,
+      fullTextEnabled,
+    } = params;
     const contextLeft = selectionContext?.[0] || "";
     const contextRight = selectionContext?.[2] || "";
     let systemContent = !selectedText
@@ -87,17 +121,33 @@ export class ChatManager {
         `${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`;
 
     // Append item metadata if enabled (after context, before fulltext)
-    if (getPref("chat.autoAttachItemData") && sectionId !== undefined) {
-      ztoolkit.log("getting item metadata");
-      const itemMetadata = getItemMetadata(sectionId);
-      if (itemMetadata) {
-        systemContent += "\n\n" + itemMetadata;
+    if (getPref("chat.autoAttachItemData") && metadata) {
+      const metadataLines: string[] = ["# Item Metadata"];
+      const metadataFieldLabels: Array<[keyof ItemMetadata, string]> = [
+        ["title", "Title"],
+        ["authors", "Authors"],
+        ["abstract", "Abstract"],
+        ["publication", "Publication"],
+        ["itemType", "Item Type"],
+        ["publicationDate", "Publication Date"],
+      ];
+      for (const [key, label] of metadataFieldLabels) {
+        const value = metadata[key];
+        if (!value) {
+          continue;
+        }
+        metadataLines.push(
+          Array.isArray(value)
+            ? `${label}: ${value.join(", ")}`
+            : `${label}: ${value}`,
+        );
       }
+      systemContent += "\n\n" + metadataLines.join("\n");
     }
 
     // Append full text if enabled for this section (manual toggle) or globally (pref)
-    if (fullTextEnabled && sectionId !== undefined) {
-      const fullText = await getItemFullText(sectionId);
+    if (fullTextEnabled && itemId !== undefined) {
+      const fullText = await getItemFullText(itemId);
       if (fullText) {
         systemContent +=
           "\n\n# Full Document Text\n<fulldoc>\n" + fullText + "\n</fulldoc>";
@@ -107,38 +157,28 @@ export class ChatManager {
     return systemContent;
   }
 
-  async sendChatRequest(params: {
-    userPrompt: string;
-    sourceLabel?: string;
-    doesCopyResponse?: boolean;
-    isFromPopup?: boolean;
-    // for distinguishing different sections, probably useless
-    // todo maybe itemId is better
-    sectionId?: string;
-    contextPromise?: Promise<string[] | undefined>;
-  }) {
+  async sendChatRequest(params: ChatRequestParams) {
     const selectedText = addon.data.selection.text;
-    const sectionId = params.sectionId ?? addon.chatManager.currentTabID;
+    const tabId = params.tabId ?? addon.chatManager.currentTabID;
+    const itemId = params.itemId ?? getItemIdFromTab(params.tabId);
 
-    const route = this.getCurrentHostMode();
-
-    if (sectionId === undefined) {
-      throw new Error("No section ID available for chat request.");
+    if (tabId === undefined && itemId === undefined) {
+      throw new Error("No article available for chat request.");
     }
 
-    const session = this.sessionsMap.get(sectionId) ?? new Session(sectionId);
-    this.sessionsMap.set(sectionId, session);
+    const session = this.sessionsMap.get(tabId) ?? new Session(tabId);
+    this.sessionsMap.set(tabId, session);
 
-    const nextSourceLabel =
-      params.sourceLabel ||
-      getReaderSourceLabel(addon.data.selection.currentReader);
+    const route = this.getCurrentHostMode();
+    const metadata = itemId !== undefined ? getItemMetadata(itemId) : undefined;
+
     session.pending.isNewSource =
-      !!nextSourceLabel && session.sourceLabel !== nextSourceLabel;
+      !!params.sourceLabel && session.sourceLabel !== params.sourceLabel;
 
     // cleanup history
     const contextRounds = getPref("chat.contextRounds") ?? 8;
     const maxHistoryMessages = contextRounds * 2;
-    if (params.isFromPopup || nextSourceLabel === session.sourceLabel) {
+    if (params.isFromPopup || session.pending.isNewSource) {
       session.conversationHistory = [];
     } else if (session.conversationHistory.length > maxHistoryMessages) {
       session.conversationHistory =
@@ -169,7 +209,8 @@ export class ChatManager {
       const systemContent = await this.buildSystemContent({
         selectedText,
         selectionContext,
-        sectionId,
+        metadata,
+        itemId: itemId,
         fullTextEnabled: session.fullTextEnabled,
       });
       const systemMsg: SystemModelMessage = {
@@ -188,7 +229,7 @@ export class ChatManager {
       return [systemMsg, userMsg];
     })();
 
-    session.sourceLabel = nextSourceLabel;
+    session.sourceLabel = params.sourceLabel ?? session.sourceLabel;
 
     if (route === "window") {
       await ensureChatWindowReady();
@@ -202,7 +243,7 @@ export class ChatManager {
     ) as typeof AbortController;
     session.pending.abortController = new AC();
     ztoolkit.log("[chat] sendChatRequest:stream-start", {
-      sectionId,
+      sectionId: tabId,
     });
     await streamLLMV2(messagesPromise, session);
   }
