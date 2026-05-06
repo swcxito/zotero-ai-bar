@@ -7,7 +7,7 @@ import {
 } from "./modules/readerBarPopup";
 import { onModelDialogLoad } from "./modules/modelDialog";
 import { onPromptEditorLoad } from "./modules/promptEditor";
-import { getPref, registerPrefs } from "./utils/prefs";
+import { getPref, setPref, registerPrefs } from "./utils/prefs";
 import { ensureChatWindowReady } from "./utils/window";
 import { registerReaderItemPaneSection } from "./modules/readerItemPane";
 import { clearDeadChatWindowRef, isWindowAlive } from "./utils/window";
@@ -67,6 +67,14 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
     convertLegacyLLMConfigByKey(llmConfig, getPref("llm.modelId"));
   addon.data.userProviderConfigV2 = userProviderConfigV2;
   addon.data.legacyCustomProviderConfigs = legacyCustomProviderConfigs;
+
+  // Sync legacy llm.modelId to v2 composite format
+  if (userProviderConfigV2.active) {
+    setPref(
+      "llm.modelId",
+      `${userProviderConfigV2.active.providerId}::${userProviderConfigV2.active.modelId}`,
+    );
+  }
 
   /**
    * @deprecated 为 modelDialog / modelInfo / preferenceScript 等旧版 UI 组件

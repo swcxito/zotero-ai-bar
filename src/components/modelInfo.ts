@@ -17,27 +17,33 @@
  */
 
 import { TagElementProps } from "zotero-plugin-toolkit";
-import { getPref, setPref } from "../utils/prefs";
-import { syncV2ActiveFromLegacyModelId } from "../utils/providers";
+import { setPref } from "../utils/prefs";
 import { analyzeModelName, getModelIconPath } from "../utils/modelAnalyzer";
 import { getString } from "../utils/locale";
 import { IconView } from "./iconView";
 import { DropdownMenuGroup, toggleDropdownMenu } from "./dropdownMenu";
+import type { ProviderId } from "../utils/providers";
 
-function buildCurrentModelInfoChildren(): TagElementProps[] {
-  const modelId = getPref("llm.modelId") || "";
-  let modelName = "";
+function resolveModelDisplayName(): string {
+  const active = addon.data.userProviderConfigV2?.active;
+  if (!active) return "";
 
-  if (modelId && addon.data.userProviderConfigs) {
-    for (const provider of addon.data.userProviderConfigs) {
-      const model = provider.models?.find((m) => m.id === modelId);
-      if (model?.name) {
-        modelName = model.name;
-        break;
-      }
-    }
+  const cp = addon.data.commonProviders;
+  const v2Model = cp?.[active.providerId]?.models?.[active.modelId];
+  if (v2Model?.name) return v2Model.name;
+
+  for (const conf of addon.data.legacyCustomProviderConfigs ?? []) {
+    const m = conf.models?.find(
+      (m) => m.id === active.modelId || m.name === active.modelId,
+    );
+    if (m?.name) return m.name;
   }
 
+  return active.modelId;
+}
+
+function buildCurrentModelInfoChildren(): TagElementProps[] {
+  const modelName = resolveModelDisplayName();
   const modelAnalysis = analyzeModelName(modelName);
   const iconPath = getModelIconPath(modelAnalysis.family);
 
@@ -53,9 +59,7 @@ function buildCurrentModelInfoChildren(): TagElementProps[] {
     children.push({
       tag: "span",
       classList: ["model-info-version"],
-      properties: {
-        textContent: modelAnalysis.version,
-      },
+      properties: { textContent: modelAnalysis.version },
     });
   }
 
@@ -63,32 +67,21 @@ function buildCurrentModelInfoChildren(): TagElementProps[] {
     children.push({
       tag: "span",
       classList: ["model-info-type"],
-      properties: {
-        textContent: modelAnalysis.type,
-      },
+      properties: { textContent: modelAnalysis.type },
     });
   }
 
   return children;
 }
 
-/**
- * Update the model info display
- */
 function updateModelInfoDisplay(container: HTMLElement) {
   const children = buildCurrentModelInfoChildren();
-
   container.innerHTML = "";
-
   for (const child of children) {
     ztoolkit.UI.appendElement(child, container);
   }
 }
 
-/**
- * Create a model info display component
- * Shows model icon, type, and version based on user configuration
- */
 export function ModelInfo(): TagElementProps {
   const children = buildCurrentModelInfoChildren();
 
@@ -102,8 +95,7 @@ export function ModelInfo(): TagElementProps {
         type: "click",
         listener: (e: Event) => {
           e.stopPropagation();
-          const target = e.currentTarget as HTMLElement;
-          toggleModelDropdown(target);
+          toggleModelDropdown(e.currentTarget as HTMLElement);
         },
       },
     ],
@@ -114,25 +106,70 @@ function toggleModelDropdown(anchor: HTMLElement) {
   const container = anchor.closest(".ai-bar-container") as HTMLElement;
   if (!container) return;
 
-  // Populate with providers and models
-  const currentModelId = getPref("llm.modelId");
-  const providers = addon.data.userProviderConfigs || [];
+  const active = addon.data.userProviderConfigV2?.active;
+  const groups: DropdownMenuGroup[] = [];
 
-  const groups: DropdownMenuGroup[] = providers
-    .filter((provider) => (provider.models || []).length > 0)
-    .map((provider) => ({
-      title: provider.name,
-      items: (provider.models || []).map((model) => ({
-        id: model.id || model.name,
+  // v2 models: only show what's in addedModels, grouped by provider
+  const cp = addon.data.commonProviders;
+  const addedModels = addon.data.userProviderConfigV2?.addedModels ?? [];
+  if (cp) {
+    const grouped = new Map<string, typeof addedModels>();
+    for (const m of addedModels) {
+      if (!cp[m.providerId]?.models?.[m.modelId]) continue;
+      const list = grouped.get(m.providerId) || [];
+      list.push(m);
+      grouped.set(m.providerId, list);
+    }
+    for (const [providerId, models] of grouped) {
+      const provider = cp[providerId];
+      const items = models.map((m) => {
+        const model = provider.models[m.modelId];
+        return {
+          id: `${providerId}::${m.modelId}`,
+          label: model.name,
+          selected:
+            active?.providerId === providerId && active?.modelId === m.modelId,
+          renderLeading: (doc: Document) => {
+            const holder = doc.createElement("span");
+            ztoolkit.UI.appendElement(
+              IconView({
+                iconMarkup: getModelIconPath(
+                  analyzeModelName(model.name).family,
+                ),
+                extraClasses: ["model-dropdown-icon"],
+                sizeRem: 1.2,
+              }),
+              holder,
+            );
+            return holder;
+          },
+          onClick: () => {
+            addon.data.userProviderConfigV2!.active = {
+              providerId: providerId as ProviderId,
+              modelId: m.modelId,
+            };
+            setPref("llm.modelId", `${providerId}::${m.modelId}`);
+            updateModelInfoDisplay(anchor);
+          },
+        };
+      });
+      groups.push({ title: provider.name, items });
+    }
+  }
+
+  // Legacy custom providers
+  for (const conf of addon.data.legacyCustomProviderConfigs ?? []) {
+    const items = (conf.models ?? []).map((model) => {
+      const itemId = `${conf.id}::${model.name}`;
+      return {
+        id: itemId,
         label: model.name,
-        selected: model.id === currentModelId,
+        selected: active?.providerId === conf.id && active?.modelId === model.name,
         renderLeading: (doc: Document) => {
           const holder = doc.createElement("span");
-          const modelAnalysis = analyzeModelName(model.name);
-          const iconPath = getModelIconPath(modelAnalysis.family);
           ztoolkit.UI.appendElement(
             IconView({
-              iconMarkup: iconPath,
+              iconMarkup: getModelIconPath(analyzeModelName(model.name).family),
               extraClasses: ["model-dropdown-icon"],
               sizeRem: 1.2,
             }),
@@ -141,14 +178,19 @@ function toggleModelDropdown(anchor: HTMLElement) {
           return holder;
         },
         onClick: () => {
-          if (model.id) {
-            setPref("llm.modelId", model.id);
-            syncV2ActiveFromLegacyModelId(model.id);
-            updateModelInfoDisplay(anchor);
-          }
+          addon.data.userProviderConfigV2!.active = {
+            providerId: conf.id as ProviderId,
+            modelId: model.name,
+          };
+          setPref("llm.modelId", itemId);
+          updateModelInfoDisplay(anchor);
         },
-      })),
-    }));
+      };
+    });
+    if (items.length > 0) {
+      groups.push({ title: conf.name, items });
+    }
+  }
 
   toggleDropdownMenu({
     menuId: "ai-bar-model-dropdown",
