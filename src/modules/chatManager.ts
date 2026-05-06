@@ -115,12 +115,9 @@ export class ChatManager {
     } = params;
     const contextLeft = selectionContext?.[0] || "";
     const contextRight = selectionContext?.[2] || "";
-    let systemContent = !selectedText
-      ? `${SYSTEM_PROMPT_PREFIX}${contextLeft}\n${contextRight}`.trim()
-      : SYSTEM_PROMPT_PREFIX +
-        `${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`;
+    let systemPrompt = SYSTEM_PROMPT_PREFIX;
 
-    // Append item metadata if enabled (after context, before fulltext)
+    // Append item metadata if enabled (stable → cacheable)
     if (getPref("chat.autoAttachItemData") && metadata) {
       const metadataLines: string[] = ["# Item Metadata"];
       const metadataFieldLabels: Array<[keyof ItemMetadata, string]> = [
@@ -142,19 +139,24 @@ export class ChatManager {
             : `${label}: ${value}`,
         );
       }
-      systemContent += "\n\n" + metadataLines.join("\n");
+      systemPrompt += "\n\n" + metadataLines.join("\n");
     }
 
-    // Append full text if enabled for this section (manual toggle) or globally (pref)
+    // Append full text if enabled (stable → cacheable)
     if (fullTextEnabled && itemId !== undefined) {
       const fullText = await getItemFullText(itemId);
       if (fullText) {
-        systemContent +=
+        systemPrompt +=
           "\n\n# Full Document Text\n<fulldoc>\n" + fullText + "\n</fulldoc>";
       }
     }
 
-    return systemContent;
+    // Append volatile context at the end to improve prompt cache hits
+    systemPrompt += "\n\nContent:" + (!selectedText
+      ? `${contextLeft}\n${contextRight}`.trim()
+      : `${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`);
+
+    return systemPrompt;
   }
 
   async sendChatRequest(params: ChatRequestParams) {

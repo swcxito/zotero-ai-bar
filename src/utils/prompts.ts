@@ -42,9 +42,7 @@ Answer user queries based on the provided document content. The specific user se
     E=mc^2
     $$
 
-    (empty lines before/after).
-
-# Content`;
+    (empty lines before/after).`;
 
 export interface AIBarCommand {
   id: string;
