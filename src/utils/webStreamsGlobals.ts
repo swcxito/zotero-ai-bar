@@ -35,6 +35,10 @@ export function ensureWebStreamsGlobals() {
     }
   }
 
+  if (typeof g.DOMException === "undefined" && mainWin.DOMException) {
+    g.DOMException = mainWin.DOMException;
+  }
+
   if (typeof g.TransformStream !== "undefined") return;
   if (!mainWin) return;
 
