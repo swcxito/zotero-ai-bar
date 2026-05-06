@@ -18,6 +18,7 @@
 
 import { config } from "../../package.json";
 import { getPref, setPref } from "../utils/prefs";
+import { syncV2ActiveFromLegacyModelId } from "../utils/providers";
 import { openDialog } from "./modelDialog";
 import { openPromptEditor } from "./promptEditor";
 import { getLocaleID, getString } from "../utils/locale";
@@ -87,6 +88,9 @@ function updatePrefsUI() {
     makeId("model-selector"),
   ) as HTMLSelectElement;
   updateModelSelector(modelSelector, doc);
+  modelSelector.addEventListener("change", () => {
+    syncV2ActiveFromLegacyModelId(modelSelector.value);
+  });
   const modelEditButton = doc.querySelector(
     makeId("model-edit-button"),
   ) as HTMLButtonElement;

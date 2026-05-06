@@ -258,6 +258,29 @@ export function convertLegacyLLMConfigByKey(
 }
 
 /**
+ * 根据旧版 model UUID (llm.modelId) 同步 userProviderConfigV2.active。
+ * 调用时机：用户通过旧 UI（preferences / reader popup）切换模型后立即调用。
+ */
+export function syncV2ActiveFromLegacyModelId(modelId: string) {
+  const v2 = addon.data.userProviderConfigV2;
+  if (!v2) return;
+
+  const configs = addon.data.userProviderConfigs || [];
+  for (const provider of configs) {
+    const model = provider.models?.find((m) => m.id === modelId);
+    if (model?.name) {
+      v2.active = {
+        providerId: (provider.key
+          ? PROVIDER_KEY_TO_ID[provider.key] ?? provider.id
+          : provider.id) as ProviderId,
+        modelId: model.name,
+      };
+      return;
+    }
+  }
+}
+
+/**
  * 从 providers JSON 初始化配置。
  * 只负责解析并补齐基础字段，不处理兼容性与业务校验。
  * @returns 补齐了 id 字段

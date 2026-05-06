@@ -18,6 +18,7 @@
 
 import { TagElementProps } from "zotero-plugin-toolkit";
 import { getPref, setPref } from "../utils/prefs";
+import { syncV2ActiveFromLegacyModelId } from "../utils/providers";
 import { analyzeModelName, getModelIconPath } from "../utils/modelAnalyzer";
 import { getString } from "../utils/locale";
 import { IconView } from "./iconView";
@@ -142,6 +143,7 @@ function toggleModelDropdown(anchor: HTMLElement) {
         onClick: () => {
           if (model.id) {
             setPref("llm.modelId", model.id);
+            syncV2ActiveFromLegacyModelId(model.id);
             updateModelInfoDisplay(anchor);
           }
         },

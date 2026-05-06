@@ -207,28 +207,67 @@ async function createModel() {
   await preloadLLMRuntime();
 
   const v2 = addon.data.userProviderConfigV2;
-  const providers = addon.data.commonProviders;
-  if (!v2?.active || !providers) throw new Error("No active model selected.");
+  if (!v2?.active) throw new Error("No active model selected.");
 
   const { providerId, modelId } = v2.active;
-  const provider = providers[providerId];
-  if (!provider) throw new Error(`Provider not found: ${providerId}`);
+  const commonProviders = addon.data.commonProviders;
+  const provider = commonProviders?.[providerId];
 
-  const model = provider.models[modelId];
-  if (!model) throw new Error(`Model not found: ${modelId}`);
+  // V2 path: provider found in common_providers.json → use native SDK dispatch
+  if (provider) {
+    const model = provider.models[modelId];
+    if (!model) throw new Error(`Model not found: ${modelId}`);
 
-  // Resolve API key from v2 env
-  const envKey = PROVIDER_ENV_KEY_MAP[providerId] || "API_KEY";
-  const apiKey = v2.env[providerId]?.[envKey];
-  if (!apiKey) throw new Error(`API key not configured for ${providerId}`);
+    const envKey = PROVIDER_ENV_KEY_MAP[providerId] || "API_KEY";
+    const apiKey = v2.env[providerId]?.[envKey];
+    if (!apiKey) throw new Error(`API key not configured for ${providerId}`);
 
-  const sdkPackage = resolveSDKPackage(provider.npm);
-  const createFn = CREATE_PROVIDER_FNS[sdkPackage];
-  if (!createFn) throw new Error(`Provider SDK not loaded: ${sdkPackage}`);
+    const sdkPackage = resolveSDKPackage(provider.npm);
+    const createFn = CREATE_PROVIDER_FNS[sdkPackage];
+    if (!createFn) throw new Error(`Provider SDK not loaded: ${sdkPackage}`);
 
-  const baseUrl = provider.api;
+    return createProvider(createFn, sdkPackage, {
+      apiKey,
+      baseUrl: provider.api,
+      providerId,
+      modelId,
+    });
+  }
 
-  return createProvider(createFn, sdkPackage, { apiKey, baseUrl, providerId, modelId });
+  // Fallback: legacy / custom provider — search both config arrays + openai-compatible
+  const legacyConfigs = [
+    ...(addon.data.legacyCustomProviderConfigs ?? []),
+    ...(addon.data.userProviderConfigs ?? []),
+  ];
+  for (const conf of legacyConfigs) {
+    // Match by providerId first (UUID for custom), then fall back to model name
+    const model = conf.models?.find(
+      (m) =>
+        conf.id === providerId && (m.id === modelId || m.name === modelId),
+    ) ?? conf.models?.find(
+      (m) => m.id === modelId || m.name === modelId,
+    );
+    if (model?.name) {
+      if (!conf.baseUrl) throw new Error("Base URL is missing.");
+      if (!conf.apiKey) throw new Error("API Key is missing.");
+
+      const createFn = CREATE_PROVIDER_FNS["@ai-sdk/openai-compatible"];
+      if (!createFn) throw new Error("OpenAI-compatible SDK not loaded.");
+
+      return createProvider(
+        createFn as typeof import("@ai-sdk/openai-compatible").createOpenAICompatible,
+        "@ai-sdk/openai-compatible",
+        {
+          apiKey: conf.apiKey,
+          baseUrl: conf.baseUrl,
+          providerId: conf.id,
+          modelId: model.name,
+        },
+      );
+    }
+  }
+
+  throw new Error(`Provider or model not found: ${providerId}/${modelId}`);
 }
 
 function getRefreshRateFromPref() {
