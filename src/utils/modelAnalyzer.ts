@@ -179,5 +179,5 @@ export function analyzeModelName(modelName: string): ModelAnalysisResult {
 export function getModelIconPath(family: string): string {
   const normalizedFamily = family.toLowerCase();
 
-  return ModelIcons.get(normalizedFamily) || "";
+  return ModelIcons[normalizedFamily] || ModelIcons.custom;
 }
