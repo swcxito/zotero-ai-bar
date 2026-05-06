@@ -159,6 +159,7 @@ function smartAutoTranslate(
         sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
         isFromPopup: true,
         contextPromise: selectionContextPromise,
+        itemId: reader.itemID!,
       })
       // todo remove this temp resolution after chatManager is reconstructed.
       .finally(() => {
@@ -206,6 +207,7 @@ function renderAIBar(
       isFromPopup: true,
       // Enable auto-copy for smartCopy command only
       doesCopyResponse: input === "smartCopy",
+      itemId: reader.itemID!,
     });
   }
 
@@ -246,6 +248,7 @@ function renderAIBar(
           userPrompt: up.prompt,
           sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
           isFromPopup: true,
+          itemId: reader.itemID!,
         });
       },
     });

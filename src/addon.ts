@@ -5,6 +5,16 @@ import { createZToolkit } from "./utils/ztoolkit";
 import { UserProviderConfig, UserPrompt } from "./types";
 import { ChatManager } from "./modules/chatManager";
 
+function resolveInitialTabID(): string {
+  const initialTabID = Zotero.getMainWindow().Zotero_Tabs.selectedID;
+  if (!initialTabID.trim()) {
+    throw new Error(
+      "Failed to initialize ChatManager: selected tab ID is empty.",
+    );
+  }
+  return initialTabID;
+}
+
 class Addon {
   public data: {
     alive: boolean;
@@ -49,7 +59,7 @@ class Addon {
       ztoolkit: createZToolkit(),
       selection: {},
     };
-    this.chatManager = new ChatManager();
+    this.chatManager = new ChatManager(resolveInitialTabID());
     this.hooks = hooks;
     this.api = {};
   }

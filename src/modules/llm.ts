@@ -28,6 +28,86 @@ import {
 } from "./chatUI";
 import { ensureWebStreamsGlobals } from "../utils/webStreamsGlobals";
 
+type InstalledAISDKPackage =
+  | "@ai-sdk/openai-compatible"
+  | "@ai-sdk/amazon-bedrock"
+  | "@ai-sdk/anthropic"
+  | "@ai-sdk/azure"
+  | "@ai-sdk/google"
+  | "@ai-sdk/xai"
+  | "@openrouter/ai-sdk-provider";
+
+type ProviderCreateFunction =
+  | typeof import("@ai-sdk/openai-compatible").createOpenAICompatible
+  | typeof import("@ai-sdk/amazon-bedrock").createAmazonBedrock
+  | typeof import("@ai-sdk/anthropic").createAnthropic
+  | typeof import("@ai-sdk/azure").createAzure
+  | typeof import("@ai-sdk/google").createGoogleGenerativeAI
+  | typeof import("@ai-sdk/xai").createXai
+  | typeof import("@openrouter/ai-sdk-provider").createOpenRouter;
+
+type ProviderCreateFunctionMap = Partial<
+  Record<InstalledAISDKPackage, ProviderCreateFunction>
+>;
+
+export const CREATE_PROVIDER_FNS: ProviderCreateFunctionMap = {};
+
+let streamTextFn: typeof import("ai").streamText | undefined;
+let preloadLLMRuntimePromise: Promise<void> | undefined;
+let createOpenAICompatibleFn:
+  | typeof import("@ai-sdk/openai-compatible").createOpenAICompatible
+  | undefined;
+
+export async function preloadLLMRuntime() {
+  if (!preloadLLMRuntimePromise) {
+    preloadLLMRuntimePromise = (async () => {
+      ensureWebStreamsGlobals();
+
+      const [
+        ai,
+        openaiCompatible,
+        amazonBedrock,
+        anthropic,
+        azure,
+        google,
+        xai,
+        openrouter,
+      ] = await Promise.all([
+        import("ai"),
+        import("@ai-sdk/openai-compatible"),
+        import("@ai-sdk/amazon-bedrock"),
+        import("@ai-sdk/anthropic"),
+        import("@ai-sdk/azure"),
+        import("@ai-sdk/google"),
+        import("@ai-sdk/xai"),
+        import("@openrouter/ai-sdk-provider"),
+      ]);
+
+      streamTextFn = ai.streamText;
+
+      CREATE_PROVIDER_FNS["@ai-sdk/openai-compatible"] =
+        openaiCompatible.createOpenAICompatible;
+      CREATE_PROVIDER_FNS["@ai-sdk/amazon-bedrock"] =
+        amazonBedrock.createAmazonBedrock;
+      CREATE_PROVIDER_FNS["@ai-sdk/anthropic"] = anthropic.createAnthropic;
+      CREATE_PROVIDER_FNS["@ai-sdk/azure"] = azure.createAzure;
+      CREATE_PROVIDER_FNS["@ai-sdk/google"] = google.createGoogleGenerativeAI;
+      CREATE_PROVIDER_FNS["@ai-sdk/xai"] = xai.createXai;
+      CREATE_PROVIDER_FNS["@openrouter/ai-sdk-provider"] =
+        openrouter.createOpenRouter;
+
+      createOpenAICompatibleFn = CREATE_PROVIDER_FNS[
+        "@ai-sdk/openai-compatible"
+      ] as typeof import("@ai-sdk/openai-compatible").createOpenAICompatible;
+    })().catch((error) => {
+      preloadLLMRuntimePromise = undefined;
+      throw error;
+    });
+  }
+
+  await preloadLLMRuntimePromise;
+}
+
 export async function streamLLMV2(
   messagesOrPromise: ModelMessage[] | Promise<ModelMessage[]>,
   session: Session,
@@ -35,8 +115,7 @@ export async function streamLLMV2(
   refreshRate: number = getRefreshRateFromPref(),
 ) {
   try {
-    ensureWebStreamsGlobals();
-    const { streamText } = await import("ai");
+    await preloadLLMRuntime();
     onLLMStreamStartV2(session);
     const model = await createModel();
 
@@ -45,12 +124,24 @@ export async function streamLLMV2(
     const maxTokens = getPref("llm.maxTokens") || 2000;
     const messages = await messagesOrPromise;
 
-    const { textStream } = streamText({
+    const { textStream } = streamTextFn!({
       model: model,
       messages: messages,
       abortSignal: session.pending.abortController?.signal,
       temperature: temp,
       maxOutputTokens: maxTokens,
+      providerOptions: {
+        ALIBABA_CLOUD: {
+          enable_thinking: false,
+          enable_search: true,
+        },
+        ZHIPU: {
+          thinking: { type: "disabled" },
+        },
+        ZAI: {
+          thinking: { type: "disabled" },
+        },
+      },
     });
 
     // if (provider.key === "ZHIPU" || provider.key === "ZAI") {
@@ -90,6 +181,10 @@ export async function streamLLMV2(
 }
 
 async function createModel() {
+  if (!createOpenAICompatibleFn) {
+    await preloadLLMRuntime();
+  }
+
   const modelId = getPref("llm.modelId");
   if (!modelId) throw new Error("No model selected.");
   ztoolkit.log(`Using model ID: ${modelId}`);
@@ -120,9 +215,8 @@ async function createModel() {
   if (!providerConfig.baseUrl) throw new Error("Base URL is missing.");
   if (!providerConfig.apiKey) throw new Error("API Key is missing.");
 
-  const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
-  const provider = createOpenAICompatible({
-    name: providerConfig.name,
+  const provider = createOpenAICompatibleFn!({
+    name: providerConfig.key ?? "",
     apiKey: providerConfig.apiKey,
     baseURL: providerConfig.baseUrl,
     includeUsage: true, // Include usage information in streaming responses

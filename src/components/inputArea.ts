@@ -264,7 +264,7 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
     try {
       await addon.chatManager.sendChatRequest({
         userPrompt: text,
-        sectionId,
+        tabId: sectionId,
       });
     } catch (e) {
       ztoolkit.log("sendChatRequest error:", e);

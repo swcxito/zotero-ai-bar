@@ -12,6 +12,7 @@ import { ensureChatWindowReady } from "./utils/window";
 import { registerReaderItemPaneSection } from "./modules/readerItemPane";
 import { clearDeadChatWindowRef, isWindowAlive } from "./utils/window";
 import { registerTabObserver } from "./modules/tabObserver";
+import { preloadLLMRuntime } from "./modules/llm";
 
 async function onStartup() {
   await Promise.all([
@@ -21,6 +22,7 @@ async function onStartup() {
   ]);
 
   initLocale();
+  await preloadLLMRuntime();
 
   addon.chatManager.chatHostMode = addon.chatManager.getCurrentHostMode();
 
@@ -57,9 +59,10 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
 
   const llmConfig = getPref("llm.providerConfigs");
   //TODO 添加配置转换层，兼容老版本配置格式
-  // ztoolkit.log("llmConfig: ", llmConfig);
-  if (llmConfig)
+  ztoolkit.log("llmConfig: ", llmConfig);
+  if (llmConfig) {
     addon.data.userProviderConfigs = JSON.parse(getPref("llm.providerConfigs"));
+  }
 
   // Load user custom prompts
   const userPromptsConfig = getPref("prompt.userPrompts");

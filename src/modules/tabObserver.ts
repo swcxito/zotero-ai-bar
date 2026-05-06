@@ -42,3 +42,25 @@ export function getReaderByTabId(id: string) {
   }
   return null;
 }
+
+// export function getItemFromTab(tabId?: string) {
+//   const selectedTabID = tabId || addon.chatManager.currentTabID;
+//   const reader = selectedTabID
+//     ? Zotero.Reader.getByTabID(selectedTabID)
+//     : undefined;
+//   const itemID = reader?.itemID;
+//   if (itemID) {
+//     return Zotero.Items.get(itemID);
+//   }
+//
+//   return undefined;
+// }
+
+export function getItemIdFromTab(tabId?: string): number | undefined {
+  const selectedTabID = tabId || addon.chatManager.currentTabID;
+  const reader = selectedTabID
+    ? Zotero.Reader.getByTabID(selectedTabID)
+    : undefined;
+
+  return reader?.itemID;
+}

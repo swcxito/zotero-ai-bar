@@ -16,31 +16,27 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-function getItemFromTab(tabId?: string): any | undefined {
-  const selectedTabID = tabId || addon.chatManager.currentTabID;
-  const reader = selectedTabID
-    ? (Zotero.Reader.getByTabID(selectedTabID) as any)
-    : undefined;
-  const itemID = reader?.itemID;
-  if (itemID) {
-    return Zotero.Items.get(itemID) as any;
-  }
-
-  return undefined;
-}
-
 /**
  * Retrieve metadata for the given Zotero item ID.
- * Returns formatted metadata string including title, abstract, authors, publication, etc.
+ * Returns structured metadata including title, abstract, authors, publication, etc.
  */
-export function getItemMetadata(tabId: string): string | undefined {
+export type ItemMetadata = {
+  title?: string;
+  authors?: string[];
+  abstract?: string;
+  publication?: string;
+  itemType?: string;
+  publicationDate?: string;
+};
+
+export function getItemMetadata(itemId: number): ItemMetadata | undefined {
   try {
-    const item = getItemFromTab(tabId);
+    const item = Zotero.Items.get(itemId);
     if (!item) {
-      ztoolkit.log("No item found for tabId:", tabId);
+      ztoolkit.log("No item found for tabId:", itemId);
       return undefined;
     }
-    ztoolkit.log("Found item for tabId:", tabId, "item:", item);
+    ztoolkit.log("Found item for tabId:", itemId, "item:", item);
     // Get the top-level parent item (not attachment)
     let targetItem = item;
     if (item.isAttachment?.()) {
@@ -58,12 +54,12 @@ export function getItemMetadata(tabId: string): string | undefined {
     }
 
     // Extract metadata
-    const metadata: Record<string, string | string[]> = {};
+    const metadata: ItemMetadata = {};
 
     // Title
     const title = targetItem.getField("title") as string;
     if (title) {
-      metadata["Title"] = title;
+      metadata.title = title;
     }
 
     // Authors
@@ -82,14 +78,14 @@ export function getItemMetadata(tabId: string): string | undefined {
         })
         .filter(Boolean);
       if (authorNames.length > 0) {
-        metadata["Authors"] = authorNames;
+        metadata.authors = authorNames as string[];
       }
     }
 
     // Abstract
     const abstract = targetItem.getField("abstractNote") as string;
     if (abstract) {
-      metadata["Abstract"] = abstract;
+      metadata.abstract = abstract;
     }
 
     // Publication
@@ -99,7 +95,7 @@ export function getItemMetadata(tabId: string): string | undefined {
       (targetItem.getField("journalAbbreviation") as string) ||
       (targetItem.getField("series") as string);
     if (publication) {
-      metadata["Publication"] = publication;
+      metadata.publication = publication;
     }
 
     // Item Type
@@ -107,31 +103,21 @@ export function getItemMetadata(tabId: string): string | undefined {
     if (itemTypeID) {
       const itemType = Zotero.ItemTypes.getLocalizedString(itemTypeID);
       if (itemType) {
-        metadata["Item Type"] = itemType;
+        metadata.itemType = itemType;
       }
     }
 
     // Date
     const date = targetItem.getField("date") as string;
     if (date) {
-      metadata["Publication Date"] = date;
+      metadata.publicationDate = date;
     }
 
-    // Build formatted string
     if (Object.keys(metadata).length === 0) {
       return undefined;
     }
 
-    let result = "# Item Metadata\n";
-    for (const [key, value] of Object.entries(metadata)) {
-      if (Array.isArray(value)) {
-        result += `${key}: ${value.join(", ")}\n`;
-      } else {
-        result += `${key}: ${value}\n`;
-      }
-    }
-
-    return result.trim();
+    return metadata;
   } catch (e) {
     ztoolkit.log("getItemMetadata failed:", e);
     return undefined;
@@ -143,10 +129,10 @@ export function getItemMetadata(tabId: string): string | undefined {
  * Truncates to 50,000 characters to keep prompts manageable.
  */
 export async function getItemFullText(
-  tabId: string,
+  itemId: number,
 ): Promise<string | undefined> {
   try {
-    const item = getItemFromTab(tabId) as any;
+    const item = Zotero.Items.get(itemId);
     if (!item) {
       return undefined;
     }
