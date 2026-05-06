@@ -19,6 +19,8 @@
 import { getLocaleID } from "../utils/locale";
 import { config } from "../../package.json";
 import { InputArea } from "../components/inputArea";
+import { convertLegacyLLMConfigByKey, loadProvidersFromFile } from "../utils/providers";
+import { getPref } from "../utils/prefs";
 
 export function injectCSS(doc: Document | ShadowRoot, filename: string) {
   // 获取插件内资源的 URL
@@ -172,6 +174,20 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
             messageContainer.innerHTML = "";
           }
           addon.chatManager.clearSectionHistory(currentTab);
+        },
+      },
+      {
+        type: "debug",
+        icon: "chrome://zotero/skin/16/universal/note.svg",
+        onClick: async () => {
+          const llmConfig = getPref("llm.providerConfigs");
+          ztoolkit.log("[Debug] Old llm.providerConfigs:", llmConfig);
+          const result = convertLegacyLLMConfigByKey(llmConfig);
+          ztoolkit.log("[Debug] Converted UserProviderConfigV2:", result.userProviderConfigV2);
+          ztoolkit.log("[Debug] Legacy custom providers:", result.legacyCustomProviderConfigs);
+          ztoolkit.log("[Debug] Loading common_providers.min.json...");
+          const providers = await loadProvidersFromFile();
+          ztoolkit.log("[Debug] Loaded providers:", providers);
         },
       },
     ],

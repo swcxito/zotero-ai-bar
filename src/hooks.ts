@@ -13,6 +13,7 @@ import { registerReaderItemPaneSection } from "./modules/readerItemPane";
 import { clearDeadChatWindowRef, isWindowAlive } from "./utils/window";
 import { registerTabObserver } from "./modules/tabObserver";
 import { preloadLLMRuntime } from "./modules/llm";
+import { convertLegacyLLMConfigByKey, loadProvidersFromFile } from "./utils/providers";
 
 async function onStartup() {
   await Promise.all([
@@ -58,8 +59,19 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   );
 
   const llmConfig = getPref("llm.providerConfigs");
-  //TODO 添加配置转换层，兼容老版本配置格式
   ztoolkit.log("llmConfig: ", llmConfig);
+
+  // Config v2: load provider metadata + convert legacy config
+  addon.data.commonProviders = await loadProvidersFromFile();
+  const { userProviderConfigV2, legacyCustomProviderConfigs } =
+    convertLegacyLLMConfigByKey(llmConfig, getPref("llm.modelId"));
+  addon.data.userProviderConfigV2 = userProviderConfigV2;
+  addon.data.legacyCustomProviderConfigs = legacyCustomProviderConfigs;
+
+  /**
+   * @deprecated 为 modelDialog / modelInfo / preferenceScript 等旧版 UI 组件
+   * 提供过渡期兼容。迁移完成后应删除此赋值及 addon.data.userProviderConfigs。
+   */
   if (llmConfig) {
     addon.data.userProviderConfigs = JSON.parse(getPref("llm.providerConfigs"));
   }

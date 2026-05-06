@@ -22,6 +22,12 @@ export function getLogoUrl(providerKey: string): string {
   return `chrome://${config.addonRef}/content/icons/${providerKey.toLowerCase()}.svg`;
 }
 
+/**
+ * @deprecated 使用 `CommonProviders` (从 common_providers.min.json 加载) 代替。
+ * 迁移方式：通过 `src/utils/providers.ts` 中的 `loadProvidersFromFile()` 加载 provider 元数据，
+ * Provider 信息由 JSON 数据驱动，不再硬编码。
+ * 迁移指南：旧 key（如 "OPENAI"）→ 新 ProviderId（如 "openai"），映射见 PROVIDER_KEY_TO_ID。
+ */
 export const PROVIDERS = {
   OPENAI: {
     name: "OpenAI",

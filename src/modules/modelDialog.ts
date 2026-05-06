@@ -30,6 +30,12 @@ import { ProviderCard } from "../components/providerCard";
 import { UserProviderConfig } from "../types";
 import { setPref } from "../utils/prefs";
 
+/**
+ * @deprecated ModelDialog 基于旧版 `UserProviderConfig[]` 配置格式。
+ * 未来将替换为基于 `CommonProviders` + `UserProviderConfigV2` 的新版 UI。
+ * 目前仍可用于管理旧版 provider 配置，但写入的 `llm.providerConfigs` 会在启动时
+ * 通过 `convertLegacyLLMConfigByKey()` 转换为 v2 格式。
+ */
 export async function openDialog(onDialogClosed: () => void = () => {}) {
   // 创建窗口参数
   const windowArgs: {
@@ -59,6 +65,7 @@ export async function openDialog(onDialogClosed: () => void = () => {}) {
   // };
 }
 
+/** @deprecated 见 {@link openDialog} */
 export class ModelDialog {
   private readonly doc: Document;
   private readonly root: HTMLElement | null;

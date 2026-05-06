@@ -17,7 +17,6 @@
  */
 
 import { getPref } from "../utils/prefs";
-import type { UserProviderConfig, UserProviderModel } from "../types";
 import { Session } from "./chatManager";
 import { ModelMessage } from "ai";
 import {
@@ -27,6 +26,7 @@ import {
   onLLMStreamUpdateV2,
 } from "./chatUI";
 import { ensureWebStreamsGlobals } from "../utils/webStreamsGlobals";
+import { PROVIDER_ENV_KEY_MAP } from "../utils/providers";
 
 type InstalledAISDKPackage =
   | "@ai-sdk/openai-compatible"
@@ -35,6 +35,7 @@ type InstalledAISDKPackage =
   | "@ai-sdk/azure"
   | "@ai-sdk/google"
   | "@ai-sdk/xai"
+  | "@ai-sdk/openai"
   | "@openrouter/ai-sdk-provider";
 
 type ProviderCreateFunction =
@@ -44,6 +45,7 @@ type ProviderCreateFunction =
   | typeof import("@ai-sdk/azure").createAzure
   | typeof import("@ai-sdk/google").createGoogleGenerativeAI
   | typeof import("@ai-sdk/xai").createXai
+  | typeof import("@ai-sdk/openai").createOpenAI
   | typeof import("@openrouter/ai-sdk-provider").createOpenRouter;
 
 type ProviderCreateFunctionMap = Partial<
@@ -54,9 +56,6 @@ export const CREATE_PROVIDER_FNS: ProviderCreateFunctionMap = {};
 
 let streamTextFn: typeof import("ai").streamText | undefined;
 let preloadLLMRuntimePromise: Promise<void> | undefined;
-let createOpenAICompatibleFn:
-  | typeof import("@ai-sdk/openai-compatible").createOpenAICompatible
-  | undefined;
 
 export async function preloadLLMRuntime() {
   if (!preloadLLMRuntimePromise) {
@@ -66,6 +65,7 @@ export async function preloadLLMRuntime() {
       const [
         ai,
         openaiCompatible,
+        openai,
         amazonBedrock,
         anthropic,
         azure,
@@ -75,6 +75,7 @@ export async function preloadLLMRuntime() {
       ] = await Promise.all([
         import("ai"),
         import("@ai-sdk/openai-compatible"),
+        import("@ai-sdk/openai"),
         import("@ai-sdk/amazon-bedrock"),
         import("@ai-sdk/anthropic"),
         import("@ai-sdk/azure"),
@@ -87,6 +88,7 @@ export async function preloadLLMRuntime() {
 
       CREATE_PROVIDER_FNS["@ai-sdk/openai-compatible"] =
         openaiCompatible.createOpenAICompatible;
+      CREATE_PROVIDER_FNS["@ai-sdk/openai"] = openai.createOpenAI;
       CREATE_PROVIDER_FNS["@ai-sdk/amazon-bedrock"] =
         amazonBedrock.createAmazonBedrock;
       CREATE_PROVIDER_FNS["@ai-sdk/anthropic"] = anthropic.createAnthropic;
@@ -95,10 +97,6 @@ export async function preloadLLMRuntime() {
       CREATE_PROVIDER_FNS["@ai-sdk/xai"] = xai.createXai;
       CREATE_PROVIDER_FNS["@openrouter/ai-sdk-provider"] =
         openrouter.createOpenRouter;
-
-      createOpenAICompatibleFn = CREATE_PROVIDER_FNS[
-        "@ai-sdk/openai-compatible"
-      ] as typeof import("@ai-sdk/openai-compatible").createOpenAICompatible;
     })().catch((error) => {
       preloadLLMRuntimePromise = undefined;
       throw error;
@@ -130,31 +128,9 @@ export async function streamLLMV2(
       abortSignal: session.pending.abortController?.signal,
       temperature: temp,
       maxOutputTokens: maxTokens,
-      providerOptions: {
-        ALIBABA_CLOUD: {
-          enable_thinking: false,
-          enable_search: true,
-        },
-        ZHIPU: {
-          thinking: { type: "disabled" },
-        },
-        ZAI: {
-          thinking: { type: "disabled" },
-        },
-      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      providerOptions: V2_PROVIDER_OPTIONS as any,
     });
-
-    // if (provider.key === "ZHIPU" || provider.key === "ZAI") {
-    //   body.thinking = { type: "disabled" };
-    // } else if (
-    //   provider.key === "ALIBABA_CLOUD" &&
-    //   model.name.startsWith("qwen")
-    // ) {
-    //   body.enable_thinking = false;
-    //   body.enable_search = true;
-    // } else if (provider.key === "MINIMAX") {
-    //   body.reasoning_split = true;
-    // }
 
     let fullText = "";
     let count = 0;
@@ -180,48 +156,79 @@ export async function streamLLMV2(
   }
 }
 
+/**
+ * Provider-specific options passed via streamText.
+ * The AI SDK auto-routes options to the matching provider by namespace key.
+ * Namespaces match the `name` param passed to createOpenAICompatible (v2 providerId).
+ */
+const V2_PROVIDER_OPTIONS: Record<string, Record<string, unknown>> = {
+  "alibaba-cn": { enable_thinking: false, enable_search: true },
+  alibaba: { enable_thinking: false, enable_search: true },
+  "alibaba-coding-plan": { enable_thinking: false, enable_search: true },
+  "alibaba-coding-plan-cn": { enable_thinking: false, enable_search: true },
+  zhipuai: { thinking: { type: "disabled" } },
+  "zhipuai-coding-plan": { thinking: { type: "disabled" } },
+  zai: { thinking: { type: "disabled" } },
+  "zai-coding-plan": { thinking: { type: "disabled" } },
+  // "minimax-cn": { thinking: { type: "enabled" } },
+};
+
+function resolveSDKPackage(npm?: string): InstalledAISDKPackage {
+  if (npm && npm in CREATE_PROVIDER_FNS) {
+    return npm as InstalledAISDKPackage;
+  }
+  return "@ai-sdk/openai-compatible";
+}
+
+function createProvider(
+  createFn: ProviderCreateFunction,
+  sdkPackage: InstalledAISDKPackage,
+  opts: { apiKey: string; baseUrl?: string; providerId: string; modelId: string },
+) {
+  if (sdkPackage === "@ai-sdk/openai" || sdkPackage === "@ai-sdk/openai-compatible") {
+    const fn = createFn as typeof import("@ai-sdk/openai-compatible").createOpenAICompatible;
+    if (!opts.baseUrl) throw new Error(`Base URL required for ${sdkPackage}`);
+    return fn({
+      name: opts.providerId,
+      apiKey: opts.apiKey,
+      baseURL: opts.baseUrl,
+      includeUsage: true,
+    })(opts.modelId);
+  }
+  // Native SDKs: anthropic, google, xai, openrouter, etc.
+  const fn = createFn as (config: { apiKey: string; baseURL?: string }) => any;
+  return fn({
+    apiKey: opts.apiKey,
+    ...(opts.baseUrl ? { baseURL: opts.baseUrl } : {}),
+  })(opts.modelId);
+}
+
 async function createModel() {
-  if (!createOpenAICompatibleFn) {
-    await preloadLLMRuntime();
-  }
+  await preloadLLMRuntime();
 
-  const modelId = getPref("llm.modelId");
-  if (!modelId) throw new Error("No model selected.");
-  ztoolkit.log(`Using model ID: ${modelId}`);
+  const v2 = addon.data.userProviderConfigV2;
+  const providers = addon.data.commonProviders;
+  if (!v2?.active || !providers) throw new Error("No active model selected.");
 
-  const configs = addon.data.userProviderConfigs || [];
-  let providerConfig: UserProviderConfig | undefined;
-  let modelConfig: UserProviderModel | undefined;
+  const { providerId, modelId } = v2.active;
+  const provider = providers[providerId];
+  if (!provider) throw new Error(`Provider not found: ${providerId}`);
 
-  // Find model and provider
-  for (const conf of configs) {
-    if (conf.models) {
-      const found = conf.models.find((m) => {
-        // ztoolkit.log(`Checking model ${m.id}`);
-        return m.id === modelId;
-      });
-      if (found) {
-        modelConfig = found;
-        providerConfig = conf;
-        break;
-      }
-    }
-  }
+  const model = provider.models[modelId];
+  if (!model) throw new Error(`Model not found: ${modelId}`);
 
-  if (!providerConfig || !modelConfig) {
-    throw new Error("Model config not found.");
-  }
-  if (!modelConfig.name) throw new Error("Model name is missing.");
-  if (!providerConfig.baseUrl) throw new Error("Base URL is missing.");
-  if (!providerConfig.apiKey) throw new Error("API Key is missing.");
+  // Resolve API key from v2 env
+  const envKey = PROVIDER_ENV_KEY_MAP[providerId] || "API_KEY";
+  const apiKey = v2.env[providerId]?.[envKey];
+  if (!apiKey) throw new Error(`API key not configured for ${providerId}`);
 
-  const provider = createOpenAICompatibleFn!({
-    name: providerConfig.key ?? "",
-    apiKey: providerConfig.apiKey,
-    baseURL: providerConfig.baseUrl,
-    includeUsage: true, // Include usage information in streaming responses
-  });
-  return provider(modelConfig.name);
+  const sdkPackage = resolveSDKPackage(provider.npm);
+  const createFn = CREATE_PROVIDER_FNS[sdkPackage];
+  if (!createFn) throw new Error(`Provider SDK not loaded: ${sdkPackage}`);
+
+  const baseUrl = provider.api;
+
+  return createProvider(createFn, sdkPackage, { apiKey, baseUrl, providerId, modelId });
 }
 
 function getRefreshRateFromPref() {
