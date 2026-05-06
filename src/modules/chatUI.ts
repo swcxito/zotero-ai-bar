@@ -157,7 +157,25 @@ export function onLLMStreamEndV2(session: Session) {
 
 export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
   ztoolkit.log("LLM stream error:", data.session, data.error);
-  const pop = data.session.pending.messagePop;
+  let pop = data.session.pending.messagePop;
+
+  // If no message pop exists yet (error during init), create one
+  if (!pop) {
+    const container = getMessageContainer(data.session);
+    if (container) {
+      const doc = container.ownerDocument;
+      pop = ChatBox({ doc, isUser: false }) as HTMLElement;
+      const chatMsg = pop.querySelector(".chat-message") as HTMLElement | null;
+      if (chatMsg) {
+        const contentEl = doc.createElement("div");
+        contentEl.classList.add("chat-message-content");
+        chatMsg.appendChild(contentEl);
+      }
+      container.appendChild(pop);
+      data.session.pending.messagePop = pop;
+    }
+  }
+
   if (pop) {
     const actions = pop.querySelector(".chat-actions");
     if (actions) {
@@ -172,7 +190,12 @@ export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
     }
     const chatMessage = pop.querySelector(".chat-message-content");
     if (chatMessage) {
-      chatMessage.innerHTML = `<div class="ai-bar-error-text">${data.error}</div>`;
+      chatMessage.innerHTML = `<div class="ai-bar-error-text">${escapeHtml(data.error)}</div>`;
+    } else {
+      const chatMsg = pop.querySelector(".chat-message") as HTMLElement | null;
+      if (chatMsg) {
+        chatMsg.innerHTML = `<div class="ai-bar-error-text">${escapeHtml(data.error)}</div>`;
+      }
     }
     const container = pop.parentElement;
     if (container && data.session.pending.shouldAutoScroll) {
@@ -182,6 +205,15 @@ export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
   // Clear streaming state
   updateSectionInputArea(data.session.id, false);
   cleanupRequestData(data.session);
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function cleanupRequestData(session: Session) {

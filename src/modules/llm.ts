@@ -112,6 +112,8 @@ export async function streamLLMV2(
   // externalController?: InstanceType<typeof AbortController>,
   refreshRate: number = getRefreshRateFromPref(),
 ) {
+  let streamErrorHandled = false;
+
   try {
     await preloadLLMRuntime();
     onLLMStreamStartV2(session);
@@ -130,6 +132,10 @@ export async function streamLLMV2(
       maxOutputTokens: maxTokens,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       providerOptions: V2_PROVIDER_OPTIONS as any,
+      onError: ({ error }: { error: unknown }) => {
+        streamErrorHandled = true;
+        handleStreamError(session, error);
+      },
     });
 
     let fullText = "";
@@ -147,12 +153,57 @@ export async function streamLLMV2(
     await onLLMStreamUpdateV2({ session, fullText });
     onLLMStreamEndV2(session);
   } catch (error: any) {
-    onLLMStreamErrorV2({
-      session,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    // Skip abort errors from intentional stop — treat as normal end
+    if (error?.name === "AbortError") {
+      onLLMStreamEndV2(session);
+      return;
+    }
+    // If onError already handled this, skip duplicate handling
+    if (!streamErrorHandled) {
+      handleStreamError(session, error);
+    }
   } finally {
     // session.abortController = undefined;
+  }
+}
+
+function buildErrorMessage(error: unknown): string {
+  const err = error as any;
+  let message = "Unknown error";
+  if (typeof err?.message === "string" && err.message) {
+    const label = err.name && err.name !== "Error" ? err.name : "";
+    message = label ? `${label}: ${err.message}` : err.message;
+  } else {
+    message = String(error);
+  }
+  if (typeof err?.statusCode === "number") {
+    message = `[HTTP ${err.statusCode}] ${message}`;
+  }
+  return message;
+}
+
+function handleStreamError(session: Session, error: unknown) {
+  const message = buildErrorMessage(error);
+
+  // Write error directly into the message pop DOM
+  const pop = session.pending.messagePop;
+  if (pop) {
+    const contentEl = pop.querySelector(".chat-message-content");
+    if (contentEl) {
+      const escaped = message
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      contentEl.innerHTML = `<div class="ai-bar-error-text">${escaped}</div>`;
+    }
+  }
+  ztoolkit.log("LLM stream error:", session.id, message);
+
+  // Delegate cleanup + edge cases (pop doesn't exist, window mode, etc.)
+  try {
+    onLLMStreamErrorV2({ session, error: message });
+  } catch (e) {
+    ztoolkit.log("onLLMStreamErrorV2 failed:", e);
   }
 }
 
