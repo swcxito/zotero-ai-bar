@@ -109,24 +109,9 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
       setSectionSummary,
       setSectionButtonStatus,
     }) => {
-      // setSectionSummary("TODO!");
-      setSectionButtonStatus("clear", { hidden: true });
-    },
-    // Optional, can be asynchronous.
-    onAsyncRender: async ({
-      body,
-      doc,
-      item,
-      setL10nArgs,
-      setSectionSummary,
-      setSectionButtonStatus,
-    }) => {
-      if (
-        item &&
-        addon.data.sidePaneBodyMap &&
-        addon.chatManager.currentTabID
-      ) {
-        addon.data.sidePaneBodyMap.set(addon.chatManager.currentTabID, body);
+      const tabID = Zotero.getMainWindow()?.Zotero_Tabs?.selectedID;
+      if (item && addon.data.sidePaneBodyMap && tabID) {
+        addon.data.sidePaneBodyMap.set(tabID, body);
       }
       const root = body.querySelector("#ai-bar-chat-root") as HTMLElement;
       const shadowRoot = root.attachShadow({ mode: "open" });
@@ -149,7 +134,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
       );
       messageContainer.style.userSelect = "text";
       shadowRoot.appendChild(messageContainer);
-      shadowRoot.appendChild(InputArea(doc, addon.chatManager.currentTabID!));
+      shadowRoot.appendChild(InputArea(doc, tabID));
       setSectionButtonStatus("clear", { hidden: false });
     },
     // Optional, Called when the section is toggled. Can happen anytime even if the section is not visible or not rendered
