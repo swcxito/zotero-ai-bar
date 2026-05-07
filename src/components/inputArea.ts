@@ -20,6 +20,7 @@ import { Icons } from "./common";
 import { IconView } from "./iconView";
 import { ChatBox } from "./chatBox";
 import { getString } from "../utils/locale";
+import { Session } from "../modules/chatManager";
 
 /**
  * Build the InputArea widget and wire up all interactive logic.
@@ -306,8 +307,8 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
 
   // Full-text toggle button
   fullTextBtn.addEventListener("click", () => {
-    const session = addon.chatManager.sessionsMap.get(sectionId);
-    if (!session) return;
+    const session = addon.chatManager.sessionsMap.get(sectionId) ?? new Session(sectionId);
+    addon.chatManager.sessionsMap.set(sectionId, session);
     session.fullTextEnabled = !session.fullTextEnabled;
     if (session.fullTextEnabled) {
       fullTextBtn.classList.remove(
