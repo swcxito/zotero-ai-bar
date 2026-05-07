@@ -180,27 +180,34 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
           addon.chatManager.clearSectionHistory(currentTab);
         },
       },
-      {
-        type: "debug",
-        icon: "chrome://zotero/skin/16/universal/note.svg",
-        onClick: async () => {
-          ztoolkit.log("[Debug] Loading common_providers.min.json...");
-          const providers = await loadProvidersFromFile();
-          ztoolkit.log("[Debug] Loaded providers:", providers);
-          const llmConfig = getPref("llm.providerConfigs");
-          ztoolkit.log("[Debug] Old llm.providerConfigs:", llmConfig);
-          const result = convertLegacyLLMConfigByKey(llmConfig, providers!);
-          ztoolkit.log(
-            "[Debug] Converted UserProviderConfigV2:",
-            result.userProviderConfigV2,
-          );
-          ztoolkit.log(
-            "[Debug] Legacy custom providers:",
-            result.legacyCustomProviderConfigs,
-          );
-          // await llmTest();
-        },
-      },
+      ...(__env__ === "development"
+        ? [
+            {
+              type: "debug",
+              icon: "chrome://zotero/skin/16/universal/note.svg",
+              onClick: async () => {
+                ztoolkit.log("[Debug] Loading common_providers.min.json...");
+                const providers = await loadProvidersFromFile();
+                ztoolkit.log("[Debug] Loaded providers:", providers);
+                const llmConfig = getPref("llm.providerConfigs");
+                ztoolkit.log("[Debug] Old llm.providerConfigs:", llmConfig);
+                const result = convertLegacyLLMConfigByKey(
+                  llmConfig,
+                  providers!,
+                );
+                ztoolkit.log(
+                  "[Debug] Converted UserProviderConfigV2:",
+                  result.userProviderConfigV2,
+                );
+                ztoolkit.log(
+                  "[Debug] Legacy custom providers:",
+                  result.legacyCustomProviderConfigs,
+                );
+                // await llmTest();
+              },
+            } as const,
+          ]
+        : []),
     ],
   });
 }
