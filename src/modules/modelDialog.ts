@@ -73,6 +73,8 @@ class ModelDialogV2 {
   private readonly modelOverlay: HTMLElement | null;
   private readonly modelSearchInput: HTMLInputElement | null;
   private readonly modelList: HTMLElement | null;
+  private liveFetchPromise: Promise<void> | null = null;
+  private interacting = false;
 
   // Pinned to top when search is empty (order = display order)
   private static readonly PINNED_ORDER = [
@@ -103,19 +105,6 @@ class ModelDialogV2 {
   async init() {
     await ensureCommonProviders();
 
-    // 尝试在线获取最新数据，失败则回退本地
-    try {
-      const live = await fetchLiveProviders();
-      addon.data.liveProviders = live;
-      ztoolkit.log(
-        "[ModelDialogV2] Live providers loaded:",
-        Object.keys(live).length,
-      );
-    } catch (e) {
-      ztoolkit.log("[ModelDialogV2] Live fetch failed, using local:", e);
-      addon.data.liveProviders = undefined;
-    }
-
     if (
       !(
         this.root &&
@@ -135,14 +124,37 @@ class ModelDialogV2 {
       envKeys: Object.keys(v2.env),
     });
 
+    // 先渲染 UI（使用本地数据）
     this.bindPopupShowHide();
     this.renderProviders();
     this.addCards();
+
+    // 后台获取在线数据，完成后刷新 provider 列表
+    this.liveFetchPromise = fetchLiveProviders()
+      .then((live) => {
+        addon.data.liveProviders = live;
+        ztoolkit.log(
+          "[ModelDialogV2] Live providers loaded:",
+          Object.keys(live).length,
+        );
+      })
+      .catch((e) => {
+        ztoolkit.log("[ModelDialogV2] Live fetch failed, using local:", e);
+        addon.data.liveProviders = undefined;
+      });
 
     this.win.addEventListener("unload", async () => {
       await this.saveSettings();
       this.win.arguments[0].onWindowClosed();
     });
+  }
+
+  /** 确保在线数据加载完成（用户交互前调用） */
+  private async ensureLiveData(): Promise<void> {
+    if (this.liveFetchPromise) {
+      await this.liveFetchPromise;
+      this.liveFetchPromise = null;
+    }
   }
 
   // ---- Card rendering ----
@@ -321,27 +333,41 @@ class ModelDialogV2 {
   }
 
   private async addProviderCard(providerId: string) {
-    ztoolkit.log("[ModelDialogV2] addProviderCard:", providerId);
-    const v2 = addon.data.userProviderConfigV2!;
-    const cp = this.getActiveProviders()?.[providerId];
-    if (!v2.addedProviders[providerId] && cp) {
-      const { models: _, ...rest } = cp;
-      v2.addedProviders[providerId] = rest as AddedProvider;
+    if (this.interacting) return;
+    this.interacting = true;
+    try {
+      await this.ensureLiveData();
+      ztoolkit.log("[ModelDialogV2] addProviderCard:", providerId);
+      const v2 = addon.data.userProviderConfigV2!;
+      const cp = this.getActiveProviders()?.[providerId];
+      if (!v2.addedProviders[providerId] && cp) {
+        const { models: _, ...rest } = cp;
+        v2.addedProviders[providerId] = rest as AddedProvider;
+      }
+      await cacheProviderIcon(providerId);
+      this.createAndAppendCard(providerId);
+    } finally {
+      this.interacting = false;
     }
-    await cacheProviderIcon(providerId);
-    this.createAndAppendCard(providerId);
   }
 
-  private addCustomProviderCard() {
-    const customId = `custom-${crypto.randomUUID().slice(0, 8)}`;
-    ztoolkit.log("[ModelDialogV2] addCustomProviderCard:", customId);
-    const v2 = addon.data.userProviderConfigV2!;
-    v2.addedProviders[customId] = {
-      id: customId as ProviderId,
-      name: "Custom Provider",
-      env: ["API_KEY"],
-    };
-    this.createAndAppendCard(customId);
+  private async addCustomProviderCard() {
+    if (this.interacting) return;
+    this.interacting = true;
+    try {
+      await this.ensureLiveData();
+      const customId = `custom-${crypto.randomUUID().slice(0, 8)}`;
+      ztoolkit.log("[ModelDialogV2] addCustomProviderCard:", customId);
+      const v2 = addon.data.userProviderConfigV2!;
+      v2.addedProviders[customId] = {
+        id: customId as ProviderId,
+        name: "Custom Provider",
+        env: ["API_KEY"],
+      };
+      this.createAndAppendCard(customId);
+    } finally {
+      this.interacting = false;
+    }
   }
 
   // ---- Save ----
@@ -510,8 +536,11 @@ class ModelDialogV2 {
 
   // ---- Model selection popup ----
 
-  openModelSelect(providerId: string, onSelect: (modelName: string) => void) {
+  async openModelSelect(providerId: string, onSelect: (modelName: string) => void) {
     if (!this.modelOverlay || !this.modelList || !this.modelSearchInput) return;
+    if (this.interacting) return;
+    this.interacting = true;
+    await this.ensureLiveData();
 
     const models = this.getActiveProviders()?.[providerId]?.models ?? {};
     const entries = Object.entries(models).sort(([, a], [, b]) =>
@@ -598,6 +627,7 @@ class ModelDialogV2 {
   }
 
   closeModelSelect() {
+    this.interacting = false;
     this.modelOverlay?.classList.remove("opacity-100");
     this.modelOverlay?.classList.add(
       "opacity-0",
