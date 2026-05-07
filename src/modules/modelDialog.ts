@@ -19,6 +19,7 @@
 import { config } from "../../package.json";
 import { ProviderLogoButton } from "../components/buttons/providerLogoButton";
 import { ProviderCard } from "../components/providerCard";
+import { getString } from "../utils/locale";
 import {
   getModelsDevLogoUrl,
   resolveProviderIcon,
@@ -115,6 +116,13 @@ class ModelDialogV2 {
       )
     ) {
       return;
+    }
+
+    if (this.searchInput) {
+      this.searchInput.placeholder = getString("model-dialog-search-providers");
+    }
+    if (this.modelSearchInput) {
+      this.modelSearchInput.placeholder = getString("model-dialog-search-models");
     }
 
     const v2 = addon.data.userProviderConfigV2!;
@@ -311,7 +319,7 @@ class ModelDialogV2 {
     this.customButtonContainer.replaceChildren();
     ztoolkit.UI.appendElement(
       ProviderLogoButton({
-        text: "Custom Provider",
+        text: getString("model-dialog-custom-provider"),
         iconUrl: `chrome://${config.addonRef}/content/icons/favicon.svg`,
         onClick: () => {
           this.hidePopup();

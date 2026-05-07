@@ -18,3 +18,13 @@ reader-bar-ask-placeholder = 问问 AI...
 input-ai-disclaimer = 以上回答由AI生成，其回答未必正确无误。
 input-full-text-tooltip = 附加全文
 input-stop-tooltip = 停止生成
+
+model-dialog-title = 模型提供商
+model-dialog-add-provider = 添加提供商
+model-dialog-search-providers = 搜索提供商...
+model-dialog-search-models = 搜索或输入模型名称后按回车...
+model-dialog-custom-provider = 自定义提供商
+model-dialog-browse-model = 浏览并选择模型
+model-dialog-type-model = 点击或输入模型名称...
+model-dialog-delete-model = 删除模型
+model-dialog-add-model = 添加模型

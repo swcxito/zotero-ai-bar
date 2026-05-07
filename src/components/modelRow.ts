@@ -18,6 +18,7 @@
 
 import { ButtonBase } from "./buttons/buttonBase";
 import { Icons } from "./common";
+import { getString } from "../utils/locale";
 
 export interface CardModelRowProps {
   doc: Document;
@@ -81,7 +82,7 @@ export function CardModelRow({ doc, data, onSelectModel }: CardModelRowProps) {
               "dark:hover:bg-zinc-700",
               "cursor-pointer",
             ],
-            title: "Browse & Select Model",
+            title: getString("model-dialog-browse-model"),
             onClick: () => onSelectModel?.(),
           }),
           {
@@ -103,7 +104,7 @@ export function CardModelRow({ doc, data, onSelectModel }: CardModelRowProps) {
             ],
             properties: {
               type: "text",
-              placeholder: "Click or type model name...",
+              placeholder: getString("model-dialog-type-model"),
               value: data?.name || "",
               readOnly: true,
             },
@@ -127,7 +128,7 @@ export function CardModelRow({ doc, data, onSelectModel }: CardModelRowProps) {
           "rounded-lg",
           "shrink-0",
         ],
-        title: "Delete Model",
+        title: getString("model-dialog-delete-model"),
         onClick: (e) =>
           (e.currentTarget as HTMLElement).parentElement?.remove(),
       }),

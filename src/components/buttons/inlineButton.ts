@@ -20,6 +20,7 @@ import { TagElementProps } from "zotero-plugin-toolkit";
 import { ButtonBase } from "./buttonBase";
 import { BUTTON_VARIANTS } from "./buttonVariants";
 import { Icons } from "../common";
+import { getString } from "../../utils/locale";
 
 export interface InlineButtonProps {
   onClicked: (e: Event) => void;
@@ -29,7 +30,7 @@ export interface InlineButtonProps {
 
 export function InlineButton({
   onClicked,
-  label = "Add Model",
+  label = getString("model-dialog-add-model"),
   classList,
 }: InlineButtonProps): TagElementProps {
   return ButtonBase({

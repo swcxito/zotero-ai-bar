@@ -18,3 +18,13 @@ reader-bar-ask-placeholder = Ask AI...
 input-ai-disclaimer = AI-generated content may not be accurate.
 input-full-text-tooltip = Attach full text
 input-stop-tooltip = Stop generating
+
+model-dialog-title = Model Providers
+model-dialog-add-provider = Add Provider
+model-dialog-search-providers = Search providers...
+model-dialog-search-models = Search or type model name and press Enter...
+model-dialog-custom-provider = Custom Provider
+model-dialog-browse-model = Browse & Select Model
+model-dialog-type-model = Click or type model name...
+model-dialog-delete-model = Delete Model
+model-dialog-add-model = Add Model

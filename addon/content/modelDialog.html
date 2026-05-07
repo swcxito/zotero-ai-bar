@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link href="chrome://__addonRef__/content/app.css" rel="stylesheet" />
+    <link rel="localization" href="__addonRef__-addon.ftl" />
     <!--  <link href="./app.css" rel="stylesheet"/>-->
     <script>
       // document.addEventListener("DOMContentLoaded", (ev) => {
@@ -18,7 +19,7 @@
     </script>
     <!--   <script src="https://cdn.tailwindcss.com"></script>-->
     <!-- <script src="chrome://__addonRef__/content/tailwind.js"></script> -->
-    <title>Provider Settings</title>
+    <title data-l10n-id="model-dialog-title">Model Providers</title>
   </head>
 
   <body class="duration-300 transition-colors text-zinc-900 dark:text-zinc-100">
@@ -28,7 +29,7 @@
           id="provider-head"
           class="mb-10 flex items-center justify-between"
         >
-          <h2 class="text-xl font-semibold">Model Providers</h2>
+          <h2 class="text-xl font-semibold" data-l10n-id="model-dialog-title">Model Providers</h2>
           <div id="add-provider-container">
             <button
               id="add-provider-button"
@@ -47,7 +48,7 @@
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
-              <span>Add Provider</span>
+              <span data-l10n-id="model-dialog-add-provider">Add Provider</span>
             </button>
           </div>
         </header>
