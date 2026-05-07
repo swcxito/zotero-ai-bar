@@ -22,9 +22,10 @@ import { Icons } from "./common";
 export interface CardModelRowProps {
   doc: Document;
   data?: { id?: string; name: string; enabled: boolean };
+  onSelectModel?: () => void;
 }
 
-export function CardModelRow({ doc, data }: CardModelRowProps) {
+export function CardModelRow({ doc, data, onSelectModel }: CardModelRowProps) {
   const row = ztoolkit.UI.createElement(doc, "div", {
     tag: "div",
     classList: [
@@ -78,8 +79,10 @@ export function CardModelRow({ doc, data }: CardModelRowProps) {
               "hover:text-rose-400",
               "hover:bg-white",
               "dark:hover:bg-zinc-700",
+              "cursor-pointer",
             ],
-            title: "Quick Select",
+            title: "Browse & Select Model",
+            onClick: () => onSelectModel?.(),
           }),
           {
             tag: "input",
@@ -96,12 +99,20 @@ export function CardModelRow({ doc, data }: CardModelRowProps) {
               "transition-all",
               "duration-200",
               "font-semibold",
+              "cursor-pointer",
             ],
             properties: {
               type: "text",
-              placeholder: "Enter model name",
+              placeholder: "Click or type model name...",
               value: data?.name || "",
+              readOnly: true,
             },
+            listeners: [
+              {
+                type: "click",
+                listener: () => onSelectModel?.(),
+              },
+            ],
           },
         ],
       },

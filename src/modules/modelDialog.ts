@@ -20,6 +20,8 @@ import { config } from "../../package.json";
 import { ProviderLogoButton } from "../components/buttons/providerLogoButton";
 import { ProviderCard } from "../components/providerCard";
 import { getV2LogoUrl, findModelMetadata } from "../utils/providers";
+import { getModelIconPath } from "../utils/modelAnalyzer";
+import { ModelIcons } from "../components/common";
 import type {
   UserProviderConfigV2,
   AddedProvider,
@@ -58,6 +60,9 @@ class ModelDialogV2 {
   private readonly searchInput: HTMLInputElement | null;
   private readonly providerList: HTMLElement | null;
   private readonly customButtonContainer: HTMLElement | null;
+  private readonly modelOverlay: HTMLElement | null;
+  private readonly modelSearchInput: HTMLInputElement | null;
+  private readonly modelList: HTMLElement | null;
 
   // Pinned to top when search is empty (order = display order)
   private static readonly PINNED_ORDER = [
@@ -80,6 +85,9 @@ class ModelDialogV2 {
     this.searchInput = this.doc.querySelector("#provider-search-input");
     this.providerList = this.doc.querySelector("#add-provider-list");
     this.customButtonContainer = this.doc.querySelector("#add-provider-custom");
+    this.modelOverlay = this.doc.querySelector("#model-select-overlay");
+    this.modelSearchInput = this.doc.querySelector("#model-search-input");
+    this.modelList = this.doc.querySelector("#model-select-list");
   }
 
   init() {
@@ -155,6 +163,9 @@ class ModelDialogV2 {
       isCustom,
       models: buildModelRows(v2, providerId),
       doc: this.doc,
+      onAddModel: (cb: (name: string) => void) => {
+        this.openModelSelect(providerId, cb);
+      },
       onDelete: () => this.renderProviders(),
     });
 
@@ -352,8 +363,13 @@ class ModelDialogV2 {
         newEnv[providerId] = { ...cardEnv };
       }
 
-      // Models
+      // Models (dedup by providerId + name)
+      const seenModels = new Set<string>();
       for (const cm of cardModels) {
+        const dedupKey = `${providerId}::${cm.name.toLowerCase()}`;
+        if (seenModels.has(dedupKey)) continue;
+        seenModels.add(dedupKey);
+
         const existing = v2.addedModels.find(
           (m) => m.providerId === providerId && m.id === cm.id,
         );
@@ -371,7 +387,7 @@ class ModelDialogV2 {
             ...(metadata ?? {
               id: cm.name,
               name: cm.name,
-              family: "gpt" as import("../utils/providers").ModelFamily,
+              family: "unknown" as import("../utils/providers").ModelFamily,
               reasoning: false,
               temperature: true,
               modalities: {
@@ -433,11 +449,12 @@ class ModelDialogV2 {
 
     // Close on Escape key
     this.doc.addEventListener("keydown", (event: KeyboardEvent) => {
-      if (
-        event.key === "Escape" &&
-        this.overlay?.classList.contains("opacity-100")
-      ) {
-        this.hidePopup();
+      if (event.key === "Escape") {
+        if (this.modelOverlay?.classList.contains("opacity-100")) {
+          this.closeModelSelect();
+        } else if (this.overlay?.classList.contains("opacity-100")) {
+          this.hidePopup();
+        }
       }
     });
   }
@@ -461,6 +478,104 @@ class ModelDialogV2 {
     );
     this.overlay?.classList.add("opacity-100");
     this.searchInput?.focus();
+  }
+
+  // ---- Model selection popup ----
+
+  openModelSelect(providerId: string, onSelect: (modelName: string) => void) {
+    if (!this.modelOverlay || !this.modelList || !this.modelSearchInput) return;
+
+    const models = addon.data.commonProviders?.[providerId]?.models ?? {};
+    const entries = Object.entries(models).sort(([, a], [, b]) =>
+      a.name.localeCompare(b.name),
+    );
+
+    const renderList = (query: string) => {
+      this.modelList!.replaceChildren();
+      const q = query.toLowerCase().trim();
+      const filtered = q
+        ? entries.filter(
+            ([, m]) =>
+              m.name.toLowerCase().includes(q) ||
+              m.id.toLowerCase().includes(q),
+          )
+        : entries;
+
+      for (const [id, m] of filtered) {
+        const btn = this.doc.createElement("button");
+        btn.className =
+          "flex w-full items-center gap-3 px-4 py-1.5 text-left text-sm text-zinc-700 transition-colors hover:bg-rose-400 hover:text-white dark:text-zinc-200";
+
+        const iconMarkup = getModelIconPath(m.family);
+        if (iconMarkup !== ModelIcons.custom) {
+          const icon = this.doc.createElement("span");
+          icon.innerHTML = iconMarkup;
+          icon.className =
+            "w-4 h-4 shrink-0 inline-flex items-center justify-center";
+          btn.appendChild(icon);
+        }
+
+        const span = this.doc.createElement("span");
+        span.textContent = m.name;
+        btn.appendChild(span);
+
+        btn.addEventListener("click", () => {
+          this.closeModelSelect();
+          onSelect(m.name);
+        });
+        this.modelList!.appendChild(btn);
+      }
+    };
+
+    // Replace old event listeners by cloning (previous handler cleared)
+    const existingHandler = (this.modelSearchInput as any)._modelSelectHandler;
+    if (existingHandler) {
+      this.modelSearchInput.removeEventListener("keydown", existingHandler);
+    }
+
+    renderList("");
+
+    const searchHandler = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        const val = this.modelSearchInput!.value.trim();
+        if (val) {
+          this.closeModelSelect();
+          onSelect(val);
+        }
+        return;
+      }
+      renderList(this.modelSearchInput!.value);
+    };
+
+    this.modelSearchInput.addEventListener("input", () => {
+      renderList(this.modelSearchInput!.value);
+    });
+    this.modelSearchInput.addEventListener("keydown", searchHandler);
+    (this.modelSearchInput as any)._modelSelectHandler = searchHandler;
+
+    this.modelSearchInput.value = "";
+
+    // Close on overlay click
+    this.modelOverlay.onclick = (e: Event) => {
+      if (e.target === this.modelOverlay) this.closeModelSelect();
+    };
+
+    this.modelOverlay.classList.remove(
+      "opacity-0",
+      "invisible",
+      "pointer-events-none",
+    );
+    this.modelOverlay.classList.add("opacity-100");
+    this.modelSearchInput.focus();
+  }
+
+  closeModelSelect() {
+    this.modelOverlay?.classList.remove("opacity-100");
+    this.modelOverlay?.classList.add(
+      "opacity-0",
+      "invisible",
+      "pointer-events-none",
+    );
   }
 }
 

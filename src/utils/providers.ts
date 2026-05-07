@@ -382,7 +382,7 @@ export function convertLegacyLLMConfigByKey(
           : {
               id: model.name,
               name: model.name,
-              family: "gpt" as ModelFamily,
+              family: "unknown" as ModelFamily,
               reasoning: false,
               temperature: true,
               modalities: { input: ["text"], output: ["text"] } as Modalities,
@@ -505,6 +505,7 @@ export type ProviderId =
 
 /** 模型家族 */
 export type ModelFamily =
+  | "unknown"
   | "allenai"
   | "alpha"
   | "claude-haiku"

@@ -30,6 +30,7 @@ export interface ProviderCardV2Props {
   isCustom: boolean;
   models: { id: string; name: string; enabled: boolean }[];
   doc: Document;
+  onAddModel?: (cb: (name: string) => void) => void;
   onDelete?: () => void;
 }
 
@@ -43,6 +44,7 @@ export function ProviderCard({
   isCustom,
   models,
   doc,
+  onAddModel,
   onDelete = () => {},
 }: ProviderCardV2Props): Node {
   const card = ztoolkit.UI.createElement(doc, "div", {
@@ -107,11 +109,33 @@ export function ProviderCard({
 
   const modelCardList = cardBody.querySelector(".model-card-list");
 
+  const getExistingModelNames = (skipRow?: HTMLElement): Set<string> => {
+    const names = new Set<string>();
+    modelCardList?.querySelectorAll(":scope > div").forEach((rowEl) => {
+      if (skipRow && rowEl === skipRow) return;
+      const data = (rowEl as RowWithGetData).getData();
+      if (data.name) names.add(data.name.toLowerCase());
+    });
+    return names;
+  };
+
+  const openSelectForRow = (row: HTMLElement, existingName?: string) => {
+    onAddModel?.((name: string) => {
+      const existing = getExistingModelNames(row as HTMLElement);
+      if (existing.has(name.toLowerCase())) return;
+      const textInput = row.querySelector(
+        'input[type="text"]',
+      ) as HTMLInputElement;
+      if (textInput) textInput.value = name;
+    });
+  };
+
   models.forEach((model) => {
     if (model.id) {
       const row = CardModelRow({
         doc,
         data: { id: model.id, name: model.name, enabled: model.enabled },
+        onSelectModel: () => openSelectForRow(row as HTMLElement, model.name),
       });
       modelCardList?.appendChild(row);
     }
@@ -123,8 +147,22 @@ export function ProviderCard({
     InlineButton({
       onClicked: () => {
         if (modelCardList) {
-          const row = CardModelRow({ doc });
+          const row = CardModelRow({
+            doc,
+            onSelectModel: () => openSelectForRow(row as HTMLElement),
+          });
           modelCardList.insertBefore(row, addModelButton);
+          onAddModel?.((name: string) => {
+            const existing = getExistingModelNames(row as HTMLElement);
+            if (existing.has(name.toLowerCase())) {
+              (row as HTMLElement).remove();
+              return;
+            }
+            const textInput = (row as HTMLElement).querySelector(
+              'input[type="text"]',
+            ) as HTMLInputElement;
+            if (textInput) textInput.value = name;
+          });
         }
       },
     }),
@@ -153,9 +191,7 @@ export function ProviderCard({
   }
 
   (card as any).getData = () => {
-    const modelRows = modelCardList?.querySelectorAll(
-      "div[class*='model-card-list'] > div",
-    );
+    const modelRows = modelCardList?.querySelectorAll(":scope > div");
     const collected: { id: string; name: string; enabled: boolean }[] = [];
     modelRows?.forEach((row: Element) => {
       const data = (row as RowWithGetData).getData();
