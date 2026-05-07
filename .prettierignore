@@ -8,5 +8,6 @@ pnpm-lock.yaml
 .DS_Store
 .scaffold
 **/*.min.css
+*.min.json
 addon/content/app.css
 addon/content/styles
