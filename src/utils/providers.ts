@@ -281,15 +281,6 @@ export function getV2LogoUrl(providerId: string): string {
   return `chrome://${config.addonRef}/content/icons/favicon.svg`;
 }
 
-/** 解析 provider 对应的 API key env 变量名 */
-export function resolveEnvKeyName(providerId: string): string {
-  return (
-    PROVIDER_ENV_KEY_MAP[providerId] ??
-    addon.data.commonProviders?.[providerId]?.env?.[0] ??
-    "API_KEY"
-  );
-}
-
 /** 将 providerId 和 model 对象转换为 ModelSelect。 */
 function toModelSelect(
   providerId: ProviderId,
