@@ -19,6 +19,12 @@
 import { getLocaleID } from "../utils/locale";
 import { config } from "../../package.json";
 import { InputArea } from "../components/inputArea";
+import {
+  convertLegacyLLMConfigByKey,
+  loadProvidersFromFile,
+} from "../utils/providers";
+import { getPref } from "../utils/prefs";
+// import { llmTest } from "./llm";
 
 export function injectCSS(doc: Document | ShadowRoot, filename: string) {
   // 获取插件内资源的 URL
@@ -60,8 +66,8 @@ function injectDebugTailwindScript(root: ShadowRoot) {
 
 export async function registerReaderItemPaneSection() {
   // Setup LLM callbacks to update UI
-  if (!addon.data.sidePaneMap) {
-    addon.data.sidePaneMap = new Map();
+  if (!addon.data.sidePaneBodyMap) {
+    addon.data.sidePaneBodyMap = new Map<string, HTMLElement>();
   }
 
   Zotero.ItemPaneManager.registerSection({
@@ -115,8 +121,12 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
       setSectionSummary,
       setSectionButtonStatus,
     }) => {
-      if (item && addon.data.sidePaneMap && addon.chatManager.currentTabID) {
-        addon.data.sidePaneMap.set(addon.chatManager.currentTabID, body);
+      if (
+        item &&
+        addon.data.sidePaneBodyMap &&
+        addon.chatManager.currentTabID
+      ) {
+        addon.data.sidePaneBodyMap.set(addon.chatManager.currentTabID, body);
       }
       const root = body.querySelector("#ai-bar-chat-root") as HTMLElement;
       const shadowRoot = root.attachShadow({ mode: "open" });
@@ -156,19 +166,39 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
         onClick: () => {
           const currentTab = addon.chatManager.currentTabID;
           if (!currentTab) return;
-          const body = addon.data.sidePaneMap?.get(currentTab);
+          const body = addon.data.sidePaneBodyMap?.get(currentTab);
           if (!body) return;
 
           const root = body.querySelector("#ai-bar-chat-root");
           if (!root || !root.shadowRoot) return;
           const shadowRoot = root.shadowRoot;
-          const doc = body.ownerDocument;
           const messageContainer =
             shadowRoot.querySelector(".message-container");
           if (messageContainer) {
             messageContainer.innerHTML = "";
           }
           addon.chatManager.clearSectionHistory(currentTab);
+        },
+      },
+      {
+        type: "debug",
+        icon: "chrome://zotero/skin/16/universal/note.svg",
+        onClick: async () => {
+          ztoolkit.log("[Debug] Loading common_providers.min.json...");
+          const providers = await loadProvidersFromFile();
+          ztoolkit.log("[Debug] Loaded providers:", providers);
+          const llmConfig = getPref("llm.providerConfigs");
+          ztoolkit.log("[Debug] Old llm.providerConfigs:", llmConfig);
+          const result = convertLegacyLLMConfigByKey(llmConfig, providers!);
+          ztoolkit.log(
+            "[Debug] Converted UserProviderConfigV2:",
+            result.userProviderConfigV2,
+          );
+          ztoolkit.log(
+            "[Debug] Legacy custom providers:",
+            result.legacyCustomProviderConfigs,
+          );
+          // await llmTest();
         },
       },
     ],

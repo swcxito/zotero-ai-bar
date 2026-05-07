@@ -84,7 +84,7 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
       IconView({ iconMarkup: Icons.FileText, sizeRem: 1 }),
     ),
   );
-  if (addon.chatManager.getOrCreateSectionState(sectionId).fullTextEnabled) {
+  if (addon.chatManager.sessionsMap.get(sectionId)?.fullTextEnabled) {
     fullTextBtn.classList.remove(
       "text-slate-400",
       "dark:text-neutral-500",
@@ -175,8 +175,9 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
   // Helper: update send button appearance based on textarea content
   // ─────────────────────────────────────────────────────────────────────────
   function updateSendBtnState() {
-    const sectionState = addon.chatManager.sidebarStates.get(sectionId);
-    const isStreaming = sectionState?.isStreaming ?? false;
+    const isStreaming =
+      addon.chatManager.sessionsMap.get(sectionId)?.pending.userMessage ??
+      false;
     if (isStreaming) return; // streaming state is controlled by ChatManager.updateSectionInputArea
     const hasText = textarea.value.trim().length > 0;
     if (hasText) {
@@ -212,7 +213,7 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
   // Helper: scroll message container to bottom
   // ─────────────────────────────────────────────────────────────────────────
   function scrollToBottom() {
-    const body = addon.data.sidePaneMap?.get(sectionId);
+    const body = addon.data.sidePaneBodyMap?.get(sectionId);
     if (!body) return;
     const root = body.querySelector("#ai-bar-chat-root");
     const container = root?.shadowRoot?.querySelector(".message-container");
@@ -228,11 +229,12 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
     const text = textarea.value.trim();
     if (!text) return;
 
-    const sectionState = addon.chatManager.sidebarStates.get(sectionId);
-    if (sectionState?.isStreaming) return;
+    //todo enhance streaming state handling:
+    // const sectionState = addon.chatManager.sidebarStates.get(sectionId);
+    // if (sectionState?.isStreaming) return;
 
     // Get message container from shadow DOM
-    const body = addon.data.sidePaneMap?.get(sectionId);
+    const body = addon.data.sidePaneBodyMap?.get(sectionId);
     if (!body) return;
     const root = body.querySelector("#ai-bar-chat-root");
     if (!root?.shadowRoot) return;
@@ -244,7 +246,6 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
     // Append user bubble
     const userBubble = ChatBox({
       doc,
-      annotation: undefined,
       isUser: true,
     }) as HTMLElement;
     const msgEl = userBubble.querySelector(
@@ -263,8 +264,7 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
     try {
       await addon.chatManager.sendChatRequest({
         userPrompt: text,
-        hostMode: "sidebar",
-        sectionId,
+        tabId: sectionId,
       });
     } catch (e) {
       ztoolkit.log("sendChatRequest error:", e);
@@ -295,9 +295,9 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
   sendBtn.addEventListener("click", () => {
     if (sendBtn.dataset.mode === "stop") {
       // Abort the ongoing stream for this section
-      const sectionState = addon.chatManager.sidebarStates.get(sectionId);
-      if (sectionState?.abortController) {
-        sectionState.abortController.abort();
+      const session = addon.chatManager.sessionsMap.get(sectionId);
+      if (session?.pending.abortController) {
+        session.pending.abortController.abort();
       }
     } else {
       handleSend();
@@ -306,9 +306,10 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
 
   // Full-text toggle button
   fullTextBtn.addEventListener("click", () => {
-    const sectionState = addon.chatManager.getOrCreateSectionState(sectionId);
-    sectionState.fullTextEnabled = !sectionState.fullTextEnabled;
-    if (sectionState.fullTextEnabled) {
+    const session = addon.chatManager.sessionsMap.get(sectionId);
+    if (!session) return;
+    session.fullTextEnabled = !session.fullTextEnabled;
+    if (session.fullTextEnabled) {
       fullTextBtn.classList.remove(
         "text-slate-400",
         "dark:text-neutral-500",

@@ -17,23 +17,62 @@
  */
 
 import { ElementProps, TagElementProps } from "zotero-plugin-toolkit";
-import { getLogoUrl } from "../utils/providerInfo";
 import { Icons } from "./common";
-import { UserProvider } from "../types";
+import { ButtonBase } from "./buttons/buttonBase";
 import { IconView } from "./iconView";
 
 export interface CardHeadProps {
-  data: UserProvider;
+  iconUrl: string;
+  providerName: string;
+  baseUrl?: string;
+  envKeys: string[];
+  envValues: Record<string, string>;
+  isCustom: boolean;
   onDeleteClicked: () => void;
   onToggleCollapse: (e: Event) => void;
 }
 
+function makeEnvInput(key: string, value: string): TagElementProps {
+  return {
+    tag: "input",
+    classList: [
+      "flex-1",
+      "bg-white",
+      "dark:bg-zinc-900",
+      "border",
+      "border-gray-300",
+      "dark:border-zinc-700",
+      "rounded-lg",
+      "px-2",
+      "py-1",
+      "text-sm",
+      "outline-none",
+      "focus:ring-1",
+      "focus:ring-rose-300",
+      "transition-all",
+      "duration-200",
+      "ease-in-out",
+      "env-input",
+    ],
+    properties: {
+      type: "text",
+      placeholder: key,
+      value,
+    },
+  };
+}
+
 export function CardHead({
-  data,
+  iconUrl,
+  providerName,
+  baseUrl,
+  envKeys,
+  envValues,
+  isCustom,
   onDeleteClicked,
   onToggleCollapse,
 }: CardHeadProps): ElementProps {
-  const urlLabel: TagElementProps = {
+  const nameLabel: TagElementProps = {
     tag: "div",
     classList: [
       "text-xs",
@@ -44,7 +83,7 @@ export function CardHead({
       "text-zinc-700",
       "dark:text-zinc-300",
     ],
-    properties: { innerText: data.baseUrl },
+    properties: { innerText: providerName },
   };
   const urlInput: TagElementProps = {
     tag: "input",
@@ -68,7 +107,7 @@ export function CardHead({
     ],
     properties: {
       type: "text",
-      value: data.baseUrl || "",
+      value: baseUrl || "",
       placeholder: "Base URL",
     },
   };
@@ -94,7 +133,7 @@ export function CardHead({
         classList: ["flex", "items-center", "gap-4", "flex-1", "min-w-0"],
         children: [
           IconView({
-            iconMarkup: getLogoUrl(data.key ?? "favicon"),
+            iconMarkup: iconUrl,
             sizeRem: 1.5,
             extraClasses: ["shrink-0"],
           }),
@@ -111,34 +150,8 @@ export function CardHead({
               "min-w-10",
             ],
             children: [
-              data.isCustom ? urlInput : urlLabel,
-              {
-                tag: "input",
-                classList: [
-                  "flex-1",
-                  "bg-white",
-                  "dark:bg-zinc-900",
-                  "border",
-                  "border-gray-300",
-                  "dark:border-zinc-700",
-                  "rounded-lg",
-                  "px-2",
-                  "py-1",
-                  "text-sm",
-                  "outline-none",
-                  "focus:ring-1",
-                  "focus:ring-rose-300",
-                  "transition-all",
-                  "duration-200",
-                  "ease-in-out",
-                  "key-input",
-                ],
-                properties: {
-                  type: "text",
-                  placeholder: "API Key",
-                  value: data.apiKey || "",
-                },
-              },
+              isCustom ? urlInput : nameLabel,
+              ...envKeys.map((key) => makeEnvInput(key, envValues[key] ?? "")),
             ],
           },
           // tail buttons
@@ -146,8 +159,8 @@ export function CardHead({
             tag: "div",
             classList: ["flex", "items-center", "gap-1", "shrink-0"],
             children: [
-              {
-                tag: "button",
+              ButtonBase({
+                iconMarkup: Icons.Delete,
                 classList: [
                   "p-2",
                   "text-zinc-500",
@@ -158,11 +171,10 @@ export function CardHead({
                   "hover:bg-white/50",
                   "dark:hover:bg-red-950",
                 ],
-                children: [IconView({ iconMarkup: Icons.Delete, sizeRem: 1 })],
-                listeners: [{ type: "click", listener: onDeleteClicked }],
-              },
-              {
-                tag: "button",
+                onClick: () => onDeleteClicked(),
+              }),
+              ButtonBase({
+                iconMarkup: Icons.Chevron,
                 classList: [
                   "p-2",
                   "text-zinc-500",
@@ -174,21 +186,13 @@ export function CardHead({
                   "hover:bg-white/50",
                   "dark:hover:bg-zinc-800",
                 ],
-                children: [
-                  {
-                    tag: "div",
-                    classList: [
-                      "transition-transform",
-                      "duration-300",
-                      "ease-in-out",
-                    ],
-                    children: [
-                      IconView({ iconMarkup: Icons.Chevron, sizeRem: 1 }),
-                    ],
-                  },
+                iconExtraClasses: [
+                  "transition-transform",
+                  "duration-300",
+                  "ease-in-out",
                 ],
-                listeners: [{ type: "click", listener: onToggleCollapse }],
-              },
+                onClick: (e) => onToggleCollapse(e),
+              }),
             ],
           },
         ],

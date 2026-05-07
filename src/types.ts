@@ -16,41 +16,29 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { PROVIDERS } from "./utils/providerInfo";
-
-export interface ProviderInfo {
-  key: string;
+/**
+ * @deprecated 旧版 provider 配置格式。使用 `UserProviderConfigV2`（来自 `src/utils/providers.ts`）代替。
+ * 启动时通过 `convertLegacyLLMConfigByKey()` 自动转换为 v2 格式。
+ * 旧格式的自定义 provider 保留在 `legacyCustomProviderConfigs` 中。
+ */
+export interface UserProviderConfig {
+  id: string;
+  key?: string;
+  name: string;
   baseUrl: string;
-  models?: string[];
-}
-
-export interface UserProviderModel {
-  id?: string; // 模型唯一 ID (UUID)
-  name: string; // 模型名称
-  enable?: boolean; // 是否启用
-  providerId?: string; // 所属 Provider ID
-}
-
-export interface UserProvider {
-  id: string; // Provider 唯一 ID (UUID)
-  key?: keyof typeof PROVIDERS; // 如果是预设，则有此字段，对应 defaultProvidersMap 的 key
-  name: string; // Provider 名称 (可由用户修改)
-  baseUrl?: string; // API Base URL
-  apiKey?: string; // API Key
-  models?: UserProviderModel[]; // 模型列表
-  isCustom: boolean; // 是否为自定义 Provider
-}
-
-export interface UserProviderConfig extends UserProvider {
-  name: string; // Provider 名称 (可由用户修改)
-  baseUrl: string; // API Base URL
-  apiKey: string; // API Key
-  models: UserProviderModel[]; // 模型列表
+  apiKey: string;
+  models: {
+    id?: string;
+    name: string;
+    enable?: boolean;
+    providerId?: string;
+  }[];
+  isCustom: boolean;
 }
 
 export interface UserPrompt {
-  id: string; // UUID via crypto.randomUUID()
-  name: string; // Display name (e.g., "Critique Method")
-  description: string; // Short description shown in table/menu
-  prompt: string; // The actual prompt content text
+  id: string;
+  name: string;
+  description: string;
+  prompt: string;
 }

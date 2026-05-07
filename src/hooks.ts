@@ -7,11 +7,16 @@ import {
 } from "./modules/readerBarPopup";
 import { onModelDialogLoad } from "./modules/modelDialog";
 import { onPromptEditorLoad } from "./modules/promptEditor";
-import { getPref, registerPrefs } from "./utils/prefs";
+import { getPref, setPref, registerPrefs } from "./utils/prefs";
 import { ensureChatWindowReady } from "./utils/window";
 import { registerReaderItemPaneSection } from "./modules/readerItemPane";
 import { clearDeadChatWindowRef, isWindowAlive } from "./utils/window";
 import { registerTabObserver } from "./modules/tabObserver";
+import { preloadLLMRuntime } from "./modules/llm";
+import {
+  convertLegacyLLMConfigByKey,
+  ensureCommonProviders,
+} from "./utils/providers";
 
 async function onStartup() {
   await Promise.all([
@@ -21,9 +26,9 @@ async function onStartup() {
   ]);
 
   initLocale();
+  await preloadLLMRuntime();
 
   addon.chatManager.chatHostMode = addon.chatManager.getCurrentHostMode();
-  addon.chatManager.ensureRequestMaps();
 
   if (
     getPref("chat.openOnStartup") === true &&
@@ -56,9 +61,32 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
     `${addon.data.config.addonRef}-mainWindow.ftl`,
   );
 
+  // Config v2: lazy-load provider metadata + convert legacy config
+  await ensureCommonProviders();
   const llmConfig = getPref("llm.providerConfigs");
-  if (llmConfig)
-    addon.data.userProviderConfigs = JSON.parse(getPref("llm.providerConfigs"));
+  ztoolkit.log("[hooks] llmConfig:", llmConfig);
+
+  const { userProviderConfigV2, legacyCustomProviderConfigs } =
+    convertLegacyLLMConfigByKey(
+      llmConfig,
+      addon.data.commonProviders,
+      getPref("llm.modelId"),
+    );
+  addon.data.userProviderConfigV2 = userProviderConfigV2;
+  addon.data.legacyCustomProviderConfigs = legacyCustomProviderConfigs;
+  ztoolkit.log("[hooks] Converted v2 config:", {
+    providers: Object.keys(userProviderConfigV2.addedProviders),
+    models: userProviderConfigV2.addedModels.length,
+    envKeys: Object.keys(userProviderConfigV2.env),
+  });
+
+  // Sync legacy llm.modelId to v2 composite format
+  if (addon.data.userProviderConfigV2.active) {
+    setPref(
+      "llm.modelId",
+      `${addon.data.userProviderConfigV2.active.providerId}::${addon.data.userProviderConfigV2.active.modelId}`,
+    );
+  }
 
   // Load user custom prompts
   const userPromptsConfig = getPref("prompt.userPrompts");
@@ -69,6 +97,7 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   if (addon.chatManager.getCurrentHostMode() === "sidebar") {
     await registerReaderItemPaneSection();
   }
+  ztoolkit.log("stream", typeof TransformStream); // 应该是 "function"
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {

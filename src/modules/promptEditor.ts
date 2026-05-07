@@ -1,5 +1,5 @@
 import { config } from "../../package.json";
-import { InlineButton } from "../components/inlineButton";
+import { InlineButton } from "../components/buttons/inlineButton";
 import { UserPrompt } from "../types";
 import { setPref } from "../utils/prefs";
 import { getLocaleID } from "../utils/locale";

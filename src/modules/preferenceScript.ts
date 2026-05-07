@@ -18,6 +18,7 @@
 
 import { config } from "../../package.json";
 import { getPref, setPref } from "../utils/prefs";
+import type { ProviderId } from "../utils/providers";
 import { openDialog } from "./modelDialog";
 import { openPromptEditor } from "./promptEditor";
 import { getLocaleID, getString } from "../utils/locale";
@@ -40,59 +41,90 @@ function makeId(id: string): string {
   return `#${config.addonRef}-${id}`;
 }
 
-function updateModelSelector(modelSelector: HTMLSelectElement, doc: Document) {
-  const currentValue = modelSelector.value;
-  modelSelector.innerHTML = "";
-  const providers = addon.data.userProviderConfigs;
-  for (const provider of providers ?? []) {
-    for (const model of provider.models ?? []) {
-      if (!model.id) continue;
-      const option = doc.createElement("option");
-      option.value = model.id;
-      option.textContent = `${model.name} (${provider.name})`;
-      modelSelector.appendChild(option);
+function populateSelectorFromV2(
+  selector: HTMLSelectElement,
+  doc: Document,
+  includeEmptyOption: boolean = false,
+) {
+  const currentValue = selector.value;
+  selector.innerHTML = "";
+  if (includeEmptyOption) {
+    const opt = doc.createElement("option");
+    opt.value = "";
+    selector.appendChild(opt);
+  }
+
+  // v2 models: use AddedModel data directly, only enabled
+  const addedModels = addon.data.userProviderConfigV2?.addedModels ?? [];
+  const addedProviders = addon.data.userProviderConfigV2?.addedProviders ?? {};
+  for (const m of addedModels) {
+    if (m.enabled === false) continue;
+    const provider = addedProviders[m.providerId];
+    const providerName = provider?.name ?? m.providerId;
+    const opt = doc.createElement("option");
+    opt.value = `${m.providerId}::${m.id}`;
+    opt.textContent = `${m.name} (${providerName})`;
+    selector.appendChild(opt);
+  }
+
+  // Legacy custom providers
+  for (const conf of addon.data.legacyCustomProviderConfigs ?? []) {
+    for (const model of conf.models ?? []) {
+      const opt = doc.createElement("option");
+      opt.value = `${conf.id}::${model.name}`;
+      opt.textContent = `${model.name} (${conf.name})`;
+      selector.appendChild(opt);
     }
-    modelSelector.value = currentValue;
+  }
+
+  selector.value = currentValue;
+}
+
+function setActiveFromCompositeKey(value: string) {
+  if (!value) return;
+  const sepIdx = value.indexOf("::");
+  if (sepIdx < 0) return;
+  const providerId = value.slice(0, sepIdx);
+  const modelId = value.slice(sepIdx + 2);
+  if (addon.data.userProviderConfigV2) {
+    addon.data.userProviderConfigV2.active = {
+      providerId: providerId as ProviderId,
+      modelId,
+    };
   }
 }
 
-function updateTranslateModelSelector(
-  modelSelector: HTMLSelectElement,
-  doc: Document,
-) {
-  const currentValue = modelSelector.value;
-  const defaultOption = modelSelector.querySelector('option[value=""]');
-  modelSelector.innerHTML = "";
-  if (defaultOption) {
-    modelSelector.appendChild(defaultOption);
+function setInitialSelectorValue(selector: HTMLSelectElement, doc: Document) {
+  const active = addon.data.userProviderConfigV2?.active;
+  if (active) {
+    selector.value = `${active.providerId}::${active.modelId}`;
   }
-  const providers = addon.data.userProviderConfigs;
-  for (const provider of providers ?? []) {
-    for (const model of provider.models ?? []) {
-      if (!model.id) continue;
-      const option = doc.createElement("option");
-      option.value = model.id;
-      option.textContent = `${model.name} (${provider.name})`;
-      modelSelector.appendChild(option);
-    }
-  }
-  modelSelector.value = currentValue;
 }
 
 function updatePrefsUI() {
   const doc = addon.data.prefs?.window.document;
   if (!doc) return;
-  //? model settings
+
+  // Model selector
   const modelSelector = doc.querySelector(
     makeId("model-selector"),
   ) as HTMLSelectElement;
-  updateModelSelector(modelSelector, doc);
+  populateSelectorFromV2(modelSelector, doc);
+  setInitialSelectorValue(modelSelector, doc);
+  modelSelector.addEventListener("change", () => {
+    setActiveFromCompositeKey(modelSelector.value);
+  });
+
   const modelEditButton = doc.querySelector(
     makeId("model-edit-button"),
   ) as HTMLButtonElement;
   if (modelEditButton) {
     modelEditButton.addEventListener("click", () => {
-      openDialog(() => updateModelSelector(modelSelector, doc));
+      openDialog(() => {
+        // Dialog has already updated addon.data.userProviderConfigV2 in memory
+        populateSelectorFromV2(modelSelector, doc);
+        setInitialSelectorValue(modelSelector, doc);
+      });
     });
   }
 
@@ -115,7 +147,7 @@ function updatePrefsUI() {
     makeId("translate-model-selector"),
   ) as HTMLSelectElement;
   if (translateModelSelector) {
-    updateTranslateModelSelector(translateModelSelector, doc);
+    populateSelectorFromV2(translateModelSelector, doc, true);
   }
 
   renderPromptPreview();

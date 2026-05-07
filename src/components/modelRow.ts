@@ -16,19 +16,18 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { UserProviderModel } from "../types";
+import { ButtonBase } from "./buttons/buttonBase";
 import { Icons } from "./common";
-import { IconView } from "./iconView";
 
 export interface CardModelRowProps {
   doc: Document;
-  data?: UserProviderModel;
+  data?: { id?: string; name: string; enabled: boolean };
+  onSelectModel?: () => void;
 }
 
-export function CardModelRow({ doc, data }: CardModelRowProps) {
+export function CardModelRow({ doc, data, onSelectModel }: CardModelRowProps) {
   const row = ztoolkit.UI.createElement(doc, "div", {
     tag: "div",
-    //flex items-center gap-3 p-2 rounded-xl transition-all duration-300 bg-zinc-50 dark:bg-zinc-800  ring-2 ring-rose-100
     classList: [
       "flex",
       "items-center",
@@ -61,14 +60,14 @@ export function CardModelRow({ doc, data }: CardModelRowProps) {
           "bg-white",
           "dark:bg-zinc-800",
         ],
-        properties: { type: "checkbox", checked: data?.enable ?? true },
+        properties: { type: "checkbox", checked: data?.enabled ?? true },
       },
       {
         tag: "div",
         classList: ["relative", "flex-1", "flex", "items-center"],
         children: [
-          {
-            tag: "button",
+          ButtonBase({
+            iconMarkup: Icons.QuickInput,
             classList: [
               "p-1.5",
               "mr-2",
@@ -80,10 +79,11 @@ export function CardModelRow({ doc, data }: CardModelRowProps) {
               "hover:text-rose-400",
               "hover:bg-white",
               "dark:hover:bg-zinc-700",
+              "cursor-pointer",
             ],
-            properties: { title: "Quick Select" },
-            children: [IconView({ iconMarkup: Icons.QuickInput, sizeRem: 1 })],
-          },
+            title: "Browse & Select Model",
+            onClick: () => onSelectModel?.(),
+          }),
           {
             tag: "input",
             classList: [
@@ -99,17 +99,25 @@ export function CardModelRow({ doc, data }: CardModelRowProps) {
               "transition-all",
               "duration-200",
               "font-semibold",
+              "cursor-pointer",
             ],
             properties: {
               type: "text",
-              placeholder: "Enter model name",
+              placeholder: "Click or type model name...",
               value: data?.name || "",
+              readOnly: true,
             },
+            listeners: [
+              {
+                type: "click",
+                listener: () => onSelectModel?.(),
+              },
+            ],
           },
         ],
       },
-      {
-        tag: "button",
+      ButtonBase({
+        iconMarkup: Icons.Delete,
         classList: [
           "p-2",
           "text-gray-300",
@@ -119,23 +127,17 @@ export function CardModelRow({ doc, data }: CardModelRowProps) {
           "rounded-lg",
           "shrink-0",
         ],
-        properties: { title: "Delete Model" },
-        children: [IconView({ iconMarkup: Icons.Delete, sizeRem: 1 })],
-        listeners: [
-          {
-            type: "click",
-            listener: (e: Event) =>
-              (e.currentTarget as HTMLElement).parentElement?.remove(),
-          },
-        ],
-      },
+        title: "Delete Model",
+        onClick: (e) =>
+          (e.currentTarget as HTMLElement).parentElement?.remove(),
+      }),
     ],
   });
-  (row as any).getData = (): UserProviderModel => {
+  (row as any).getData = () => {
     return {
       id: data?.id ?? crypto.randomUUID(),
       name: (row.querySelector('input[type="text"]') as HTMLInputElement).value,
-      enable: (row.querySelector('input[type="checkbox"]') as HTMLInputElement)
+      enabled: (row.querySelector('input[type="checkbox"]') as HTMLInputElement)
         .checked,
     };
   };

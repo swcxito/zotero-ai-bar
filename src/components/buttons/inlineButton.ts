@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: AGPL-3.0-only
- * aiButton.ts
+ * inlineButton.ts
  *
  * This file is part of Zotero AI Bar.
  * Zotero AI Bar - A handy AI assistant integration for Zotero
@@ -17,37 +17,26 @@
  */
 
 import { TagElementProps } from "zotero-plugin-toolkit";
-import { ActionButton } from "./actionButton";
+import { ButtonBase } from "./buttonBase";
+import { BUTTON_VARIANTS } from "./buttonVariants";
+import { Icons } from "../common";
 
-export interface AIButtonProps {
-  label: string;
-  icon?: string;
-  onClick: (e: Event) => Promise<void>;
+export interface InlineButtonProps {
+  onClicked: (e: Event) => void;
+  label?: string;
+  classList?: string[];
 }
 
-export function AiActionButton({
-  label,
-  icon = "",
-  onClick,
-}: AIButtonProps): TagElementProps {
-  return ActionButton({
-    label: icon ? `${icon}${label}` : label,
-    className: "ai-btn",
-    onClick: async (e, btn) => {
-      if ((btn as HTMLButtonElement).disabled) return;
-
-      const container = btn.closest(".ai-bar-container") as HTMLElement;
-      if (container) {
-        container
-          .querySelectorAll("button, textarea")
-          .forEach((el: Element) => {
-            (el as HTMLButtonElement | HTMLTextAreaElement).disabled = true;
-          });
-      }
-
-      e.stopPropagation();
-
-      await onClick(e);
-    },
+export function InlineButton({
+  onClicked,
+  label = "Add Model",
+  classList,
+}: InlineButtonProps): TagElementProps {
+  return ButtonBase({
+    label,
+    iconMarkup: Icons.Add,
+    classList: classList ?? [...BUTTON_VARIANTS.inline],
+    labelClassList: ["inline-button-label"],
+    onClick: (e) => onClicked(e),
   });
 }

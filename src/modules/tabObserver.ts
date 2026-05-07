@@ -31,3 +31,36 @@ export function registerTabObserver() {
     "myObserverID",
   );
 }
+
+export function getReaderByTabId(id: string) {
+  const readers = Zotero.Reader._readers;
+  for (const reader of readers) {
+    // ztoolkit.log("reader", reader.tabID);
+    if (reader.tabID === id) {
+      return reader;
+    }
+  }
+  return null;
+}
+
+// export function getItemFromTab(tabId?: string) {
+//   const selectedTabID = tabId || addon.chatManager.currentTabID;
+//   const reader = selectedTabID
+//     ? Zotero.Reader.getByTabID(selectedTabID)
+//     : undefined;
+//   const itemID = reader?.itemID;
+//   if (itemID) {
+//     return Zotero.Items.get(itemID);
+//   }
+//
+//   return undefined;
+// }
+
+export function getItemIdFromTab(tabId?: string): number | undefined {
+  const selectedTabID = tabId || addon.chatManager.currentTabID;
+  const reader = selectedTabID
+    ? Zotero.Reader.getByTabID(selectedTabID)
+    : undefined;
+
+  return reader?.itemID;
+}

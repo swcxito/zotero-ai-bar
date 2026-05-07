@@ -16,6 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+// TODO review
 export interface DropdownMenuItem {
   id: string;
   label: string;
@@ -76,7 +77,7 @@ export function openDropdownMenu({
 
   const dropdown = doc.createElement("div");
   dropdown.id = menuId;
-  dropdown.className = "model-dropdown-menu ai-bar-dropdown-menu";
+  dropdown.className = "model-dropdown-menu";
 
   const validGroups = groups.filter((group) => group.items.length > 0);
   if (validGroups.length === 0) {

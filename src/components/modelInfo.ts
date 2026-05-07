@@ -17,129 +17,75 @@
  */
 
 import { TagElementProps } from "zotero-plugin-toolkit";
-import { getPref, setPref } from "../utils/prefs";
+import { setPref } from "../utils/prefs";
 import { analyzeModelName, getModelIconPath } from "../utils/modelAnalyzer";
-import { UserProviderConfig, UserProviderModel } from "../types";
 import { getString } from "../utils/locale";
 import { IconView } from "./iconView";
 import { DropdownMenuGroup, toggleDropdownMenu } from "./dropdownMenu";
+import type { AddedModel, ProviderId } from "../utils/providers";
 
-/**
- * Update the model info display
- */
-function updateModelInfoDisplay(container: HTMLElement) {
-  const modelId = getPref("llm.modelId") || "";
+function resolveModelDisplayName(): string {
+  const active = addon.data.userProviderConfigV2?.active;
+  if (!active) return "";
 
-  // Find model name from userProviderConfigs
-  let modelName = "";
-  if (modelId && addon.data.userProviderConfigs) {
-    for (const provider of addon.data.userProviderConfigs) {
-      const model = provider.models?.find((m) => m.id === modelId);
-      if (model?.name) {
-        modelName = model.name;
-        break;
-      }
-    }
-  }
-
-  const modelAnalysis = analyzeModelName(modelName);
-  const iconPath = getModelIconPath(modelAnalysis.family);
-
-  container.innerHTML = "";
-
-  // Add model icon
-  ztoolkit.UI.appendElement(
-    IconView({
-      iconMarkup: iconPath,
-      extraClasses: ["model-info-icon"],
-      sizeRem: 1.5,
-    }),
-    container,
+  const addedModels = addon.data.userProviderConfigV2?.addedModels ?? [];
+  const m = addedModels.find(
+    (m) => m.providerId === active.providerId && m.id === active.modelId,
   );
+  if (m?.name) return m.name;
 
-  // Add version text if available
-  if (modelAnalysis.version) {
-    ztoolkit.UI.appendElement(
-      {
-        tag: "span",
-        classList: ["model-info-version"],
-        properties: {
-          textContent: modelAnalysis.version,
-        },
-      },
-      container,
+  for (const conf of addon.data.legacyCustomProviderConfigs ?? []) {
+    const lm = conf.models?.find(
+      (lm) => lm.id === active.modelId || lm.name === active.modelId,
     );
+    if (lm?.name) return lm.name;
   }
 
-  // Add type text if available
-  if (modelAnalysis.type) {
-    ztoolkit.UI.appendElement(
-      {
-        tag: "span",
-        classList: ["model-info-type"],
-        properties: {
-          textContent: modelAnalysis.type,
-        },
-      },
-      container,
-    );
-  }
+  return active.modelId;
 }
 
-/**
- * Create a model info display component
- * Shows model icon, type, and version based on user configuration
- */
-export function ModelInfo(): TagElementProps {
-  const modelId = getPref("llm.modelId") || "";
-
-  // Find model name from userProviderConfigs
-  let modelName = "";
-  if (modelId && addon.data.userProviderConfigs) {
-    for (const provider of addon.data.userProviderConfigs) {
-      const model = provider.models?.find((m) => m.id === modelId);
-      if (model?.name) {
-        modelName = model.name;
-        break;
-      }
-    }
-  }
-
+function buildCurrentModelInfoChildren(): TagElementProps[] {
+  const modelName = resolveModelDisplayName();
   const modelAnalysis = analyzeModelName(modelName);
   const iconPath = getModelIconPath(modelAnalysis.family);
 
-  const children: TagElementProps[] = [];
-
-  // Add model icon
-  children.push(
+  const children: TagElementProps[] = [
     IconView({
       iconMarkup: iconPath,
       extraClasses: ["model-info-icon"],
       sizeRem: 1.5,
     }),
-  );
+  ];
 
-  // Add version text if available (top-right corner)
   if (modelAnalysis.version) {
     children.push({
       tag: "span",
       classList: ["model-info-version"],
-      properties: {
-        textContent: modelAnalysis.version,
-      },
+      properties: { textContent: modelAnalysis.version },
     });
   }
 
-  // Add type text if available (bottom-right corner)
   if (modelAnalysis.type) {
     children.push({
       tag: "span",
       classList: ["model-info-type"],
-      properties: {
-        textContent: modelAnalysis.type,
-      },
+      properties: { textContent: modelAnalysis.type },
     });
   }
+
+  return children;
+}
+
+function updateModelInfoDisplay(container: HTMLElement) {
+  const children = buildCurrentModelInfoChildren();
+  container.innerHTML = "";
+  for (const child of children) {
+    ztoolkit.UI.appendElement(child, container);
+  }
+}
+
+export function ModelInfo(): TagElementProps {
+  const children = buildCurrentModelInfoChildren();
 
   return {
     tag: "div",
@@ -151,8 +97,7 @@ export function ModelInfo(): TagElementProps {
         type: "click",
         listener: (e: Event) => {
           e.stopPropagation();
-          const target = e.currentTarget as HTMLElement;
-          toggleModelDropdown(target);
+          toggleModelDropdown(e.currentTarget as HTMLElement);
         },
       },
     ],
@@ -163,25 +108,63 @@ function toggleModelDropdown(anchor: HTMLElement) {
   const container = anchor.closest(".ai-bar-container") as HTMLElement;
   if (!container) return;
 
-  // Populate with providers and models
-  const currentModelId = getPref("llm.modelId");
-  const providers = addon.data.userProviderConfigs || [];
+  const active = addon.data.userProviderConfigV2?.active;
+  const groups: DropdownMenuGroup[] = [];
 
-  const groups: DropdownMenuGroup[] = providers
-    .filter((provider) => (provider.models || []).length > 0)
-    .map((provider) => ({
-      title: provider.name,
-      items: (provider.models || []).map((model) => ({
-        id: model.id || model.name,
+  // v2 models: grouped by provider, only enabled
+  const addedModels = addon.data.userProviderConfigV2?.addedModels ?? [];
+  const addedProviders = addon.data.userProviderConfigV2?.addedProviders ?? {};
+  const grouped = new Map<ProviderId, AddedModel[]>();
+  for (const m of addedModels) {
+    if (m.enabled === false) continue;
+    const list = grouped.get(m.providerId) || [];
+    list.push(m);
+    grouped.set(m.providerId, list);
+  }
+  for (const [providerId, models] of grouped) {
+    const provider = addedProviders[providerId];
+    const items = models.map((m) => ({
+      id: `${providerId}::${m.id}`,
+      label: m.name,
+      selected: active?.providerId === providerId && active?.modelId === m.id,
+      renderLeading: (doc: Document) => {
+        const holder = doc.createElement("span");
+        ztoolkit.UI.appendElement(
+          IconView({
+            iconMarkup: getModelIconPath(m.family),
+            extraClasses: ["model-dropdown-icon"],
+            sizeRem: 1.2,
+          }),
+          holder,
+        );
+        return holder;
+      },
+      onClick: () => {
+        addon.data.userProviderConfigV2!.active = {
+          providerId,
+          modelId: m.id,
+        };
+        setPref("llm.modelId", `${providerId}::${m.id}`);
+        updateModelInfoDisplay(anchor);
+      },
+    }));
+    groups.push({ title: provider?.name ?? providerId, items });
+  }
+
+  // Legacy custom providers
+  for (const conf of addon.data.legacyCustomProviderConfigs ?? []) {
+    const items = (conf.models ?? []).map((model) => {
+      const itemId = `${conf.id}::${model.name}`;
+      return {
+        id: itemId,
         label: model.name,
-        selected: model.id === currentModelId,
+        selected:
+          active?.providerId === conf.id && active?.modelId === model.name,
         renderLeading: (doc: Document) => {
           const holder = doc.createElement("span");
-          const modelAnalysis = analyzeModelName(model.name);
-          const iconPath = getModelIconPath(modelAnalysis.family);
           ztoolkit.UI.appendElement(
             IconView({
-              iconMarkup: iconPath,
+              iconMarkup: getModelIconPath(analyzeModelName(model.name).family),
               extraClasses: ["model-dropdown-icon"],
               sizeRem: 1.2,
             }),
@@ -190,13 +173,19 @@ function toggleModelDropdown(anchor: HTMLElement) {
           return holder;
         },
         onClick: () => {
-          if (model.id) {
-            setPref("llm.modelId", model.id);
-            updateModelInfoDisplay(anchor);
-          }
+          addon.data.userProviderConfigV2!.active = {
+            providerId: conf.id as ProviderId,
+            modelId: model.name,
+          };
+          setPref("llm.modelId", itemId);
+          updateModelInfoDisplay(anchor);
         },
-      })),
-    }));
+      };
+    });
+    if (items.length > 0) {
+      groups.push({ title: conf.name, items });
+    }
+  }
 
   toggleDropdownMenu({
     menuId: "ai-bar-model-dropdown",

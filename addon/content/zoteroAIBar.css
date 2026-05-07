@@ -457,9 +457,13 @@
   }
   .model-dropdown-item:hover {
     background-color: #f3f4f6;
+    color: #f43f5e;
   }
   .model-dropdown-item.selected {
     background-color: rgba(244, 63, 94, 0.1);
+    color: inherit;
+  }
+  .model-dropdown-item.selected:hover {
     color: #f43f5e;
   }
   .model-dropdown-item.selected::after {
@@ -489,9 +493,13 @@
   }
   .model-dropdown-item:hover {
     background-color: #374151;
+    color: #f87171;
   }
   .model-dropdown-item.selected {
     background-color: rgba(244, 63, 94, 0.15);
+    color: inherit;
+  }
+  .model-dropdown-item.selected:hover {
     color: #f87171;
   }
   .model-dropdown-item.selected::after {
