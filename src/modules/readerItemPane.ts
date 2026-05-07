@@ -21,6 +21,7 @@ import { config } from "../../package.json";
 import { InputArea } from "../components/inputArea";
 import { convertLegacyLLMConfigByKey, loadProvidersFromFile } from "../utils/providers";
 import { getPref } from "../utils/prefs";
+// import { llmTest } from "./llm";
 
 export function injectCSS(doc: Document | ShadowRoot, filename: string) {
   // 获取插件内资源的 URL
@@ -188,6 +189,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
           ztoolkit.log("[Debug] Loading common_providers.min.json...");
           const providers = await loadProvidersFromFile();
           ztoolkit.log("[Debug] Loaded providers:", providers);
+          // await llmTest();
         },
       },
     ],

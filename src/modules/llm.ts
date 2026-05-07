@@ -27,6 +27,7 @@ import {
 } from "./chatUI";
 import { ensureWebStreamsGlobals } from "../utils/webStreamsGlobals";
 import { PROVIDER_ENV_KEY_MAP } from "../utils/providers";
+// import { JSONObject } from "@ai-sdk/provider";
 
 type InstalledAISDKPackage =
   | "@ai-sdk/openai-compatible"
@@ -130,8 +131,7 @@ export async function streamLLMV2(
       abortSignal: session.pending.abortController?.signal,
       temperature: temp,
       maxOutputTokens: maxTokens,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      providerOptions: V2_PROVIDER_OPTIONS as any,
+      providerOptions: V2_PROVIDER_OPTIONS,
       onError: ({ error }: { error: unknown }) => {
         streamErrorHandled = true;
         handleStreamError(session, error);
@@ -149,7 +149,6 @@ export async function streamLLMV2(
       }
     }
 
-    // Final update - ensure all content including trailing newlines are flushed
     await onLLMStreamUpdateV2({ session, fullText });
     onLLMStreamEndV2(session);
   } catch (error: any) {
@@ -169,7 +168,7 @@ export async function streamLLMV2(
 
 function buildErrorMessage(error: unknown): string {
   const err = error as any;
-  let message = "Unknown error";
+  let message:string;
   if (typeof err?.message === "string" && err.message) {
     const label = err.name && err.name !== "Error" ? err.name : "";
     message = label ? `${label}: ${err.message}` : err.message;
@@ -212,7 +211,7 @@ function handleStreamError(session: Session, error: unknown) {
  * The AI SDK auto-routes options to the matching provider by namespace key.
  * Namespaces match the `name` param passed to createOpenAICompatible (v2 providerId).
  */
-const V2_PROVIDER_OPTIONS: Record<string, Record<string, unknown>> = {
+const V2_PROVIDER_OPTIONS: Record<string, any> = {
   "alibaba-cn": { enable_thinking: false, enable_search: true },
   alibaba: { enable_thinking: false, enable_search: true },
   "alibaba-coding-plan": { enable_thinking: false, enable_search: true },
@@ -221,7 +220,8 @@ const V2_PROVIDER_OPTIONS: Record<string, Record<string, unknown>> = {
   "zhipuai-coding-plan": { thinking: { type: "disabled" } },
   zai: { thinking: { type: "disabled" } },
   "zai-coding-plan": { thinking: { type: "disabled" } },
-  // "minimax-cn": { thinking: { type: "enabled" } },
+  "minimax-cn": { thinking: { type: "disabled" } },
+  // "minimax-cn": { thinking: { type: "adaptive" }, effort: "max" },
 };
 
 function resolveSDKPackage(npm?: string): InstalledAISDKPackage {
@@ -247,9 +247,10 @@ function createProvider(
     })(opts.modelId);
   }
   // Native SDKs: anthropic, google, xai, openrouter, etc.
-  const fn = createFn as (config: { apiKey: string; baseURL?: string }) => any;
+  const fn = createFn as (config: { apiKey: string; name:string; baseURL?: string }) => any;
   return fn({
     apiKey: opts.apiKey,
+    name: opts.providerId,
     ...(opts.baseUrl ? { baseURL: opts.baseUrl } : {}),
   })(opts.modelId);
 }
@@ -320,6 +321,54 @@ async function createModel() {
 
   throw new Error(`Provider or model not found: ${providerId}/${modelId}`);
 }
+
+// export async function llmTest() {
+//   ztoolkit.log("LLM test function called");
+//   const fn = CREATE_PROVIDER_FNS["@ai-sdk/anthropic"] as typeof import("@ai-sdk/anthropic").createAnthropic | undefined;
+//   if (fn && streamTextFn) {
+//     try {
+//       const minimax = fn({
+//         apiKey:
+//         baseURL: "https://api.minimaxi.com/anthropic/v1",
+//         name: "minimax-cn",
+//       });
+//       const { textStream } = streamTextFn({
+//         model: minimax("minimax-m2.7"),
+//         prompt: "Write a poem about embedding models.",
+//         providerOptions: V2_PROVIDER_OPTIONS,
+//         onError: ({ error }: { error: unknown }) => {
+//           const err = error as any;
+//           ztoolkit.log("llmTest onError captured:");
+//           ztoolkit.log("  name:", err?.name);
+//           ztoolkit.log("  message:", err?.message);
+//           ztoolkit.log("  statusCode:", err?.statusCode);
+//           ztoolkit.log("  url:", err?.url);
+//           ztoolkit.log("  requestBodyValues:", err?.requestBodyValues);
+//           ztoolkit.log("  responseHeaders:", err?.responseHeaders);
+//           ztoolkit.log("  responseBody:", err?.responseBody);
+//         },
+//       });
+//
+//       for await (const textPart of textStream) {
+//         ztoolkit.log(textPart);
+//       }
+//       ztoolkit.log("llmTest completed successfully");
+//     } catch (error: any) {
+//       ztoolkit.log("llmTest error details:");
+//       ztoolkit.log("  name:", error?.name);
+//       ztoolkit.log("  message:", error?.message);
+//       ztoolkit.log("  statusCode:", error?.statusCode);
+//       ztoolkit.log("  url:", error?.url);
+//       ztoolkit.log("  requestBody:", error?.requestBodyValues);
+//       ztoolkit.log("  responseHeaders:", error?.responseHeaders);
+//       ztoolkit.log("  responseBody:", error?.responseBody);
+//       ztoolkit.log("  cause:", error?.cause);
+//       ztoolkit.log("  full error:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+//     }
+//   } else {
+//     ztoolkit.log(fn, streamTextFn);
+//   }
+// }
 
 function getRefreshRateFromPref() {
   const speed = getPref("llm.streamUpdateSpeed");
