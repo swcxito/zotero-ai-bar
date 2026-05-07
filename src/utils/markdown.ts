@@ -182,10 +182,7 @@ export async function renderMarkdown(markdown: string): Promise<string> {
         /<math(?![^>]*xmlns)/g,
         '<math xmlns="http://www.w3.org/1998/Math/MathML"',
       )
-      .replace(
-        /<svg(?![^>]*xmlns)/g,
-        '<svg xmlns="http://www.w3.org/2000/svg"',
-      )
+      .replace(/<svg(?![^>]*xmlns)/g, '<svg xmlns="http://www.w3.org/2000/svg"')
       .replace(
         /<span class="katex"><math[\s][^>]*display="block"[^>]*>[\s\S]*?<\/math>\s*<\/span>/g,
         '<span class="math-scroll-wrapper">$&</span>',
