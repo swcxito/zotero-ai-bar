@@ -483,6 +483,147 @@ export async function ensureCommonProviders(): Promise<CommonProviders> {
   return commonProvidersPromise;
 }
 
+// ---- 在线获取 models.dev 数据 ----
+
+const MODELS_DEV_API = "https://models.dev/api.json";
+const MODELS_DEV_LOGO_BASE = "https://models.dev/logos";
+
+/** 过滤模型：去掉带日期、参数量、特定后缀的版本（不过滤 :free） */
+const LIVE_FILTER_PATTERNS = [
+  /\d{4}-\d{2}-\d{2}/,
+  /-\d{4}(?:-|$)/,
+  /-\d{2}-\d{4}(?:-|$)/,
+  /-\d{2}-\d{2}(?:-|$|\w)/,
+  /-\d+(?:b|B)(?:-\w+)?|-\d+[a-zA-Z]*b(?:-|\w|$)/,
+  /:exacto$|v\d+:\d+$/,
+];
+
+const LIVE_FIELDS_TO_REMOVE = [
+  "attachment",
+  "tool_call",
+  "structured_output",
+  "knowledge",
+  "release_date",
+  "last_updated",
+  "open_weights",
+];
+
+/** 生成 models.dev 的 logo URL */
+export function getModelsDevLogoUrl(providerId: string): string {
+  return `${MODELS_DEV_LOGO_BASE}/${providerId}.svg`;
+}
+
+// ---- Icon cache ----
+
+const ICON_CACHE_PREF = "icons.providerCache";
+
+function loadIconCache(): Record<string, string> {
+  try {
+    const raw = Zotero.Prefs.get(
+      `${config.prefsPrefix}.${ICON_CACHE_PREF}`,
+      true,
+    ) as string;
+    if (!raw) return {};
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function saveIconCache(cache: Record<string, string>): void {
+  Zotero.Prefs.set(
+    `${config.prefsPrefix}.${ICON_CACHE_PREF}`,
+    JSON.stringify(cache),
+    true,
+  );
+}
+
+function hasLocalIcon(providerId: string): boolean {
+  return providerId in PROVIDER_ID_ICON_STEM;
+}
+
+/** 获取 provider 图标：本地优先 → 缓存 → favicon */
+export function resolveProviderIcon(providerId: string): string {
+  if (hasLocalIcon(providerId)) return getV2LogoUrl(providerId);
+  const cached = loadIconCache()[providerId];
+  if (cached) return cached;
+  return getV2LogoUrl(providerId);
+}
+
+/** 在线获取并缓存 provider 图标（用户添加 provider 时调用） */
+export async function cacheProviderIcon(providerId: string): Promise<void> {
+  if (hasLocalIcon(providerId)) return;
+  const cache = loadIconCache();
+  if (cache[providerId]) return;
+
+  try {
+    const res = await fetch(getModelsDevLogoUrl(providerId));
+    if (!res.ok) return;
+    const svgText = await res.text();
+    const base64 = btoa(unescape(encodeURIComponent(svgText)));
+    cache[providerId] = `data:image/svg+xml;base64,${base64}`;
+    saveIconCache(cache);
+    ztoolkit.log("[cacheProviderIcon] Cached icon for", providerId);
+  } catch {
+    /* 静默失败 */
+  }
+}
+
+let liveProvidersPromise: Promise<CommonProviders> | null = null;
+
+/** 从 models.dev 在线获取并过滤 provider 数据，结果缓存到 session */
+export async function fetchLiveProviders(): Promise<CommonProviders> {
+  if (liveProvidersPromise) return liveProvidersPromise;
+
+  liveProvidersPromise = (async () => {
+    const res = await fetch(MODELS_DEV_API);
+    if (!res.ok) throw new Error(`models.dev API error: ${res.status}`);
+    const data = await res.json();
+
+    const result: Record<string, any> = {};
+    for (const [name, provider] of Object.entries(data)) {
+      const p = provider as any;
+
+      const models: Record<string, any> = {};
+      for (const [key, model] of Object.entries(p.models ?? {})) {
+        const m = model as any;
+        const testStr = `${key}|${m.id || ""}`;
+        if (LIVE_FILTER_PATTERNS.some((pat) => pat.test(testStr))) continue;
+
+        const cleaned: any = {};
+        for (const [f, v] of Object.entries(m)) {
+          if (LIVE_FIELDS_TO_REMOVE.includes(f)) continue;
+          if (f === "id" && v === key) continue;
+          cleaned[f] = v;
+        }
+        models[key] = cleaned;
+      }
+      result[name] = { ...p, models };
+    }
+
+    // 补充 volcengine（models.dev 中可能不存在）
+    if (!result.volcengine) {
+      result.volcengine = {
+        id: "volcengine",
+        env: ["ARK_API_KEY"],
+        npm: "@ai-sdk/openai-compatible",
+        api: "https://ark.cn-beijing.volces.com/api/v3",
+        name: "Volcengine",
+        models: {},
+      };
+    }
+
+    ztoolkit.log(
+      "[fetchLiveProviders] Loaded",
+      Object.keys(result).length,
+      "providers from models.dev",
+    );
+    return initProvidersFromJSON(result);
+  })();
+
+  return liveProvidersPromise;
+}
+
 /** Provider ID */
 export type ProviderId =
   | "openai"

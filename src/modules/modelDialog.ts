@@ -20,17 +20,22 @@ import { config } from "../../package.json";
 import { ProviderLogoButton } from "../components/buttons/providerLogoButton";
 import { ProviderCard } from "../components/providerCard";
 import {
-  getV2LogoUrl,
+  getModelsDevLogoUrl,
+  resolveProviderIcon,
+  cacheProviderIcon,
   findModelMetadata,
   ensureCommonProviders,
+  fetchLiveProviders,
 } from "../utils/providers";
 import { getModelIconPath } from "../utils/modelAnalyzer";
 import { ModelIcons } from "../components/common";
 import type {
   UserProviderConfigV2,
+  CommonProviders,
   AddedProvider,
   AddedModel,
   ProviderId,
+  Provider,
 } from "../utils/providers";
 
 function buildModelRows(
@@ -97,6 +102,16 @@ class ModelDialogV2 {
   async init() {
     await ensureCommonProviders();
 
+    // 尝试在线获取最新数据，失败则回退本地
+    try {
+      const live = await fetchLiveProviders();
+      addon.data.liveProviders = live;
+      ztoolkit.log("[ModelDialogV2] Live providers loaded:", Object.keys(live).length);
+    } catch (e) {
+      ztoolkit.log("[ModelDialogV2] Live fetch failed, using local:", e);
+      addon.data.liveProviders = undefined;
+    }
+
     if (
       !(
         this.root &&
@@ -133,8 +148,6 @@ class ModelDialogV2 {
     if (!container) return;
 
     const v2 = addon.data.userProviderConfigV2!;
-    const cp = addon.data.commonProviders;
-
     for (const [providerId] of Object.entries(v2.addedProviders)) {
       this.createAndAppendCard(providerId, container as HTMLElement);
     }
@@ -145,7 +158,7 @@ class ModelDialogV2 {
     if (!target) return;
 
     const v2 = addon.data.userProviderConfigV2!;
-    const cp = addon.data.commonProviders;
+    const cp = this.getActiveProviders();
     const commonProvider = cp?.[providerId];
     const addedProvider = v2.addedProviders[providerId];
     const envKeys = addedProvider?.env ?? commonProvider?.env ?? [];
@@ -162,7 +175,7 @@ class ModelDialogV2 {
     const card = ProviderCard({
       providerId,
       providerName: addedProvider?.name ?? commonProvider?.name ?? providerId,
-      iconUrl: getV2LogoUrl(providerId),
+      iconUrl: resolveProviderIcon(providerId),
       baseUrl: commonProvider?.api,
       envKeys,
       envValues,
@@ -188,11 +201,15 @@ class ModelDialogV2 {
     return ids;
   }
 
-  private getAvailableProviders(): Array<[string, { name: string }]> {
-    const commonProviders = addon.data.commonProviders;
-    if (!commonProviders) return [];
+  private getActiveProviders(): CommonProviders {
+    return addon.data.liveProviders ?? addon.data.commonProviders!;
+  }
+
+  private getAvailableProviders(): Array<[string, Provider]> {
+    const providers = this.getActiveProviders();
+    if (!providers) return [];
     const existingIds = this.getExistingProviderIds();
-    return Object.entries(commonProviders)
+    return (Object.entries(providers) as [string, Provider][])
       .filter(([id]) => !existingIds.has(id))
       .sort(([, a], [, b]) => a.name.localeCompare(b.name));
   }
@@ -239,13 +256,13 @@ class ModelDialogV2 {
     const appendButton = (
       providerId: string,
       name: string,
-      iconUrl: string,
     ) => {
       const btn = this.doc.createElement("button");
       btn.className =
         "flex w-full items-center gap-3 px-4 py-1.5 text-left text-sm text-zinc-700 transition-colors hover:bg-rose-400 hover:text-white dark:text-zinc-200";
       const img = this.doc.createElement("img");
-      img.src = iconUrl;
+      img.src = getModelsDevLogoUrl(providerId);
+      img.onerror = () => { img.src = resolveProviderIcon(providerId); };
       img.className = "w-4 h-4 shrink-0";
       btn.appendChild(img);
       const span = this.doc.createElement("span");
@@ -260,7 +277,7 @@ class ModelDialogV2 {
     };
 
     for (const [id, p] of pinned) {
-      appendButton(id, p.name, getV2LogoUrl(id));
+      appendButton(id, p.name);
     }
     if (pinned.length > 0 && rest.length > 0) {
       const sep = this.doc.createElement("div");
@@ -268,7 +285,7 @@ class ModelDialogV2 {
       this.providerList.appendChild(sep);
     }
     for (const [id, p] of rest) {
-      appendButton(id, p.name, getV2LogoUrl(id));
+      appendButton(id, p.name);
     }
     ztoolkit.log(
       "[ModelDialogV2.refreshProviderList] DOM children:",
@@ -300,14 +317,15 @@ class ModelDialogV2 {
     });
   }
 
-  private addProviderCard(providerId: string) {
+  private async addProviderCard(providerId: string) {
     ztoolkit.log("[ModelDialogV2] addProviderCard:", providerId);
     const v2 = addon.data.userProviderConfigV2!;
-    const cp = addon.data.commonProviders?.[providerId];
+    const cp = this.getActiveProviders()?.[providerId];
     if (!v2.addedProviders[providerId] && cp) {
       const { models: _, ...rest } = cp;
       v2.addedProviders[providerId] = rest as AddedProvider;
     }
+    await cacheProviderIcon(providerId);
     this.createAndAppendCard(providerId);
   }
 
@@ -387,7 +405,7 @@ class ModelDialogV2 {
             cm.name,
             undefined,
             providerId as ProviderId,
-            addon.data.commonProviders,
+            this.getActiveProviders(),
           );
           newAddedModels.push({
             ...(metadata ?? {
@@ -413,7 +431,7 @@ class ModelDialogV2 {
       }
 
       // Provider metadata
-      const cp = addon.data.commonProviders?.[providerId];
+      const cp = this.getActiveProviders()?.[providerId];
       if (cp) {
         const { models: _, ...rest } = cp;
         newAddedProviders[providerId] = rest as AddedProvider;
@@ -491,7 +509,7 @@ class ModelDialogV2 {
   openModelSelect(providerId: string, onSelect: (modelName: string) => void) {
     if (!this.modelOverlay || !this.modelList || !this.modelSearchInput) return;
 
-    const models = addon.data.commonProviders?.[providerId]?.models ?? {};
+    const models = this.getActiveProviders()?.[providerId]?.models ?? {};
     const entries = Object.entries(models).sort(([, a], [, b]) =>
       a.name.localeCompare(b.name),
     );

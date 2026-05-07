@@ -42,6 +42,7 @@ class Addon {
     /** @deprecated 迁移到 userProviderConfigV2 */
     userProviderConfigs?: UserProviderConfig[];
     commonProviders?: CommonProviders;
+    liveProviders?: CommonProviders;
     userProviderConfigV2?: UserProviderConfigV2;
     legacyCustomProviderConfigs?: UserProviderConfig[];
     userPrompts?: UserPrompt[];
