@@ -15,7 +15,7 @@ import { registerTabObserver } from "./modules/tabObserver";
 import { preloadLLMRuntime } from "./modules/llm";
 import {
   convertLegacyLLMConfigByKey,
-  loadProvidersFromFile,
+  ensureCommonProviders,
 } from "./utils/providers";
 
 async function onStartup() {
@@ -61,8 +61,8 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
     `${addon.data.config.addonRef}-mainWindow.ftl`,
   );
 
-  // Config v2: load provider metadata + convert legacy config
-  addon.data.commonProviders = await loadProvidersFromFile();
+  // Config v2: lazy-load provider metadata + convert legacy config
+  await ensureCommonProviders();
   const llmConfig = getPref("llm.providerConfigs");
   ztoolkit.log("[hooks] llmConfig:", llmConfig);
 

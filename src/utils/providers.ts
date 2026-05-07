@@ -449,6 +449,8 @@ export function initProvidersFromJSON(json: string | object): CommonProviders {
 /** 默认 providers json 文件地址 */
 export const DEFAULT_PROVIDERS_JSON_URL = `chrome://${config.addonRef}/content/common_providers.min.json`;
 
+let commonProvidersPromise: Promise<CommonProviders> | null = null;
+
 /** 从 json 文件读取并解析 providers 配置。 */
 export async function loadProvidersFromFile(
   jsonUrl = DEFAULT_PROVIDERS_JSON_URL,
@@ -462,6 +464,19 @@ export async function loadProvidersFromFile(
 
   const jsonText = await response.text();
   return initProvidersFromJSON(jsonText);
+}
+
+/** 懒加载 commonProviders，只在首次调用时 fetch，后续返回缓存 */
+export async function ensureCommonProviders(): Promise<CommonProviders> {
+  if (addon.data.commonProviders) return addon.data.commonProviders;
+  if (!commonProvidersPromise) {
+    commonProvidersPromise = loadProvidersFromFile().then((cp) => {
+      addon.data.commonProviders = cp;
+      ztoolkit.log("[ensureCommonProviders] Loaded", Object.keys(cp).length, "providers");
+      return cp;
+    });
+  }
+  return commonProvidersPromise;
 }
 
 /** Provider ID */

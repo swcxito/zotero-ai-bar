@@ -19,7 +19,11 @@
 import { config } from "../../package.json";
 import { ProviderLogoButton } from "../components/buttons/providerLogoButton";
 import { ProviderCard } from "../components/providerCard";
-import { getV2LogoUrl, findModelMetadata } from "../utils/providers";
+import {
+  getV2LogoUrl,
+  findModelMetadata,
+  ensureCommonProviders,
+} from "../utils/providers";
 import { getModelIconPath } from "../utils/modelAnalyzer";
 import { ModelIcons } from "../components/common";
 import type {
@@ -90,7 +94,9 @@ class ModelDialogV2 {
     this.modelList = this.doc.querySelector("#model-select-list");
   }
 
-  init() {
+  async init() {
+    await ensureCommonProviders();
+
     if (
       !(
         this.root &&
@@ -580,5 +586,5 @@ class ModelDialogV2 {
 }
 
 export async function onModelDialogLoad(window: Window) {
-  new ModelDialogV2(window).init();
+  await new ModelDialogV2(window).init();
 }
