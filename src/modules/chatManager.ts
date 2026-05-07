@@ -152,9 +152,11 @@ export class ChatManager {
     }
 
     // Append volatile context at the end to improve prompt cache hits
-    systemPrompt += "\n\nContent:" + (!selectedText
-      ? `${contextLeft}\n${contextRight}`.trim()
-      : `${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`);
+    systemPrompt +=
+      "\n\nContent:" +
+      (!selectedText
+        ? `${contextLeft}\n${contextRight}`.trim()
+        : `${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`);
 
     return systemPrompt;
   }

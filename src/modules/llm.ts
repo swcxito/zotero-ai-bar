@@ -168,7 +168,7 @@ export async function streamLLMV2(
 
 function buildErrorMessage(error: unknown): string {
   const err = error as any;
-  let message:string;
+  let message: string;
   if (typeof err?.message === "string" && err.message) {
     const label = err.name && err.name !== "Error" ? err.name : "";
     message = label ? `${label}: ${err.message}` : err.message;
@@ -234,10 +234,19 @@ function resolveSDKPackage(npm?: string): InstalledAISDKPackage {
 function createProvider(
   createFn: ProviderCreateFunction,
   sdkPackage: InstalledAISDKPackage,
-  opts: { apiKey: string; baseUrl?: string; providerId: string; modelId: string },
+  opts: {
+    apiKey: string;
+    baseUrl?: string;
+    providerId: string;
+    modelId: string;
+  },
 ) {
-  if (sdkPackage === "@ai-sdk/openai" || sdkPackage === "@ai-sdk/openai-compatible") {
-    const fn = createFn as typeof import("@ai-sdk/openai-compatible").createOpenAICompatible;
+  if (
+    sdkPackage === "@ai-sdk/openai" ||
+    sdkPackage === "@ai-sdk/openai-compatible"
+  ) {
+    const fn =
+      createFn as typeof import("@ai-sdk/openai-compatible").createOpenAICompatible;
     if (!opts.baseUrl) throw new Error(`Base URL required for ${sdkPackage}`);
     return fn({
       name: opts.providerId,
@@ -247,7 +256,11 @@ function createProvider(
     })(opts.modelId);
   }
   // Native SDKs: anthropic, google, xai, openrouter, etc.
-  const fn = createFn as (config: { apiKey: string; name:string; baseURL?: string }) => any;
+  const fn = createFn as (config: {
+    apiKey: string;
+    name: string;
+    baseURL?: string;
+  }) => any;
   return fn({
     apiKey: opts.apiKey,
     name: opts.providerId,
@@ -268,7 +281,11 @@ async function createModel() {
   // V2 path: provider found in common_providers.json → use native SDK dispatch
   if (provider) {
     const model = provider.models[modelId];
-    if (!model) throw new Error(`Model not found: ${modelId}`);
+    // Providers with empty models dict (openrouter, azure, etc.) accept
+    // dynamic model IDs — proceed with the active modelId as-is.
+    if (!model && Object.keys(provider.models).length > 0) {
+      throw new Error(`Model not found: ${modelId}`);
+    }
 
     const envKey = PROVIDER_ENV_KEY_MAP[providerId] || "API_KEY";
     const apiKey = v2.env[providerId]?.[envKey];
@@ -293,12 +310,11 @@ async function createModel() {
   ];
   for (const conf of legacyConfigs) {
     // Match by providerId first (UUID for custom), then fall back to model name
-    const model = conf.models?.find(
-      (m) =>
-        conf.id === providerId && (m.id === modelId || m.name === modelId),
-    ) ?? conf.models?.find(
-      (m) => m.id === modelId || m.name === modelId,
-    );
+    const model =
+      conf.models?.find(
+        (m) =>
+          conf.id === providerId && (m.id === modelId || m.name === modelId),
+      ) ?? conf.models?.find((m) => m.id === modelId || m.name === modelId);
     if (model?.name) {
       if (!conf.baseUrl) throw new Error("Base URL is missing.");
       if (!conf.apiKey) throw new Error("API Key is missing.");

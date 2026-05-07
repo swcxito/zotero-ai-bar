@@ -13,7 +13,10 @@ import { registerReaderItemPaneSection } from "./modules/readerItemPane";
 import { clearDeadChatWindowRef, isWindowAlive } from "./utils/window";
 import { registerTabObserver } from "./modules/tabObserver";
 import { preloadLLMRuntime } from "./modules/llm";
-import { convertLegacyLLMConfigByKey, loadProvidersFromFile } from "./utils/providers";
+import {
+  convertLegacyLLMConfigByKey,
+  loadProvidersFromFile,
+} from "./utils/providers";
 
 async function onStartup() {
   await Promise.all([
@@ -64,7 +67,11 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   // Config v2: load provider metadata + convert legacy config
   addon.data.commonProviders = await loadProvidersFromFile();
   const { userProviderConfigV2, legacyCustomProviderConfigs } =
-    convertLegacyLLMConfigByKey(llmConfig, getPref("llm.modelId"));
+    convertLegacyLLMConfigByKey(
+      llmConfig,
+      addon.data.commonProviders,
+      getPref("llm.modelId"),
+    );
   addon.data.userProviderConfigV2 = userProviderConfigV2;
   addon.data.legacyCustomProviderConfigs = legacyCustomProviderConfigs;
 

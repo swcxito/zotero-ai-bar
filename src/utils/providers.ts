@@ -105,16 +105,28 @@ export interface Provider {
 
 /** Common Providers 配置 */
 export type CommonProviders = Record<ProviderId, Provider>;
+
+/** Provider 元数据（不含 models），存入 UserProviderConfigV2 */
+export type AddedProvider = Omit<Provider, "models">;
+
+/** Model 元数据 + providerId 引用，存入 UserProviderConfigV2 */
+export interface AddedModel extends Model {
+  providerId: ProviderId;
+  /** 是否在模型选择列表中显示 */
+  enabled: boolean;
+}
+
 interface ModelSelect {
   providerId: ProviderId;
   modelId: string;
-  active?: boolean;
 }
+
 export interface UserProviderConfigV2 {
   active?: ModelSelect;
   env: Record<ProviderId, Record<string, string>>;
   recentUsed: Array<ModelSelect>;
-  addedModels: Array<ModelSelect>;
+  addedModels: Array<AddedModel>;
+  addedProviders: Record<ProviderId, AddedProvider>;
 }
 
 export interface ConvertLLMConfigResult {
@@ -165,6 +177,70 @@ function safeParseLegacyLLMConfig(
   }
 }
 
+/**
+ * Search for model metadata across all commonProviders.
+ * Tries: exact key match in own provider, name match in own provider,
+ * cross-provider lookup for "prefix/model" style names, and global search.
+ */
+function findModelMetadata(
+  modelName: string,
+  modelId: string | undefined,
+  providerId: ProviderId,
+  commonProviders: CommonProviders | undefined,
+): Model | undefined {
+  if (!commonProviders) {
+    ztoolkit.log("[findModelMetadata] No commonProviders available");
+    return undefined;
+  }
+
+  // 1. Direct lookup in the provider's own models
+  // ztoolkit.log("searching model metadata for", {
+  //   modelName,
+  //   modelId,
+  //   providerId,
+  // });
+  const ownProvider = commonProviders[providerId];
+  if (ownProvider?.models) {
+    if (ownProvider.models[modelName]) return ownProvider.models[modelName];
+    if (modelId && ownProvider.models[modelId])
+      return ownProvider.models[modelId];
+    for (const m of Object.values(ownProvider.models)) {
+      if (m.name === modelName || (modelId && m.name === modelId)) return m;
+    }
+  }
+
+  // 2. Cross-provider: if modelName has "prefix/model" format (e.g. openrouter)
+  const slashIdx = modelName.indexOf("/");
+  if (slashIdx > 0) {
+    const prefix = modelName.slice(0, slashIdx);
+    const bareName = modelName.slice(slashIdx + 1);
+    const prefixProvider = commonProviders[prefix];
+    if (prefixProvider?.models?.[bareName]) {
+      return prefixProvider.models[bareName];
+    }
+    if (prefixProvider?.models) {
+      for (const m of Object.values(prefixProvider.models)) {
+        if (m.name === bareName) return m;
+      }
+    }
+  }
+
+  // 3. Global search across all providers by name or id
+  for (const p of Object.values(commonProviders)) {
+    for (const m of Object.values(p.models)) {
+      if (
+        m.name === modelName ||
+        m.id === modelName ||
+        (modelId && (m.name === modelId || m.id === modelId))
+      ) {
+        return m;
+      }
+    }
+  }
+
+  return undefined;
+}
+
 /** 将 providerId 和 model 对象转换为 ModelSelect。 */
 function toModelSelect(
   providerId: ProviderId,
@@ -177,27 +253,16 @@ function toModelSelect(
   } as ModelSelect;
 }
 
-export const PROVIDER_ENV_KEY_MAP: Record<string, string> = {
-  openai: "OPENAI_API_KEY",
-  anthropic: "ANTHROPIC_API_KEY",
-  google: "GOOGLE_GENERATIVE_AI_API_KEY",
-  "alibaba-cn": "DASHSCOPE_API_KEY",
-  openrouter: "OPENROUTER_API_KEY",
-  zhipuai: "ZHIPU_API_KEY",
-  zai: "ZHIPU_API_KEY",
-  deepseek: "DEEPSEEK_API_KEY",
-  "minimax-cn": "MINIMAX_API_KEY",
-  volcengine: "ARK_API_KEY",
-};
-
 /**
  * 将旧版 llm.providerConfigs 转换为基于 key 的 V2 结构。
  * 同时返回仅包含 custom provider 的旧版配置，供兼容路径继续使用。
  * @param LegacyLlmConfig - 旧版配置
  * @param LegacyActiveLlmModelId - 用于设置 active
+ * @param commonProviders - 从 JSON 加载的 provider 元数据，用于填充 addedProviders / addedModels
  */
 export function convertLegacyLLMConfigByKey(
   LegacyLlmConfig: string | UserProviderConfig[] | null | undefined,
+  commonProviders?: CommonProviders,
   LegacyActiveLlmModelId?: string | null,
 ): ConvertLLMConfigResult {
   const legacyConfigs = safeParseLegacyLLMConfig(LegacyLlmConfig);
@@ -206,7 +271,9 @@ export function convertLegacyLLMConfigByKey(
   );
 
   const env: Record<ProviderId, Record<string, string>> = {};
-  const addedModels: ModelSelect[] = [];
+  const addedModelRefs: ModelSelect[] = [];
+  const addedProviders: Record<ProviderId, AddedProvider> = {};
+  const addedModels: AddedModel[] = [];
   const recentUsed: ModelSelect[] = [];
   const seen = new Set<string>();
 
@@ -226,6 +293,21 @@ export function convertLegacyLLMConfigByKey(
       currentEnv[apiKeyName] = provider.apiKey;
     }
 
+    // Fill addedProviders from commonProviders, fall back to legacy config info
+    const cp = commonProviders?.[providerId];
+    if (!addedProviders[providerId]) {
+      if (cp) {
+        const { models: _, ...rest } = cp;
+        addedProviders[providerId] = rest as AddedProvider;
+      } else {
+        addedProviders[providerId] = {
+          id: providerId,
+          name: provider.name,
+          env: [PROVIDER_ENV_KEY_MAP[providerId] || "API_KEY"],
+        };
+      }
+    }
+
     for (const model of provider.models || []) {
       if (!model.name) {
         continue;
@@ -236,15 +318,43 @@ export function convertLegacyLLMConfigByKey(
         continue;
       }
       seen.add(dedupKey);
-      addedModels.push(modelSelect);
+      addedModelRefs.push(modelSelect);
+
+      // Fill addedModels: search commonProviders (cross-provider) for metadata
+      const cm = findModelMetadata(
+        model.name,
+        model.id,
+        providerId,
+        commonProviders,
+      );
+      addedModels.push({
+        ...(cm
+          ? { ...cm }
+          : {
+              id: model.name,
+              name: model.name,
+              family: "gpt" as ModelFamily,
+              reasoning: false,
+              temperature: true,
+              modalities: { input: ["text"], output: ["text"] } as Modalities,
+              open_weights: false,
+              cost: { input: 0, output: 0 },
+              limit: { context: 0, output: 0 },
+            }),
+        // Override id/name with legacy values for lookup consistency
+        id: model.name,
+        name: model.name,
+        providerId,
+        enabled: true,
+      });
     }
   }
 
   const activeFromModelId = LegacyActiveLlmModelId
-    ? addedModels.find((model) => model.modelId === LegacyActiveLlmModelId)
+    ? addedModelRefs.find((model) => model.modelId === LegacyActiveLlmModelId)
     : undefined;
 
-  const active = activeFromModelId || recentUsed[0] || addedModels[0];
+  const active = activeFromModelId || recentUsed[0] || addedModelRefs[0];
 
   return {
     userProviderConfigV2: {
@@ -252,10 +362,24 @@ export function convertLegacyLLMConfigByKey(
       env,
       recentUsed,
       addedModels,
+      addedProviders,
     },
     legacyCustomProviderConfigs,
   };
 }
+
+export const PROVIDER_ENV_KEY_MAP: Record<string, string> = {
+  openai: "OPENAI_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+  google: "GOOGLE_GENERATIVE_AI_API_KEY",
+  "alibaba-cn": "DASHSCOPE_API_KEY",
+  openrouter: "OPENROUTER_API_KEY",
+  zhipuai: "ZHIPU_API_KEY",
+  zai: "ZHIPU_API_KEY",
+  deepseek: "DEEPSEEK_API_KEY",
+  "minimax-cn": "MINIMAX_API_KEY",
+  volcengine: "ARK_API_KEY",
+};
 
 /**
  * 从 providers JSON 初始化配置。

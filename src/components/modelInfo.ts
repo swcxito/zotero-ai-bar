@@ -22,21 +22,23 @@ import { analyzeModelName, getModelIconPath } from "../utils/modelAnalyzer";
 import { getString } from "../utils/locale";
 import { IconView } from "./iconView";
 import { DropdownMenuGroup, toggleDropdownMenu } from "./dropdownMenu";
-import type { ProviderId } from "../utils/providers";
+import type { AddedModel, ProviderId } from "../utils/providers";
 
 function resolveModelDisplayName(): string {
   const active = addon.data.userProviderConfigV2?.active;
   if (!active) return "";
 
-  const cp = addon.data.commonProviders;
-  const v2Model = cp?.[active.providerId]?.models?.[active.modelId];
-  if (v2Model?.name) return v2Model.name;
+  const addedModels = addon.data.userProviderConfigV2?.addedModels ?? [];
+  const m = addedModels.find(
+    (m) => m.providerId === active.providerId && m.id === active.modelId,
+  );
+  if (m?.name) return m.name;
 
   for (const conf of addon.data.legacyCustomProviderConfigs ?? []) {
-    const m = conf.models?.find(
-      (m) => m.id === active.modelId || m.name === active.modelId,
+    const lm = conf.models?.find(
+      (lm) => lm.id === active.modelId || lm.name === active.modelId,
     );
-    if (m?.name) return m.name;
+    if (lm?.name) return lm.name;
   }
 
   return active.modelId;
@@ -109,52 +111,44 @@ function toggleModelDropdown(anchor: HTMLElement) {
   const active = addon.data.userProviderConfigV2?.active;
   const groups: DropdownMenuGroup[] = [];
 
-  // v2 models: only show what's in addedModels, grouped by provider
-  const cp = addon.data.commonProviders;
+  // v2 models: grouped by provider, only enabled
   const addedModels = addon.data.userProviderConfigV2?.addedModels ?? [];
-  if (cp) {
-    const grouped = new Map<string, typeof addedModels>();
-    for (const m of addedModels) {
-      if (!cp[m.providerId]?.models?.[m.modelId]) continue;
-      const list = grouped.get(m.providerId) || [];
-      list.push(m);
-      grouped.set(m.providerId, list);
-    }
-    for (const [providerId, models] of grouped) {
-      const provider = cp[providerId];
-      const items = models.map((m) => {
-        const model = provider.models[m.modelId];
-        return {
-          id: `${providerId}::${m.modelId}`,
-          label: model.name,
-          selected:
-            active?.providerId === providerId && active?.modelId === m.modelId,
-          renderLeading: (doc: Document) => {
-            const holder = doc.createElement("span");
-            ztoolkit.UI.appendElement(
-              IconView({
-                iconMarkup: getModelIconPath(
-                  analyzeModelName(model.name).family,
-                ),
-                extraClasses: ["model-dropdown-icon"],
-                sizeRem: 1.2,
-              }),
-              holder,
-            );
-            return holder;
-          },
-          onClick: () => {
-            addon.data.userProviderConfigV2!.active = {
-              providerId: providerId as ProviderId,
-              modelId: m.modelId,
-            };
-            setPref("llm.modelId", `${providerId}::${m.modelId}`);
-            updateModelInfoDisplay(anchor);
-          },
+  const addedProviders = addon.data.userProviderConfigV2?.addedProviders ?? {};
+  const grouped = new Map<ProviderId, AddedModel[]>();
+  for (const m of addedModels) {
+    if (m.enabled === false) continue;
+    const list = grouped.get(m.providerId) || [];
+    list.push(m);
+    grouped.set(m.providerId, list);
+  }
+  for (const [providerId, models] of grouped) {
+    const provider = addedProviders[providerId];
+    const items = models.map((m) => ({
+      id: `${providerId}::${m.id}`,
+      label: m.name,
+      selected: active?.providerId === providerId && active?.modelId === m.id,
+      renderLeading: (doc: Document) => {
+        const holder = doc.createElement("span");
+        ztoolkit.UI.appendElement(
+          IconView({
+            iconMarkup: getModelIconPath(m.family),
+            extraClasses: ["model-dropdown-icon"],
+            sizeRem: 1.2,
+          }),
+          holder,
+        );
+        return holder;
+      },
+      onClick: () => {
+        addon.data.userProviderConfigV2!.active = {
+          providerId,
+          modelId: m.id,
         };
-      });
-      groups.push({ title: provider.name, items });
-    }
+        setPref("llm.modelId", `${providerId}::${m.id}`);
+        updateModelInfoDisplay(anchor);
+      },
+    }));
+    groups.push({ title: provider?.name ?? providerId, items });
   }
 
   // Legacy custom providers
@@ -164,7 +158,8 @@ function toggleModelDropdown(anchor: HTMLElement) {
       return {
         id: itemId,
         label: model.name,
-        selected: active?.providerId === conf.id && active?.modelId === model.name,
+        selected:
+          active?.providerId === conf.id && active?.modelId === model.name,
         renderLeading: (doc: Document) => {
           const holder = doc.createElement("span");
           ztoolkit.UI.appendElement(

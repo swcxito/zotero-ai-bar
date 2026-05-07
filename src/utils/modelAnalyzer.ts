@@ -179,5 +179,15 @@ export function analyzeModelName(modelName: string): ModelAnalysisResult {
 export function getModelIconPath(family: string): string {
   const normalizedFamily = family.toLowerCase();
 
-  return ModelIcons[normalizedFamily] || ModelIcons.custom;
+  if (ModelIcons[normalizedFamily]) return ModelIcons[normalizedFamily];
+
+  // Try progressively shorter prefixes for sub-families (e.g. "claude-sonnet" → "claude")
+  let lastDash = normalizedFamily.lastIndexOf("-");
+  while (lastDash > 0) {
+    const prefix = normalizedFamily.slice(0, lastDash);
+    if (ModelIcons[prefix]) return ModelIcons[prefix];
+    lastDash = normalizedFamily.lastIndexOf("-", lastDash - 1);
+  }
+
+  return ModelIcons.custom;
 }

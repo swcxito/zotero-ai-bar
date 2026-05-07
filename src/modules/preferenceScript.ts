@@ -55,19 +55,17 @@ function populateSelectorFromV2(
     selector.appendChild(opt);
   }
 
-  // v2 models: only show what's in addedModels
-  const cp = addon.data.commonProviders;
+  // v2 models: use AddedModel data directly, only enabled
   const addedModels = addon.data.userProviderConfigV2?.addedModels ?? [];
-  if (cp) {
-    for (const m of addedModels) {
-      const provider = cp[m.providerId];
-      if (!provider || !provider.models?.[m.modelId]) continue;
-      const model = provider.models[m.modelId];
-      const opt = doc.createElement("option");
-      opt.value = `${m.providerId}::${m.modelId}`;
-      opt.textContent = `${model.name} (${provider.name})`;
-      selector.appendChild(opt);
-    }
+  const addedProviders = addon.data.userProviderConfigV2?.addedProviders ?? {};
+  for (const m of addedModels) {
+    if (m.enabled === false) continue;
+    const provider = addedProviders[m.providerId];
+    const providerName = provider?.name ?? m.providerId;
+    const opt = doc.createElement("option");
+    opt.value = `${m.providerId}::${m.id}`;
+    opt.textContent = `${m.name} (${providerName})`;
+    selector.appendChild(opt);
   }
 
   // Legacy custom providers
@@ -97,10 +95,7 @@ function setActiveFromCompositeKey(value: string) {
   }
 }
 
-function setInitialSelectorValue(
-  selector: HTMLSelectElement,
-  doc: Document,
-) {
+function setInitialSelectorValue(selector: HTMLSelectElement, doc: Document) {
   const active = addon.data.userProviderConfigV2?.active;
   if (active) {
     selector.value = `${active.providerId}::${active.modelId}`;
@@ -130,6 +125,7 @@ function updatePrefsUI() {
         // Re-convert legacy config after dialog changes
         const result = convertLegacyLLMConfigByKey(
           addon.data.userProviderConfigs,
+          addon.data.commonProviders!,
           getPref("llm.modelId"),
         );
         addon.data.userProviderConfigV2 = result.userProviderConfigV2;
