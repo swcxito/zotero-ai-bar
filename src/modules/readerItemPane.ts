@@ -197,11 +197,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
                 );
                 ztoolkit.log(
                   "[Debug] Converted UserProviderConfigV2:",
-                  result.userProviderConfigV2,
-                );
-                ztoolkit.log(
-                  "[Debug] Legacy custom providers:",
-                  result.legacyCustomProviderConfigs,
+                  result,
                 );
                 // await llmTest();
               },

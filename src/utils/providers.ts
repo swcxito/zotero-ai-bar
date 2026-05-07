@@ -129,10 +129,8 @@ export interface UserProviderConfigV2 {
   addedProviders: Record<ProviderId, AddedProvider>;
 }
 
-export interface ConvertLLMConfigResult {
-  userProviderConfigV2: UserProviderConfigV2;
-  legacyCustomProviderConfigs: UserProviderConfig[];
-}
+
+
 
 const PROVIDER_KEY_TO_ID: Record<string, ProviderId> = {
   OPENAI: "openai",
@@ -304,11 +302,8 @@ export function convertLegacyLLMConfigByKey(
   LegacyLlmConfig: string | UserProviderConfig[] | null | undefined,
   commonProviders?: CommonProviders,
   LegacyActiveLlmModelId?: string | null,
-): ConvertLLMConfigResult {
+): UserProviderConfigV2 {
   const legacyConfigs = safeParseLegacyLLMConfig(LegacyLlmConfig);
-  const legacyCustomProviderConfigs = legacyConfigs.filter(
-    (provider) => provider.isCustom,
-  );
 
   const env: Record<ProviderId, Record<string, string>> = {};
   const addedModelRefs: ModelSelect[] = [];
@@ -318,9 +313,40 @@ export function convertLegacyLLMConfigByKey(
   const seen = new Set<string>();
 
   for (const provider of legacyConfigs) {
-    if (provider.isCustom || !provider.key) {
+    // Custom provider → 转换为 v2 格式
+    if (provider.isCustom) {
+      const providerId = provider.id as ProviderId;
+      env[providerId] = { API_KEY: provider.apiKey ?? "" };
+      addedProviders[providerId] = {
+        id: providerId,
+        name: provider.name,
+        env: ["API_KEY"],
+        api: provider.baseUrl,
+      };
+      for (const model of provider.models ?? []) {
+        if (!model.name) continue;
+        const dedupKey = `${providerId}::${model.name}`;
+        if (seen.has(dedupKey)) continue;
+        seen.add(dedupKey);
+        addedModelRefs.push({ providerId, modelId: model.name });
+        addedModels.push({
+          id: model.name,
+          name: model.name,
+          family: "unknown" as ModelFamily,
+          reasoning: false,
+          temperature: true,
+          modalities: { input: ["text"], output: ["text"] } as Modalities,
+          open_weights: false,
+          cost: { input: 0, output: 0 },
+          limit: { context: 0, output: 0 },
+          providerId,
+          enabled: model.enable ?? true,
+        });
+      }
       continue;
     }
+
+    if (!provider.key) continue;
 
     const providerId = normalizeProviderIdFromKey(String(provider.key));
     if (!providerId) {
@@ -397,14 +423,11 @@ export function convertLegacyLLMConfigByKey(
   const active = activeFromModelId || recentUsed[0] || addedModelRefs[0];
 
   return {
-    userProviderConfigV2: {
-      active,
-      env,
-      recentUsed,
-      addedModels,
-      addedProviders,
-    },
-    legacyCustomProviderConfigs,
+    active,
+    env,
+    recentUsed,
+    addedModels,
+    addedProviders,
   };
 }
 

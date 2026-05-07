@@ -2,7 +2,7 @@ import { config } from "../package.json";
 import { ColumnOptions, DialogHelper } from "zotero-plugin-toolkit";
 import hooks from "./hooks";
 import { createZToolkit } from "./utils/ztoolkit";
-import { UserProviderConfig, UserPrompt } from "./types";
+import { UserPrompt } from "./types";
 import type { CommonProviders, UserProviderConfigV2 } from "./utils/providers";
 import { ChatManager } from "./modules/chatManager";
 
@@ -39,12 +39,9 @@ class Addon {
       currentAnnotation?: _ZoteroTypes.Annotations.AnnotationJson;
       currentReader?: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">;
     };
-    /** @deprecated 迁移到 userProviderConfigV2 */
-    userProviderConfigs?: UserProviderConfig[];
     commonProviders?: CommonProviders;
     liveProviders?: CommonProviders;
     userProviderConfigV2?: UserProviderConfigV2;
-    legacyCustomProviderConfigs?: UserProviderConfig[];
     userPrompts?: UserPrompt[];
     // map tab IDs to their side pane root elements
     sidePaneBodyMap?: Map<string, HTMLElement>;

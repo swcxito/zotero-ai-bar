@@ -303,36 +303,29 @@ async function createModel() {
     });
   }
 
-  // Fallback: legacy / custom provider — search both config arrays + openai-compatible
-  const legacyConfigs = [
-    ...(addon.data.legacyCustomProviderConfigs ?? []),
-    ...(addon.data.userProviderConfigs ?? []),
-  ];
-  for (const conf of legacyConfigs) {
-    // Match by providerId first (UUID for custom), then fall back to model name
-    const model =
-      conf.models?.find(
-        (m) =>
-          conf.id === providerId && (m.id === modelId || m.name === modelId),
-      ) ?? conf.models?.find((m) => m.id === modelId || m.name === modelId);
-    if (model?.name) {
-      if (!conf.baseUrl) throw new Error("Base URL is missing.");
-      if (!conf.apiKey) throw new Error("API Key is missing.");
+  // V2 custom provider: not in commonProviders but in v2.addedProviders
+  const addedProvider = v2.addedProviders[providerId];
+  if (addedProvider) {
+    const model = v2.addedModels.find(
+      (m) => m.providerId === providerId && (m.id === modelId || m.name === modelId),
+    );
+    if (!model?.name) throw new Error(`Model not found: ${modelId}`);
 
-      const createFn = CREATE_PROVIDER_FNS["@ai-sdk/openai-compatible"];
-      if (!createFn) throw new Error("OpenAI-compatible SDK not loaded.");
+    const envValues = v2.env[providerId] ?? {};
+    const apiKey = Object.values(envValues)[0];
+    if (!apiKey) throw new Error(`API key not configured for ${providerId}`);
 
-      return createProvider(
-        createFn as typeof import("@ai-sdk/openai-compatible").createOpenAICompatible,
-        "@ai-sdk/openai-compatible",
-        {
-          apiKey: conf.apiKey,
-          baseUrl: conf.baseUrl,
-          providerId: conf.id,
-          modelId: model.name,
-        },
-      );
-    }
+    const baseUrl = addedProvider.api;
+    if (!baseUrl) throw new Error(`Base URL not configured for ${providerId}`);
+
+    const createFn = CREATE_PROVIDER_FNS["@ai-sdk/openai-compatible"];
+    if (!createFn) throw new Error("OpenAI-compatible SDK not loaded.");
+
+    return createProvider(
+      createFn as typeof import("@ai-sdk/openai-compatible").createOpenAICompatible,
+      "@ai-sdk/openai-compatible",
+      { apiKey, baseUrl, providerId, modelId: model.name },
+    );
   }
 
   throw new Error(`Provider or model not found: ${providerId}/${modelId}`);

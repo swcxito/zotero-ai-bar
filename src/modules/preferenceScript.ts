@@ -67,15 +67,7 @@ function populateSelectorFromV2(
     selector.appendChild(opt);
   }
 
-  // Legacy custom providers
-  for (const conf of addon.data.legacyCustomProviderConfigs ?? []) {
-    for (const model of conf.models ?? []) {
-      const opt = doc.createElement("option");
-      opt.value = `${conf.id}::${model.name}`;
-      opt.textContent = `${model.name} (${conf.name})`;
-      selector.appendChild(opt);
-    }
-  }
+
 
   selector.value = currentValue;
 }

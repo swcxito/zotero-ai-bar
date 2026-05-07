@@ -34,13 +34,6 @@ function resolveModelDisplayName(): string {
   );
   if (m?.name) return m.name;
 
-  for (const conf of addon.data.legacyCustomProviderConfigs ?? []) {
-    const lm = conf.models?.find(
-      (lm) => lm.id === active.modelId || lm.name === active.modelId,
-    );
-    if (lm?.name) return lm.name;
-  }
-
   return active.modelId;
 }
 
@@ -149,42 +142,6 @@ function toggleModelDropdown(anchor: HTMLElement) {
       },
     }));
     groups.push({ title: provider?.name ?? providerId, items });
-  }
-
-  // Legacy custom providers
-  for (const conf of addon.data.legacyCustomProviderConfigs ?? []) {
-    const items = (conf.models ?? []).map((model) => {
-      const itemId = `${conf.id}::${model.name}`;
-      return {
-        id: itemId,
-        label: model.name,
-        selected:
-          active?.providerId === conf.id && active?.modelId === model.name,
-        renderLeading: (doc: Document) => {
-          const holder = doc.createElement("span");
-          ztoolkit.UI.appendElement(
-            IconView({
-              iconMarkup: getModelIconPath(analyzeModelName(model.name).family),
-              extraClasses: ["model-dropdown-icon"],
-              sizeRem: 1.2,
-            }),
-            holder,
-          );
-          return holder;
-        },
-        onClick: () => {
-          addon.data.userProviderConfigV2!.active = {
-            providerId: conf.id as ProviderId,
-            modelId: model.name,
-          };
-          setPref("llm.modelId", itemId);
-          updateModelInfoDisplay(anchor);
-        },
-      };
-    });
-    if (items.length > 0) {
-      groups.push({ title: conf.name, items });
-    }
   }
 
   toggleDropdownMenu({
