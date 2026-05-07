@@ -16,22 +16,35 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { UserProvider, UserProviderConfig, UserProviderModel } from "../types";
 import { CardHead } from "./cardHead";
 import { CardModelRow } from "./modelRow";
 import { InlineButton } from "./buttons/inlineButton";
 
-export interface ProviderCardProps {
-  data: UserProvider;
+export interface ProviderCardV2Props {
+  providerId: string;
+  providerName: string;
+  iconUrl: string;
+  baseUrl?: string;
+  envKeys: string[];
+  envValues: Record<string, string>;
+  isCustom: boolean;
+  models: { id: string; name: string; enabled: boolean }[];
   doc: Document;
   onDelete?: () => void;
 }
 
 export function ProviderCard({
-  data,
+  providerId,
+  providerName,
+  iconUrl,
+  baseUrl,
+  envKeys,
+  envValues,
+  isCustom,
+  models,
   doc,
   onDelete = () => {},
-}: ProviderCardProps): Node {
+}: ProviderCardV2Props): Node {
   const card = ztoolkit.UI.createElement(doc, "div", {
     classList: [
       "overflow-clip",
@@ -49,7 +62,6 @@ export function ProviderCard({
       "break-inside-avoid",
       "provider-card",
     ],
-    // children: [headerTag],
   });
 
   function onDeleteClicked() {
@@ -95,9 +107,12 @@ export function ProviderCard({
 
   const modelCardList = cardBody.querySelector(".model-card-list");
 
-  data.models?.forEach((model) => {
+  models.forEach((model) => {
     if (model.id) {
-      const row = CardModelRow({ doc, data: model });
+      const row = CardModelRow({
+        doc,
+        data: { id: model.id, name: model.name, enabled: model.enabled },
+      });
       modelCardList?.appendChild(row);
     }
   });
@@ -133,46 +148,59 @@ export function ProviderCard({
     isCollapsed = !isCollapsed;
   }
 
-  const providerSetting: UserProviderConfig = {
-    id: data.id,
-    key: data.key,
-    name: data.name,
-    baseUrl: data.baseUrl ?? "",
-    apiKey: data.apiKey ?? "",
-    models: data.models ?? [],
-    isCustom: data.isCustom,
-  };
-  (card as any).getData = (): UserProviderConfig => {
+  interface RowWithGetData extends HTMLDivElement {
+    getData: () => { id: string; name: string; enabled: boolean };
+  }
+
+  (card as any).getData = () => {
     const modelRows = modelCardList?.querySelectorAll(
       "div[class*='model-card-list'] > div",
     );
-    const models: UserProviderModel[] = [];
-    interface ModelRowElement extends HTMLDivElement {
-      getData: () => UserProviderModel;
-    }
+    const collected: { id: string; name: string; enabled: boolean }[] = [];
     modelRows?.forEach((row: Element) => {
-      const modelData: UserProviderModel = (row as ModelRowElement).getData();
-      if (modelData.id && modelData.name !== "") {
-        modelData.providerId = providerSetting.id;
-        models.push(modelData);
+      const data = (row as RowWithGetData).getData();
+      if (data.id && data.name !== "") {
+        collected.push(data);
       }
     });
-    providerSetting.apiKey = (
-      card.querySelector(".key-input") as HTMLInputElement
-    ).value;
-    providerSetting.models = models;
-    if (data.isCustom) {
-      providerSetting.baseUrl = (
-        card.querySelector(".url-input") as HTMLInputElement
-      ).value;
-    }
-    return providerSetting;
+    const envValuesOut: Record<string, string> = {};
+    card.querySelectorAll(".env-input").forEach((input) => {
+      const el = input as HTMLInputElement;
+      envValuesOut[el.placeholder] = el.value;
+    });
+    const result = {
+      providerId,
+      envValues: envValuesOut,
+      baseUrl: isCustom
+        ? (card.querySelector(".url-input") as HTMLInputElement).value
+        : undefined,
+      models: collected,
+    };
+    ztoolkit.log("[ProviderCard.getData]", {
+      providerId,
+      envKeys: Object.keys(envValuesOut),
+      models: collected.map((m) => ({
+        id: m.id,
+        name: m.name,
+        enabled: m.enabled,
+      })),
+    });
+    return result;
   };
 
   const header = ztoolkit.UI.createElement(
     doc,
     "div",
-    CardHead({ data, onDeleteClicked, onToggleCollapse }),
+    CardHead({
+      iconUrl,
+      providerName,
+      baseUrl,
+      envKeys,
+      envValues,
+      isCustom,
+      onDeleteClicked,
+      onToggleCollapse,
+    }),
   );
 
   modelCardList?.appendChild(addModelButton);

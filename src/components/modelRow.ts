@@ -16,19 +16,17 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { UserProviderModel } from "../types";
 import { ButtonBase } from "./buttons/buttonBase";
 import { Icons } from "./common";
 
 export interface CardModelRowProps {
   doc: Document;
-  data?: UserProviderModel;
+  data?: { id?: string; name: string; enabled: boolean };
 }
 
 export function CardModelRow({ doc, data }: CardModelRowProps) {
   const row = ztoolkit.UI.createElement(doc, "div", {
     tag: "div",
-    //flex items-center gap-3 p-2 rounded-xl transition-all duration-300 bg-zinc-50 dark:bg-zinc-800  ring-2 ring-rose-100
     classList: [
       "flex",
       "items-center",
@@ -61,7 +59,7 @@ export function CardModelRow({ doc, data }: CardModelRowProps) {
           "bg-white",
           "dark:bg-zinc-800",
         ],
-        properties: { type: "checkbox", checked: data?.enable ?? true },
+        properties: { type: "checkbox", checked: data?.enabled ?? true },
       },
       {
         tag: "div",
@@ -124,11 +122,11 @@ export function CardModelRow({ doc, data }: CardModelRowProps) {
       }),
     ],
   });
-  (row as any).getData = (): UserProviderModel => {
+  (row as any).getData = () => {
     return {
       id: data?.id ?? crypto.randomUUID(),
       name: (row.querySelector('input[type="text"]') as HTMLInputElement).value,
-      enable: (row.querySelector('input[type="checkbox"]') as HTMLInputElement)
+      enabled: (row.querySelector('input[type="checkbox"]') as HTMLInputElement)
         .checked,
     };
   };

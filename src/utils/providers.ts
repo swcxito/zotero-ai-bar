@@ -182,7 +182,7 @@ function safeParseLegacyLLMConfig(
  * Tries: exact key match in own provider, name match in own provider,
  * cross-provider lookup for "prefix/model" style names, and global search.
  */
-function findModelMetadata(
+export function findModelMetadata(
   modelName: string,
   modelId: string | undefined,
   providerId: ProviderId,
@@ -239,6 +239,55 @@ function findModelMetadata(
   }
 
   return undefined;
+}
+
+/** ProviderId → 图标文件 stem（不含 .svg） */
+const PROVIDER_ID_ICON_STEM: Record<string, string> = {
+  openai: "openai",
+  anthropic: "anthropic",
+  google: "google_cloud",
+  "google-vertex": "google_cloud",
+  "google-vertex-anthropic": "google_cloud",
+  deepseek: "deepseek",
+  openrouter: "openrouter",
+  alibaba: "alibaba_cloud",
+  "alibaba-cn": "alibaba_cloud",
+  "alibaba-coding-plan": "alibaba_cloud",
+  "alibaba-coding-plan-cn": "alibaba_cloud",
+  zhipuai: "zhipu",
+  "zhipuai-coding-plan": "zhipu",
+  zai: "zai",
+  "zai-coding-plan": "zai",
+  minimax: "minimax",
+  "minimax-cn": "minimax",
+  "minimax-coding-plan": "minimax",
+  "minimax-cn-coding-plan": "minimax",
+  volcengine: "volcengine",
+  xai: "xai",
+  azure: "azure",
+  "azure-cognitive-services": "azure",
+  vercel: "vercel",
+  "amazon-bedrock": "aws",
+  moonshotai: "moonshot",
+  "moonshotai-cn": "moonshot",
+};
+
+/** 根据 providerId 获取图标 chrome:// URL */
+export function getV2LogoUrl(providerId: string): string {
+  const stem = PROVIDER_ID_ICON_STEM[providerId];
+  if (stem) {
+    return `chrome://${config.addonRef}/content/icons/${stem}.svg`;
+  }
+  return `chrome://${config.addonRef}/content/icons/favicon.svg`;
+}
+
+/** 解析 provider 对应的 API key env 变量名 */
+export function resolveEnvKeyName(providerId: string): string {
+  return (
+    PROVIDER_ENV_KEY_MAP[providerId] ??
+    addon.data.commonProviders?.[providerId]?.env?.[0] ??
+    "API_KEY"
+  );
 }
 
 /** 将 providerId 和 model 对象转换为 ModelSelect。 */

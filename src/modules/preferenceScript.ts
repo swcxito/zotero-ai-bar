@@ -18,7 +18,6 @@
 
 import { config } from "../../package.json";
 import { getPref, setPref } from "../utils/prefs";
-import { convertLegacyLLMConfigByKey } from "../utils/providers";
 import type { ProviderId } from "../utils/providers";
 import { openDialog } from "./modelDialog";
 import { openPromptEditor } from "./promptEditor";
@@ -122,15 +121,7 @@ function updatePrefsUI() {
   if (modelEditButton) {
     modelEditButton.addEventListener("click", () => {
       openDialog(() => {
-        // Re-convert legacy config after dialog changes
-        const result = convertLegacyLLMConfigByKey(
-          addon.data.userProviderConfigs,
-          addon.data.commonProviders!,
-          getPref("llm.modelId"),
-        );
-        addon.data.userProviderConfigV2 = result.userProviderConfigV2;
-        addon.data.legacyCustomProviderConfigs =
-          result.legacyCustomProviderConfigs;
+        // Dialog has already updated addon.data.userProviderConfigV2 in memory
         populateSelectorFromV2(modelSelector, doc);
         setInitialSelectorValue(modelSelector, doc);
       });

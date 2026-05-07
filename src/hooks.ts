@@ -61,11 +61,11 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
     `${addon.data.config.addonRef}-mainWindow.ftl`,
   );
 
-  const llmConfig = getPref("llm.providerConfigs");
-  ztoolkit.log("llmConfig: ", llmConfig);
-
   // Config v2: load provider metadata + convert legacy config
   addon.data.commonProviders = await loadProvidersFromFile();
+  const llmConfig = getPref("llm.providerConfigs");
+  ztoolkit.log("[hooks] llmConfig:", llmConfig);
+
   const { userProviderConfigV2, legacyCustomProviderConfigs } =
     convertLegacyLLMConfigByKey(
       llmConfig,
@@ -74,21 +74,18 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
     );
   addon.data.userProviderConfigV2 = userProviderConfigV2;
   addon.data.legacyCustomProviderConfigs = legacyCustomProviderConfigs;
+  ztoolkit.log("[hooks] Converted v2 config:", {
+    providers: Object.keys(userProviderConfigV2.addedProviders),
+    models: userProviderConfigV2.addedModels.length,
+    envKeys: Object.keys(userProviderConfigV2.env),
+  });
 
   // Sync legacy llm.modelId to v2 composite format
-  if (userProviderConfigV2.active) {
+  if (addon.data.userProviderConfigV2.active) {
     setPref(
       "llm.modelId",
-      `${userProviderConfigV2.active.providerId}::${userProviderConfigV2.active.modelId}`,
+      `${addon.data.userProviderConfigV2.active.providerId}::${addon.data.userProviderConfigV2.active.modelId}`,
     );
-  }
-
-  /**
-   * @deprecated 为 modelDialog / modelInfo / preferenceScript 等旧版 UI 组件
-   * 提供过渡期兼容。迁移完成后应删除此赋值及 addon.data.userProviderConfigs。
-   */
-  if (llmConfig) {
-    addon.data.userProviderConfigs = JSON.parse(getPref("llm.providerConfigs"));
   }
 
   // Load user custom prompts
