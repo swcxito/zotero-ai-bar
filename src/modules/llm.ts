@@ -241,10 +241,7 @@ function createProvider(
     modelId: string;
   },
 ) {
-  if (
-    sdkPackage === "@ai-sdk/openai" ||
-    sdkPackage === "@ai-sdk/openai-compatible"
-  ) {
+  if (sdkPackage === "@ai-sdk/openai-compatible") {
     const fn =
       createFn as typeof import("@ai-sdk/openai-compatible").createOpenAICompatible;
     if (!opts.baseUrl) throw new Error(`Base URL required for ${sdkPackage}`);
@@ -255,7 +252,7 @@ function createProvider(
       includeUsage: true,
     })(opts.modelId);
   }
-  // Native SDKs: anthropic, google, xai, openrouter, etc.
+  // Native SDKs: openai, anthropic, google, xai, openrouter, etc.
   const fn = createFn as (config: {
     apiKey: string;
     name: string;
@@ -284,7 +281,10 @@ async function createModel() {
     // Providers with empty models dict (openrouter, azure, etc.) accept
     // dynamic model IDs — proceed with the active modelId as-is.
     if (!model && Object.keys(provider.models).length > 0) {
-      throw new Error(`Model not found: ${modelId}`);
+      const userAdded = v2.addedModels.find(
+        (m) => m.providerId === providerId && (m.id === modelId || m.name === modelId),
+      );
+      if (!userAdded) throw new Error(`Model not found: ${modelId}`);
     }
 
     const envKey = PROVIDER_ENV_KEY_MAP[providerId] || "API_KEY";

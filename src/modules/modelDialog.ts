@@ -461,7 +461,7 @@ class ModelDialogV2 {
               cost: { input: 0, output: 0 },
               limit: { context: 0, output: 0 },
             }),
-            id: cm.name,
+            id: metadata?.id ?? cm.name,
             name: cm.name,
             providerId: providerId as ProviderId,
             enabled: cm.enabled,
