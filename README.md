@@ -15,17 +15,33 @@ If you find this project helpful, please consider supporting its development and
 [<img alt="&quot;Buy Me A Coffee&quot;" height="60px" src="docs/assets/red-button.png"/>](https://www.buymeacoffee.com/fukeke)
 [<img alt="Afdian" src="docs/assets/afdian-btn-en.png" height="60px"/>](https://afdian.com/a/fukeke)
 
-## What's New in v0.4.0 (Planned)
+## What's New in v1.0beta
 
 Changes below are summarized from commits after `v0.3.4`.
 
-- Added custom prompt management and a dedicated prompt editor page.
-- Added smart copy support and improved response interaction.
-- Added formula block optimization options for better math rendering/handling.
-- Refactored chat flow with `ChatManager` and moved request utilities for cleaner architecture.
-- Added standalone chat window support and chat window host integration.
-- Added UI settings options and improved interface consistency.
-- Continued prompt quality improvements and style fixes.
+### Config v2 — New Provider & Model Architecture
+
+- **Data-driven providers**: Replaced hardcoded provider list with `common_providers.min.json` — supports **27 providers** and **763 models** out of the box.
+- **Native SDK dispatch**: Each provider now uses its own AI SDK (`@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/openai`, etc.) instead of routing everything through OpenAI-compatible. Providers with custom endpoints (DeepSeek, Zhipu, MiniMax, etc.) continue to use `@ai-sdk/openai-compatible` with proper namespacing for streaming.
+- **Lazy-loading**: Provider metadata is loaded on-demand to reduce startup overhead.
+- **Multi-env support**: Providers with multiple environment variables (e.g., Azure) show separate input fields in the configuration dialog.
+
+### Redesigned Model Management Dialog
+
+- **Provider browser**: Centered modal with search, alphabetical sorting, and pinned common providers (OpenAI, Google, Anthropic, etc.) at the top.
+- **Model selection popup**: Browse and search provider-specific models with family-based icons. Type a model name and press Enter to add directly.
+- **Family-aware model metadata**: Model family is resolved from `common_providers.json` (default: `unknown` instead of the previous `gpt` fallback).
+- **Dedup protection**: Prevents adding duplicate models within the same provider.
+
+### Other Improvements
+
+- **Custom prompt management**: Dedicated prompt editor page with drag-to-reorder support.
+- **Smart copy** and improved response interaction.
+- **Standalone chat window** with host mode integration.
+- **Formula block optimization** for better math rendering.
+- **Refactored chat flow**: `ChatManager` for cleaner request handling.
+- **UI improvements**: Streamlined model selector on toolbar, retry button for failed requests, stream update speed settings with localization.
+- Removed deprecated `providerInfo.ts` and legacy `UserProvider`/`UserProviderModel` types.
 
 ## What's New in v0.3
 

@@ -15,17 +15,33 @@
 [<img alt="爱发电" src="/docs/assets/afdian-btn-zh.png" height="60px"/>](https://afdian.com/a/fukeke)
 [<img alt="&amp;amp;quot;Buy Me A Coffee&amp;amp;quot;" height="60px" src="/docs/assets/red-button.png"/>](https://www.buymeacoffee.com/fukeke)
 
-## v0.4.0 计划更新内容
+## v1.0beta 更新内容
 
 以下内容基于 `v0.3.4` 之后的提交整理：
 
-- 新增自定义提示词管理与独立提示词编辑页面。
-- 新增智能复制能力，优化回复交互体验。
-- 新增公式块优化选项，提升公式显示与处理体验。
-- 重构聊天请求与状态管理，引入 `ChatManager` 并调整请求模块结构。
-- 新增独立聊天窗口能力及窗口托管模块。
-- 新增界面设置选项，优化整体界面一致性。
-- 持续优化提示词与样式细节。
+### Config v2 — 全新供应商 & 模型架构
+
+- **数据驱动的供应商**：用 `common_providers.min.json` 替代硬编码的供应商列表，开箱支持 **27 个供应商**和 **763 个模型**。
+- **原生 SDK 分发**：各供应商使用自己的 AI SDK（`@ai-sdk/anthropic`、`@ai-sdk/google`、`@ai-sdk/openai` 等），不再统一走 OpenAI-compatible。自定义端点的供应商（DeepSeek、智谱、MiniMax 等）继续使用 `@ai-sdk/openai-compatible` 并正确配置命名空间以支持流式输出。
+- **懒加载**：供应商元数据按需加载，降低启动开销。
+- **多环境变量支持**：需要多个环境变量的供应商（如 Azure）在配置对话框中显示独立输入框。
+
+### 重新设计的模型管理对话框
+
+- **供应商浏览器**：居中弹窗，支持搜索、按字母排序，常用供应商（OpenAI、Google、Anthropic 等）置顶显示。
+- **模型选择弹窗**：浏览和搜索供应商专属模型，显示对应 family 图标。输入模型名后直接回车即可添加。
+- **Family 感知的模型元数据**：模型 family 从 `common_providers.json` 解析（默认值：`unknown`，不再使用 `gpt`）。
+- **去重保护**：同一供应商下防止重复添加同名模型。
+
+### 其他改进
+
+- **自定义提示词管理**：独立提示词编辑页面，支持拖拽排序。
+- **智能复制**与优化的回复交互体验。
+- **独立聊天窗口**，支持窗口托管模式。
+- **公式块优化**，提升公式渲染质量。
+- **重构聊天流程**：引入 `ChatManager`，请求处理更清晰。
+- **界面优化**：工具栏模型选择器、失败重试按钮、流式更新速度设置（含本地化）。
+- 移除已弃用的 `providerInfo.ts` 和旧版 `UserProvider`/`UserProviderModel` 类型。
 
 ## v0.3 更新说明
 
