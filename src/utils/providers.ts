@@ -267,7 +267,7 @@ const PROVIDER_ID_ICON_STEM: Record<string, string> = {
   azure: "azure",
   "azure-cognitive-services": "azure",
   vercel: "vercel",
-  "amazon-bedrock": "aws",
+  "amazon-bedrock": "bedrock",
   moonshotai: "moonshot",
   "moonshotai-cn": "moonshot",
 };
