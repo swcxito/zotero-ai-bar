@@ -67,8 +67,6 @@ function populateSelectorFromV2(
     selector.appendChild(opt);
   }
 
-
-
   selector.value = currentValue;
 }
 

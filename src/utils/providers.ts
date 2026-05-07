@@ -129,9 +129,6 @@ export interface UserProviderConfigV2 {
   addedProviders: Record<ProviderId, AddedProvider>;
 }
 
-
-
-
 const PROVIDER_KEY_TO_ID: Record<string, ProviderId> = {
   OPENAI: "openai",
   ANTHROPIC: "anthropic",

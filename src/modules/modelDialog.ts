@@ -122,7 +122,9 @@ class ModelDialogV2 {
       this.searchInput.placeholder = getString("model-dialog-search-providers");
     }
     if (this.modelSearchInput) {
-      this.modelSearchInput.placeholder = getString("model-dialog-search-models");
+      this.modelSearchInput.placeholder = getString(
+        "model-dialog-search-models",
+      );
     }
 
     const v2 = addon.data.userProviderConfigV2!;
@@ -546,7 +548,10 @@ class ModelDialogV2 {
 
   // ---- Model selection popup ----
 
-  async openModelSelect(providerId: string, onSelect: (modelName: string) => void) {
+  async openModelSelect(
+    providerId: string,
+    onSelect: (modelName: string) => void,
+  ) {
     if (!this.modelOverlay || !this.modelList || !this.modelSearchInput) return;
     if (this.interacting) return;
     this.interacting = true;

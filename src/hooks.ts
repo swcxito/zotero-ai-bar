@@ -78,12 +78,11 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
     const llmConfig = getPref("llm.providerConfigs");
     ztoolkit.log("[hooks] No v2 pref, converting from legacy:", llmConfig);
 
-    const userProviderConfigV2 =
-      convertLegacyLLMConfigByKey(
-        llmConfig,
-        addon.data.commonProviders,
-        getPref("llm.modelId"),
-      );
+    const userProviderConfigV2 = convertLegacyLLMConfigByKey(
+      llmConfig,
+      addon.data.commonProviders,
+      getPref("llm.modelId"),
+    );
     addon.data.userProviderConfigV2 = userProviderConfigV2;
     await saveV2Config(userProviderConfigV2);
     ztoolkit.log("[hooks] Converted and persisted v2 config:", {

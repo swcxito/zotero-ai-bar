@@ -307,7 +307,8 @@ async function createModel() {
   const addedProvider = v2.addedProviders[providerId];
   if (addedProvider) {
     const model = v2.addedModels.find(
-      (m) => m.providerId === providerId && (m.id === modelId || m.name === modelId),
+      (m) =>
+        m.providerId === providerId && (m.id === modelId || m.name === modelId),
     );
     if (!model?.name) throw new Error(`Model not found: ${modelId}`);
 
