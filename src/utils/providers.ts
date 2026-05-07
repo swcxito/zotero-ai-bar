@@ -488,14 +488,15 @@ export async function ensureCommonProviders(): Promise<CommonProviders> {
 const MODELS_DEV_API = "https://models.dev/api.json";
 const MODELS_DEV_LOGO_BASE = "https://models.dev/logos";
 
-/** 过滤模型：去掉带日期、参数量、特定后缀的版本（不过滤 :free） */
+/** 过滤模型：去掉带日期、参数量、上下文窗口、特定后缀的版本（不过滤 :free） */
 const LIVE_FILTER_PATTERNS = [
-  /\d{4}-\d{2}-\d{2}/,
-  /-\d{4}(?:-|$)/,
-  /-\d{2}-\d{4}(?:-|$)/,
-  /-\d{2}-\d{2}(?:-|$|\w)/,
-  /-\d+(?:b|B)(?:-\w+)?|-\d+[a-zA-Z]*b(?:-|\w|$)/,
-  /:exacto$|v\d+:\d+$/,
+  /\d{4}-\d{2}-\d{2}/,                      // 完整日期: 2024-11-20
+  /-\d{4}(?:-|$)/,                           // 年份后缀: -2024
+  /-\d{2}-\d{4}(?:-|$)/,                     // 月-年: -06-2024
+  /-\d{2}-\d{2}(?:-|$|\w)/,                  // 短日期: -06-05
+  /(?:^|[.\-_])\d+(?:\.\d+)?[bB](?:[.\-_]|\W|$)/,  // 参数量: 8b, 70B, 1.2b
+  /(?:^|[.\-_])\d+k(?:[.\-_]|\W|$)/i,        // 上下文窗口: 32k, 128k
+  /:exacto$|v\d+:\d+$/,                      // 特定后缀: :exacto, v1:0
 ];
 
 const LIVE_FIELDS_TO_REMOVE = [
@@ -596,6 +597,7 @@ export async function fetchLiveProviders(): Promise<CommonProviders> {
           if (f === "id" && v === key) continue;
           cleaned[f] = v;
         }
+        if (!cleaned.family) cleaned.family = "unknown";
         models[key] = cleaned;
       }
       result[name] = { ...p, models };

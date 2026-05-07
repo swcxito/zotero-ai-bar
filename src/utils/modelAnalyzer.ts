@@ -176,10 +176,16 @@ export function analyzeModelName(modelName: string): ModelAnalysisResult {
  * @param family The model family name
  * @returns Chrome URL path to the model icon
  */
-export function getModelIconPath(family: string): string {
+export function getModelIconPath(family?: string): string {
+  if (!family) return ModelIcons.custom;
   const normalizedFamily = family.toLowerCase();
 
   if (ModelIcons[normalizedFamily]) return ModelIcons[normalizedFamily];
+
+  // GPT o-series: o1, o3, o4-mini, o-pro → OpenAI icon
+  if (normalizedFamily === "o" || normalizedFamily.startsWith("o-")) {
+    return ModelIcons.gpt;
+  }
 
   // Try progressively shorter prefixes for sub-families (e.g. "claude-sonnet" → "claude")
   let lastDash = normalizedFamily.lastIndexOf("-");

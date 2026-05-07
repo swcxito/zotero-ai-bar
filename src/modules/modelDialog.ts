@@ -530,14 +530,14 @@ class ModelDialogV2 {
         btn.className =
           "flex w-full items-center gap-3 px-4 py-1.5 text-left text-sm text-zinc-700 transition-colors hover:bg-rose-400 hover:text-white dark:text-zinc-200";
 
+        const iconSlot = this.doc.createElement("span");
+        iconSlot.className =
+          "w-4 h-4 shrink-0 inline-flex items-center justify-center";
         const iconMarkup = getModelIconPath(m.family);
         if (iconMarkup !== ModelIcons.custom) {
-          const icon = this.doc.createElement("span");
-          icon.innerHTML = iconMarkup;
-          icon.className =
-            "w-4 h-4 shrink-0 inline-flex items-center justify-center";
-          btn.appendChild(icon);
+          iconSlot.innerHTML = iconMarkup;
         }
+        btn.appendChild(iconSlot);
 
         const span = this.doc.createElement("span");
         span.textContent = m.name;
