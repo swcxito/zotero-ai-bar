@@ -117,6 +117,10 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
       const shadowRoot = root.attachShadow({ mode: "open" });
       resizeReaderItemPaneHeight(body, "fit");
 
+      // 阻止侧边栏被宽内容（表格/公式/代码块）横向撑开
+      body.style.overflowX = "hidden";
+      root.style.contain = "inline-size";
+
       // 将 CSS 注入到 Shadow DOM 中
       // injectDebugTailwindScript(shadowRoot);
       injectCSS(shadowRoot, "katex.min.css");
@@ -131,6 +135,8 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
         "flex-col",
         "flex-1",
         "overflow-y-auto",
+        "overflow-x-auto",
+        "min-w-0",
       );
       messageContainer.style.userSelect = "text";
       shadowRoot.appendChild(messageContainer);

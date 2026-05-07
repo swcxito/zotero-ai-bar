@@ -60,6 +60,10 @@
     display: none;
   }
 
+  .chat-message-content {
+    max-width: 100%;
+  }
+
   .chat-message p {
     margin-bottom: 0.75rem;
     text-align: justify;
@@ -121,11 +125,15 @@
   }
 
   .chat-message table {
-    @apply w-full border-separate border-spacing-0 rounded-xl border border-rose-200 dark:border-rose-900/50 my-6 overflow-x-auto block text-sm;
+    @apply w-full min-w-0 max-w-full border-separate border-spacing-0 rounded-xl border border-rose-200 dark:border-rose-900/50 my-6 overflow-x-auto block text-sm;
   }
 
   .chat-message math[display="block"] {
-    @apply block overflow-x-auto overflow-y-hidden py-2;
+    @apply block overflow-y-hidden py-2 min-w-0 max-w-full;
+  }
+
+  .math-scroll-wrapper {
+    @apply block overflow-x-auto max-w-full;
   }
 
   .chat-message th {
@@ -149,7 +157,7 @@
     @apply px-1.5 py-0.5 rounded-md bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 text-[0.9em] font-medium font-mono;
   }
   .chat-message pre {
-    @apply my-4 mx-2 rounded-xl p-4 overflow-x-auto shadow-sm shadow-rose-200 dark:shadow-rose-950 dark:bg-zinc-800 bg-zinc-50;
+    @apply my-4 mx-2 rounded-xl p-4 overflow-x-auto min-w-0 max-w-full shadow-sm shadow-rose-200 dark:shadow-rose-950 dark:bg-zinc-800 bg-zinc-50;
   }
   .chat-message pre code {
     @apply bg-transparent p-0 text-inherit;

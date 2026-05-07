@@ -185,6 +185,10 @@ export async function renderMarkdown(markdown: string): Promise<string> {
       .replace(
         /<svg(?![^>]*xmlns)/g,
         '<svg xmlns="http://www.w3.org/2000/svg"',
+      )
+      .replace(
+        /<span class="katex"><math[\s][^>]*display="block"[^>]*>[\s\S]*?<\/math>\s*<\/span>/g,
+        '<span class="math-scroll-wrapper">$&</span>',
       );
   } catch (error) {
     console.error("Markdown 解析失败:", error);
