@@ -529,10 +529,12 @@ class ModelDialogV2 {
       "invisible",
       "pointer-events-none",
     );
+    this.doc.body.style.overflow = "";
   }
 
   private showPopup() {
     this.refreshProviderList();
+    this.doc.body.style.overflow = "hidden";
     this.overlay?.classList.remove(
       "opacity-0",
       "invisible",
@@ -631,6 +633,7 @@ class ModelDialogV2 {
       "pointer-events-none",
     );
     this.modelOverlay.classList.add("opacity-100");
+    this.doc.body.style.overflow = "hidden";
     this.modelSearchInput.focus();
   }
 
@@ -642,6 +645,7 @@ class ModelDialogV2 {
       "invisible",
       "pointer-events-none",
     );
+    this.doc.body.style.overflow = "";
   }
 }
 
