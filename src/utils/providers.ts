@@ -483,6 +483,102 @@ export async function ensureCommonProviders(): Promise<CommonProviders> {
   return commonProvidersPromise;
 }
 
+// ---- Config V2 持久化（Prefs 存轻量引用 + File 存模型元数据） ----
+
+const V2_CONFIG_PREF_KEY = "llm.providerConfigsV2";
+const V2_MODELS_FILENAME = "models-v2.json";
+
+function getV2ModelsPath(): string {
+  const baseDir = PathUtils.profileDir;
+  return PathUtils.join(
+    baseDir,
+    addon.data.config.addonRef,
+    V2_MODELS_FILENAME,
+  );
+}
+
+/** 将模型元数据同步到文件（不存 providerId 和 enabled，这两项在 Prefs 中） */
+async function saveV2Models(addedModels: AddedModel[]): Promise<void> {
+  const filePath = getV2ModelsPath();
+  // 重建完整模型字典：覆盖本次保存的所有模型
+  const allModels: Record<string, Record<string, any>> = {};
+  for (const m of addedModels) {
+    const { providerId, enabled, ...model } = m;
+    (allModels[providerId] ??= {})[m.id] = model;
+  }
+  await IOUtils.writeJSON(filePath, allModels);
+}
+
+async function loadV2ModelsFile(): Promise<
+  Record<string, Record<string, any>>
+> {
+  try {
+    const filePath = getV2ModelsPath();
+    if (!(await IOUtils.exists(filePath))) return {};
+    return await IOUtils.readJSON(filePath);
+  } catch {
+    return {};
+  }
+}
+
+/** 持久化：轻量引用 → Prefs，模型元数据 → File */
+export async function saveV2Config(v2: UserProviderConfigV2): Promise<void> {
+  const lightweight = {
+    active: v2.active,
+    env: v2.env,
+    recentUsed: v2.recentUsed,
+    addedProviders: v2.addedProviders,
+    addedModels: v2.addedModels.map((m) => ({
+      providerId: m.providerId,
+      id: m.id,
+      name: m.name,
+      enabled: m.enabled,
+    })),
+  };
+  Zotero.Prefs.set(
+    `${config.prefsPrefix}.${V2_CONFIG_PREF_KEY}`,
+    JSON.stringify(lightweight),
+    true,
+  );
+  await saveV2Models(v2.addedModels);
+  addon.data.userProviderConfigV2 = v2;
+  ztoolkit.log("[saveV2Config] Persisted (prefs + models file)");
+}
+
+/** 加载：Prefs 轻量引用 + File 模型元数据合并 */
+export async function loadV2Config(): Promise<UserProviderConfigV2 | null> {
+  try {
+    const raw = Zotero.Prefs.get(
+      `${config.prefsPrefix}.${V2_CONFIG_PREF_KEY}`,
+      true,
+    ) as string;
+    if (!raw) return null;
+    const lightweight = JSON.parse(raw);
+    const modelsFile = await loadV2ModelsFile();
+
+    lightweight.addedModels = lightweight.addedModels.map((m: any) => {
+      const meta = modelsFile[m.providerId]?.[m.id] ?? {};
+      const merged = { ...meta, ...m };
+      // 如果文件中没有元数据（首次迁移或文件丢失），尝试从 commonProviders 补充
+      if (!merged.family) {
+        const fm = findModelMetadata(
+          m.name,
+          m.id,
+          m.providerId,
+          addon.data.liveProviders ?? addon.data.commonProviders,
+        );
+        if (fm) Object.assign(merged, fm);
+      }
+      if (!merged.family) merged.family = "unknown";
+      return merged;
+    });
+
+    return lightweight;
+  } catch {
+    return null;
+  }
+}
+
 // ---- 在线获取 models.dev 数据 ----
 
 const MODELS_DEV_API = "https://models.dev/api.json";
@@ -490,13 +586,13 @@ const MODELS_DEV_LOGO_BASE = "https://models.dev/logos";
 
 /** 过滤模型：去掉带日期、参数量、上下文窗口、特定后缀的版本（不过滤 :free） */
 const LIVE_FILTER_PATTERNS = [
-  /\d{4}-\d{2}-\d{2}/,                      // 完整日期: 2024-11-20
-  /-\d{4}(?:-|$)/,                           // 年份后缀: -2024
-  /-\d{2}-\d{4}(?:-|$)/,                     // 月-年: -06-2024
-  /-\d{2}-\d{2}(?:-|$|\w)/,                  // 短日期: -06-05
-  /(?:^|[.\-_])\d+(?:\.\d+)?[bB](?:[.\-_]|\W|$)/,  // 参数量: 8b, 70B, 1.2b
-  /(?:^|[.\-_])\d+k(?:[.\-_]|\W|$)/i,        // 上下文窗口: 32k, 128k
-  /:exacto$|v\d+:\d+$/,                      // 特定后缀: :exacto, v1:0
+  /\d{4}-\d{2}-\d{2}/, // 完整日期: 2024-11-20
+  /-\d{4}(?:-|$)/, // 年份后缀: -2024
+  /-\d{2}-\d{4}(?:-|$)/, // 月-年: -06-2024
+  /-\d{2}-\d{2}(?:-|$|\w)/, // 短日期: -06-05
+  /(?:^|[.\-_])\d+(?:\.\d+)?[bB](?:[.\-_]|\W|$)/, // 参数量: 8b, 70B, 1.2b
+  /(?:^|[.\-_])\d+k(?:[.\-_]|\W|$)/i, // 上下文窗口: 32k, 128k
+  /:exacto$|v\d+:\d+$/, // 特定后缀: :exacto, v1:0
 ];
 
 const LIVE_FIELDS_TO_REMOVE = [

@@ -16,6 +16,8 @@ import { preloadLLMRuntime } from "./modules/llm";
 import {
   convertLegacyLLMConfigByKey,
   ensureCommonProviders,
+  loadV2Config,
+  saveV2Config,
 } from "./utils/providers";
 
 async function onStartup() {
@@ -61,24 +63,37 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
     `${addon.data.config.addonRef}-mainWindow.ftl`,
   );
 
-  // Config v2: lazy-load provider metadata + convert legacy config
+  // Config v2: lazy-load provider metadata, prefer persisted v2 config
   await ensureCommonProviders();
-  const llmConfig = getPref("llm.providerConfigs");
-  ztoolkit.log("[hooks] llmConfig:", llmConfig);
 
-  const { userProviderConfigV2, legacyCustomProviderConfigs } =
-    convertLegacyLLMConfigByKey(
-      llmConfig,
-      addon.data.commonProviders,
-      getPref("llm.modelId"),
-    );
-  addon.data.userProviderConfigV2 = userProviderConfigV2;
-  addon.data.legacyCustomProviderConfigs = legacyCustomProviderConfigs;
-  ztoolkit.log("[hooks] Converted v2 config:", {
-    providers: Object.keys(userProviderConfigV2.addedProviders),
-    models: userProviderConfigV2.addedModels.length,
-    envKeys: Object.keys(userProviderConfigV2.env),
-  });
+  const v2FromPref = await loadV2Config();
+  if (v2FromPref) {
+    addon.data.userProviderConfigV2 = v2FromPref;
+    addon.data.legacyCustomProviderConfigs = [];
+    ztoolkit.log("[hooks] Loaded v2 config from pref:", {
+      providers: Object.keys(v2FromPref.addedProviders),
+      models: v2FromPref.addedModels.length,
+      envKeys: Object.keys(v2FromPref.env),
+    });
+  } else {
+    const llmConfig = getPref("llm.providerConfigs");
+    ztoolkit.log("[hooks] No v2 pref, converting from legacy:", llmConfig);
+
+    const { userProviderConfigV2, legacyCustomProviderConfigs } =
+      convertLegacyLLMConfigByKey(
+        llmConfig,
+        addon.data.commonProviders,
+        getPref("llm.modelId"),
+      );
+    addon.data.userProviderConfigV2 = userProviderConfigV2;
+    addon.data.legacyCustomProviderConfigs = legacyCustomProviderConfigs;
+    await saveV2Config(userProviderConfigV2);
+    ztoolkit.log("[hooks] Converted and persisted v2 config:", {
+      providers: Object.keys(userProviderConfigV2.addedProviders),
+      models: userProviderConfigV2.addedModels.length,
+      envKeys: Object.keys(userProviderConfigV2.env),
+    });
+  }
 
   // Sync legacy llm.modelId to v2 composite format
   if (addon.data.userProviderConfigV2.active) {

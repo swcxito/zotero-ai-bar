@@ -26,6 +26,7 @@ import {
   findModelMetadata,
   ensureCommonProviders,
   fetchLiveProviders,
+  saveV2Config,
 } from "../utils/providers";
 import { getModelIconPath } from "../utils/modelAnalyzer";
 import { ModelIcons } from "../components/common";
@@ -106,7 +107,10 @@ class ModelDialogV2 {
     try {
       const live = await fetchLiveProviders();
       addon.data.liveProviders = live;
-      ztoolkit.log("[ModelDialogV2] Live providers loaded:", Object.keys(live).length);
+      ztoolkit.log(
+        "[ModelDialogV2] Live providers loaded:",
+        Object.keys(live).length,
+      );
     } catch (e) {
       ztoolkit.log("[ModelDialogV2] Live fetch failed, using local:", e);
       addon.data.liveProviders = undefined;
@@ -135,8 +139,8 @@ class ModelDialogV2 {
     this.renderProviders();
     this.addCards();
 
-    this.win.addEventListener("unload", () => {
-      this.saveSettings();
+    this.win.addEventListener("unload", async () => {
+      await this.saveSettings();
       this.win.arguments[0].onWindowClosed();
     });
   }
@@ -253,16 +257,15 @@ class ModelDialogV2 {
       rest.push(...filtered);
     }
 
-    const appendButton = (
-      providerId: string,
-      name: string,
-    ) => {
+    const appendButton = (providerId: string, name: string) => {
       const btn = this.doc.createElement("button");
       btn.className =
         "flex w-full items-center gap-3 px-4 py-1.5 text-left text-sm text-zinc-700 transition-colors hover:bg-rose-400 hover:text-white dark:text-zinc-200";
       const img = this.doc.createElement("img");
       img.src = getModelsDevLogoUrl(providerId);
-      img.onerror = () => { img.src = resolveProviderIcon(providerId); };
+      img.onerror = () => {
+        img.src = resolveProviderIcon(providerId);
+      };
       img.className = "w-4 h-4 shrink-0";
       btn.appendChild(img);
       const span = this.doc.createElement("span");
@@ -343,7 +346,7 @@ class ModelDialogV2 {
 
   // ---- Save ----
 
-  private saveSettings() {
+  private async saveSettings() {
     const container = this.root?.querySelector("#provider-block");
     if (!container) return;
 
@@ -454,6 +457,7 @@ class ModelDialogV2 {
       "[ModelDialogV2.saveSettings] new addon.data.userProviderConfigV2:",
       v2,
     );
+    await saveV2Config(v2);
   }
 
   // ---- Popup show/hide ----
