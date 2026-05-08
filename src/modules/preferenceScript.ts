@@ -19,6 +19,7 @@
 import { config } from "../../package.json";
 import { getPref, setPref } from "../utils/prefs";
 import type { ProviderId } from "../utils/providers";
+import { saveV2Config } from "../utils/providers";
 import { openDialog } from "./modelDialog";
 import { openPromptEditor } from "./promptEditor";
 import { getLocaleID, getString } from "../utils/locale";
@@ -81,6 +82,7 @@ function setActiveFromCompositeKey(value: string) {
       providerId: providerId as ProviderId,
       modelId,
     };
+    saveV2Config(addon.data.userProviderConfigV2);
   }
 }
 

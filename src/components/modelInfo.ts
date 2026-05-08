@@ -18,6 +18,7 @@
 
 import { TagElementProps } from "zotero-plugin-toolkit";
 import { setPref } from "../utils/prefs";
+import { saveV2Config } from "../utils/providers";
 import { analyzeModelName, getModelIconPath } from "../utils/modelAnalyzer";
 import { getString } from "../utils/locale";
 import { IconView } from "./iconView";
@@ -138,6 +139,7 @@ function toggleModelDropdown(anchor: HTMLElement) {
           modelId: m.id,
         };
         setPref("llm.modelId", `${providerId}::${m.id}`);
+        saveV2Config(addon.data.userProviderConfigV2!);
         updateModelInfoDisplay(anchor);
       },
     }));
