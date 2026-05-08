@@ -231,6 +231,7 @@ const V2_PROVIDER_OPTIONS: Record<string, any> = {
   "zai-coding-plan": { thinking: { type: "disabled" } },
   "minimax-cn": { thinking: { type: "disabled" } },
   // "minimax-cn": { thinking: { type: "adaptive" }, effort: "max" },
+  anthropic: { thinking: { type: "disabled" } },
 };
 
 /**
