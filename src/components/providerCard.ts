@@ -30,7 +30,7 @@ export interface ProviderCardV2Props {
   isCustom: boolean;
   models: { id: string; name: string; enabled: boolean }[];
   doc: Document;
-  onAddModel?: (cb: (name: string) => void) => void;
+  onAddModel?: (cb: (id: string, name: string) => void) => void;
   onDelete?: () => void;
 }
 
@@ -120,9 +120,10 @@ export function ProviderCard({
   };
 
   const openSelectForRow = (row: HTMLElement, existingName?: string) => {
-    onAddModel?.((name: string) => {
+    onAddModel?.((id: string, name: string) => {
       const existing = getExistingModelNames(row as HTMLElement);
       if (existing.has(name.toLowerCase())) return;
+      (row as HTMLElement).dataset.modelId = id;
       const textInput = row.querySelector(
         'input[type="text"]',
       ) as HTMLInputElement;
@@ -146,24 +147,17 @@ export function ProviderCard({
     "button",
     InlineButton({
       onClicked: () => {
-        if (modelCardList) {
+        onAddModel?.((id: string, name: string) => {
+          if (!modelCardList) return;
+          const existing = getExistingModelNames();
+          if (existing.has(name.toLowerCase())) return;
           const row = CardModelRow({
             doc,
-            onSelectModel: () => openSelectForRow(row as HTMLElement),
+            data: { id, name, enabled: true },
+            onSelectModel: () => openSelectForRow(row as HTMLElement, name),
           });
           modelCardList.insertBefore(row, addModelButton);
-          onAddModel?.((name: string) => {
-            const existing = getExistingModelNames(row as HTMLElement);
-            if (existing.has(name.toLowerCase())) {
-              (row as HTMLElement).remove();
-              return;
-            }
-            const textInput = (row as HTMLElement).querySelector(
-              'input[type="text"]',
-            ) as HTMLInputElement;
-            if (textInput) textInput.value = name;
-          });
-        }
+        });
       },
     }),
   );

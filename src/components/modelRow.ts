@@ -134,10 +134,14 @@ export function CardModelRow({ doc, data, onSelectModel }: CardModelRowProps) {
       }),
     ],
   });
+  if (data?.id) {
+    (row as HTMLElement).dataset.modelId = data.id;
+  }
   (row as any).getData = () => {
+    const nameValue = (row.querySelector('input[type="text"]') as HTMLInputElement).value;
     return {
-      id: data?.id ?? crypto.randomUUID(),
-      name: (row.querySelector('input[type="text"]') as HTMLInputElement).value,
+      id: (row as HTMLElement).dataset.modelId || nameValue || crypto.randomUUID(),
+      name: nameValue,
       enabled: (row.querySelector('input[type="checkbox"]') as HTMLInputElement)
         .checked,
     };

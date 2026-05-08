@@ -280,11 +280,10 @@ async function createModel() {
   // V2 path: provider found in common_providers.json → use native SDK dispatch
   if (provider) {
     const model = provider.models[modelId];
-    // Providers with empty models dict (openrouter, azure, etc.) accept
-    // dynamic model IDs — proceed with the active modelId as-is.
+    // 校验模型是否存在：commonProviders列表->userAdded
     if (!model && Object.keys(provider.models).length > 0) {
       const userAdded = v2.addedModels.find(
-        (m) => m.providerId === providerId && (m.id === modelId || m.name === modelId),
+        (m) => m.providerId === providerId && (m.id === modelId),
       );
       if (!userAdded) throw new Error(`Model not found: ${modelId}`);
     }
@@ -310,7 +309,7 @@ async function createModel() {
   if (addedProvider) {
     const model = v2.addedModels.find(
       (m) =>
-        m.providerId === providerId && (m.id === modelId || m.name === modelId),
+        m.providerId === providerId && m.id === modelId,
     );
     if (!model?.name) throw new Error(`Model not found: ${modelId}`);
 

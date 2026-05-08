@@ -208,7 +208,7 @@ class ModelDialogV2 {
       isCustom,
       models: buildModelRows(v2, providerId),
       doc: this.doc,
-      onAddModel: (cb: (name: string) => void) => {
+      onAddModel: (cb: (id: string, name: string) => void) => {
         this.openModelSelect(providerId, cb);
       },
       onDelete: () => this.renderProviders(),
@@ -411,10 +411,23 @@ class ModelDialogV2 {
         models: cardModels,
       } = cardData;
 
+      // 过滤掉名为空的模型行（getData已做，此处兜底）
+      const validModels = cardModels.filter((m) => m.id.trim() !== "");
+      const hasNonEmptyEnv = Object.values(cardEnv).some((v) => v.trim() !== "");
+
+      // 全空的 card 不保存
+      if (!hasNonEmptyEnv && validModels.length === 0) {
+        ztoolkit.log(
+          "[ModelDialogV2.saveSettings] Skipping empty card:",
+          providerId,
+        );
+        return;
+      }
+
       ztoolkit.log("[ModelDialogV2.saveSettings] card:", {
         providerId,
         envKeys: Object.keys(cardEnv),
-        models: cardModels.map((m) => ({
+        models: validModels.map((m) => ({
           id: m.id,
           name: m.name,
           enabled: m.enabled,
@@ -422,13 +435,13 @@ class ModelDialogV2 {
       });
 
       // Env values
-      if (Object.keys(cardEnv).length > 0) {
+      if (hasNonEmptyEnv) {
         newEnv[providerId] = { ...cardEnv };
       }
 
       // Models (dedup by providerId + name)
       const seenModels = new Set<string>();
-      for (const cm of cardModels) {
+      for (const cm of validModels) {
         const dedupKey = `${providerId}::${cm.name.toLowerCase()}`;
         if (seenModels.has(dedupKey)) continue;
         seenModels.add(dedupKey);
@@ -550,7 +563,7 @@ class ModelDialogV2 {
 
   async openModelSelect(
     providerId: string,
-    onSelect: (modelName: string) => void,
+    onSelect: (modelId: string, modelName: string) => void,
   ) {
     if (!this.modelOverlay || !this.modelList || !this.modelSearchInput) return;
     if (this.interacting) return;
@@ -593,7 +606,7 @@ class ModelDialogV2 {
 
         btn.addEventListener("click", () => {
           this.closeModelSelect();
-          onSelect(m.name);
+          onSelect(id, m.name);
         });
         this.modelList!.appendChild(btn);
       }
@@ -612,7 +625,20 @@ class ModelDialogV2 {
         const val = this.modelSearchInput!.value.trim();
         if (val) {
           this.closeModelSelect();
-          onSelect(val);
+          // Match as model ID first, then name, then treat as raw ID
+          const foundById = models[val];
+          if (foundById) {
+            onSelect(val, foundById.name);
+            return;
+          }
+          const foundByName = Object.entries(models).find(
+            ([, m]) => m.name.toLowerCase() === val.toLowerCase(),
+          );
+          if (foundByName) {
+            onSelect(foundByName[0], foundByName[1].name);
+            return;
+          }
+          onSelect(val, val);
         }
         return;
       }
