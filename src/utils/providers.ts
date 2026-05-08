@@ -21,6 +21,7 @@
 
 import { config } from "../../package.json";
 import type { UserProviderConfig } from "../types";
+import { getPref, setPref } from "./prefs";
 
 /** 模态类型 */
 export type ModalityType = "audio" | "image" | "pdf" | "text" | "video";
@@ -555,10 +556,9 @@ export async function saveV2Config(v2: UserProviderConfigV2): Promise<void> {
       enabled: m.enabled,
     })),
   };
-  Zotero.Prefs.set(
-    `${config.prefsPrefix}.${V2_CONFIG_PREF_KEY}`,
+  setPref(
+    V2_CONFIG_PREF_KEY as keyof _ZoteroTypes.Prefs["PluginPrefsMap"],
     JSON.stringify(lightweight),
-    true,
   );
   await saveV2Models(v2.addedModels);
   addon.data.userProviderConfigV2 = v2;
@@ -568,9 +568,8 @@ export async function saveV2Config(v2: UserProviderConfigV2): Promise<void> {
 /** 加载：Prefs 轻量引用 + File 模型元数据合并 */
 export async function loadV2Config(): Promise<UserProviderConfigV2 | null> {
   try {
-    const raw = Zotero.Prefs.get(
-      `${config.prefsPrefix}.${V2_CONFIG_PREF_KEY}`,
-      true,
+    const raw = getPref(
+      V2_CONFIG_PREF_KEY as keyof _ZoteroTypes.Prefs["PluginPrefsMap"],
     ) as string;
     if (!raw) return null;
     const lightweight = JSON.parse(raw);
