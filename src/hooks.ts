@@ -16,6 +16,7 @@ import { preloadLLMRuntime } from "./modules/llm";
 import {
   convertLegacyLLMConfigByKey,
   ensureCommonProviders,
+  initIconCache,
   loadV2Config,
   saveV2Config,
 } from "./utils/providers";
@@ -99,6 +100,9 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
       `${addon.data.userProviderConfigV2.active.providerId}::${addon.data.userProviderConfigV2.active.modelId}`,
     );
   }
+
+  // Load icon cache from file (with migration from legacy pref)
+  await initIconCache();
 
   // Load user custom prompts
   const userPromptsConfig = getPref("prompt.userPrompts");

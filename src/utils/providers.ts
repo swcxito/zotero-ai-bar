@@ -632,27 +632,44 @@ export function getModelsDevLogoUrl(providerId: string): string {
 
 // ---- Icon cache ----
 
-const ICON_CACHE_PREF = "icons.providerCache";
+const ICONS_CACHE_FILENAME = "icons-cache.json";
 
-function loadIconCache(): Record<string, string> {
-  try {
-    const raw = Zotero.Prefs.get(
-      `${config.prefsPrefix}.${ICON_CACHE_PREF}`,
-      true,
-    ) as string;
-    if (!raw) return {};
-    return JSON.parse(raw);
-  } catch {
-    return {};
-  }
+let _iconCache: Record<string, string> | null = null;
+
+function getIconsCachePath(): string {
+  return PathUtils.join(
+    PathUtils.profileDir,
+    addon.data.config.addonRef,
+    ICONS_CACHE_FILENAME,
+  );
 }
 
-function saveIconCache(cache: Record<string, string>): void {
-  Zotero.Prefs.set(
-    `${config.prefsPrefix}.${ICON_CACHE_PREF}`,
-    JSON.stringify(cache),
-    true,
-  );
+/** 启动时调用，从文件加载图标缓存 */
+export async function initIconCache(): Promise<void> {
+  if (_iconCache) return;
+
+  try {
+    const filePath = getIconsCachePath();
+    if (await IOUtils.exists(filePath)) {
+      _iconCache = await IOUtils.readJSON(filePath);
+      return;
+    }
+  } catch {
+    /* fall through */
+  }
+
+  _iconCache = {};
+}
+
+/** 同步读取（UI 渲染路径需要 sync 返回值） */
+function loadIconCache(): Record<string, string> {
+  return _iconCache ?? {};
+}
+
+async function flushIconCache(): Promise<void> {
+  if (!_iconCache) _iconCache = {};
+  const filePath = getIconsCachePath();
+  await IOUtils.writeJSON(filePath, _iconCache);
 }
 
 function hasLocalIcon(providerId: string): boolean {
@@ -679,7 +696,7 @@ export async function cacheProviderIcon(providerId: string): Promise<void> {
     const svgText = await res.text();
     const base64 = btoa(unescape(encodeURIComponent(svgText)));
     cache[providerId] = `data:image/svg+xml;base64,${base64}`;
-    saveIconCache(cache);
+    await flushIconCache();
     ztoolkit.log("[cacheProviderIcon] Cached icon for", providerId);
   } catch {
     /* 静默失败 */
