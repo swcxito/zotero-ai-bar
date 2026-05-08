@@ -172,6 +172,8 @@ function buildErrorMessage(error: unknown): string {
   if (typeof err?.message === "string" && err.message) {
     const label = err.name && err.name !== "Error" ? err.name : "";
     message = label ? `${label}: ${err.message}` : err.message;
+  } else if (typeof error === "object" && error !== null) {
+    message = JSON.stringify(error);
   } else {
     message = String(error);
   }

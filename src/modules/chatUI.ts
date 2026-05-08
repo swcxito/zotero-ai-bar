@@ -156,7 +156,7 @@ export function onLLMStreamEndV2(session: Session) {
 }
 
 export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
-  ztoolkit.log("LLM stream error:", data.session, data.error);
+  ztoolkit.log("LLM stream error:", data.session.id, data.error);
   let pop = data.session.pending.messagePop;
 
   // If no message pop exists yet (error during init), create one
