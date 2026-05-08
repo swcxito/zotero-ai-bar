@@ -305,7 +305,7 @@ async function createModel() {
     // 校验模型是否存在：commonProviders列表->userAdded
     if (!model && Object.keys(provider.models).length > 0) {
       const userAdded = v2.addedModels.find(
-        (m) => m.providerId === providerId && (m.id === modelId),
+        (m) => m.providerId === providerId && m.id === modelId,
       );
       if (!userAdded) throw new Error(`Model not found: ${modelId}`);
     }
@@ -330,8 +330,7 @@ async function createModel() {
   const addedProvider = v2.addedProviders[providerId];
   if (addedProvider) {
     const model = v2.addedModels.find(
-      (m) =>
-        m.providerId === providerId && m.id === modelId,
+      (m) => m.providerId === providerId && m.id === modelId,
     );
     if (!model?.name) throw new Error(`Model not found: ${modelId}`);
 

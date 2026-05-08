@@ -423,7 +423,9 @@ class ModelDialogV2 {
 
       // 过滤掉名为空的模型行（getData已做，此处兜底）
       const validModels = cardModels.filter((m) => m.id.trim() !== "");
-      const hasNonEmptyEnv = Object.values(cardEnv).some((v) => v.trim() !== "");
+      const hasNonEmptyEnv = Object.values(cardEnv).some(
+        (v) => v.trim() !== "",
+      );
 
       // 全空的 card 不保存
       if (!hasNonEmptyEnv && validModels.length === 0) {

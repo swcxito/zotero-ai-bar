@@ -138,9 +138,14 @@ export function CardModelRow({ doc, data, onSelectModel }: CardModelRowProps) {
     (row as HTMLElement).dataset.modelId = data.id;
   }
   (row as any).getData = () => {
-    const nameValue = (row.querySelector('input[type="text"]') as HTMLInputElement).value;
+    const nameValue = (
+      row.querySelector('input[type="text"]') as HTMLInputElement
+    ).value;
     return {
-      id: (row as HTMLElement).dataset.modelId || nameValue || crypto.randomUUID(),
+      id:
+        (row as HTMLElement).dataset.modelId ||
+        nameValue ||
+        crypto.randomUUID(),
       name: nameValue,
       enabled: (row.querySelector('input[type="checkbox"]') as HTMLInputElement)
         .checked,
