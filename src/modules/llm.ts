@@ -125,13 +125,20 @@ export async function streamLLMV2(
     const maxTokens = getPref("llm.maxTokens") || 2000;
     const messages = await messagesOrPromise;
 
+    const providerOptions = {
+      ...V2_PROVIDER_OPTIONS,
+      google: getGoogleThinkingConfig(
+        addon.data.userProviderConfigV2?.active?.modelId ?? "",
+      ),
+    };
+
     const { textStream } = streamTextFn!({
       model: model,
       messages: messages,
       abortSignal: session.pending.abortController?.signal,
       temperature: temp,
       maxOutputTokens: maxTokens,
-      providerOptions: V2_PROVIDER_OPTIONS,
+      providerOptions,
       onError: ({ error }: { error: unknown }) => {
         streamErrorHandled = true;
         handleStreamError(session, error);
@@ -226,6 +233,20 @@ const V2_PROVIDER_OPTIONS: Record<string, any> = {
   // "minimax-cn": { thinking: { type: "adaptive" }, effort: "max" },
 };
 
+/**
+ * Gemini 3 系列使用 thinkingLevel 控制推理深度，
+ * Gemini 2.5 系列使用 thinkingBudget 控制思考 token 数（-1 禁用）。
+ */
+function getGoogleThinkingConfig(modelId: string) {
+  if (modelId.startsWith("gemini-3")) {
+    return { thinkingLevel: "low", includeThoughts: false };
+  }
+  if (modelId.startsWith("gemini-2.5")) {
+    return { thinkingBudget: -1, includeThoughts: false };
+  }
+  return { thinkingBudget: 0, includeThoughts: false };
+}
+
 function resolveSDKPackage(npm?: string): InstalledAISDKPackage {
   if (npm && npm in CREATE_PROVIDER_FNS) {
     return npm as InstalledAISDKPackage;
@@ -287,7 +308,7 @@ async function createModel() {
       );
       if (!userAdded) throw new Error(`Model not found: ${modelId}`);
     }
-
+    //TODO UPDATE KEY
     const envKey = PROVIDER_ENV_KEY_MAP[providerId] || "API_KEY";
     const apiKey = v2.env[providerId]?.[envKey];
     if (!apiKey) throw new Error(`API key not configured for ${providerId}`);

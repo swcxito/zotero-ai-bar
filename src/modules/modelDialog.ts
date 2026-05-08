@@ -49,6 +49,12 @@ function buildModelRows(
     .map((m) => ({ id: m.id, name: m.name, enabled: m.enabled }));
 }
 
+/** Google 的 GOOGLE_GENERATIVE_AI_API_KEY 与 GEMINI_API_KEY 可互换，统一只显示/存储后者 */
+function filterGoogleEnvKeys(providerId: string, envKeys: string[]): string[] {
+  if (providerId !== "google") return envKeys;
+  return envKeys.filter((k) => k !== "GOOGLE_GENERATIVE_AI_API_KEY");
+}
+
 export async function openDialog(onDialogClosed: () => void = () => {}) {
   const windowArgs = {
     onBodyLoaded: onModelDialogLoad,
@@ -187,7 +193,10 @@ class ModelDialogV2 {
     const cp = this.getActiveProviders();
     const commonProvider = cp?.[providerId];
     const addedProvider = v2.addedProviders[providerId];
-    const envKeys = addedProvider?.env ?? commonProvider?.env ?? [];
+    const envKeys = filterGoogleEnvKeys(
+      providerId,
+      addedProvider?.env ?? commonProvider?.env ?? [],
+    );
     const envValues = v2.env[providerId] ?? {};
     const isCustom = !commonProvider;
 
@@ -352,6 +361,7 @@ class ModelDialogV2 {
       const cp = this.getActiveProviders()?.[providerId];
       if (!v2.addedProviders[providerId] && cp) {
         const { models: _, ...rest } = cp;
+        rest.env = filterGoogleEnvKeys(providerId, rest.env);
         v2.addedProviders[providerId] = rest as AddedProvider;
       }
       await cacheProviderIcon(providerId);
@@ -486,6 +496,7 @@ class ModelDialogV2 {
       const cp = this.getActiveProviders()?.[providerId];
       if (cp) {
         const { models: _, ...rest } = cp;
+        rest.env = filterGoogleEnvKeys(providerId, rest.env);
         newAddedProviders[providerId] = rest as AddedProvider;
       } else {
         // Custom provider
