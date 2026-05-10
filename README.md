@@ -4,7 +4,7 @@
 
 **English** | [简体中文](docs/README_zh-CN.md)
 
-A beautiful and handful AI assistant plugin for Zotero, putting an AI assistant right at your fingertips.
+A beautiful and handy AI assistant plugin for Zotero, putting an AI assistant right at your fingertips.
 
 You can visit the [**Project Homepage**](https://zotero.fukeke.com) for more information and detailed tutorials.
 

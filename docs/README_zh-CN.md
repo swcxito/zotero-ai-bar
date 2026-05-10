@@ -4,7 +4,7 @@
 
 [English](../README.md) | **简体中文**
 
-一款美观便捷的 Zotero AI 插件，让 AI 助手住在你的手边。
+好看又好用的AI工具栏！
 
 您可以访问 [**项目主页**](https://zotero.fukeke.com/zh-cn/) 了解更多信息及详细教程。
 
