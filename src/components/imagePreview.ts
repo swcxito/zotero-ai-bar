@@ -19,6 +19,8 @@
 import { Icons } from './common';
 import { IconView } from './iconView';
 import { getReaderByTabId } from '../modules/tabObserver';
+import { getPref } from '../utils/prefs';
+import { openCapturePreview } from '../modules/capture';
 
 const MAX_IMAGES = 9;
 

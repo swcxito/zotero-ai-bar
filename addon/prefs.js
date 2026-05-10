@@ -24,3 +24,4 @@ pref('translate.extendContext', 'follow');
 pref('translate.useAlternativeModel', false);
 pref('translate.modelId', '');
 pref('translate.targetLanguage', '');
+pref('imagePreview.location', 'reader');
