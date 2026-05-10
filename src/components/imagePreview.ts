@@ -82,6 +82,12 @@ export function ImagePreview(doc: Document, sectionId: string, onChange?: () => 
   }
 
   function openViewer(dataUrl: string) {
+    // Sidebar mode: check preference for viewer location
+    if ((strip.getRootNode() as any).host && getPref('imagePreview.location') === 'window') {
+      openCapturePreview(dataUrl);
+      return;
+    }
+
     closeViewer();
 
     const { parent, ownerDoc } = getMountPoint();
