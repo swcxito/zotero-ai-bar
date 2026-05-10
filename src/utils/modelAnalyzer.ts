@@ -1,5 +1,5 @@
-import { config } from "../../package.json";
-import { ModelIcons } from "../components/common";
+import { config } from '../../package.json';
+import { ModelIcons } from '../components/common';
 
 /**
  * Extracts model family, type, and version from a model ID string based on common naming conventions.
@@ -11,56 +11,56 @@ export interface ModelAnalysisResult {
 }
 
 const TYPE_KEYWORDS = new Set([
-  "opus",
-  "sonnet",
-  "haiku",
-  "coder",
-  "chat",
-  "instruct",
-  "pro",
-  "ultra",
-  "flash",
-  "fast",
-  "turbo",
-  "lite",
-  "max",
-  "plus",
-  "her",
-  "base",
-  "large",
-  "medium",
-  "small",
-  "tiny",
-  "mini",
-  "micro",
-  "nano",
-  "thinking",
-  "codex",
-  "code",
-  "flashx",
-  "highspeed",
+  'opus',
+  'sonnet',
+  'haiku',
+  'coder',
+  'chat',
+  'instruct',
+  'pro',
+  'ultra',
+  'flash',
+  'fast',
+  'turbo',
+  'lite',
+  'max',
+  'plus',
+  'her',
+  'base',
+  'large',
+  'medium',
+  'small',
+  'tiny',
+  'mini',
+  'micro',
+  'nano',
+  'thinking',
+  'codex',
+  'code',
+  'flashx',
+  'highspeed',
 ]);
 
 const IGNORED_KEYWORDS = new Set([
-  "next",
-  "preview",
-  "beta",
-  "alpha",
-  "rc",
-  "stable",
-  "release",
-  "latest",
-  "v",
-  "version",
-  "final",
-  "experiment",
-  "experimental",
-  "free",
+  'next',
+  'preview',
+  'beta',
+  'alpha',
+  'rc',
+  'stable',
+  'release',
+  'latest',
+  'v',
+  'version',
+  'final',
+  'experiment',
+  'experimental',
+  'free',
 ]);
 
 export function analyzeModelName(modelName: string): ModelAnalysisResult {
   // 0. Remove prefix (everything before last /)
-  const baseId = modelName.split("/").pop() || modelName;
+  const baseId = modelName.split('/').pop() || modelName;
 
   // 1. Normalization
   const normalizedId = baseId.toLowerCase();
@@ -78,15 +78,11 @@ export function analyzeModelName(modelName: string): ModelAnalysisResult {
     }
 
     // Version patterns: Keep whole
-    if (
-      /^\d+(\.\d+)*$/.test(token) ||
-      /^v\d+(\.\d+)*$/.test(token) ||
-      /^[a-z]\d+(\.\d+)*$/.test(token)
-    ) {
+    if (/^\d+(\.\d+)*$/.test(token) || /^v\d+(\.\d+)*$/.test(token) || /^[a-z]\d+(\.\d+)*$/.test(token)) {
       tokens.push(token);
-    } else if (token.includes(".")) {
+    } else if (token.includes('.')) {
       // Split by dot if it doesn't look like a version/size
-      tokens.push(...token.split("."));
+      tokens.push(...token.split('.'));
     } else {
       tokens.push(token);
     }
@@ -109,7 +105,7 @@ export function analyzeModelName(modelName: string): ModelAnalysisResult {
     }
   }
 
-  let type = "";
+  let type = '';
 
   // 4. Process remaining tokens
   for (let i = 1; i < tokens.length; i++) {
@@ -149,7 +145,7 @@ export function analyzeModelName(modelName: string): ModelAnalysisResult {
       const numVal = parseFloat(token);
       // Heuristic: Large integers are dates/identifiers, skip.
       // Integers < 100 or numbers with decimals are versions.
-      if (token.includes(".") || numVal < 100) {
+      if (token.includes('.') || numVal < 100) {
         versionParts.push(token);
       }
       continue;
@@ -163,7 +159,7 @@ export function analyzeModelName(modelName: string): ModelAnalysisResult {
   }
 
   // 5. Construct Version
-  const version = versionParts.join(".");
+  const version = versionParts.join('.');
 
   return { family, type, version };
 }
@@ -183,16 +179,16 @@ export function getModelIconPath(family?: string): string {
   if (ModelIcons[normalizedFamily]) return ModelIcons[normalizedFamily];
 
   // GPT o-series: o1, o3, o4-mini, o-pro → OpenAI icon
-  if (normalizedFamily === "o" || normalizedFamily.startsWith("o-")) {
+  if (normalizedFamily === 'o' || normalizedFamily.startsWith('o-')) {
     return ModelIcons.gpt;
   }
 
   // Try progressively shorter prefixes for sub-families (e.g. "claude-sonnet" → "claude")
-  let lastDash = normalizedFamily.lastIndexOf("-");
+  let lastDash = normalizedFamily.lastIndexOf('-');
   while (lastDash > 0) {
     const prefix = normalizedFamily.slice(0, lastDash);
     if (ModelIcons[prefix]) return ModelIcons[prefix];
-    lastDash = normalizedFamily.lastIndexOf("-", lastDash - 1);
+    lastDash = normalizedFamily.lastIndexOf('-', lastDash - 1);
   }
 
   return ModelIcons.custom;

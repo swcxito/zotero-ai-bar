@@ -33,10 +33,10 @@ export function getItemMetadata(itemId: number): ItemMetadata | undefined {
   try {
     const item = Zotero.Items.get(itemId);
     if (!item) {
-      ztoolkit.log("No item found for tabId:", itemId);
+      ztoolkit.log('No item found for tabId:', itemId);
       return undefined;
     }
-    ztoolkit.log("Found item for tabId:", itemId, "item:", item);
+    ztoolkit.log('Found item for tabId:', itemId, 'item:', item);
     // Get the top-level parent item (not attachment)
     let targetItem = item;
     if (item.isAttachment?.()) {
@@ -57,7 +57,7 @@ export function getItemMetadata(itemId: number): ItemMetadata | undefined {
     const metadata: ItemMetadata = {};
 
     // Title
-    const title = targetItem.getField("title") as string;
+    const title = targetItem.getField('title') as string;
     if (title) {
       metadata.title = title;
     }
@@ -83,17 +83,17 @@ export function getItemMetadata(itemId: number): ItemMetadata | undefined {
     }
 
     // Abstract
-    const abstract = targetItem.getField("abstractNote") as string;
+    const abstract = targetItem.getField('abstractNote') as string;
     if (abstract) {
       metadata.abstract = abstract;
     }
 
     // Publication
     const publication =
-      (targetItem.getField("publicationTitle") as string) ||
-      (targetItem.getField("bookTitle") as string) ||
-      (targetItem.getField("journalAbbreviation") as string) ||
-      (targetItem.getField("series") as string);
+      (targetItem.getField('publicationTitle') as string) ||
+      (targetItem.getField('bookTitle') as string) ||
+      (targetItem.getField('journalAbbreviation') as string) ||
+      (targetItem.getField('series') as string);
     if (publication) {
       metadata.publication = publication;
     }
@@ -108,7 +108,7 @@ export function getItemMetadata(itemId: number): ItemMetadata | undefined {
     }
 
     // Date
-    const date = targetItem.getField("date") as string;
+    const date = targetItem.getField('date') as string;
     if (date) {
       metadata.publicationDate = date;
     }
@@ -119,7 +119,7 @@ export function getItemMetadata(itemId: number): ItemMetadata | undefined {
 
     return metadata;
   } catch (e) {
-    ztoolkit.log("getItemMetadata failed:", e);
+    ztoolkit.log('getItemMetadata failed:', e);
     return undefined;
   }
 }
@@ -128,9 +128,7 @@ export function getItemMetadata(itemId: number): ItemMetadata | undefined {
  * Retrieve the full text of the attachment for the given Zotero item ID.
  * Truncates to 50,000 characters to keep prompts manageable.
  */
-export async function getItemFullText(
-  itemId: number,
-): Promise<string | undefined> {
+export async function getItemFullText(itemId: number): Promise<string | undefined> {
   try {
     const item = Zotero.Items.get(itemId);
     if (!item) {
@@ -143,10 +141,7 @@ export async function getItemFullText(
       const attachmentIDs: number[] = item.getAttachments?.() ?? [];
       for (const aid of attachmentIDs) {
         const att = Zotero.Items.get(aid) as any;
-        if (
-          att?.attachmentContentType === "application/pdf" ||
-          att?.attachmentContentType?.startsWith("text/")
-        ) {
+        if (att?.attachmentContentType === 'application/pdf' || att?.attachmentContentType?.startsWith('text/')) {
           targetItem = att;
           break;
         }
@@ -158,12 +153,9 @@ export async function getItemFullText(
 
     // Try built-in attachment text
     let text: string | undefined;
-    if (typeof targetItem.attachmentText === "string") {
+    if (typeof targetItem.attachmentText === 'string') {
       text = targetItem.attachmentText;
-    } else if (
-      targetItem.attachmentText &&
-      typeof targetItem.attachmentText.then === "function"
-    ) {
+    } else if (targetItem.attachmentText && typeof targetItem.attachmentText.then === 'function') {
       text = await targetItem.attachmentText;
     }
 
@@ -171,9 +163,9 @@ export async function getItemFullText(
       return undefined;
     }
     const MAX = 50000;
-    return text.length > MAX ? text.slice(0, MAX) + "\n...[truncated]" : text;
+    return text.length > MAX ? text.slice(0, MAX) + '\n...[truncated]' : text;
   } catch (e) {
-    ztoolkit.log("getItemFullText failed:", e);
+    ztoolkit.log('getItemFullText failed:', e);
     return undefined;
   }
 }

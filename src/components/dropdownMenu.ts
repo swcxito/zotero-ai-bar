@@ -51,19 +51,12 @@ export function closeDropdownMenu(doc: Document, menuId: string) {
 
   const closeHandler = dropdownCloseHandlers.get(menuId);
   if (closeHandler) {
-    doc.removeEventListener("click", closeHandler, true);
+    doc.removeEventListener('click', closeHandler, true);
     dropdownCloseHandlers.delete(menuId);
   }
 }
 
-export function openDropdownMenu({
-  menuId,
-  anchor,
-  container,
-  groups,
-  emptyText,
-  closeOnOutsideClick = true,
-}: OpenDropdownMenuOptions): HTMLElement {
+export function openDropdownMenu({ menuId, anchor, container, groups, emptyText, closeOnOutsideClick = true }: OpenDropdownMenuOptions): HTMLElement {
   const doc = anchor.ownerDocument;
 
   // Close any open dropdowns in the same popup to avoid overlap.
@@ -75,33 +68,33 @@ export function openDropdownMenu({
   // Keep one menu instance per anchor menu id.
   closeDropdownMenu(doc, menuId);
 
-  const dropdown = doc.createElement("div");
+  const dropdown = doc.createElement('div');
   dropdown.id = menuId;
-  dropdown.className = "model-dropdown-menu";
+  dropdown.className = 'model-dropdown-menu';
 
   const validGroups = groups.filter((group) => group.items.length > 0);
   if (validGroups.length === 0) {
-    const emptyItem = doc.createElement("div");
-    emptyItem.className = "model-dropdown-empty";
-    emptyItem.textContent = emptyText || "No options available";
+    const emptyItem = doc.createElement('div');
+    emptyItem.className = 'model-dropdown-empty';
+    emptyItem.textContent = emptyText || 'No options available';
     dropdown.appendChild(emptyItem);
   } else {
     validGroups.forEach((group) => {
       if (group.title) {
-        const groupTitle = doc.createElement("div");
-        groupTitle.className = "model-dropdown-group-title";
+        const groupTitle = doc.createElement('div');
+        groupTitle.className = 'model-dropdown-group-title';
         groupTitle.textContent = group.title;
         dropdown.appendChild(groupTitle);
       }
 
-      const groupList = doc.createElement("div");
-      groupList.className = "model-dropdown-group-list";
+      const groupList = doc.createElement('div');
+      groupList.className = 'model-dropdown-group-list';
 
       group.items.forEach((item) => {
-        const itemEl = doc.createElement("div");
-        itemEl.className = "model-dropdown-item";
+        const itemEl = doc.createElement('div');
+        itemEl.className = 'model-dropdown-item';
         if (item.selected) {
-          itemEl.classList.add("selected");
+          itemEl.classList.add('selected');
         }
 
         if (item.renderLeading) {
@@ -110,22 +103,22 @@ export function openDropdownMenu({
             itemEl.appendChild(leading);
           }
         } else if (item.iconMarkup) {
-          const icon = doc.createElement("span");
-          icon.className = "dropdown-item-icon-text";
+          const icon = doc.createElement('span');
+          icon.className = 'dropdown-item-icon-text';
           icon.innerHTML = item.iconMarkup;
           itemEl.appendChild(icon);
         } else if (item.iconText) {
-          const icon = doc.createElement("span");
-          icon.className = "dropdown-item-icon-text";
+          const icon = doc.createElement('span');
+          icon.className = 'dropdown-item-icon-text';
           icon.textContent = item.iconText;
           itemEl.appendChild(icon);
         }
 
-        const text = doc.createElement("span");
+        const text = doc.createElement('span');
         text.textContent = item.label;
         itemEl.appendChild(text);
 
-        itemEl.addEventListener("click", (e: Event) => {
+        itemEl.addEventListener('click', (e: Event) => {
           e.stopPropagation();
           item.onClick?.();
           closeDropdownMenu(doc, menuId);
@@ -142,10 +135,10 @@ export function openDropdownMenu({
 
   const containerRect = container.getBoundingClientRect();
   const anchorRect = anchor.getBoundingClientRect();
-  dropdown.style.position = "absolute";
+  dropdown.style.position = 'absolute';
   dropdown.style.top = `${anchorRect.bottom - containerRect.top + 2}px`;
   dropdown.style.left = `${anchorRect.left - containerRect.left}px`;
-  dropdown.style.zIndex = "10001";
+  dropdown.style.zIndex = '10001';
 
   if (closeOnOutsideClick) {
     const closeHandler = (e: Event) => {
@@ -158,7 +151,7 @@ export function openDropdownMenu({
 
     dropdownCloseHandlers.set(menuId, closeHandler);
     setTimeout(() => {
-      doc.addEventListener("click", closeHandler, true);
+      doc.addEventListener('click', closeHandler, true);
     }, 0);
   }
 

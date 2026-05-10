@@ -19,16 +19,16 @@
 // todo 拆分文件
 // TODO 优化provider管理，适配sdk
 // todo !! 一个tab不止对应一个文件
-import { getItemFullText, getItemMetadata } from "../utils/itemContext";
-import { getPref } from "../utils/prefs";
-import { SYSTEM_PROMPT_PREFIX } from "../utils/prompts";
-import { ensureChatWindowReady, focusChatWindow } from "../utils/window";
-import { streamLLMV2 } from "./llm";
-import type { ModelMessage, SystemModelMessage, UserModelMessage } from "ai";
-import { getItemIdFromTab } from "./tabObserver";
-import type { ItemMetadata } from "../utils/itemContext";
+import { getItemFullText, getItemMetadata } from '../utils/itemContext';
+import { getPref } from '../utils/prefs';
+import { SYSTEM_PROMPT_PREFIX } from '../utils/prompts';
+import { ensureChatWindowReady, focusChatWindow } from '../utils/window';
+import { streamLLMV2 } from './llm';
+import type { ModelMessage, SystemModelMessage, UserModelMessage } from 'ai';
+import { getItemIdFromTab } from './tabObserver';
+import type { ItemMetadata } from '../utils/itemContext';
 
-export type ChatHostMode = "sidebar" | "window";
+export type ChatHostMode = 'sidebar' | 'window';
 
 /** Per-section (per-document tab) state for sidebar chat */
 export class Session {
@@ -79,7 +79,7 @@ export class ChatManager {
 
   constructor(currentTabID: string) {
     if (!currentTabID.trim()) {
-      throw new Error("currentTabID must be a non-empty string.");
+      throw new Error('currentTabID must be a non-empty string.');
     }
     this.currentTabID = currentTabID;
   }
@@ -92,9 +92,9 @@ export class ChatManager {
   }
 
   getCurrentHostMode(): ChatHostMode {
-    const location = this.chatHostMode || getPref("chat.location");
-    ztoolkit.log("Current chat host mode:", location);
-    return location === "window" ? "window" : "sidebar";
+    const location = this.chatHostMode || getPref('chat.location');
+    ztoolkit.log('Current chat host mode:', location);
+    return location === 'window' ? 'window' : 'sidebar';
   }
 
   // ────────────────────────────────────────────────────────────────────────
@@ -106,57 +106,44 @@ export class ChatManager {
     itemId?: number;
     fullTextEnabled?: boolean;
   }): Promise<string> {
-    const {
-      selectedText,
-      selectionContext,
-      metadata,
-      itemId,
-      fullTextEnabled,
-    } = params;
-    const contextLeft = selectionContext?.[0] || "";
-    const contextRight = selectionContext?.[2] || "";
+    const { selectedText, selectionContext, metadata, itemId, fullTextEnabled } = params;
+    const contextLeft = selectionContext?.[0] || '';
+    const contextRight = selectionContext?.[2] || '';
     let systemPrompt = SYSTEM_PROMPT_PREFIX;
 
     // Append item metadata if enabled (stable → cacheable)
-    if (getPref("chat.autoAttachItemData") && metadata) {
-      const metadataLines: string[] = ["# Item Metadata"];
+    if (getPref('chat.autoAttachItemData') && metadata) {
+      const metadataLines: string[] = ['# Item Metadata'];
       const metadataFieldLabels: Array<[keyof ItemMetadata, string]> = [
-        ["title", "Title"],
-        ["authors", "Authors"],
-        ["abstract", "Abstract"],
-        ["publication", "Publication"],
-        ["itemType", "Item Type"],
-        ["publicationDate", "Publication Date"],
+        ['title', 'Title'],
+        ['authors', 'Authors'],
+        ['abstract', 'Abstract'],
+        ['publication', 'Publication'],
+        ['itemType', 'Item Type'],
+        ['publicationDate', 'Publication Date'],
       ];
       for (const [key, label] of metadataFieldLabels) {
         const value = metadata[key];
         if (!value) {
           continue;
         }
-        metadataLines.push(
-          Array.isArray(value)
-            ? `${label}: ${value.join(", ")}`
-            : `${label}: ${value}`,
-        );
+        metadataLines.push(Array.isArray(value) ? `${label}: ${value.join(', ')}` : `${label}: ${value}`);
       }
-      systemPrompt += "\n\n" + metadataLines.join("\n");
+      systemPrompt += '\n\n' + metadataLines.join('\n');
     }
 
     // Append full text if enabled (stable → cacheable)
     if (fullTextEnabled && itemId !== undefined) {
       const fullText = await getItemFullText(itemId);
       if (fullText) {
-        systemPrompt +=
-          "\n\n# Full Document Text\n<fulldoc>\n" + fullText + "\n</fulldoc>";
+        systemPrompt += '\n\n# Full Document Text\n<fulldoc>\n' + fullText + '\n</fulldoc>';
       }
     }
 
     // Append volatile context at the end to improve prompt cache hits
     systemPrompt +=
-      "\n\nContent:" +
-      (!selectedText
-        ? `${contextLeft}\n${contextRight}`.trim()
-        : `${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`);
+      '\n\nContent:' +
+      (!selectedText ? `${contextLeft}\n${contextRight}`.trim() : `${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`);
 
     return systemPrompt;
   }
@@ -167,7 +154,7 @@ export class ChatManager {
     const itemId = params.itemId ?? getItemIdFromTab(params.tabId);
 
     if (tabId === undefined && itemId === undefined) {
-      throw new Error("No article available for chat request.");
+      throw new Error('No article available for chat request.');
     }
 
     const session = this.sessionsMap.get(tabId) ?? new Session(tabId);
@@ -176,17 +163,15 @@ export class ChatManager {
     const route = this.getCurrentHostMode();
     const metadata = itemId !== undefined ? getItemMetadata(itemId) : undefined;
 
-    session.pending.isNewSource =
-      !!params.sourceLabel && session.sourceLabel !== params.sourceLabel;
+    session.pending.isNewSource = !!params.sourceLabel && session.sourceLabel !== params.sourceLabel;
 
     // cleanup history
-    const contextRounds = getPref("chat.contextRounds") ?? 8;
+    const contextRounds = getPref('chat.contextRounds') ?? 8;
     const maxHistoryMessages = contextRounds * 2;
     if (params.isFromPopup || session.pending.isNewSource) {
       session.conversationHistory = [];
     } else if (session.conversationHistory.length > maxHistoryMessages) {
-      session.conversationHistory =
-        session.conversationHistory.slice(-maxHistoryMessages);
+      session.conversationHistory = session.conversationHistory.slice(-maxHistoryMessages);
     }
     if (session.pending.abortController) {
       session.pending.abortController.abort();
@@ -202,10 +187,10 @@ export class ChatManager {
           selectionContext = await addon.data.selection.contextPromise;
         }
       } catch (e) {
-        ztoolkit.log("Get selection context failed:", e);
+        ztoolkit.log('Get selection context failed:', e);
       }
 
-      ztoolkit.log("[chat] sendChatRequest:selection-context", {
+      ztoolkit.log('[chat] sendChatRequest:selection-context', {
         hasSelectionContext: Boolean(selectionContext),
         selectionContextLength: selectionContext?.length ?? 0,
       });
@@ -218,11 +203,11 @@ export class ChatManager {
         fullTextEnabled: session.fullTextEnabled,
       });
       const systemMsg: SystemModelMessage = {
-        role: "system",
+        role: 'system',
         content: systemContent,
       };
       const userMsg: UserModelMessage = {
-        role: "user",
+        role: 'user',
         content: params.userPrompt,
       };
 
@@ -235,18 +220,14 @@ export class ChatManager {
 
     session.sourceLabel = params.sourceLabel ?? session.sourceLabel;
 
-    if (route === "window") {
+    if (route === 'window') {
       await ensureChatWindowReady();
       focusChatWindow();
     }
 
-    const AC = (
-      typeof AbortController !== "undefined"
-        ? AbortController
-        : (Zotero.getMainWindow() as any).AbortController
-    ) as typeof AbortController;
+    const AC = (typeof AbortController !== 'undefined' ? AbortController : (Zotero.getMainWindow() as any).AbortController) as typeof AbortController;
     session.pending.abortController = new AC();
-    ztoolkit.log("[chat] sendChatRequest:stream-start", {
+    ztoolkit.log('[chat] sendChatRequest:stream-start', {
       sectionId: tabId,
     });
     await streamLLMV2(messagesPromise, session);

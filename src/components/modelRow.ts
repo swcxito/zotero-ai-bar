@@ -16,9 +16,9 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { ButtonBase } from "./buttons/buttonBase";
-import { Icons } from "./common";
-import { getString } from "../utils/locale";
+import { ButtonBase } from './buttons/buttonBase';
+import { Icons } from './common';
+import { getString } from '../utils/locale';
 
 export interface CardModelRowProps {
   doc: Document;
@@ -27,90 +27,90 @@ export interface CardModelRowProps {
 }
 
 export function CardModelRow({ doc, data, onSelectModel }: CardModelRowProps) {
-  const row = ztoolkit.UI.createElement(doc, "div", {
-    tag: "div",
+  const row = ztoolkit.UI.createElement(doc, 'div', {
+    tag: 'div',
     classList: [
-      "flex",
-      "items-center",
-      "gap-3",
-      "p-2",
-      "rounded-xl",
-      "transition-all",
-      "duration-300",
-      "bg-zinc-50",
-      "dark:bg-zinc-800",
-      "hover:ring-2",
-      "hover:ring-rose-100",
-      "dark:hover:ring-rose-900/50",
-      "focus-within:ring-2",
-      "focus-within:ring-rose-100",
-      "dark:focus-within:ring-rose-900/50",
+      'flex',
+      'items-center',
+      'gap-3',
+      'p-2',
+      'rounded-xl',
+      'transition-all',
+      'duration-300',
+      'bg-zinc-50',
+      'dark:bg-zinc-800',
+      'hover:ring-2',
+      'hover:ring-rose-100',
+      'dark:hover:ring-rose-900/50',
+      'focus-within:ring-2',
+      'focus-within:ring-rose-100',
+      'dark:focus-within:ring-rose-900/50',
     ],
     children: [
       {
-        tag: "input",
+        tag: 'input',
         classList: [
-          "mx-1",
-          "w-4",
-          "h-4",
-          "rounded",
-          "border-gray-300",
-          "dark:border-zinc-600",
-          "cursor-pointer",
-          "accent-rose-500",
-          "bg-white",
-          "dark:bg-zinc-800",
+          'mx-1',
+          'w-4',
+          'h-4',
+          'rounded',
+          'border-gray-300',
+          'dark:border-zinc-600',
+          'cursor-pointer',
+          'accent-rose-500',
+          'bg-white',
+          'dark:bg-zinc-800',
         ],
-        properties: { type: "checkbox", checked: data?.enabled ?? true },
+        properties: { type: 'checkbox', checked: data?.enabled ?? true },
       },
       {
-        tag: "div",
-        classList: ["relative", "flex-1", "flex", "items-center"],
+        tag: 'div',
+        classList: ['relative', 'flex-1', 'flex', 'items-center'],
         children: [
           ButtonBase({
             iconMarkup: Icons.QuickInput,
             classList: [
-              "p-1.5",
-              "mr-2",
-              "rounded-md",
-              "transition-all",
-              "duration-200",
-              "shrink-0",
-              "text-gray-400",
-              "hover:text-rose-400",
-              "hover:bg-white",
-              "dark:hover:bg-zinc-700",
-              "cursor-pointer",
+              'p-1.5',
+              'mr-2',
+              'rounded-md',
+              'transition-all',
+              'duration-200',
+              'shrink-0',
+              'text-gray-400',
+              'hover:text-rose-400',
+              'hover:bg-white',
+              'dark:hover:bg-zinc-700',
+              'cursor-pointer',
             ],
-            title: getString("model-dialog-browse-model"),
+            title: getString('model-dialog-browse-model'),
             onClick: () => onSelectModel?.(),
           }),
           {
-            tag: "input",
+            tag: 'input',
             classList: [
-              "flex-1",
-              "bg-transparent",
-              "text-sm",
-              "px-0",
-              "outline-none",
-              "rounded",
-              "focus:ring-1",
-              "ring-rose-300",
-              "placeholder:text-gray-400",
-              "transition-all",
-              "duration-200",
-              "font-semibold",
-              "cursor-pointer",
+              'flex-1',
+              'bg-transparent',
+              'text-sm',
+              'px-0',
+              'outline-none',
+              'rounded',
+              'focus:ring-1',
+              'ring-rose-300',
+              'placeholder:text-gray-400',
+              'transition-all',
+              'duration-200',
+              'font-semibold',
+              'cursor-pointer',
             ],
             properties: {
-              type: "text",
-              placeholder: getString("model-dialog-type-model"),
-              value: data?.name || "",
+              type: 'text',
+              placeholder: getString('model-dialog-type-model'),
+              value: data?.name || '',
               readOnly: true,
             },
             listeners: [
               {
-                type: "click",
+                type: 'click',
                 listener: () => onSelectModel?.(),
               },
             ],
@@ -119,18 +119,9 @@ export function CardModelRow({ doc, data, onSelectModel }: CardModelRowProps) {
       },
       ButtonBase({
         iconMarkup: Icons.Delete,
-        classList: [
-          "p-2",
-          "text-gray-300",
-          "hover:text-red-500",
-          "transition-all",
-          "duration-200",
-          "rounded-lg",
-          "shrink-0",
-        ],
-        title: getString("model-dialog-delete-model"),
-        onClick: (e) =>
-          (e.currentTarget as HTMLElement).parentElement?.remove(),
+        classList: ['p-2', 'text-gray-300', 'hover:text-red-500', 'transition-all', 'duration-200', 'rounded-lg', 'shrink-0'],
+        title: getString('model-dialog-delete-model'),
+        onClick: (e) => (e.currentTarget as HTMLElement).parentElement?.remove(),
       }),
     ],
   });
@@ -138,17 +129,11 @@ export function CardModelRow({ doc, data, onSelectModel }: CardModelRowProps) {
     (row as HTMLElement).dataset.modelId = data.id;
   }
   (row as any).getData = () => {
-    const nameValue = (
-      row.querySelector('input[type="text"]') as HTMLInputElement
-    ).value;
+    const nameValue = (row.querySelector('input[type="text"]') as HTMLInputElement).value;
     return {
-      id:
-        (row as HTMLElement).dataset.modelId ||
-        nameValue ||
-        crypto.randomUUID(),
+      id: (row as HTMLElement).dataset.modelId || nameValue || crypto.randomUUID(),
       name: nameValue,
-      enabled: (row.querySelector('input[type="checkbox"]') as HTMLInputElement)
-        .checked,
+      enabled: (row.querySelector('input[type="checkbox"]') as HTMLInputElement).checked,
     };
   };
   return row;

@@ -20,7 +20,7 @@ export function ensureWebStreamsGlobals() {
   const g = globalThis as any;
   const mainWin = Zotero.getMainWindow?.() as any;
 
-  if (typeof g.console === "undefined") {
+  if (typeof g.console === 'undefined') {
     if (mainWin?.console) {
       g.console = mainWin.console;
     } else {
@@ -35,30 +35,30 @@ export function ensureWebStreamsGlobals() {
     }
   }
 
-  if (typeof g.DOMException === "undefined" && mainWin.DOMException) {
+  if (typeof g.DOMException === 'undefined' && mainWin.DOMException) {
     g.DOMException = mainWin.DOMException;
   }
 
-  if (typeof g.TransformStream !== "undefined") return;
+  if (typeof g.TransformStream !== 'undefined') return;
   if (!mainWin) return;
 
-  if (typeof g.TransformStream === "undefined" && mainWin.TransformStream) {
+  if (typeof g.TransformStream === 'undefined' && mainWin.TransformStream) {
     g.TransformStream = mainWin.TransformStream;
   }
-  if (typeof g.ReadableStream === "undefined" && mainWin.ReadableStream) {
+  if (typeof g.ReadableStream === 'undefined' && mainWin.ReadableStream) {
     g.ReadableStream = mainWin.ReadableStream;
   }
-  if (typeof g.WritableStream === "undefined" && mainWin.WritableStream) {
+  if (typeof g.WritableStream === 'undefined' && mainWin.WritableStream) {
     g.WritableStream = mainWin.WritableStream;
   }
 
-  if (typeof g.TextEncoder === "undefined" && mainWin.TextEncoder) {
+  if (typeof g.TextEncoder === 'undefined' && mainWin.TextEncoder) {
     g.TextEncoder = mainWin.TextEncoder;
   }
-  if (typeof g.TextDecoder === "undefined" && mainWin.TextDecoder) {
+  if (typeof g.TextDecoder === 'undefined' && mainWin.TextDecoder) {
     g.TextDecoder = mainWin.TextDecoder;
   }
-  if (typeof g.TextDecoderStream === "undefined" && mainWin.TextDecoderStream) {
+  if (typeof g.TextDecoderStream === 'undefined' && mainWin.TextDecoderStream) {
     g.TextDecoderStream = mainWin.TextDecoderStream;
   }
 }

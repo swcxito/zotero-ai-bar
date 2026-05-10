@@ -1,17 +1,15 @@
-import { config } from "../package.json";
-import { ColumnOptions, DialogHelper } from "zotero-plugin-toolkit";
-import hooks from "./hooks";
-import { createZToolkit } from "./utils/ztoolkit";
-import { UserPrompt } from "./types";
-import type { CommonProviders, UserProviderConfigV2 } from "./utils/providers";
-import { ChatManager } from "./modules/chatManager";
+import { config } from '../package.json';
+import { ColumnOptions, DialogHelper } from 'zotero-plugin-toolkit';
+import hooks from './hooks';
+import { createZToolkit } from './utils/ztoolkit';
+import { UserPrompt } from './types';
+import type { CommonProviders, UserProviderConfigV2 } from './utils/providers';
+import { ChatManager } from './modules/chatManager';
 
 function resolveInitialTabID(): string {
   const initialTabID = Zotero.getMainWindow().Zotero_Tabs.selectedID;
   if (!initialTabID.trim()) {
-    throw new Error(
-      "Failed to initialize ChatManager: selected tab ID is empty.",
-    );
+    throw new Error('Failed to initialize ChatManager: selected tab ID is empty.');
   }
   return initialTabID;
 }
@@ -21,7 +19,7 @@ class Addon {
     alive: boolean;
     config: typeof config;
     // Env type, see build.js
-    env: "development" | "production";
+    env: 'development' | 'production';
     initialized?: boolean;
     ztoolkit: ZToolkit;
     locale?: {
@@ -37,7 +35,7 @@ class Addon {
       text?: string;
       contextPromise?: Promise<Array<string> | undefined>;
       currentAnnotation?: _ZoteroTypes.Annotations.AnnotationJson;
-      currentReader?: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">;
+      currentReader?: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>;
     };
     commonProviders?: CommonProviders;
     liveProviders?: CommonProviders;

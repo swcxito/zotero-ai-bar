@@ -19,15 +19,15 @@
 // 基于 common_providers.json 生成的 TypeScript 类型定义
 // 包含 25 个 providers 和 763 个 models
 
-import { config } from "../../package.json";
-import type { UserProviderConfig } from "../types";
-import { getPref, setPref } from "./prefs";
+import { config } from '../../package.json';
+import type { UserProviderConfig } from '../types';
+import { getPref, setPref } from './prefs';
 
 /** 模态类型 */
-export type ModalityType = "audio" | "image" | "pdf" | "text" | "video";
+export type ModalityType = 'audio' | 'image' | 'pdf' | 'text' | 'video';
 
 /** 模型状态 */
-export type ModelStatus = "beta" | "deprecated" | "preview";
+export type ModelStatus = 'beta' | 'deprecated' | 'preview';
 
 /** 模态配置 */
 export interface Modalities {
@@ -108,7 +108,7 @@ export interface Provider {
 export type CommonProviders = Record<ProviderId, Provider>;
 
 /** Provider 元数据（不含 models），存入 UserProviderConfigV2 */
-export type AddedProvider = Omit<Provider, "models">;
+export type AddedProvider = Omit<Provider, 'models'>;
 
 /** Model 元数据 + providerId 引用，存入 UserProviderConfigV2 */
 export interface AddedModel extends Model {
@@ -131,16 +131,16 @@ export interface UserProviderConfigV2 {
 }
 
 const PROVIDER_KEY_TO_ID: Record<string, ProviderId> = {
-  OPENAI: "openai",
-  ANTHROPIC: "anthropic",
-  GOOGLE_CLOUD: "google",
-  ALIBABA_CLOUD: "alibaba-cn",
-  OPENROUTER: "openrouter",
-  ZHIPU: "zhipuai",
-  ZAI: "zai",
-  DEEPSEEK: "deepseek",
-  MINIMAX: "minimax-cn",
-  VOLCENGINE: "volcengine",
+  OPENAI: 'openai',
+  ANTHROPIC: 'anthropic',
+  GOOGLE_CLOUD: 'google',
+  ALIBABA_CLOUD: 'alibaba-cn',
+  OPENROUTER: 'openrouter',
+  ZHIPU: 'zhipuai',
+  ZAI: 'zai',
+  DEEPSEEK: 'deepseek',
+  MINIMAX: 'minimax-cn',
+  VOLCENGINE: 'volcengine',
 };
 
 /**
@@ -159,9 +159,7 @@ function normalizeProviderIdFromKey(key?: string): ProviderId | undefined {
  * 安全解析旧版 LLM 配置，支持 JSON 字符串和数组两种格式。
  * @returns 解析失败或为空时返回 []
  */
-function safeParseLegacyLLMConfig(
-  llmConfig: string | UserProviderConfig[] | null | undefined,
-): UserProviderConfig[] {
+function safeParseLegacyLLMConfig(llmConfig: string | UserProviderConfig[] | null | undefined): UserProviderConfig[] {
   if (!llmConfig) return [];
   if (Array.isArray(llmConfig)) return llmConfig;
 
@@ -182,10 +180,10 @@ export function findModelMetadata(
   modelName: string,
   modelId: string | undefined,
   providerId: ProviderId,
-  commonProviders: CommonProviders | undefined,
+  commonProviders: CommonProviders | undefined
 ): Model | undefined {
   if (!commonProviders) {
-    ztoolkit.log("[findModelMetadata] No commonProviders available");
+    ztoolkit.log('[findModelMetadata] No commonProviders available');
     return undefined;
   }
 
@@ -198,15 +196,14 @@ export function findModelMetadata(
   const ownProvider = commonProviders[providerId];
   if (ownProvider?.models) {
     if (ownProvider.models[modelName]) return ownProvider.models[modelName];
-    if (modelId && ownProvider.models[modelId])
-      return ownProvider.models[modelId];
+    if (modelId && ownProvider.models[modelId]) return ownProvider.models[modelId];
     for (const m of Object.values(ownProvider.models)) {
       if (m.name === modelName || (modelId && m.name === modelId)) return m;
     }
   }
 
   // 2. Cross-provider: if modelName has "prefix/model" format (e.g. openrouter)
-  const slashIdx = modelName.indexOf("/");
+  const slashIdx = modelName.indexOf('/');
   if (slashIdx > 0) {
     const prefix = modelName.slice(0, slashIdx);
     const bareName = modelName.slice(slashIdx + 1);
@@ -224,11 +221,7 @@ export function findModelMetadata(
   // 3. Global search across all providers by name or id
   for (const p of Object.values(commonProviders)) {
     for (const m of Object.values(p.models)) {
-      if (
-        m.name === modelName ||
-        m.id === modelName ||
-        (modelId && (m.name === modelId || m.id === modelId))
-      ) {
+      if (m.name === modelName || m.id === modelName || (modelId && (m.name === modelId || m.id === modelId))) {
         return m;
       }
     }
@@ -239,33 +232,33 @@ export function findModelMetadata(
 
 /** ProviderId → 图标文件 stem（不含 .svg） */
 const PROVIDER_ID_ICON_STEM: Record<string, string> = {
-  openai: "openai",
-  anthropic: "anthropic",
-  google: "google_cloud",
-  "google-vertex": "google_cloud",
-  "google-vertex-anthropic": "google_cloud",
-  deepseek: "deepseek",
-  openrouter: "openrouter",
-  alibaba: "alibaba_cloud",
-  "alibaba-cn": "alibaba_cloud",
-  "alibaba-coding-plan": "alibaba_cloud",
-  "alibaba-coding-plan-cn": "alibaba_cloud",
-  zhipuai: "zhipu",
-  "zhipuai-coding-plan": "zhipu",
-  zai: "zai",
-  "zai-coding-plan": "zai",
-  minimax: "minimax",
-  "minimax-cn": "minimax",
-  "minimax-coding-plan": "minimax",
-  "minimax-cn-coding-plan": "minimax",
-  volcengine: "volcengine",
-  xai: "xai",
-  azure: "azure",
-  "azure-cognitive-services": "azure",
-  vercel: "vercel",
-  "amazon-bedrock": "bedrock",
-  moonshotai: "moonshot",
-  "moonshotai-cn": "moonshot",
+  openai: 'openai',
+  anthropic: 'anthropic',
+  google: 'google_cloud',
+  'google-vertex': 'google_cloud',
+  'google-vertex-anthropic': 'google_cloud',
+  deepseek: 'deepseek',
+  openrouter: 'openrouter',
+  alibaba: 'alibaba_cloud',
+  'alibaba-cn': 'alibaba_cloud',
+  'alibaba-coding-plan': 'alibaba_cloud',
+  'alibaba-coding-plan-cn': 'alibaba_cloud',
+  zhipuai: 'zhipu',
+  'zhipuai-coding-plan': 'zhipu',
+  zai: 'zai',
+  'zai-coding-plan': 'zai',
+  minimax: 'minimax',
+  'minimax-cn': 'minimax',
+  'minimax-coding-plan': 'minimax',
+  'minimax-cn-coding-plan': 'minimax',
+  volcengine: 'volcengine',
+  xai: 'xai',
+  azure: 'azure',
+  'azure-cognitive-services': 'azure',
+  vercel: 'vercel',
+  'amazon-bedrock': 'bedrock',
+  moonshotai: 'moonshot',
+  'moonshotai-cn': 'moonshot',
 };
 
 /** 根据 providerId 获取图标 chrome:// URL */
@@ -278,10 +271,7 @@ export function getV2LogoUrl(providerId: string): string {
 }
 
 /** 将 providerId 和 model 对象转换为 ModelSelect。 */
-function toModelSelect(
-  providerId: ProviderId,
-  model: { id?: string; name: string },
-) {
+function toModelSelect(providerId: ProviderId, model: { id?: string; name: string }) {
   const modelId = model.name;
   return {
     providerId,
@@ -299,7 +289,7 @@ function toModelSelect(
 export function convertLegacyLLMConfigByKey(
   LegacyLlmConfig: string | UserProviderConfig[] | null | undefined,
   commonProviders?: CommonProviders,
-  LegacyActiveLlmModelId?: string | null,
+  LegacyActiveLlmModelId?: string | null
 ): UserProviderConfigV2 {
   const legacyConfigs = safeParseLegacyLLMConfig(LegacyLlmConfig);
 
@@ -314,11 +304,11 @@ export function convertLegacyLLMConfigByKey(
     // Custom provider → 转换为 v2 格式
     if (provider.isCustom) {
       const providerId = provider.id as ProviderId;
-      env[providerId] = { API_KEY: provider.apiKey ?? "" };
+      env[providerId] = { API_KEY: provider.apiKey ?? '' };
       addedProviders[providerId] = {
         id: providerId,
         name: provider.name,
-        env: ["API_KEY"],
+        env: ['API_KEY'],
         api: provider.baseUrl,
       };
       for (const model of provider.models ?? []) {
@@ -330,10 +320,10 @@ export function convertLegacyLLMConfigByKey(
         addedModels.push({
           id: model.name,
           name: model.name,
-          family: "unknown" as ModelFamily,
+          family: 'unknown' as ModelFamily,
           reasoning: false,
           temperature: true,
-          modalities: { input: ["text"], output: ["text"] } as Modalities,
+          modalities: { input: ['text'], output: ['text'] } as Modalities,
           open_weights: false,
           cost: { input: 0, output: 0 },
           limit: { context: 0, output: 0 },
@@ -353,7 +343,7 @@ export function convertLegacyLLMConfigByKey(
 
     const currentEnv = (env[providerId] ||= {});
     if (provider.apiKey) {
-      const apiKeyName = PROVIDER_ENV_KEY_MAP[providerId] || "API_KEY";
+      const apiKeyName = PROVIDER_ENV_KEY_MAP[providerId] || 'API_KEY';
       currentEnv[apiKeyName] = provider.apiKey;
     }
 
@@ -367,7 +357,7 @@ export function convertLegacyLLMConfigByKey(
         addedProviders[providerId] = {
           id: providerId,
           name: provider.name,
-          env: [PROVIDER_ENV_KEY_MAP[providerId] || "API_KEY"],
+          env: [PROVIDER_ENV_KEY_MAP[providerId] || 'API_KEY'],
         };
       }
     }
@@ -385,22 +375,17 @@ export function convertLegacyLLMConfigByKey(
       addedModelRefs.push(modelSelect);
 
       // Fill addedModels: search commonProviders (cross-provider) for metadata
-      const cm = findModelMetadata(
-        model.name,
-        model.id,
-        providerId,
-        commonProviders,
-      );
+      const cm = findModelMetadata(model.name, model.id, providerId, commonProviders);
       addedModels.push({
         ...(cm
           ? { ...cm }
           : {
               id: model.name,
               name: model.name,
-              family: "unknown" as ModelFamily,
+              family: 'unknown' as ModelFamily,
               reasoning: false,
               temperature: true,
-              modalities: { input: ["text"], output: ["text"] } as Modalities,
+              modalities: { input: ['text'], output: ['text'] } as Modalities,
               open_weights: false,
               cost: { input: 0, output: 0 },
               limit: { context: 0, output: 0 },
@@ -414,9 +399,7 @@ export function convertLegacyLLMConfigByKey(
     }
   }
 
-  const activeFromModelId = LegacyActiveLlmModelId
-    ? addedModelRefs.find((model) => model.modelId === LegacyActiveLlmModelId)
-    : undefined;
+  const activeFromModelId = LegacyActiveLlmModelId ? addedModelRefs.find((model) => model.modelId === LegacyActiveLlmModelId) : undefined;
 
   const active = activeFromModelId || recentUsed[0] || addedModelRefs[0];
 
@@ -430,16 +413,16 @@ export function convertLegacyLLMConfigByKey(
 }
 
 export const PROVIDER_ENV_KEY_MAP: Record<string, string> = {
-  openai: "OPENAI_API_KEY",
-  anthropic: "ANTHROPIC_API_KEY",
-  google: "GEMINI_API_KEY",
-  "alibaba-cn": "DASHSCOPE_API_KEY",
-  openrouter: "OPENROUTER_API_KEY",
-  zhipuai: "ZHIPU_API_KEY",
-  zai: "ZHIPU_API_KEY",
-  deepseek: "DEEPSEEK_API_KEY",
-  "minimax-cn": "MINIMAX_API_KEY",
-  volcengine: "ARK_API_KEY",
+  openai: 'OPENAI_API_KEY',
+  anthropic: 'ANTHROPIC_API_KEY',
+  google: 'GEMINI_API_KEY',
+  'alibaba-cn': 'DASHSCOPE_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
+  zhipuai: 'ZHIPU_API_KEY',
+  zai: 'ZHIPU_API_KEY',
+  deepseek: 'DEEPSEEK_API_KEY',
+  'minimax-cn': 'MINIMAX_API_KEY',
+  volcengine: 'ARK_API_KEY',
 };
 
 /**
@@ -448,7 +431,7 @@ export const PROVIDER_ENV_KEY_MAP: Record<string, string> = {
  * @returns 补齐了 id 字段
  */
 export function initProvidersFromJSON(json: string | object): CommonProviders {
-  const source = typeof json === "string" ? JSON.parse(json) : json;
+  const source = typeof json === 'string' ? JSON.parse(json) : json;
   const providers = source as CommonProviders;
 
   for (const [providerId, provider] of Object.entries(providers)) {
@@ -473,14 +456,10 @@ export const DEFAULT_PROVIDERS_JSON_URL = `chrome://${config.addonRef}/content/c
 let commonProvidersPromise: Promise<CommonProviders> | null = null;
 
 /** 从 json 文件读取并解析 providers 配置。 */
-export async function loadProvidersFromFile(
-  jsonUrl = DEFAULT_PROVIDERS_JSON_URL,
-): Promise<CommonProviders> {
+export async function loadProvidersFromFile(jsonUrl = DEFAULT_PROVIDERS_JSON_URL): Promise<CommonProviders> {
   const response = await fetch(jsonUrl);
   if (!response.ok) {
-    throw new Error(
-      `Failed to load providers json: ${jsonUrl} (${response.status})`,
-    );
+    throw new Error(`Failed to load providers json: ${jsonUrl} (${response.status})`);
   }
 
   const jsonText = await response.text();
@@ -493,11 +472,7 @@ export async function ensureCommonProviders(): Promise<CommonProviders> {
   if (!commonProvidersPromise) {
     commonProvidersPromise = loadProvidersFromFile().then((cp) => {
       addon.data.commonProviders = cp;
-      ztoolkit.log(
-        "[ensureCommonProviders] Loaded",
-        Object.keys(cp).length,
-        "providers",
-      );
+      ztoolkit.log('[ensureCommonProviders] Loaded', Object.keys(cp).length, 'providers');
       return cp;
     });
   }
@@ -506,16 +481,12 @@ export async function ensureCommonProviders(): Promise<CommonProviders> {
 
 // ---- Config V2 持久化（Prefs 存轻量引用 + File 存模型元数据） ----
 
-const V2_CONFIG_PREF_KEY = "llm.providerConfigsV2";
-const V2_MODELS_FILENAME = "models-v2.json";
+const V2_CONFIG_PREF_KEY = 'llm.providerConfigsV2';
+const V2_MODELS_FILENAME = 'models-v2.json';
 
 function getV2ModelsPath(): string {
   const baseDir = PathUtils.profileDir;
-  return PathUtils.join(
-    baseDir,
-    addon.data.config.addonRef,
-    V2_MODELS_FILENAME,
-  );
+  return PathUtils.join(baseDir, addon.data.config.addonRef, V2_MODELS_FILENAME);
 }
 
 /** 将模型元数据同步到文件（不存 providerId 和 enabled，这两项在 Prefs 中） */
@@ -530,9 +501,7 @@ async function saveV2Models(addedModels: AddedModel[]): Promise<void> {
   await IOUtils.writeJSON(filePath, allModels);
 }
 
-async function loadV2ModelsFile(): Promise<
-  Record<string, Record<string, any>>
-> {
+async function loadV2ModelsFile(): Promise<Record<string, Record<string, any>>> {
   try {
     const filePath = getV2ModelsPath();
     if (!(await IOUtils.exists(filePath))) return {};
@@ -556,21 +525,16 @@ export async function saveV2Config(v2: UserProviderConfigV2): Promise<void> {
       enabled: m.enabled,
     })),
   };
-  setPref(
-    V2_CONFIG_PREF_KEY as keyof _ZoteroTypes.Prefs["PluginPrefsMap"],
-    JSON.stringify(lightweight),
-  );
+  setPref(V2_CONFIG_PREF_KEY as keyof _ZoteroTypes.Prefs['PluginPrefsMap'], JSON.stringify(lightweight));
   await saveV2Models(v2.addedModels);
   addon.data.userProviderConfigV2 = v2;
-  ztoolkit.log("[saveV2Config] Persisted (prefs + models file)");
+  ztoolkit.log('[saveV2Config] Persisted (prefs + models file)');
 }
 
 /** 加载：Prefs 轻量引用 + File 模型元数据合并 */
 export async function loadV2Config(): Promise<UserProviderConfigV2 | null> {
   try {
-    const raw = getPref(
-      V2_CONFIG_PREF_KEY as keyof _ZoteroTypes.Prefs["PluginPrefsMap"],
-    ) as string;
+    const raw = getPref(V2_CONFIG_PREF_KEY as keyof _ZoteroTypes.Prefs['PluginPrefsMap']) as string;
     if (!raw) return null;
     const lightweight = JSON.parse(raw);
     const modelsFile = await loadV2ModelsFile();
@@ -580,15 +544,10 @@ export async function loadV2Config(): Promise<UserProviderConfigV2 | null> {
       const merged = { ...meta, ...m };
       // 如果文件中没有元数据（首次迁移或文件丢失），尝试从 commonProviders 补充
       if (!merged.family) {
-        const fm = findModelMetadata(
-          m.name,
-          m.id,
-          m.providerId,
-          addon.data.liveProviders ?? addon.data.commonProviders,
-        );
+        const fm = findModelMetadata(m.name, m.id, m.providerId, addon.data.liveProviders ?? addon.data.commonProviders);
         if (fm) Object.assign(merged, fm);
       }
-      if (!merged.family) merged.family = "unknown";
+      if (!merged.family) merged.family = 'unknown';
       return merged;
     });
 
@@ -600,8 +559,8 @@ export async function loadV2Config(): Promise<UserProviderConfigV2 | null> {
 
 // ---- 在线获取 models.dev 数据 ----
 
-const MODELS_DEV_API = "https://models.dev/api.json";
-const MODELS_DEV_LOGO_BASE = "https://models.dev/logos";
+const MODELS_DEV_API = 'https://models.dev/api.json';
+const MODELS_DEV_LOGO_BASE = 'https://models.dev/logos';
 
 /** 过滤模型：去掉带日期、参数量、上下文窗口、特定后缀的版本（不过滤 :free） */
 const LIVE_FILTER_PATTERNS = [
@@ -614,15 +573,7 @@ const LIVE_FILTER_PATTERNS = [
   /:exacto$|v\d+:\d+$/, // 特定后缀: :exacto, v1:0
 ];
 
-const LIVE_FIELDS_TO_REMOVE = [
-  "attachment",
-  "tool_call",
-  "structured_output",
-  "knowledge",
-  "release_date",
-  "last_updated",
-  "open_weights",
-];
+const LIVE_FIELDS_TO_REMOVE = ['attachment', 'tool_call', 'structured_output', 'knowledge', 'release_date', 'last_updated', 'open_weights'];
 
 /** 生成 models.dev 的 logo URL */
 export function getModelsDevLogoUrl(providerId: string): string {
@@ -631,16 +582,12 @@ export function getModelsDevLogoUrl(providerId: string): string {
 
 // ---- Icon cache ----
 
-const ICONS_CACHE_FILENAME = "icons-cache.json";
+const ICONS_CACHE_FILENAME = 'icons-cache.json';
 
 let _iconCache: Record<string, string> | null = null;
 
 function getIconsCachePath(): string {
-  return PathUtils.join(
-    PathUtils.profileDir,
-    addon.data.config.addonRef,
-    ICONS_CACHE_FILENAME,
-  );
+  return PathUtils.join(PathUtils.profileDir, addon.data.config.addonRef, ICONS_CACHE_FILENAME);
 }
 
 /** 启动时调用，从文件加载图标缓存 */
@@ -696,7 +643,7 @@ export async function cacheProviderIcon(providerId: string): Promise<void> {
     const base64 = btoa(unescape(encodeURIComponent(svgText)));
     cache[providerId] = `data:image/svg+xml;base64,${base64}`;
     await flushIconCache();
-    ztoolkit.log("[cacheProviderIcon] Cached icon for", providerId);
+    ztoolkit.log('[cacheProviderIcon] Cached icon for', providerId);
   } catch {
     /* 静默失败 */
   }
@@ -720,16 +667,16 @@ export async function fetchLiveProviders(): Promise<CommonProviders> {
       const models: Record<string, any> = {};
       for (const [key, model] of Object.entries(p.models ?? {})) {
         const m = model as any;
-        const testStr = `${key}|${m.id || ""}`;
+        const testStr = `${key}|${m.id || ''}`;
         if (LIVE_FILTER_PATTERNS.some((pat) => pat.test(testStr))) continue;
 
         const cleaned: any = {};
         for (const [f, v] of Object.entries(m)) {
           if (LIVE_FIELDS_TO_REMOVE.includes(f)) continue;
-          if (f === "id" && v === key) continue;
+          if (f === 'id' && v === key) continue;
           cleaned[f] = v;
         }
-        if (!cleaned.family) cleaned.family = "unknown";
+        if (!cleaned.family) cleaned.family = 'unknown';
         models[key] = cleaned;
       }
       result[name] = { ...p, models };
@@ -738,20 +685,16 @@ export async function fetchLiveProviders(): Promise<CommonProviders> {
     // 补充 volcengine（models.dev 中可能不存在）
     if (!result.volcengine) {
       result.volcengine = {
-        id: "volcengine",
-        env: ["ARK_API_KEY"],
-        npm: "@ai-sdk/openai-compatible",
-        api: "https://ark.cn-beijing.volces.com/api/v3",
-        name: "Volcengine",
+        id: 'volcengine',
+        env: ['ARK_API_KEY'],
+        npm: '@ai-sdk/openai-compatible',
+        api: 'https://ark.cn-beijing.volces.com/api/v3',
+        name: 'Volcengine',
         models: {},
       };
     }
 
-    ztoolkit.log(
-      "[fetchLiveProviders] Loaded",
-      Object.keys(result).length,
-      "providers from models.dev",
-    );
+    ztoolkit.log('[fetchLiveProviders] Loaded', Object.keys(result).length, 'providers from models.dev');
     return initProvidersFromJSON(result);
   })();
 
@@ -760,111 +703,111 @@ export async function fetchLiveProviders(): Promise<CommonProviders> {
 
 /** Provider ID */
 export type ProviderId =
-  | "openai"
-  | "anthropic"
-  | "google"
-  | "azure"
-  | "amazon"
-  | "cohere"
-  | "mistral"
-  | "grok"
-  | "deepseek"
-  | "groq"
-  | "perplexity"
-  | "openrouter"
-  | "alibaba-cloud"
-  | "ai21"
-  | "zhipu"
-  | "minimax"
-  | "moonshot"
-  | "novita"
-  | "qwen"
-  | "togetherai"
-  | "fireworks"
-  | "hyperbolic"
-  | "zai"
-  | "tngtech"
-  | "sarapa"
-  | "vertex"
+  | 'openai'
+  | 'anthropic'
+  | 'google'
+  | 'azure'
+  | 'amazon'
+  | 'cohere'
+  | 'mistral'
+  | 'grok'
+  | 'deepseek'
+  | 'groq'
+  | 'perplexity'
+  | 'openrouter'
+  | 'alibaba-cloud'
+  | 'ai21'
+  | 'zhipu'
+  | 'minimax'
+  | 'moonshot'
+  | 'novita'
+  | 'qwen'
+  | 'togetherai'
+  | 'fireworks'
+  | 'hyperbolic'
+  | 'zai'
+  | 'tngtech'
+  | 'sarapa'
+  | 'vertex'
   | string; // 允许自定义 provider ID
 
 /** 模型家族 */
 export type ModelFamily =
-  | "unknown"
-  | "allenai"
-  | "alpha"
-  | "claude-haiku"
-  | "claude-opus"
-  | "claude-sonnet"
-  | "codestral"
-  | "cohere-embed"
-  | "command-a"
-  | "command-r"
-  | "deepseek"
-  | "deepseek-thinking"
-  | "devstral"
-  | "flux"
-  | "gemini"
-  | "gemini-flash"
-  | "gemini-flash-lite"
-  | "gemini-pro"
-  | "gemma"
-  | "glm"
-  | "glm-air"
-  | "glm-flash"
-  | "glm-z"
-  | "gpt"
-  | "gpt-codex"
-  | "gpt-codex-mini"
-  | "gpt-codex-spark"
-  | "gpt-mini"
-  | "gpt-nano"
-  | "gpt-oss"
-  | "gpt-pro"
-  | "grok"
-  | "grok-beta"
-  | "grok-vision"
-  | "hermes"
-  | "kat-coder"
-  | "kimi"
-  | "kimi-thinking"
-  | "liquid"
-  | "llama"
-  | "magistral"
-  | "mai"
-  | "mercury"
-  | "mimo"
-  | "minimax"
-  | "ministral"
-  | "mistral"
-  | "mistral-large"
-  | "mistral-medium"
-  | "mistral-nemo"
-  | "mistral-small"
-  | "model-router"
-  | "nemotron"
-  | "nova"
-  | "nova-lite"
-  | "nova-micro"
-  | "nova-pro"
-  | "o"
-  | "o-mini"
-  | "o-pro"
-  | "palmyra"
-  | "phi"
-  | "qvq"
-  | "qwen"
-  | "qwerky"
-  | "reka"
-  | "sarvam"
-  | "seed"
-  | "sherlock"
-  | "sourceful"
-  | "step"
-  | "text-embedding"
-  | "tngtech"
-  | "trinity"
-  | "trinity-mini"
-  | "yi"
-  | "zhipu"
+  | 'unknown'
+  | 'allenai'
+  | 'alpha'
+  | 'claude-haiku'
+  | 'claude-opus'
+  | 'claude-sonnet'
+  | 'codestral'
+  | 'cohere-embed'
+  | 'command-a'
+  | 'command-r'
+  | 'deepseek'
+  | 'deepseek-thinking'
+  | 'devstral'
+  | 'flux'
+  | 'gemini'
+  | 'gemini-flash'
+  | 'gemini-flash-lite'
+  | 'gemini-pro'
+  | 'gemma'
+  | 'glm'
+  | 'glm-air'
+  | 'glm-flash'
+  | 'glm-z'
+  | 'gpt'
+  | 'gpt-codex'
+  | 'gpt-codex-mini'
+  | 'gpt-codex-spark'
+  | 'gpt-mini'
+  | 'gpt-nano'
+  | 'gpt-oss'
+  | 'gpt-pro'
+  | 'grok'
+  | 'grok-beta'
+  | 'grok-vision'
+  | 'hermes'
+  | 'kat-coder'
+  | 'kimi'
+  | 'kimi-thinking'
+  | 'liquid'
+  | 'llama'
+  | 'magistral'
+  | 'mai'
+  | 'mercury'
+  | 'mimo'
+  | 'minimax'
+  | 'ministral'
+  | 'mistral'
+  | 'mistral-large'
+  | 'mistral-medium'
+  | 'mistral-nemo'
+  | 'mistral-small'
+  | 'model-router'
+  | 'nemotron'
+  | 'nova'
+  | 'nova-lite'
+  | 'nova-micro'
+  | 'nova-pro'
+  | 'o'
+  | 'o-mini'
+  | 'o-pro'
+  | 'palmyra'
+  | 'phi'
+  | 'qvq'
+  | 'qwen'
+  | 'qwerky'
+  | 'reka'
+  | 'sarvam'
+  | 'seed'
+  | 'sherlock'
+  | 'sourceful'
+  | 'step'
+  | 'text-embedding'
+  | 'tngtech'
+  | 'trinity'
+  | 'trinity-mini'
+  | 'yi'
+  | 'zhipu'
   | string;

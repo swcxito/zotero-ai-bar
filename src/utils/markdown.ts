@@ -16,42 +16,31 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { marked } from "marked";
-import { markedHighlight } from "marked-highlight";
-import markedKatex from "marked-katex-extension";
-import hljs from "highlight.js";
-import { markedXhtml } from "marked-xhtml";
-import { getPref } from "./prefs";
+import { marked } from 'marked';
+import { markedHighlight } from 'marked-highlight';
+import markedKatex from 'marked-katex-extension';
+import hljs from 'highlight.js';
+import { markedXhtml } from 'marked-xhtml';
+import { getPref } from './prefs';
 
 function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-const ALLOWED_RAW_HTML_TAGS = ["sub"] as const;
+const ALLOWED_RAW_HTML_TAGS = ['sub'] as const;
 
 function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function protectAllowedHtmlPairs(
-  text: string,
-  allowedTags: readonly string[],
-): { text: string; tokenMap: Map<string, string> } {
+function protectAllowedHtmlPairs(text: string, allowedTags: readonly string[]): { text: string; tokenMap: Map<string, string> } {
   const tokenMap = new Map<string, string>();
   let withTokens = text;
 
   allowedTags.forEach((tag, index) => {
     const safeTag = escapeRegExp(tag);
     let pairIndex = 0;
-    const pairPattern = new RegExp(
-      `<${safeTag}>[\\s\\S]*?<\\/${safeTag}>`,
-      "gi",
-    );
+    const pairPattern = new RegExp(`<${safeTag}>[\\s\\S]*?<\\/${safeTag}>`, 'gi');
 
     withTokens = withTokens.replace(pairPattern, (matched) => {
       const pairToken = `__ZAIBAR_ALLOW_TAG_${index}_PAIR_${pairIndex++}__`;
@@ -66,20 +55,20 @@ function protectAllowedHtmlPairs(
 marked.use(
   // 代码高亮扩展（必须在 KaTeX 之前）
   markedHighlight({
-    emptyLangClass: "hljs",
-    langPrefix: "hljs language-", // 与 highlight.js 样式类匹配
+    emptyLangClass: 'hljs',
+    langPrefix: 'hljs language-', // 与 highlight.js 样式类匹配
     highlight(code, lang) {
-      const language = hljs.getLanguage(lang) ? lang : "plaintext";
+      const language = hljs.getLanguage(lang) ? lang : 'plaintext';
       return hljs.highlight(code, { language }).value;
     },
   }),
   // 公式渲染扩展（自动处理 $...$ 和 $$...$$）
   markedKatex({
     throwOnError: false, // 公式错误时不中断渲染
-    output: "html",
+    output: 'html',
     nonStandard: true, // 支持非标准的公式
   }),
-  markedXhtml(),
+  markedXhtml()
 );
 // 可选：自定义基础渲染选项
 marked.setOptions({
@@ -91,50 +80,45 @@ marked.setOptions({
 marked.use({
   renderer: {
     html(token: any) {
-      const raw = typeof token === "string" ? token : (token?.text ?? "");
+      const raw = typeof token === 'string' ? token : (token?.text ?? '');
       return escapeHtml(raw);
     },
   },
 });
 
 function optimizeFormulas(text: string): string {
-  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
   const output: string[] = [];
 
   let inBlockMath = false;
-  let blockQuotePrefix = "";
+  let blockQuotePrefix = '';
 
   for (const line of lines) {
     const delimiterMatch = line.match(/^(\s*(?:>\s*)*)\$\$\s*$/);
 
     if (delimiterMatch) {
-      const prefix = delimiterMatch[1] ?? "";
+      const prefix = delimiterMatch[1] ?? '';
 
       if (!inBlockMath) {
         inBlockMath = true;
         blockQuotePrefix = prefix;
-        if (output.length > 0 && output[output.length - 1].trim() !== "") {
-          output.push("");
+        if (output.length > 0 && output[output.length - 1].trim() !== '') {
+          output.push('');
         }
         output.push(`${blockQuotePrefix}$$`);
       } else {
         output.push(`${blockQuotePrefix}$$`);
         inBlockMath = false;
-        blockQuotePrefix = "";
-        output.push("");
+        blockQuotePrefix = '';
+        output.push('');
       }
 
       continue;
     }
 
     if (inBlockMath) {
-      const escapedPrefix = blockQuotePrefix.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&",
-      );
-      const normalizedLine = blockQuotePrefix
-        ? line.replace(new RegExp(`^\\s*${escapedPrefix}`), blockQuotePrefix)
-        : line.replace(/^\s*/, "");
+      const escapedPrefix = blockQuotePrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const normalizedLine = blockQuotePrefix ? line.replace(new RegExp(`^\\s*${escapedPrefix}`), blockQuotePrefix) : line.replace(/^\s*/, '');
       output.push(normalizedLine);
       continue;
     }
@@ -142,11 +126,11 @@ function optimizeFormulas(text: string): string {
     output.push(line);
   }
 
-  while (output.length > 0 && output[output.length - 1] === "") {
+  while (output.length > 0 && output[output.length - 1] === '') {
     output.pop();
   }
 
-  return output.join("\n");
+  return output.join('\n');
 }
 
 /**
@@ -159,14 +143,11 @@ export async function renderMarkdown(markdown: string): Promise<string> {
     let text = markdown;
 
     // 根据配置决定是否优化公式
-    if (getPref("chat.formulaOptimization")) {
+    if (getPref('chat.formulaOptimization')) {
       text = optimizeFormulas(text);
     }
 
-    const { text: protectedText, tokenMap } = protectAllowedHtmlPairs(
-      text,
-      ALLOWED_RAW_HTML_TAGS,
-    );
+    const { text: protectedText, tokenMap } = protectAllowedHtmlPairs(text, ALLOWED_RAW_HTML_TAGS);
 
     let html = await marked.parse(protectedText);
 
@@ -178,16 +159,10 @@ export async function renderMarkdown(markdown: string): Promise<string> {
     // 避免 "Removed unsafe attribute. Element: svg. Attribute: xmlns." 警告
     // 同时也确保在 XHTML 环境下这些标签能被正确识别
     return html
-      .replace(
-        /<math(?![^>]*xmlns)/g,
-        '<math xmlns="http://www.w3.org/1998/Math/MathML"',
-      )
-      .replace(
-        /<svg(?![^>]*xmlns)/g,
-        '<svg xmlns="http://www.w3.org/2000/svg"',
-      );
+      .replace(/<math(?![^>]*xmlns)/g, '<math xmlns="http://www.w3.org/1998/Math/MathML"')
+      .replace(/<svg(?![^>]*xmlns)/g, '<svg xmlns="http://www.w3.org/2000/svg"');
   } catch (error) {
-    console.error("Markdown 解析失败:", error);
+    console.error('Markdown 解析失败:', error);
     return `<p class="error">内容解析错误</p>`;
   }
 }

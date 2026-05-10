@@ -16,17 +16,12 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { TagElementProps } from "zotero-plugin-toolkit";
-import { IconView } from "../iconView";
+import { TagElementProps } from 'zotero-plugin-toolkit';
+import { IconView } from '../iconView';
 
-export type ButtonClickHandler = (
-  e: MouseEvent,
-  btn: HTMLButtonElement,
-) => void | Promise<void>;
+export type ButtonClickHandler = (e: MouseEvent, btn: HTMLButtonElement) => void | Promise<void>;
 
-export type ButtonClickDecorator = (
-  next: ButtonClickHandler,
-) => ButtonClickHandler;
+export type ButtonClickDecorator = (next: ButtonClickHandler) => ButtonClickHandler;
 
 export interface ButtonBaseProps {
   label?: string;
@@ -61,20 +56,20 @@ export function ButtonBase({
         iconMarkup,
         sizeRem: 1,
         extraClasses: iconExtraClasses,
-      }),
+      })
     );
   }
 
-  if (typeof label === "string") {
+  if (typeof label === 'string') {
     children.push({
-      tag: "span",
+      tag: 'span',
       classList: labelClassList,
       properties: { textContent: label },
     });
   }
 
   const button: TagElementProps = {
-    tag: "button",
+    tag: 'button',
     classList,
     properties: {
       disabled: !enabled,
@@ -84,19 +79,13 @@ export function ButtonBase({
   };
 
   if (onClick || clickDecorators.length > 0) {
-    const composedHandler = clickDecorators.reduceRight(
-      (next, decorate) => decorate(next),
-      onClick ?? noopClick,
-    );
+    const composedHandler = clickDecorators.reduceRight((next, decorate) => decorate(next), onClick ?? noopClick);
 
     button.listeners = [
       {
-        type: "click",
+        type: 'click',
         listener: (e: Event) => {
-          void composedHandler(
-            e as MouseEvent,
-            e.currentTarget as HTMLButtonElement,
-          );
+          void composedHandler(e as MouseEvent, e.currentTarget as HTMLButtonElement);
         },
       },
     ];

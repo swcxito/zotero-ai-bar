@@ -16,9 +16,9 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { Icons } from "./common";
-import { getString } from "../utils/locale";
-import { ActionButton } from "./buttons/actionButton";
+import { Icons } from './common';
+import { getString } from '../utils/locale';
+import { ActionButton } from './buttons/actionButton';
 
 export interface ChatBoxProps {
   doc: Document;
@@ -26,111 +26,79 @@ export interface ChatBoxProps {
   onRegenerate?: () => void;
 }
 
-export function ChatBox({
-  doc,
-  isUser = false,
-  onRegenerate,
-}: ChatBoxProps): Element {
-  return ztoolkit.UI.createElement(doc, "div", {
-    tag: "div",
+export function ChatBox({ doc, isUser = false, onRegenerate }: ChatBoxProps): Element {
+  return ztoolkit.UI.createElement(doc, 'div', {
+    tag: 'div',
     classList: [
-      "w-full",
-      "min-w-0",
-      "flex",
-      "animate-in",
-      "fade-in",
-      "slide-in-from-bottom-3",
-      "duration-300",
-      "flex-col",
-      ...(isUser
-        ? [
-            "items-end",
-            "max-w-[85%]",
-            "sm:max-w-[75%]",
-            "justify-end",
-            "self-end",
-          ]
-        : ["items-start", "w-full"]),
+      'w-full',
+      'min-w-0',
+      'flex',
+      'animate-in',
+      'fade-in',
+      'slide-in-from-bottom-3',
+      'duration-300',
+      'flex-col',
+      ...(isUser ? ['items-end', 'max-w-[85%]', 'sm:max-w-[75%]', 'justify-end', 'self-end'] : ['items-start', 'w-full']),
     ],
     children: [
       {
-        tag: "div",
+        tag: 'div',
         classList: [
-          "chat-message",
-          "min-w-0",
-          "transition-all",
-          "duration-300",
-          "w-full",
-          "text-justify",
-          "break-words",
+          'chat-message',
+          'min-w-0',
+          'transition-all',
+          'duration-300',
+          'w-full',
+          'text-justify',
+          'break-words',
           ...(isUser
             ? [
-                "px-5",
-                "py-3.5",
-                "rounded-2xl",
-                "bg-rose-500",
-                "text-white",
-                "dark:bg-rose-600",
-                "rounded-tr-none",
-                "shadow-md",
-                "shadow-rose-200/50",
-                "dark:shadow-none",
-                "text-sm",
-                "leading-relaxed",
+                'px-5',
+                'py-3.5',
+                'rounded-2xl',
+                'bg-rose-500',
+                'text-white',
+                'dark:bg-rose-600',
+                'rounded-tr-none',
+                'shadow-md',
+                'shadow-rose-200/50',
+                'dark:shadow-none',
+                'text-sm',
+                'leading-relaxed',
               ]
-            : [
-                "pr-4",
-                "w-full",
-                "text-slate-800",
-                "dark:text-rose-50/90",
-                "text-[15px]",
-                "leading-relaxed",
-                "py-1",
-              ]),
+            : ['pr-4', 'w-full', 'text-slate-800', 'dark:text-rose-50/90', 'text-[15px]', 'leading-relaxed', 'py-1']),
         ],
       },
       //todo: add streaming indicator
       // Actions container
       {
-        tag: "div",
+        tag: 'div',
         classList: [
-          "chat-actions",
-          "mt-4",
-          "flex",
-          "items-center",
-          "gap-1.5",
-          ...(isUser
-            ? ["justify-end"]
-            : [
-                "justify-start",
-                "opacity-60",
-                "hover:opacity-100",
-                "transition-opacity",
-                "duration-300",
-                "hidden",
-              ]),
+          'chat-actions',
+          'mt-4',
+          'flex',
+          'items-center',
+          'gap-1.5',
+          ...(isUser ? ['justify-end'] : ['justify-start', 'opacity-60', 'hover:opacity-100', 'transition-opacity', 'duration-300', 'hidden']),
         ],
         styles: {
-          textAlign: "justify",
+          textAlign: 'justify',
           // textJustify: "inter-ideograph",
         },
         children: [
           ActionButton({
-            label: "Copy",
+            label: 'Copy',
             icon: Icons.Copy,
-            title: getString("chat-copy-text"),
+            title: getString('chat-copy-text'),
             onClick: (_e, btn) => {
-              const container =
-                btn.closest(".items-start") || btn.closest(".items-end");
-              const messageEl = container?.querySelector(".chat-message");
+              const container = btn.closest('.items-start') || btn.closest('.items-end');
+              const messageEl = container?.querySelector('.chat-message');
               if (messageEl && messageEl.textContent) {
-                new ztoolkit.Clipboard()
-                  .addText(messageEl.textContent, "text/plain")
-                  .copy();
-                const span = btn.querySelector(".btn-label");
+                new ztoolkit.Clipboard().addText(messageEl.textContent, 'text/plain').copy();
+                const span = btn.querySelector('.btn-label');
                 if (span) {
                   const originalText = span.textContent;
-                  span.textContent = "Copied";
+                  span.textContent = 'Copied';
                   setTimeout(() => {
                     span.textContent = originalText;
                   }, 4000);
@@ -139,27 +107,22 @@ export function ChatBox({
             },
           }),
           ActionButton({
-            label: "COPY MD",
+            label: 'COPY MD',
             icon: Icons.Markdown,
-            title: getString("chat-copy-markdown"),
+            title: getString('chat-copy-markdown'),
             onClick: (_e, btn) => {
-              const container =
-                btn.closest(".items-start") || btn.closest(".items-end");
-              const messageEl = container?.querySelector(".chat-message");
-              const markdown =
-                (container as HTMLElement)?.dataset?.markdown ||
-                (messageEl as HTMLElement)?.dataset?.markdown;
+              const container = btn.closest('.items-start') || btn.closest('.items-end');
+              const messageEl = container?.querySelector('.chat-message');
+              const markdown = (container as HTMLElement)?.dataset?.markdown || (messageEl as HTMLElement)?.dataset?.markdown;
 
               const textToCopy = markdown || messageEl?.textContent;
 
               if (textToCopy) {
-                new ztoolkit.Clipboard()
-                  .addText(textToCopy, "text/plain")
-                  .copy();
-                const span = btn.querySelector(".btn-label");
+                new ztoolkit.Clipboard().addText(textToCopy, 'text/plain').copy();
+                const span = btn.querySelector('.btn-label');
                 if (span) {
                   const originalText = span.textContent;
-                  span.textContent = "Copied";
+                  span.textContent = 'Copied';
                   setTimeout(() => {
                     span.textContent = originalText;
                   }, 4000);
@@ -183,9 +146,9 @@ export function ChatBox({
                 //   }
                 // }),
                 ActionButton({
-                  label: "Retry",
+                  label: 'Retry',
                   icon: Icons.Redo,
-                  title: getString("chat-regenerate-response"),
+                  title: getString('chat-regenerate-response'),
                   onClick: (_e, _btn) => {
                     if (onRegenerate) onRegenerate();
                   },

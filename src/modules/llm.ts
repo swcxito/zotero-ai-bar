@@ -16,46 +16,39 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { getPref } from "../utils/prefs";
-import { Session } from "./chatManager";
-import { ModelMessage } from "ai";
-import {
-  onLLMStreamEndV2,
-  onLLMStreamErrorV2,
-  onLLMStreamStartV2,
-  onLLMStreamUpdateV2,
-} from "./chatUI";
-import { ensureWebStreamsGlobals } from "../utils/webStreamsGlobals";
-import { PROVIDER_ENV_KEY_MAP } from "../utils/providers";
+import { getPref } from '../utils/prefs';
+import { Session } from './chatManager';
+import { ModelMessage } from 'ai';
+import { onLLMStreamEndV2, onLLMStreamErrorV2, onLLMStreamStartV2, onLLMStreamUpdateV2 } from './chatUI';
+import { ensureWebStreamsGlobals } from '../utils/webStreamsGlobals';
+import { PROVIDER_ENV_KEY_MAP } from '../utils/providers';
 // import { JSONObject } from "@ai-sdk/provider";
 
 type InstalledAISDKPackage =
-  | "@ai-sdk/openai-compatible"
-  | "@ai-sdk/amazon-bedrock"
-  | "@ai-sdk/anthropic"
-  | "@ai-sdk/azure"
-  | "@ai-sdk/google"
-  | "@ai-sdk/xai"
-  | "@ai-sdk/openai"
-  | "@openrouter/ai-sdk-provider";
+  | '@ai-sdk/openai-compatible'
+  | '@ai-sdk/amazon-bedrock'
+  | '@ai-sdk/anthropic'
+  | '@ai-sdk/azure'
+  | '@ai-sdk/google'
+  | '@ai-sdk/xai'
+  | '@ai-sdk/openai'
+  | '@openrouter/ai-sdk-provider';
 
 type ProviderCreateFunction =
-  | typeof import("@ai-sdk/openai-compatible").createOpenAICompatible
-  | typeof import("@ai-sdk/amazon-bedrock").createAmazonBedrock
-  | typeof import("@ai-sdk/anthropic").createAnthropic
-  | typeof import("@ai-sdk/azure").createAzure
-  | typeof import("@ai-sdk/google").createGoogleGenerativeAI
-  | typeof import("@ai-sdk/xai").createXai
-  | typeof import("@ai-sdk/openai").createOpenAI
-  | typeof import("@openrouter/ai-sdk-provider").createOpenRouter;
+  | typeof import('@ai-sdk/openai-compatible').createOpenAICompatible
+  | typeof import('@ai-sdk/amazon-bedrock').createAmazonBedrock
+  | typeof import('@ai-sdk/anthropic').createAnthropic
+  | typeof import('@ai-sdk/azure').createAzure
+  | typeof import('@ai-sdk/google').createGoogleGenerativeAI
+  | typeof import('@ai-sdk/xai').createXai
+  | typeof import('@ai-sdk/openai').createOpenAI
+  | typeof import('@openrouter/ai-sdk-provider').createOpenRouter;
 
-type ProviderCreateFunctionMap = Partial<
-  Record<InstalledAISDKPackage, ProviderCreateFunction>
->;
+type ProviderCreateFunctionMap = Partial<Record<InstalledAISDKPackage, ProviderCreateFunction>>;
 
 export const CREATE_PROVIDER_FNS: ProviderCreateFunctionMap = {};
 
-let streamTextFn: typeof import("ai").streamText | undefined;
+let streamTextFn: typeof import('ai').streamText | undefined;
 let preloadLLMRuntimePromise: Promise<void> | undefined;
 
 export async function preloadLLMRuntime() {
@@ -63,41 +56,28 @@ export async function preloadLLMRuntime() {
     preloadLLMRuntimePromise = (async () => {
       ensureWebStreamsGlobals();
 
-      const [
-        ai,
-        openaiCompatible,
-        openai,
-        amazonBedrock,
-        anthropic,
-        azure,
-        google,
-        xai,
-        openrouter,
-      ] = await Promise.all([
-        import("ai"),
-        import("@ai-sdk/openai-compatible"),
-        import("@ai-sdk/openai"),
-        import("@ai-sdk/amazon-bedrock"),
-        import("@ai-sdk/anthropic"),
-        import("@ai-sdk/azure"),
-        import("@ai-sdk/google"),
-        import("@ai-sdk/xai"),
-        import("@openrouter/ai-sdk-provider"),
+      const [ai, openaiCompatible, openai, amazonBedrock, anthropic, azure, google, xai, openrouter] = await Promise.all([
+        import('ai'),
+        import('@ai-sdk/openai-compatible'),
+        import('@ai-sdk/openai'),
+        import('@ai-sdk/amazon-bedrock'),
+        import('@ai-sdk/anthropic'),
+        import('@ai-sdk/azure'),
+        import('@ai-sdk/google'),
+        import('@ai-sdk/xai'),
+        import('@openrouter/ai-sdk-provider'),
       ]);
 
       streamTextFn = ai.streamText;
 
-      CREATE_PROVIDER_FNS["@ai-sdk/openai-compatible"] =
-        openaiCompatible.createOpenAICompatible;
-      CREATE_PROVIDER_FNS["@ai-sdk/openai"] = openai.createOpenAI;
-      CREATE_PROVIDER_FNS["@ai-sdk/amazon-bedrock"] =
-        amazonBedrock.createAmazonBedrock;
-      CREATE_PROVIDER_FNS["@ai-sdk/anthropic"] = anthropic.createAnthropic;
-      CREATE_PROVIDER_FNS["@ai-sdk/azure"] = azure.createAzure;
-      CREATE_PROVIDER_FNS["@ai-sdk/google"] = google.createGoogleGenerativeAI;
-      CREATE_PROVIDER_FNS["@ai-sdk/xai"] = xai.createXai;
-      CREATE_PROVIDER_FNS["@openrouter/ai-sdk-provider"] =
-        openrouter.createOpenRouter;
+      CREATE_PROVIDER_FNS['@ai-sdk/openai-compatible'] = openaiCompatible.createOpenAICompatible;
+      CREATE_PROVIDER_FNS['@ai-sdk/openai'] = openai.createOpenAI;
+      CREATE_PROVIDER_FNS['@ai-sdk/amazon-bedrock'] = amazonBedrock.createAmazonBedrock;
+      CREATE_PROVIDER_FNS['@ai-sdk/anthropic'] = anthropic.createAnthropic;
+      CREATE_PROVIDER_FNS['@ai-sdk/azure'] = azure.createAzure;
+      CREATE_PROVIDER_FNS['@ai-sdk/google'] = google.createGoogleGenerativeAI;
+      CREATE_PROVIDER_FNS['@ai-sdk/xai'] = xai.createXai;
+      CREATE_PROVIDER_FNS['@openrouter/ai-sdk-provider'] = openrouter.createOpenRouter;
     })().catch((error) => {
       preloadLLMRuntimePromise = undefined;
       throw error;
@@ -111,7 +91,7 @@ export async function streamLLMV2(
   messagesOrPromise: ModelMessage[] | Promise<ModelMessage[]>,
   session: Session,
   // externalController?: InstanceType<typeof AbortController>,
-  refreshRate: number = getRefreshRateFromPref(),
+  refreshRate: number = getRefreshRateFromPref()
 ) {
   let streamErrorHandled = false;
 
@@ -120,16 +100,14 @@ export async function streamLLMV2(
     onLLMStreamStartV2(session);
     const model = await createModel();
 
-    const temp100 = getPref("llm.temperature100");
+    const temp100 = getPref('llm.temperature100');
     const temp = temp100 / 100;
-    const maxTokens = getPref("llm.maxTokens") || 2000;
+    const maxTokens = getPref('llm.maxTokens') || 2000;
     const messages = await messagesOrPromise;
 
     const providerOptions = {
       ...V2_PROVIDER_OPTIONS,
-      google: getGoogleThinkingConfig(
-        addon.data.userProviderConfigV2?.active?.modelId ?? "",
-      ),
+      google: getGoogleThinkingConfig(addon.data.userProviderConfigV2?.active?.modelId ?? ''),
     };
 
     const { textStream } = streamTextFn!({
@@ -145,7 +123,7 @@ export async function streamLLMV2(
       },
     });
 
-    let fullText = "";
+    let fullText = '';
     let count = 0;
 
     for await (const textPart of textStream) {
@@ -160,7 +138,7 @@ export async function streamLLMV2(
     onLLMStreamEndV2(session);
   } catch (error: any) {
     // Skip abort errors from intentional stop — treat as normal end
-    if (error?.name === "AbortError") {
+    if (error?.name === 'AbortError') {
       onLLMStreamEndV2(session);
       return;
     }
@@ -176,15 +154,15 @@ export async function streamLLMV2(
 function buildErrorMessage(error: unknown): string {
   const err = error as any;
   let message: string;
-  if (typeof err?.message === "string" && err.message) {
-    const label = err.name && err.name !== "Error" ? err.name : "";
+  if (typeof err?.message === 'string' && err.message) {
+    const label = err.name && err.name !== 'Error' ? err.name : '';
     message = label ? `${label}: ${err.message}` : err.message;
-  } else if (typeof error === "object" && error !== null) {
+  } else if (typeof error === 'object' && error !== null) {
     message = JSON.stringify(error);
   } else {
     message = String(error);
   }
-  if (typeof err?.statusCode === "number") {
+  if (typeof err?.statusCode === 'number') {
     message = `[HTTP ${err.statusCode}] ${message}`;
   }
   return message;
@@ -196,22 +174,19 @@ function handleStreamError(session: Session, error: unknown) {
   // Write error directly into the message pop DOM
   const pop = session.pending.messagePop;
   if (pop) {
-    const contentEl = pop.querySelector(".chat-message-content");
+    const contentEl = pop.querySelector('.chat-message-content');
     if (contentEl) {
-      const escaped = message
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
+      const escaped = message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       contentEl.innerHTML = `<div class="ai-bar-error-text">${escaped}</div>`;
     }
   }
-  ztoolkit.log("LLM stream error:", session.id, message);
+  ztoolkit.log('LLM stream error:', session.id, message);
 
   // Delegate cleanup + edge cases (pop doesn't exist, window mode, etc.)
   try {
     onLLMStreamErrorV2({ session, error: message });
   } catch (e) {
-    ztoolkit.log("onLLMStreamErrorV2 failed:", e);
+    ztoolkit.log('onLLMStreamErrorV2 failed:', e);
   }
 }
 
@@ -221,17 +196,17 @@ function handleStreamError(session: Session, error: unknown) {
  * Namespaces match the `name` param passed to createOpenAICompatible (v2 providerId).
  */
 const V2_PROVIDER_OPTIONS: Record<string, any> = {
-  "alibaba-cn": { enable_thinking: false, enable_search: true },
+  'alibaba-cn': { enable_thinking: false, enable_search: true },
   alibaba: { enable_thinking: false, enable_search: true },
-  "alibaba-coding-plan": { enable_thinking: false, enable_search: true },
-  "alibaba-coding-plan-cn": { enable_thinking: false, enable_search: true },
-  zhipuai: { thinking: { type: "disabled" } },
-  "zhipuai-coding-plan": { thinking: { type: "disabled" } },
-  zai: { thinking: { type: "disabled" } },
-  "zai-coding-plan": { thinking: { type: "disabled" } },
-  "minimax-cn": { thinking: { type: "disabled" } },
+  'alibaba-coding-plan': { enable_thinking: false, enable_search: true },
+  'alibaba-coding-plan-cn': { enable_thinking: false, enable_search: true },
+  zhipuai: { thinking: { type: 'disabled' } },
+  'zhipuai-coding-plan': { thinking: { type: 'disabled' } },
+  zai: { thinking: { type: 'disabled' } },
+  'zai-coding-plan': { thinking: { type: 'disabled' } },
+  'minimax-cn': { thinking: { type: 'disabled' } },
   // "minimax-cn": { thinking: { type: "adaptive" }, effort: "max" },
-  anthropic: { thinking: { type: "disabled" } },
+  anthropic: { thinking: { type: 'disabled' } },
 };
 
 /**
@@ -239,10 +214,10 @@ const V2_PROVIDER_OPTIONS: Record<string, any> = {
  * Gemini 2.5 系列使用 thinkingBudget 控制思考 token 数（-1 禁用）。
  */
 function getGoogleThinkingConfig(modelId: string) {
-  if (modelId.startsWith("gemini-3")) {
-    return { thinkingLevel: "low", includeThoughts: false };
+  if (modelId.startsWith('gemini-3')) {
+    return { thinkingLevel: 'low', includeThoughts: false };
   }
-  if (modelId.startsWith("gemini-2.5")) {
+  if (modelId.startsWith('gemini-2.5')) {
     return { thinkingBudget: -1, includeThoughts: false };
   }
   return { thinkingBudget: 0, includeThoughts: false };
@@ -252,7 +227,7 @@ function resolveSDKPackage(npm?: string): InstalledAISDKPackage {
   if (npm && npm in CREATE_PROVIDER_FNS) {
     return npm as InstalledAISDKPackage;
   }
-  return "@ai-sdk/openai-compatible";
+  return '@ai-sdk/openai-compatible';
 }
 
 function createProvider(
@@ -263,11 +238,10 @@ function createProvider(
     baseUrl?: string;
     providerId: string;
     modelId: string;
-  },
+  }
 ) {
-  if (sdkPackage === "@ai-sdk/openai-compatible") {
-    const fn =
-      createFn as typeof import("@ai-sdk/openai-compatible").createOpenAICompatible;
+  if (sdkPackage === '@ai-sdk/openai-compatible') {
+    const fn = createFn as typeof import('@ai-sdk/openai-compatible').createOpenAICompatible;
     if (!opts.baseUrl) throw new Error(`Base URL required for ${sdkPackage}`);
     return fn({
       name: opts.providerId,
@@ -277,11 +251,7 @@ function createProvider(
     })(opts.modelId);
   }
   // Native SDKs: openai, anthropic, google, xai, openrouter, etc.
-  const fn = createFn as (config: {
-    apiKey: string;
-    name: string;
-    baseURL?: string;
-  }) => any;
+  const fn = createFn as (config: { apiKey: string; name: string; baseURL?: string }) => any;
   return fn({
     apiKey: opts.apiKey,
     name: opts.providerId,
@@ -293,7 +263,7 @@ async function createModel() {
   await preloadLLMRuntime();
 
   const v2 = addon.data.userProviderConfigV2;
-  if (!v2?.active) throw new Error("No active model selected.");
+  if (!v2?.active) throw new Error('No active model selected.');
 
   const { providerId, modelId } = v2.active;
   const commonProviders = addon.data.commonProviders;
@@ -304,13 +274,11 @@ async function createModel() {
     const model = provider.models[modelId];
     // 校验模型是否存在：commonProviders列表->userAdded
     if (!model && Object.keys(provider.models).length > 0) {
-      const userAdded = v2.addedModels.find(
-        (m) => m.providerId === providerId && m.id === modelId,
-      );
+      const userAdded = v2.addedModels.find((m) => m.providerId === providerId && m.id === modelId);
       if (!userAdded) throw new Error(`Model not found: ${modelId}`);
     }
     //TODO UPDATE KEY
-    const envKey = PROVIDER_ENV_KEY_MAP[providerId] || "API_KEY";
+    const envKey = PROVIDER_ENV_KEY_MAP[providerId] || 'API_KEY';
     const apiKey = v2.env[providerId]?.[envKey];
     if (!apiKey) throw new Error(`API key not configured for ${providerId}`);
 
@@ -329,9 +297,7 @@ async function createModel() {
   // V2 custom provider: not in commonProviders but in v2.addedProviders
   const addedProvider = v2.addedProviders[providerId];
   if (addedProvider) {
-    const model = v2.addedModels.find(
-      (m) => m.providerId === providerId && m.id === modelId,
-    );
+    const model = v2.addedModels.find((m) => m.providerId === providerId && m.id === modelId);
     if (!model?.name) throw new Error(`Model not found: ${modelId}`);
 
     const envValues = v2.env[providerId] ?? {};
@@ -341,14 +307,15 @@ async function createModel() {
     const baseUrl = addedProvider.api;
     if (!baseUrl) throw new Error(`Base URL not configured for ${providerId}`);
 
-    const createFn = CREATE_PROVIDER_FNS["@ai-sdk/openai-compatible"];
-    if (!createFn) throw new Error("OpenAI-compatible SDK not loaded.");
+    const createFn = CREATE_PROVIDER_FNS['@ai-sdk/openai-compatible'];
+    if (!createFn) throw new Error('OpenAI-compatible SDK not loaded.');
 
-    return createProvider(
-      createFn as typeof import("@ai-sdk/openai-compatible").createOpenAICompatible,
-      "@ai-sdk/openai-compatible",
-      { apiKey, baseUrl, providerId, modelId: model.name },
-    );
+    return createProvider(createFn as typeof import('@ai-sdk/openai-compatible').createOpenAICompatible, '@ai-sdk/openai-compatible', {
+      apiKey,
+      baseUrl,
+      providerId,
+      modelId: model.name,
+    });
   }
 
   throw new Error(`Provider or model not found: ${providerId}/${modelId}`);
@@ -403,15 +370,15 @@ async function createModel() {
 // }
 
 function getRefreshRateFromPref() {
-  const speed = getPref("llm.streamUpdateSpeed");
+  const speed = getPref('llm.streamUpdateSpeed');
   switch (speed) {
-    case "realtime":
+    case 'realtime':
       return 1;
-    case "fast":
+    case 'fast':
       return 2;
-    case "performance":
+    case 'performance':
       return 8;
-    case "default":
+    case 'default':
     default:
       return 4;
   }

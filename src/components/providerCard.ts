@@ -16,9 +16,9 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { CardHead } from "./cardHead";
-import { CardModelRow } from "./modelRow";
-import { InlineButton } from "./buttons/inlineButton";
+import { CardHead } from './cardHead';
+import { CardModelRow } from './modelRow';
+import { InlineButton } from './buttons/inlineButton';
 
 export interface ProviderCardV2Props {
   providerId: string;
@@ -47,22 +47,22 @@ export function ProviderCard({
   onAddModel,
   onDelete = () => {},
 }: ProviderCardV2Props): Node {
-  const card = ztoolkit.UI.createElement(doc, "div", {
+  const card = ztoolkit.UI.createElement(doc, 'div', {
     classList: [
-      "overflow-clip",
-      "bg-white",
-      "dark:bg-zinc-900",
-      "rounded-3xl",
-      "shadow-sm",
-      "border",
-      "border-gray-200",
-      "dark:border-zinc-800",
-      "transition-all",
-      "duration-300",
-      "relative",
-      "h-fit",
-      "break-inside-avoid",
-      "provider-card",
+      'overflow-clip',
+      'bg-white',
+      'dark:bg-zinc-900',
+      'rounded-3xl',
+      'shadow-sm',
+      'border',
+      'border-gray-200',
+      'dark:border-zinc-800',
+      'transition-all',
+      'duration-300',
+      'relative',
+      'h-fit',
+      'break-inside-avoid',
+      'provider-card',
     ],
   });
 
@@ -71,47 +71,32 @@ export function ProviderCard({
     onDelete();
   }
 
-  const cardBody = ztoolkit.UI.createElement(doc, "div", {
-    classList: [
-      "grid",
-      "transition-all",
-      "duration-300",
-      "ease-in-out",
-      "grid-rows-[1fr]",
-      "opacity-100",
-    ],
+  const cardBody = ztoolkit.UI.createElement(doc, 'div', {
+    classList: ['grid', 'transition-all', 'duration-300', 'ease-in-out', 'grid-rows-[1fr]', 'opacity-100'],
     children: [
       {
-        tag: "div",
-        classList: ["overflow-hidden"],
+        tag: 'div',
+        classList: ['overflow-hidden'],
         children: [
           {
-            tag: "div",
-            classList: [
-              "text-[10px]",
-              "font-bold",
-              "text-zinc-400",
-              "uppercase",
-              "tracking-widest",
-              "px-1",
-              "m-4",
-            ],
-            properties: { innerText: "Models" },
+            tag: 'div',
+            classList: ['text-[10px]', 'font-bold', 'text-zinc-400', 'uppercase', 'tracking-widest', 'px-1', 'm-4'],
+            properties: { innerText: 'Models' },
           },
           {
-            tag: "div",
-            classList: ["flex", "flex-col", "gap-2", "px-4", "model-card-list"],
+            tag: 'div',
+            classList: ['flex', 'flex-col', 'gap-2', 'px-4', 'model-card-list'],
           },
         ],
       },
     ],
   });
 
-  const modelCardList = cardBody.querySelector(".model-card-list");
+  const modelCardList = cardBody.querySelector('.model-card-list');
 
   const getExistingModelNames = (skipRow?: HTMLElement): Set<string> => {
     const names = new Set<string>();
-    modelCardList?.querySelectorAll(":scope > div").forEach((rowEl) => {
+    modelCardList?.querySelectorAll(':scope > div').forEach((rowEl) => {
       if (skipRow && rowEl === skipRow) return;
       const data = (rowEl as RowWithGetData).getData();
       if (data.name) names.add(data.name.toLowerCase());
@@ -124,9 +109,7 @@ export function ProviderCard({
       const existing = getExistingModelNames(row as HTMLElement);
       if (existing.has(name.toLowerCase())) return;
       (row as HTMLElement).dataset.modelId = id;
-      const textInput = row.querySelector(
-        'input[type="text"]',
-      ) as HTMLInputElement;
+      const textInput = row.querySelector('input[type="text"]') as HTMLInputElement;
       if (textInput) textInput.value = name;
     });
   };
@@ -144,7 +127,7 @@ export function ProviderCard({
 
   const addModelButton = ztoolkit.UI.createElement(
     doc,
-    "button",
+    'button',
     InlineButton({
       onClicked: () => {
         onAddModel?.((id: string, name: string) => {
@@ -159,7 +142,7 @@ export function ProviderCard({
           modelCardList.insertBefore(row, addModelButton);
         });
       },
-    }),
+    })
   );
 
   let isCollapsed = false;
@@ -168,13 +151,13 @@ export function ProviderCard({
     const collapseBtn = e.currentTarget as HTMLElement;
     if (cardBody && collapseBtn) {
       if (isCollapsed) {
-        cardBody.classList.remove("grid-rows-[0fr]", "opacity-0");
-        cardBody.classList.add("grid-rows-[1fr]", "opacity-100");
-        collapseBtn.firstElementChild?.classList.remove("rotate-90");
+        cardBody.classList.remove('grid-rows-[0fr]', 'opacity-0');
+        cardBody.classList.add('grid-rows-[1fr]', 'opacity-100');
+        collapseBtn.firstElementChild?.classList.remove('rotate-90');
       } else {
-        cardBody.classList.remove("grid-rows-[1fr]", "opacity-100");
-        cardBody.classList.add("grid-rows-[0fr]", "opacity-0");
-        collapseBtn.firstElementChild?.classList.add("rotate-90");
+        cardBody.classList.remove('grid-rows-[1fr]', 'opacity-100');
+        cardBody.classList.add('grid-rows-[0fr]', 'opacity-0');
+        collapseBtn.firstElementChild?.classList.add('rotate-90');
       }
     }
     isCollapsed = !isCollapsed;
@@ -185,28 +168,26 @@ export function ProviderCard({
   }
 
   (card as any).getData = () => {
-    const modelRows = modelCardList?.querySelectorAll(":scope > div");
+    const modelRows = modelCardList?.querySelectorAll(':scope > div');
     const collected: { id: string; name: string; enabled: boolean }[] = [];
     modelRows?.forEach((row: Element) => {
       const data = (row as RowWithGetData).getData();
-      if (data.id && data.name !== "") {
+      if (data.id && data.name !== '') {
         collected.push(data);
       }
     });
     const envValuesOut: Record<string, string> = {};
-    card.querySelectorAll(".env-input").forEach((input) => {
+    card.querySelectorAll('.env-input').forEach((input) => {
       const el = input as HTMLInputElement;
       envValuesOut[el.placeholder] = el.value;
     });
     const result = {
       providerId,
       envValues: envValuesOut,
-      baseUrl: isCustom
-        ? (card.querySelector(".url-input") as HTMLInputElement).value
-        : undefined,
+      baseUrl: isCustom ? (card.querySelector('.url-input') as HTMLInputElement).value : undefined,
       models: collected,
     };
-    ztoolkit.log("[ProviderCard.getData]", {
+    ztoolkit.log('[ProviderCard.getData]', {
       providerId,
       envKeys: Object.keys(envValuesOut),
       models: collected.map((m) => ({
@@ -220,7 +201,7 @@ export function ProviderCard({
 
   const header = ztoolkit.UI.createElement(
     doc,
-    "div",
+    'div',
     CardHead({
       iconUrl,
       providerName,
@@ -230,7 +211,7 @@ export function ProviderCard({
       isCustom,
       onDeleteClicked,
       onToggleCollapse,
-    }),
+    })
   );
 
   modelCardList?.appendChild(addModelButton);

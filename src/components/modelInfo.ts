@@ -16,23 +16,21 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { TagElementProps } from "zotero-plugin-toolkit";
-import { setPref } from "../utils/prefs";
-import { saveV2Config } from "../utils/providers";
-import { analyzeModelName, getModelIconPath } from "../utils/modelAnalyzer";
-import { getString } from "../utils/locale";
-import { IconView } from "./iconView";
-import { DropdownMenuGroup, toggleDropdownMenu } from "./dropdownMenu";
-import type { AddedModel, ProviderId } from "../utils/providers";
+import { TagElementProps } from 'zotero-plugin-toolkit';
+import { setPref } from '../utils/prefs';
+import { saveV2Config } from '../utils/providers';
+import { analyzeModelName, getModelIconPath } from '../utils/modelAnalyzer';
+import { getString } from '../utils/locale';
+import { IconView } from './iconView';
+import { DropdownMenuGroup, toggleDropdownMenu } from './dropdownMenu';
+import type { AddedModel, ProviderId } from '../utils/providers';
 
 function resolveModelDisplayName(): string {
   const active = addon.data.userProviderConfigV2?.active;
-  if (!active) return "";
+  if (!active) return '';
 
   const addedModels = addon.data.userProviderConfigV2?.addedModels ?? [];
-  const m = addedModels.find(
-    (m) => m.providerId === active.providerId && m.id === active.modelId,
-  );
+  const m = addedModels.find((m) => m.providerId === active.providerId && m.id === active.modelId);
   if (m?.name) return m.name;
 
   return active.modelId;
@@ -46,23 +44,23 @@ function buildCurrentModelInfoChildren(): TagElementProps[] {
   const children: TagElementProps[] = [
     IconView({
       iconMarkup: iconPath,
-      extraClasses: ["model-info-icon"],
+      extraClasses: ['model-info-icon'],
       sizeRem: 1.5,
     }),
   ];
 
   if (modelAnalysis.version) {
     children.push({
-      tag: "span",
-      classList: ["model-info-version"],
+      tag: 'span',
+      classList: ['model-info-version'],
       properties: { textContent: modelAnalysis.version },
     });
   }
 
   if (modelAnalysis.type) {
     children.push({
-      tag: "span",
-      classList: ["model-info-type"],
+      tag: 'span',
+      classList: ['model-info-type'],
       properties: { textContent: modelAnalysis.type },
     });
   }
@@ -72,7 +70,7 @@ function buildCurrentModelInfoChildren(): TagElementProps[] {
 
 function updateModelInfoDisplay(container: HTMLElement) {
   const children = buildCurrentModelInfoChildren();
-  container.innerHTML = "";
+  container.innerHTML = '';
   for (const child of children) {
     ztoolkit.UI.appendElement(child, container);
   }
@@ -82,13 +80,13 @@ export function ModelInfo(): TagElementProps {
   const children = buildCurrentModelInfoChildren();
 
   return {
-    tag: "div",
-    id: "ai-bar-model-info",
-    classList: ["model-info-container"],
+    tag: 'div',
+    id: 'ai-bar-model-info',
+    classList: ['model-info-container'],
     children: children,
     listeners: [
       {
-        type: "click",
+        type: 'click',
         listener: (e: Event) => {
           e.stopPropagation();
           toggleModelDropdown(e.currentTarget as HTMLElement);
@@ -99,7 +97,7 @@ export function ModelInfo(): TagElementProps {
 }
 
 function toggleModelDropdown(anchor: HTMLElement) {
-  const container = anchor.closest(".ai-bar-container") as HTMLElement;
+  const container = anchor.closest('.ai-bar-container') as HTMLElement;
   if (!container) return;
 
   const active = addon.data.userProviderConfigV2?.active;
@@ -122,14 +120,14 @@ function toggleModelDropdown(anchor: HTMLElement) {
       label: m.name,
       selected: active?.providerId === providerId && active?.modelId === m.id,
       renderLeading: (doc: Document) => {
-        const holder = doc.createElement("span");
+        const holder = doc.createElement('span');
         ztoolkit.UI.appendElement(
           IconView({
             iconMarkup: getModelIconPath(m.family),
-            extraClasses: ["model-dropdown-icon"],
+            extraClasses: ['model-dropdown-icon'],
             sizeRem: 1.2,
           }),
-          holder,
+          holder
         );
         return holder;
       },
@@ -138,7 +136,7 @@ function toggleModelDropdown(anchor: HTMLElement) {
           providerId,
           modelId: m.id,
         };
-        setPref("llm.modelId", `${providerId}::${m.id}`);
+        setPref('llm.modelId', `${providerId}::${m.id}`);
         saveV2Config(addon.data.userProviderConfigV2!);
         updateModelInfoDisplay(anchor);
       },
@@ -147,10 +145,10 @@ function toggleModelDropdown(anchor: HTMLElement) {
   }
 
   toggleDropdownMenu({
-    menuId: "ai-bar-model-dropdown",
+    menuId: 'ai-bar-model-dropdown',
     anchor,
     container,
     groups,
-    emptyText: getString("no-models-available" as any) || "No models available",
+    emptyText: getString('no-models-available' as any) || 'No models available',
   });
 }

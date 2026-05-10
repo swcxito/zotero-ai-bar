@@ -2,27 +2,17 @@
   <html:link rel="localization" href="__addonRef__-preferences.ftl" />
 </linkset>
 <html:style>
-  button { justify-content: center; } #__addonRef__-prompt-table-container tbody
-  tr:nth-child(even):not(.selected), #__addonRef__-prompt-table-container
-  .row:nth-child(even):not(.selected), #__addonRef__-prompt-table-container
-  [role="row"]:nth-child(even):not([aria-selected="true"]),
-  #__addonRef__-prompt-table-container .virtualized-table-body >
-  div:nth-child(even):not(.selected) { background-color: rgba(0, 0, 0, 0.03); }
-  .pref-warning-text { color: #b45309; }
+  button { justify-content: center; } #__addonRef__-prompt-table-container tbody tr:nth-child(even):not(.selected),
+  #__addonRef__-prompt-table-container .row:nth-child(even):not(.selected), #__addonRef__-prompt-table-container
+  [role="row"]:nth-child(even):not([aria-selected="true"]), #__addonRef__-prompt-table-container .virtualized-table-body >
+  div:nth-child(even):not(.selected) { background-color: rgba(0, 0, 0, 0.03); } .pref-warning-text { color: #b45309; }
 </html:style>
-<groupbox
-  onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
->
+<groupbox onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })">
   <hbox align="center" style="margin-bottom: 12px">
     <html:a
       id="__addonRef__-docs-link"
       href="https://zotero.fukeke.com/reference/model-settings"
-      style="
-        color: rgb(244, 63, 94);
-        text-decoration: underline;
-        font-size: 1.1em;
-        cursor: pointer;
-      "
+      style="color: rgb(244, 63, 94); text-decoration: underline; font-size: 1.1em; cursor: pointer"
       data-l10n-id="pref-docs-link"
       onclick="
         var locale = Zotero.locale || 'en';
@@ -38,62 +28,27 @@
     <label>
       <html:h2 data-l10n-id="pref-model-setting" />
     </label>
-    <hbox
-      align="center"
-      id="__addonRef__-model-selecter-container"
-      style="margin-top: 8px"
-    >
+    <hbox align="center" id="__addonRef__-model-selecter-container" style="margin-top: 8px">
       <label data-l10n-id="pref-model-select" />
       <vbox flex="1">
-        <html:select
-          class="select"
-          id="__addonRef__-model-selector"
-          style="width: 100%; min-width: 0"
-          preference="llm.modelId"
-        >
+        <html:select class="select" id="__addonRef__-model-selector" style="width: 100%; min-width: 0" preference="llm.modelId">
           <!-- Options will be populated dynamically -->
         </html:select>
       </vbox>
-      <button
-        id="__addonRef__-model-edit-button"
-        data-l10n-id="pref-edit-models"
-      />
+      <button id="__addonRef__-model-edit-button" data-l10n-id="pref-edit-models" />
     </hbox>
 
     <hbox align="center" style="margin: 15px 10px; gap: 10px">
       <vbox flex="1">
-        <div
-          class="range-header"
-          style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-right: 12px;
-          "
-        >
+        <div class="range-header" style="display: flex; justify-content: space-between; align-items: center; margin-right: 12px">
           <html:label data-l10n-id="pref-temperature" />
           <html:span id="__addonRef__-temperature-value">0-2</html:span>
         </div>
-        <html:input
-          type="range"
-          min="0"
-          max="200"
-          step="5"
-          preference="llm.temperature100"
-          id="__addonRef__-temperature-input"
-        />
+        <html:input type="range" min="0" max="200" step="5" preference="llm.temperature100" id="__addonRef__-temperature-input" />
       </vbox>
       <vbox flex="1">
         <html:label data-l10n-id="pref-max-tokens" />
-        <html:input
-          type="number"
-          min="256"
-          max="8192"
-          step="256"
-          value="2048"
-          style="text-align: left"
-          preference="llm.maxTokens"
-        />
+        <html:input type="number" min="256" max="8192" step="256" value="2048" style="text-align: left" preference="llm.maxTokens" />
       </vbox>
     </hbox>
   </groupbox>
@@ -124,44 +79,21 @@
     </hbox>
     <hbox align="start" style="margin-top: 6px; gap: 12px">
       <vbox flex="1">
-        <checkbox
-          id="__addonRef__-auto-attach-fulltext"
-          preference="chat.autoAttachFullText"
-          data-l10n-id="pref-auto-attach-fulltext"
-        />
-        <html:small
-          data-l10n-id="pref-auto-attach-fulltext-desc"
-          style="margin-left: 22px"
-          class="pref-warning-text"
-        />
+        <checkbox id="__addonRef__-auto-attach-fulltext" preference="chat.autoAttachFullText" data-l10n-id="pref-auto-attach-fulltext" />
+        <html:small data-l10n-id="pref-auto-attach-fulltext-desc" style="margin-left: 22px" class="pref-warning-text" />
       </vbox>
       <vbox flex="1">
-        <checkbox
-          id="__addonRef__-auto-attach-item-data"
-          preference="chat.autoAttachItemData"
-          data-l10n-id="pref-auto-attach-item-data"
-        />
+        <checkbox id="__addonRef__-auto-attach-item-data" preference="chat.autoAttachItemData" data-l10n-id="pref-auto-attach-item-data" />
       </vbox>
     </hbox>
     <vbox id="__addonRef__-prompt-preview-container" style="margin-top: 10px">
       <hbox align="center" style="margin-bottom: 8px">
         <label data-l10n-id="pref-custom-prompts" style="font-weight: bold" />
         <spacer flex="1" />
-        <button
-          id="__addonRef__-prompt-edit-button"
-          data-l10n-id="pref-edit-prompts"
-        />
+        <button id="__addonRef__-prompt-edit-button" data-l10n-id="pref-edit-prompts" />
       </hbox>
-      <hbox
-        flex="1"
-        align="center"
-        class="virtualized-table-container"
-        style="max-height: 180px; overflow: auto; padding: 6px 8px"
-      >
-        <html:div
-          id="__addonRef__-prompt-table-container"
-          style="width: 100%"
-        />
+      <hbox flex="1" align="center" class="virtualized-table-container" style="max-height: 180px; overflow: auto; padding: 6px 8px">
+        <html:div id="__addonRef__-prompt-table-container" style="width: 100%" />
       </hbox>
     </vbox>
   </groupbox>
@@ -170,22 +102,13 @@
       <html:h2 data-l10n-id="pref-translate" />
     </label>
     <hbox align="center" style="margin-top: 8px">
-      <checkbox
-        id="__addonRef__-auto-translate"
-        preference="translate.enableAuto"
-        data-l10n-id="pref-auto-translate"
-        style="flex: 1"
-      />
+      <checkbox id="__addonRef__-auto-translate" preference="translate.enableAuto" data-l10n-id="pref-auto-translate" style="flex: 1" />
     </hbox>
     <hbox align="center" style="margin-top: 10px">
       <vbox flex="1">
         <html:label data-l10n-id="pref-auto-translate-mode" />
       </vbox>
-      <radiogroup
-        preference="translate.extendContext"
-        orient="horizontal"
-        style="gap: 10px"
-      >
+      <radiogroup preference="translate.extendContext" orient="horizontal" style="gap: 10px">
         <radio value="follow" data-l10n-id="pref-auto-translate-mode-follow" />
         <radio value="always" data-l10n-id="pref-auto-translate-mode-always" />
         <!--        TODO edit chat manager to fit this-->
@@ -202,12 +125,7 @@
       <label style="flex: 1">
         <label data-l10n-id="pref-translate-model-select" />
         <vbox flex="1">
-          <html:select
-            class="select"
-            id="__addonRef__-translate-model-selector"
-            style="width: 100%; min-width: 0"
-            preference="translate.modelId"
-          >
+          <html:select class="select" id="__addonRef__-translate-model-selector" style="width: 100%; min-width: 0" preference="translate.modelId">
             <html:option value="" data-l10n-id="pref-translate-model-default" />
           </html:select>
         </vbox>
@@ -220,21 +138,11 @@
     </label>
     <hbox align="center">
       <html:label data-l10n-id="pref-stream-update-speed" flex="1" />
-      <html:select
-        class="select"
-        id="__addonRef__-stream-update-speed-selector"
-        preference="llm.streamUpdateSpeed"
-      >
-        <html:option
-          value="realtime"
-          data-l10n-id="pref-stream-speed-realtime"
-        />
+      <html:select class="select" id="__addonRef__-stream-update-speed-selector" preference="llm.streamUpdateSpeed">
+        <html:option value="realtime" data-l10n-id="pref-stream-speed-realtime" />
         <html:option value="fast" data-l10n-id="pref-stream-speed-fast" />
         <html:option value="default" data-l10n-id="pref-stream-speed-default" />
-        <html:option
-          value="performance"
-          data-l10n-id="pref-stream-speed-performance"
-        />
+        <html:option value="performance" data-l10n-id="pref-stream-speed-performance" />
       </html:select>
     </hbox>
     <hbox align="center" style="margin-top: 10px">
@@ -242,40 +150,21 @@
         <html:label data-l10n-id="pref-chat-location" />
         <html:small data-l10n-id="pref-chat-location-desc" />
       </vbox>
-      <radiogroup
-        preference="chat.location"
-        orient="horizontal"
-        style="gap: 10px"
-      >
+      <radiogroup preference="chat.location" orient="horizontal" style="gap: 10px">
         <radio value="sidebar" data-l10n-id="pref-chat-location-sidebar" />
         <radio value="window" data-l10n-id="pref-chat-location-window" />
       </radiogroup>
     </hbox>
     <hbox align="center" style="margin-top: 10px; gap: 20px">
-      <checkbox
-        id="__addonRef__-chat-window-always-on-top"
-        preference="chat.windowAlwaysOnTop"
-        data-l10n-id="pref-chat-window-always-on-top"
-      />
-      <checkbox
-        id="__addonRef__-chat-open-on-startup"
-        preference="chat.openOnStartup"
-        data-l10n-id="pref-chat-open-on-startup"
-      />
+      <checkbox id="__addonRef__-chat-window-always-on-top" preference="chat.windowAlwaysOnTop" data-l10n-id="pref-chat-window-always-on-top" />
+      <checkbox id="__addonRef__-chat-open-on-startup" preference="chat.openOnStartup" data-l10n-id="pref-chat-open-on-startup" />
     </hbox>
     <hbox align="center" style="margin-top: 10px">
       <vbox flex="1">
         <html:label data-l10n-id="pref-context-rounds" />
         <html:small data-l10n-id="pref-context-rounds-desc" />
       </vbox>
-      <html:input
-        type="number"
-        min="1"
-        max="64"
-        step="1"
-        style="text-align: left; width: 60px"
-        preference="chat.contextRounds"
-      />
+      <html:input type="number" min="1" max="64" step="1" style="text-align: left; width: 60px" preference="chat.contextRounds" />
     </hbox>
   </groupbox>
   <groupbox>
@@ -283,11 +172,7 @@
       <html:h2 data-l10n-id="pref-advanced" />
     </label>
     <hbox align="center" style="margin-top: 10px">
-      <checkbox
-        id="__addonRef__-formula-optimization"
-        preference="chat.formulaOptimization"
-        data-l10n-id="pref-formula-optimization"
-      />
+      <checkbox id="__addonRef__-formula-optimization" preference="chat.formulaOptimization" data-l10n-id="pref-formula-optimization" />
     </hbox>
   </groupbox>
 </groupbox>
@@ -296,10 +181,6 @@
   <html:label
     data-l10n-id="pref-help"
     data-l10n-args='{"time": "__buildTime__","name": "__addonName__","version":"__buildVersion__"}'
-    style="
-      margin: 16px 0 8px 0;
-      border-top: 1px solid rgba(0, 0, 0, 0.2);
-      padding-top: 2px;
-    "
+    style="margin: 16px 0 8px 0; border-top: 1px solid rgba(0, 0, 0, 0.2); padding-top: 2px"
   />
 </vbox>

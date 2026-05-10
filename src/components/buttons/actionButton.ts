@@ -16,13 +16,9 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { TagElementProps } from "zotero-plugin-toolkit";
-import {
-  ButtonBase,
-  ButtonClickDecorator,
-  ButtonClickHandler,
-} from "./buttonBase";
-import { BUTTON_VARIANTS } from "./buttonVariants";
+import { TagElementProps } from 'zotero-plugin-toolkit';
+import { ButtonBase, ButtonClickDecorator, ButtonClickHandler } from './buttonBase';
+import { BUTTON_VARIANTS } from './buttonVariants';
 
 export interface ActionButtonProps {
   label: string;
@@ -33,33 +29,19 @@ export interface ActionButtonProps {
   enabled?: boolean;
 }
 
-export function ActionButton({
-  label,
-  icon,
-  onClick,
-  title,
-  classList = [],
-  enabled = true,
-}: ActionButtonProps): TagElementProps {
+export function ActionButton({ label, icon, onClick, title, classList = [], enabled = true }: ActionButtonProps): TagElementProps {
   const withRipple: ButtonClickDecorator =
     (next: ButtonClickHandler): ButtonClickHandler =>
     (e: MouseEvent, btn: HTMLButtonElement) => {
       // Keep ripple behavior centralized in the action-style button.
-      const ripple = btn.ownerDocument!.createElement("span");
-      ripple.className = "ripple";
+      const ripple = btn.ownerDocument!.createElement('span');
+      ripple.className = 'ripple';
 
       const rect = btn.getBoundingClientRect();
       const size = Math.max(rect.width, rect.height);
-      const hasPointerPosition =
-        typeof e.clientX === "number" &&
-        typeof e.clientY === "number" &&
-        (e.clientX !== 0 || e.clientY !== 0);
-      const clickX = hasPointerPosition
-        ? e.clientX - rect.left
-        : rect.width / 2;
-      const clickY = hasPointerPosition
-        ? e.clientY - rect.top
-        : rect.height / 2;
+      const hasPointerPosition = typeof e.clientX === 'number' && typeof e.clientY === 'number' && (e.clientX !== 0 || e.clientY !== 0);
+      const clickX = hasPointerPosition ? e.clientX - rect.left : rect.width / 2;
+      const clickY = hasPointerPosition ? e.clientY - rect.top : rect.height / 2;
       const x = clickX - size / 2;
       const y = clickY - size / 2;
 
@@ -69,7 +51,7 @@ export function ActionButton({
       ripple.style.top = `${y}px`;
 
       btn.appendChild(ripple);
-      ripple.addEventListener("animationend", () => {
+      ripple.addEventListener('animationend', () => {
         ripple.remove();
       });
 
@@ -80,10 +62,10 @@ export function ActionButton({
     label,
     iconMarkup: icon,
     onClick,
-    title: title || "",
+    title: title || '',
     classList: [...BUTTON_VARIANTS.action, ...classList],
     enabled,
-    labelClassList: ["btn-label"],
+    labelClassList: ['btn-label'],
     clickDecorators: [withRipple],
   });
 }

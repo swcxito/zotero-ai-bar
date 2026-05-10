@@ -84,14 +84,8 @@ export class ZbComponent extends HTMLElement {
     super();
   }
 
-  private styleTransitionRecords: Map<string, styleTransitionRecord> =
-    new Map();
-  protected registerStyleTransition(
-    key: string,
-    styleA: string[],
-    styleB: string[],
-    initState = false,
-  ): void {
+  private styleTransitionRecords: Map<string, styleTransitionRecord> = new Map();
+  protected registerStyleTransition(key: string, styleA: string[], styleB: string[], initState = false): void {
     this.styleTransitionRecords.set(key, {
       styleTrue: styleA,
       styleFalse: styleB,

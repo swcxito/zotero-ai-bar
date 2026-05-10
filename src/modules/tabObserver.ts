@@ -20,15 +20,15 @@ export function registerTabObserver() {
   const observerID = Zotero.Notifier.registerObserver(
     {
       notify: async (event, type, ids, extraData) => {
-        if (event === "select" && type === "tab") {
+        if (event === 'select' && type === 'tab') {
           // 选项卡切换时触发
-          ztoolkit.log("Tab switched to:", ids[0]);
+          ztoolkit.log('Tab switched to:', ids[0]);
           addon.chatManager.currentTabID = ids[0].toString();
         }
       },
     },
-    ["tab"], // 监听 tab 类型
-    "myObserverID",
+    ['tab'], // 监听 tab 类型
+    'myObserverID'
   );
 }
 
@@ -58,9 +58,7 @@ export function getReaderByTabId(id: string) {
 
 export function getItemIdFromTab(tabId?: string): number | undefined {
   const selectedTabID = tabId || addon.chatManager.currentTabID;
-  const reader = selectedTabID
-    ? Zotero.Reader.getByTabID(selectedTabID)
-    : undefined;
+  const reader = selectedTabID ? Zotero.Reader.getByTabID(selectedTabID) : undefined;
 
   return reader?.itemID;
 }

@@ -16,9 +16,9 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { TagElementProps } from "zotero-plugin-toolkit";
-import { ButtonBase } from "./buttonBase";
-import { BUTTON_VARIANTS } from "./buttonVariants";
+import { TagElementProps } from 'zotero-plugin-toolkit';
+import { ButtonBase } from './buttonBase';
+import { BUTTON_VARIANTS } from './buttonVariants';
 
 export interface LogoButtonProps {
   text: string;
@@ -26,11 +26,7 @@ export interface LogoButtonProps {
   onClick?: () => void;
 }
 
-export function ProviderLogoButton({
-  text,
-  iconUrl,
-  onClick,
-}: LogoButtonProps): TagElementProps {
+export function ProviderLogoButton({ text, iconUrl, onClick }: LogoButtonProps): TagElementProps {
   return ButtonBase({
     label: text,
     iconMarkup: iconUrl,

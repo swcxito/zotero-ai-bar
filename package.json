@@ -71,20 +71,5 @@
     "typescript": "^5.9.3",
     "zotero-plugin-scaffold": "^0.8.2",
     "zotero-types": "^4.0.5"
-  },
-  "prettier": {
-    "printWidth": 80,
-    "tabWidth": 2,
-    "endOfLine": "lf",
-    "overrides": [
-      {
-        "files": [
-          "*.xhtml"
-        ],
-        "options": {
-          "htmlWhitespaceSensitivity": "css"
-        }
-      }
-    ]
   }
 }

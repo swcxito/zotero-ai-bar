@@ -1,51 +1,32 @@
-import { initLocale } from "./utils/locale";
-import { registerPrefsScripts } from "./modules/preferenceScript";
-import { createZToolkit } from "./utils/ztoolkit";
-import {
-  registerAIBarStyleSheet,
-  registerKaTeXFontSheet,
-  registerReaderInitializer,
-} from "./modules/readerBarPopup";
-import { onModelDialogLoad } from "./modules/modelDialog";
-import { onPromptEditorLoad } from "./modules/promptEditor";
-import { getPref, setPref, registerPrefs } from "./utils/prefs";
-import { ensureChatWindowReady } from "./utils/window";
-import { registerReaderItemPaneSection } from "./modules/readerItemPane";
-import { clearDeadChatWindowRef, isWindowAlive } from "./utils/window";
-import { registerTabObserver } from "./modules/tabObserver";
-import { preloadLLMRuntime } from "./modules/llm";
-import {
-  convertLegacyLLMConfigByKey,
-  ensureCommonProviders,
-  initIconCache,
-  loadV2Config,
-  saveV2Config,
-} from "./utils/providers";
+import { initLocale } from './utils/locale';
+import { registerPrefsScripts } from './modules/preferenceScript';
+import { createZToolkit } from './utils/ztoolkit';
+import { registerAIBarStyleSheet, registerKaTeXFontSheet, registerReaderInitializer } from './modules/readerBarPopup';
+import { onModelDialogLoad } from './modules/modelDialog';
+import { onPromptEditorLoad } from './modules/promptEditor';
+import { getPref, setPref, registerPrefs } from './utils/prefs';
+import { ensureChatWindowReady } from './utils/window';
+import { registerReaderItemPaneSection } from './modules/readerItemPane';
+import { clearDeadChatWindowRef, isWindowAlive } from './utils/window';
+import { registerTabObserver } from './modules/tabObserver';
+import { preloadLLMRuntime } from './modules/llm';
+import { convertLegacyLLMConfigByKey, ensureCommonProviders, initIconCache, loadV2Config, saveV2Config } from './utils/providers';
 
 async function onStartup() {
-  await Promise.all([
-    Zotero.initializationPromise,
-    Zotero.unlockPromise,
-    Zotero.uiReadyPromise,
-  ]);
+  await Promise.all([Zotero.initializationPromise, Zotero.unlockPromise, Zotero.uiReadyPromise]);
 
   initLocale();
   await preloadLLMRuntime();
 
   addon.chatManager.chatHostMode = addon.chatManager.getCurrentHostMode();
 
-  if (
-    getPref("chat.openOnStartup") === true &&
-    addon.chatManager.getCurrentHostMode() === "window"
-  ) {
+  if (getPref('chat.openOnStartup') === true && addon.chatManager.getCurrentHostMode() === 'window') {
     await ensureChatWindowReady();
   }
 
   registerReaderInitializer();
   registerPrefs();
-  await Promise.all(
-    Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
-  );
+  await Promise.all(Zotero.getMainWindows().map((win) => onMainWindowLoad(win)));
 
   // Mark initialized as true to confirm plugin loading status
   // outside the plugin (e.g. scaffold testing process)
@@ -62,9 +43,7 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   registerKaTeXFontSheet(win);
   // await HelperExampleFactory.dialogExample();
 
-  win.MozXULElement.insertFTLIfNeeded(
-    `${addon.data.config.addonRef}-mainWindow.ftl`,
-  );
+  win.MozXULElement.insertFTLIfNeeded(`${addon.data.config.addonRef}-mainWindow.ftl`);
 
   // Config v2: lazy-load provider metadata, prefer persisted v2 config
   await ensureCommonProviders();
@@ -72,23 +51,19 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   const v2FromPref = await loadV2Config();
   if (v2FromPref) {
     addon.data.userProviderConfigV2 = v2FromPref;
-    ztoolkit.log("[hooks] Loaded v2 config from pref:", {
+    ztoolkit.log('[hooks] Loaded v2 config from pref:', {
       providers: Object.keys(v2FromPref.addedProviders),
       models: v2FromPref.addedModels.length,
       envKeys: Object.keys(v2FromPref.env),
     });
   } else {
-    const llmConfig = getPref("llm.providerConfigs");
-    ztoolkit.log("[hooks] No v2 pref, converting from legacy:", llmConfig);
+    const llmConfig = getPref('llm.providerConfigs');
+    ztoolkit.log('[hooks] No v2 pref, converting from legacy:', llmConfig);
 
-    const userProviderConfigV2 = convertLegacyLLMConfigByKey(
-      llmConfig,
-      addon.data.commonProviders,
-      getPref("llm.modelId"),
-    );
+    const userProviderConfigV2 = convertLegacyLLMConfigByKey(llmConfig, addon.data.commonProviders, getPref('llm.modelId'));
     addon.data.userProviderConfigV2 = userProviderConfigV2;
     await saveV2Config(userProviderConfigV2);
-    ztoolkit.log("[hooks] Converted and persisted v2 config:", {
+    ztoolkit.log('[hooks] Converted and persisted v2 config:', {
       providers: Object.keys(userProviderConfigV2.addedProviders),
       models: userProviderConfigV2.addedModels.length,
       envKeys: Object.keys(userProviderConfigV2.env),
@@ -97,25 +72,22 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
 
   // Sync legacy llm.modelId to v2 composite format
   if (addon.data.userProviderConfigV2.active) {
-    setPref(
-      "llm.modelId",
-      `${addon.data.userProviderConfigV2.active.providerId}::${addon.data.userProviderConfigV2.active.modelId}`,
-    );
+    setPref('llm.modelId', `${addon.data.userProviderConfigV2.active.providerId}::${addon.data.userProviderConfigV2.active.modelId}`);
   }
 
   // Load icon cache from file (with migration from legacy pref)
   await initIconCache();
 
   // Load user custom prompts
-  const userPromptsConfig = getPref("prompt.userPrompts");
+  const userPromptsConfig = getPref('prompt.userPrompts');
   if (userPromptsConfig) {
     addon.data.userPrompts = JSON.parse(userPromptsConfig);
   }
 
-  if (addon.chatManager.getCurrentHostMode() === "sidebar") {
+  if (addon.chatManager.getCurrentHostMode() === 'sidebar') {
     await registerReaderItemPaneSection();
   }
-  ztoolkit.log("stream", typeof TransformStream); // 应该是 "function"
+  ztoolkit.log('stream', typeof TransformStream); // 应该是 "function"
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {
@@ -140,19 +112,10 @@ function onShutdown(): void {
  * This function is just an example of dispatcher for Notify events.
  * Any operations should be placed in a function to keep this function clear.
  */
-async function onNotify(
-  event: string,
-  type: string,
-  ids: Array<string | number>,
-  extraData: { [key: string]: any },
-) {
+async function onNotify(event: string, type: string, ids: Array<string | number>, extraData: { [key: string]: any }) {
   // You can add your code to the corresponding to notify type
-  ztoolkit.log("notify", event, type, ids, extraData);
-  if (
-    event == "select" &&
-    type == "tab" &&
-    extraData[ids[0]].type == "reader"
-  ) {
+  ztoolkit.log('notify', event, type, ids, extraData);
+  if (event == 'select' && type == 'tab' && extraData[ids[0]].type == 'reader') {
     // BasicExampleFactory.exampleNotifierCallback();
   } else {
     return;
@@ -167,14 +130,14 @@ async function onNotify(
  */
 async function onPrefsEvent(type: string, data: { [key: string]: any }) {
   switch (type) {
-    case "load":
+    case 'load':
       registerPrefsScripts(data.window);
       break;
-    case "modelDialogLoad":
+    case 'modelDialogLoad':
       onModelDialogLoad(data.window);
-      ztoolkit.log("model dialog load hook called");
+      ztoolkit.log('model dialog load hook called');
       break;
-    case "promptEditorLoad":
+    case 'promptEditorLoad':
       onPromptEditorLoad(data.window);
       break;
     default:
@@ -184,10 +147,10 @@ async function onPrefsEvent(type: string, data: { [key: string]: any }) {
 
 function onShortcuts(type: string) {
   switch (type) {
-    case "larger":
+    case 'larger':
       // KeyExampleFactory.exampleShortcutLargerCallback();
       break;
-    case "smaller":
+    case 'smaller':
       // KeyExampleFactory.exampleShortcutSmallerCallback();
       break;
     default:

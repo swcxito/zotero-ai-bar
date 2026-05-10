@@ -16,15 +16,11 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { TagElementProps } from "zotero-plugin-toolkit";
-import { getString } from "../../utils/locale";
-import {
-  closeDropdownMenu,
-  openDropdownMenu,
-  toggleDropdownMenu,
-} from "../dropdownMenu";
-import { ActionButton } from "./actionButton";
-import { Icons } from "../common";
+import { TagElementProps } from 'zotero-plugin-toolkit';
+import { getString } from '../../utils/locale';
+import { closeDropdownMenu, openDropdownMenu, toggleDropdownMenu } from '../dropdownMenu';
+import { ActionButton } from './actionButton';
+import { Icons } from '../common';
 
 export interface ExpandMenuItem {
   id: string;
@@ -40,13 +36,8 @@ export interface ExpandButtonProps {
   menuItems?: ExpandMenuItem[];
 }
 
-export function ExpandButton({
-  label,
-  icon = Icons.Chevron,
-  classList = [],
-  menuItems = [],
-}: ExpandButtonProps = {}): TagElementProps {
-  const finalLabel = label || getString("reader-bar-expand");
+export function ExpandButton({ label, icon = Icons.Chevron, classList = [], menuItems = [] }: ExpandButtonProps = {}): TagElementProps {
+  const finalLabel = label || getString('reader-bar-expand');
   const hasItems = menuItems.length > 0;
   const closeDelayMs = 180;
   let closeTimer: number | undefined;
@@ -119,22 +110,22 @@ export function ExpandButton({
   };
 
   return {
-    tag: "div",
-    classList: ["expand-container", ...classList],
+    tag: 'div',
+    classList: ['expand-container', ...classList],
     id: instanceId,
     listeners: hasItems
       ? [
           {
-            type: "mouseenter",
+            type: 'mouseenter',
             listener: (e: Event) => {
               const container = e.currentTarget as HTMLElement;
-              const anchor = container.querySelector("button") as HTMLElement;
+              const anchor = container.querySelector('button') as HTMLElement;
               if (!anchor) return;
               openMenu(container, anchor);
             },
           },
           {
-            type: "mouseleave",
+            type: 'mouseleave',
             listener: (e: Event) => {
               const container = e.currentTarget as HTMLElement;
               scheduleCloseMenu(container);
@@ -146,12 +137,10 @@ export function ExpandButton({
       ActionButton({
         label: finalLabel,
         icon,
-        classList: ["ai-btn", "expand-trigger-btn"],
+        classList: ['ai-btn', 'expand-trigger-btn'],
         onClick: (e, btn) => {
           e.stopPropagation();
-          const container = (btn as HTMLElement).closest(
-            `#${instanceId}`,
-          ) as HTMLElement;
+          const container = (btn as HTMLElement).closest(`#${instanceId}`) as HTMLElement;
           if (!container) return;
           toggleMenu(container, btn);
         },

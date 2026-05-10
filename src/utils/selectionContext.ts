@@ -18,61 +18,41 @@
 
 // src/modules/selectionContext.ts
 
-import { get } from "http";
-import { getPref } from "./prefs";
+import { get } from 'http';
+import { getPref } from './prefs';
 
 /**
  * 获取选中内容的上下文
  */
 export async function getSelectionContext(
-  reader: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">,
-  params: { annotation: _ZoteroTypes.Annotations.AnnotationJson },
+  reader: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>,
+  params: { annotation: _ZoteroTypes.Annotations.AnnotationJson }
 ): Promise<Array<string> | undefined> {
   const itemID = reader.itemID;
   const selected = params.annotation;
   const selectedText = selected.text.trim();
   addon.data.selection.text = selectedText;
   let selectionContext: Array<string> | undefined;
-  const isCrossPage = !!(
-    selected.position?.rects && selected.position?.nextPageRects
-  );
-  const lineCount =
-    (selected.position?.rects.length || 0) +
-    (isCrossPage ? selected.position.nextPageRects.length || 0 : 0);
-  if (isCrossPage) ztoolkit.log("跨页选中");
+  const isCrossPage = !!(selected.position?.rects && selected.position?.nextPageRects);
+  const lineCount = (selected.position?.rects.length || 0) + (isCrossPage ? selected.position.nextPageRects.length || 0 : 0);
+  if (isCrossPage) ztoolkit.log('跨页选中');
   const index = parseSortIndex(selected.sortIndex);
 
-  if (
-    itemID &&
-    index?.indexType === "pdf" &&
-    reader._internalReader._type === "pdf"
-  ) {
-    const selectedPageIndexes = isCrossPage
-      ? [index.pageIndex!, index.pageIndex! + 1]
-      : [index.pageIndex!];
-    const fullText = await Zotero.PDFWorker.getFullText(
-      itemID,
-      selectedPageIndexes,
-    );
+  if (itemID && index?.indexType === 'pdf' && reader._internalReader._type === 'pdf') {
+    const selectedPageIndexes = isCrossPage ? [index.pageIndex!, index.pageIndex! + 1] : [index.pageIndex!];
+    const fullText = await Zotero.PDFWorker.getFullText(itemID, selectedPageIndexes);
     // ztoolkit.log("full-text", fullText);
     // get context by search
     if (lineCount <= 40) {
       // search in fullText
       const matches = countOccurrencesInFullText(fullText.text, selectedText);
       const macheCount = matches.length;
-      const contextSize = getPref("extend-selection-size") || 70;
-      ztoolkit.log("search-matches", matches);
+      const contextSize = getPref('extend-selection-size') || 70;
+      ztoolkit.log('search-matches', matches);
       if (macheCount == 1) {
-        selectionContext = getContextAroundIndex(
-          fullText.text,
-          [matches[0].start, matches[0].end],
-          contextSize + 30,
-        );
-        ztoolkit.log("selected context by search:", selectionContext);
-      } else if (
-        selectedText.split(" ").length <= 5 ||
-        selectedText.length <= 5
-      ) {
+        selectionContext = getContextAroundIndex(fullText.text, [matches[0].start, matches[0].end], contextSize + 30);
+        ztoolkit.log('selected context by search:', selectionContext);
+      } else if (selectedText.split(' ').length <= 5 || selectedText.length <= 5) {
         // words only, use position match
         // ztoolkit.log(selected.position?.rects);
         let data;
@@ -84,15 +64,10 @@ export async function getSelectionContext(
           data = await getPageBatchRecognizerData(itemID, index.pageIndex!);
           currentPage = data.pages[0];
         }
-        ztoolkit.log("data:", data);
-        ztoolkit.log("current-page:", currentPage);
-        selectionContext = getContextByPosition(
-          selected,
-          currentPage,
-          contextSize,
-          isCrossPage ? data.pages[index.pageIndex! + 1] : undefined,
-        );
-        ztoolkit.log("selected context by position:", selectionContext);
+        ztoolkit.log('data:', data);
+        ztoolkit.log('current-page:', currentPage);
+        selectionContext = getContextByPosition(selected, currentPage, contextSize, isCrossPage ? data.pages[index.pageIndex! + 1] : undefined);
+        ztoolkit.log('selected context by position:', selectionContext);
       }
     }
   }
@@ -115,17 +90,11 @@ function getContextByPosition(
   selected: _ZoteroTypes.Annotations.AnnotationJson,
   page: Array<any>,
   contextSize: number = 50,
-  nextPage: Array<any> | undefined = undefined,
+  nextPage: Array<any> | undefined = undefined
 ): Array<string> {
-  if (
-    !Array.isArray(page) ||
-    page.length < 3 ||
-    typeof page[0] !== "number" ||
-    typeof page[1] !== "number" ||
-    !Array.isArray(page[2])
-  ) {
-    ztoolkit.log("invalid-page-structure", page);
-    return ["", "", ""];
+  if (!Array.isArray(page) || page.length < 3 || typeof page[0] !== 'number' || typeof page[1] !== 'number' || !Array.isArray(page[2])) {
+    ztoolkit.log('invalid-page-structure', page);
+    return ['', '', ''];
   }
 
   const pageSize = { width: page[0], height: page[1] };
@@ -134,7 +103,7 @@ function getContextByPosition(
     y: pageSize.height - selected.position?.rects[0][1],
     char: selected.text.trim()[0],
   };
-  ztoolkit.log("selected-head", selectedHead);
+  ztoolkit.log('selected-head', selectedHead);
   // ztoolkit.log("current-page-data", page);
   const flatTextBoxes: Array<TextBox> = parseArray(page);
   const sortedFlatTextBoxes = flatTextBoxes.toSorted((a, b) => {
@@ -143,43 +112,24 @@ function getContextByPosition(
     const a_y = a[3];
     const b_x = b[0];
     const b_y = b[3];
-    const a_dist = Math.sqrt(
-      Math.pow(a_x - selectedHead.x!, 2) + Math.pow(a_y - selectedHead.y!, 2),
-    );
-    const b_dist = Math.sqrt(
-      Math.pow(b_x - selectedHead.x!, 2) + Math.pow(b_y - selectedHead.y!, 2),
-    );
+    const a_dist = Math.sqrt(Math.pow(a_x - selectedHead.x!, 2) + Math.pow(a_y - selectedHead.y!, 2));
+    const b_dist = Math.sqrt(Math.pow(b_x - selectedHead.x!, 2) + Math.pow(b_y - selectedHead.y!, 2));
     return a_dist - b_dist;
   });
-  const selectedBox = sortedFlatTextBoxes.find(
-    (box) => box[13] && box[13][0] === selectedHead.char,
-  );
-  ztoolkit.log("selected-box", selectedBox);
+  const selectedBox = sortedFlatTextBoxes.find((box) => box[13] && box[13][0] === selectedHead.char);
+  ztoolkit.log('selected-box', selectedBox);
   if (selectedBox) {
     if (nextPage) {
       // append next page boxes
-      const nextPageBoxes: Array<TextBox> = parseArray(
-        nextPage,
-        flatTextBoxes.length,
-      );
+      const nextPageBoxes: Array<TextBox> = parseArray(nextPage, flatTextBoxes.length);
       flatTextBoxes.push(...nextPageBoxes);
     }
     const selectedIndex = selectedBox[14];
-    const leftBoxes = flatTextBoxes.slice(
-      selectedIndex - contextSize,
-      selectedIndex,
-    );
-    const rightBoxes = flatTextBoxes.slice(
-      selectedIndex + 1,
-      selectedIndex + 1 + contextSize,
-    );
-    return [
-      leftBoxes.map((box) => box[13]).join(" "),
-      selectedBox[13],
-      rightBoxes.map((box) => box[13]).join(" "),
-    ];
+    const leftBoxes = flatTextBoxes.slice(selectedIndex - contextSize, selectedIndex);
+    const rightBoxes = flatTextBoxes.slice(selectedIndex + 1, selectedIndex + 1 + contextSize);
+    return [leftBoxes.map((box) => box[13]).join(' '), selectedBox[13], rightBoxes.map((box) => box[13]).join(' ')];
   }
-  return ["", selected.text.trim(), ""];
+  return ['', selected.text.trim(), ''];
 }
 
 function parseArray(page: Array<any>, indexOffset: number = 0): Array<TextBox> {
@@ -187,7 +137,7 @@ function parseArray(page: Array<any>, indexOffset: number = 0): Array<TextBox> {
   function walk(node: any, index: number) {
     // find an array, recursively
     if (Array.isArray(node)) {
-      if (node.length === 14 && typeof node[13] === "string") {
+      if (node.length === 14 && typeof node[13] === 'string') {
         const textBoxNode = node as TextBox;
         textBoxNode.push(flatTextBoxes.length + indexOffset); // add index
         flatTextBoxes.push(textBoxNode);
@@ -216,27 +166,23 @@ function parseArray(page: Array<any>, indexOffset: number = 0): Array<TextBox> {
  *    selectedText: 选区文本（若索引非法或长度为0则为空字符串）
  *    rightContext: 选区右侧的上下文（若不存在则为空字符串）
  */
-function getContextAroundIndex(
-  text: string,
-  index: Array<number>,
-  contextSize: number = 50,
-): Array<string> {
+function getContextAroundIndex(text: string, index: Array<number>, contextSize: number = 50): Array<string> {
   if (!Array.isArray(index) || index.length < 2) {
-    return ["", "", ""];
+    return ['', '', ''];
   }
 
   let start = Math.max(0, Math.min(index[0], text.length));
   let end = Math.max(0, Math.min(index[1], text.length));
   if (start > end) [start, end] = [end, start];
 
-  const selected = start === end ? "" : text.substring(start, end);
+  const selected = start === end ? '' : text.substring(start, end);
 
   // 左侧处理
   const leftSlice = text.slice(0, start);
   const leftMatches = Array.from(leftSlice.matchAll(/\S+/g)); // 非空白序列及其索引
   let leftCtx;
   if (leftSlice.length === 0) {
-    leftCtx = "";
+    leftCtx = '';
   } else if (leftMatches.length >= contextSize) {
     // 有足够单词，取最后 contextSize 个单词（包含它们之间的原始空白）
     const firstIncluded = leftMatches[leftMatches.length - contextSize];
@@ -251,7 +197,7 @@ function getContextAroundIndex(
   const rightMatches = Array.from(rightSlice.matchAll(/\S+/g));
   let rightCtx;
   if (rightSlice.length === 0) {
-    rightCtx = "";
+    rightCtx = '';
   } else if (rightMatches.length >= contextSize) {
     // 有足够单词，取前 contextSize 个单词（包含它们之间的原始空白）
     const lastIncluded = rightMatches[contextSize - 1];
@@ -265,7 +211,7 @@ function getContextAroundIndex(
 }
 
 function parseSortIndex(str: string): {
-  indexType: "pdf" | "epub" | "html";
+  indexType: 'pdf' | 'epub' | 'html';
   pageIndex: number | null;
   offset: number | null;
   top_y: number | null;
@@ -274,7 +220,7 @@ function parseSortIndex(str: string): {
   let m = str.match(/^(\d+)\|(\d+)\|(\d+)$/);
   if (m) {
     return {
-      indexType: "pdf",
+      indexType: 'pdf',
       pageIndex: parseInt(m[1], 10),
       offset: parseInt(m[2], 10),
       top_y: parseInt(m[3], 10),
@@ -285,7 +231,7 @@ function parseSortIndex(str: string): {
   m = str.match(/^(\d+)\|(\d+)$/);
   if (m) {
     return {
-      indexType: "epub",
+      indexType: 'epub',
       pageIndex: parseInt(m[1], 10),
       offset: parseInt(m[2], 10),
       top_y: null,
@@ -296,7 +242,7 @@ function parseSortIndex(str: string): {
   m = str.match(/^(\d+)$/);
   if (m) {
     return {
-      indexType: "html",
+      indexType: 'html',
       pageIndex: null,
       offset: parseInt(m[1], 10),
       top_y: null,
@@ -307,22 +253,17 @@ function parseSortIndex(str: string): {
   return null;
 }
 
-function countOccurrencesInFullText(
-  fullText: string | string[],
-  selected: string,
-): Array<{ start: number; end: number }> {
+function countOccurrencesInFullText(fullText: string | string[], selected: string): Array<{ start: number; end: number }> {
   if (!selected) return [];
 
-  const text = Array.isArray(fullText) ? fullText.join(" ") : fullText;
+  const text = Array.isArray(fullText) ? fullText.join(' ') : fullText;
   if (!text) return [];
 
   // Optimize: Split by whitespace to handle newlines/spaces differences in PDF text
   const parts = selected.trim().split(/\s+/);
-  const pattern = parts
-    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join("\\s+");
+  const pattern = parts.map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
 
-  const regex = new RegExp(pattern, "gi");
+  const regex = new RegExp(pattern, 'gi');
 
   const matches: Array<{ start: number; end: number }> = [];
   let match: RegExpExecArray | null;
@@ -364,30 +305,19 @@ async function getPageBatchRecognizerData(itemID: number, startIndex: number) {
   const pageIndexesToDelete = Array.from({ length: startIndex }, (_, i) => i);
 
   try {
-    const result = await Zotero.PDFWorker._query(
-      "deletePages",
-      { buf, pageIndexes: pageIndexesToDelete, password: "" },
-      [buf],
-    );
+    const result = await Zotero.PDFWorker._query('deletePages', { buf, pageIndexes: pageIndexesToDelete, password: '' }, [buf]);
     buf = result.buf;
   } catch (e: any) {
-    Zotero.debug(
-      `[Plugin] Failed to delete pages for offset ${startIndex}: ${e.message}`,
-    );
+    Zotero.debug(`[Plugin] Failed to delete pages for offset ${startIndex}: ${e.message}`);
     throw e;
   }
 
   // 3. 获取数据
   let data;
   try {
-    data = await Zotero.PDFWorker._query(
-      "getRecognizerData",
-      { buf, password: "" },
-      [buf],
-    );
+    data = await Zotero.PDFWorker._query('getRecognizerData', { buf, password: '' }, [buf]);
   } catch (e: any) {
-    const msg =
-      typeof e === "object" && e.message ? e.message : JSON.stringify(e);
+    const msg = typeof e === 'object' && e.message ? e.message : JSON.stringify(e);
     throw new Error(`Failed to get recognizer data: ${msg}`);
   }
 

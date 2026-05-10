@@ -16,20 +16,17 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { ChatBox } from "../components/chatBox";
-import { renderMarkdown } from "../utils/markdown";
-import { ensureChatWindow } from "../utils/window";
-import {
-  CHAT_WINDOW_MESSAGE_CONTAINER_ID,
-  ensureChatWindowUI,
-} from "./chatWindowHost";
-import { resizeReaderItemPaneHeight } from "./readerItemPane";
-import { Session } from "./chatManager";
-import { IconView } from "../components/iconView";
-import { Icons } from "../components/common";
+import { ChatBox } from '../components/chatBox';
+import { renderMarkdown } from '../utils/markdown';
+import { ensureChatWindow } from '../utils/window';
+import { CHAT_WINDOW_MESSAGE_CONTAINER_ID, ensureChatWindowUI } from './chatWindowHost';
+import { resizeReaderItemPaneHeight } from './readerItemPane';
+import { Session } from './chatManager';
+import { IconView } from '../components/iconView';
+import { Icons } from '../components/common';
 
 export function onLLMStreamStartV2(session: Session) {
-  ztoolkit.log("LLM stream started:", session.id);
+  ztoolkit.log('LLM stream started:', session.id);
 
   updateSectionInputArea(session.id, true);
   session.pending.shouldAutoScroll = true;
@@ -47,49 +44,38 @@ export function onLLMStreamStartV2(session: Session) {
   }) as HTMLElement;
   // pop.setAttribute("data-request-id", data.requestId);
 
-  const chatMessage = pop.querySelector(".chat-message") as HTMLElement | null;
+  const chatMessage = pop.querySelector('.chat-message') as HTMLElement | null;
   if (chatMessage) {
     const sourceLabel = session.sourceLabel;
-    const shouldShowSourceLabel =
-      !!sourceLabel && !!session.pending.isNewSource;
+    const shouldShowSourceLabel = !!sourceLabel && !!session.pending.isNewSource;
 
     if (sourceLabel) {
       pop.dataset.sourceLabel = sourceLabel;
     }
 
     if (shouldShowSourceLabel) {
-      const sourceEl = doc.createElement("div");
-      sourceEl.classList.add(
-        "text-xs",
-        "tracking-wider",
-        "font-semibold",
-        "text-slate-400",
-        "dark:text-neutral-500",
-        "mb-1",
-      );
+      const sourceEl = doc.createElement('div');
+      sourceEl.classList.add('text-xs', 'tracking-wider', 'font-semibold', 'text-slate-400', 'dark:text-neutral-500', 'mb-1');
       sourceEl.textContent = `Source: ${sourceLabel}`;
-      sourceEl.style.userSelect = "none";
+      sourceEl.style.userSelect = 'none';
       chatMessage.appendChild(sourceEl);
     }
 
-    const contentEl = doc.createElement("div");
-    contentEl.classList.add("chat-message-content");
-    contentEl.innerHTML = "Thinking...";
+    const contentEl = doc.createElement('div');
+    contentEl.classList.add('chat-message-content');
+    contentEl.innerHTML = 'Thinking...';
     chatMessage.appendChild(contentEl);
   }
 
   container.appendChild(pop);
   session.pending.messagePop = pop;
-  container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+  container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
 }
 
-export async function onLLMStreamUpdateV2(data: {
-  session: Session;
-  fullText: string;
-}) {
+export async function onLLMStreamUpdateV2(data: { session: Session; fullText: string }) {
   const pop = data.session.pending.messagePop;
   if (pop) {
-    const chatMessage = pop.querySelector(".chat-message-content");
+    const chatMessage = pop.querySelector('.chat-message-content');
     if (chatMessage) {
       chatMessage.innerHTML = await renderMarkdown(data.fullText);
       (pop as HTMLElement).dataset.markdown = data.fullText;
@@ -108,7 +94,7 @@ export async function onLLMStreamUpdateV2(data: {
         data.session.pending.shouldAutoScroll = false;
         return;
       }
-      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
     }
   }
 }
@@ -116,14 +102,14 @@ export async function onLLMStreamUpdateV2(data: {
 export function onLLMStreamEndV2(session: Session) {
   const pop = session.pending.messagePop;
   if (pop) {
-    const actions = pop.querySelector(".chat-actions");
+    const actions = pop.querySelector('.chat-actions');
     if (actions) {
-      actions.classList.remove("hidden");
+      actions.classList.remove('hidden');
       const container = pop.parentElement;
       if (container && session.pending.shouldAutoScroll) {
         container.scrollTo({
           top: container.scrollHeight,
-          behavior: "smooth",
+          behavior: 'smooth',
         });
       }
     }
@@ -133,20 +119,20 @@ export function onLLMStreamEndV2(session: Session) {
       const markdown = (pop as HTMLElement).dataset.markdown;
       if (markdown) {
         try {
-          new ztoolkit.Clipboard().addText(markdown, "text/plain").copy();
-          ztoolkit.log("Auto-copied markdown to clipboard");
+          new ztoolkit.Clipboard().addText(markdown, 'text/plain').copy();
+          ztoolkit.log('Auto-copied markdown to clipboard');
         } catch (e) {
-          ztoolkit.log("Auto-copy failed:", e);
+          ztoolkit.log('Auto-copy failed:', e);
         }
       }
     }
 
     // Append turn to conversation history (sidebar mode)
     const userMessage = session.pending.userMessage;
-    const assistantContent = (pop as HTMLElement).dataset.markdown || "";
+    const assistantContent = (pop as HTMLElement).dataset.markdown || '';
     if (userMessage) {
       session.conversationHistory.push(userMessage, {
-        role: "assistant",
+        role: 'assistant',
         content: assistantContent,
       });
     }
@@ -156,7 +142,7 @@ export function onLLMStreamEndV2(session: Session) {
 }
 
 export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
-  ztoolkit.log("LLM stream error:", data.session.id, data.error);
+  ztoolkit.log('LLM stream error:', data.session.id, data.error);
   let pop = data.session.pending.messagePop;
 
   // If no message pop exists yet (error during init), create one
@@ -165,10 +151,10 @@ export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
     if (container) {
       const doc = container.ownerDocument;
       pop = ChatBox({ doc, isUser: false }) as HTMLElement;
-      const chatMsg = pop.querySelector(".chat-message") as HTMLElement | null;
+      const chatMsg = pop.querySelector('.chat-message') as HTMLElement | null;
       if (chatMsg) {
-        const contentEl = doc.createElement("div");
-        contentEl.classList.add("chat-message-content");
+        const contentEl = doc.createElement('div');
+        contentEl.classList.add('chat-message-content');
         chatMsg.appendChild(contentEl);
       }
       container.appendChild(pop);
@@ -177,29 +163,29 @@ export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
   }
 
   if (pop) {
-    const actions = pop.querySelector(".chat-actions");
+    const actions = pop.querySelector('.chat-actions');
     if (actions) {
-      actions.classList.remove("hidden");
+      actions.classList.remove('hidden');
       const actionsContainer = pop.parentElement;
       if (actionsContainer && data.session.pending.shouldAutoScroll) {
         actionsContainer.scrollTo({
           top: actionsContainer.scrollHeight,
-          behavior: "smooth",
+          behavior: 'smooth',
         });
       }
     }
-    const chatMessage = pop.querySelector(".chat-message-content");
+    const chatMessage = pop.querySelector('.chat-message-content');
     if (chatMessage) {
       chatMessage.innerHTML = `<div class="ai-bar-error-text">${escapeHtml(data.error)}</div>`;
     } else {
-      const chatMsg = pop.querySelector(".chat-message") as HTMLElement | null;
+      const chatMsg = pop.querySelector('.chat-message') as HTMLElement | null;
       if (chatMsg) {
         chatMsg.innerHTML = `<div class="ai-bar-error-text">${escapeHtml(data.error)}</div>`;
       }
     }
     const container = pop.parentElement;
     if (container && data.session.pending.shouldAutoScroll) {
-      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
     }
   }
   // Clear streaming state
@@ -208,12 +194,7 @@ export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
 }
 
 function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
 function cleanupRequestData(session: Session) {
@@ -221,12 +202,10 @@ function cleanupRequestData(session: Session) {
 }
 
 function getMessageContainer(session: Session): HTMLElement | null {
-  if (addon.chatManager.getCurrentHostMode() === "window") {
+  if (addon.chatManager.getCurrentHostMode() === 'window') {
     const chatWindow = ensureChatWindow();
     ensureChatWindowUI(chatWindow.document);
-    return chatWindow.document.querySelector(
-      `#${CHAT_WINDOW_MESSAGE_CONTAINER_ID}`,
-    ) as HTMLElement | null;
+    return chatWindow.document.querySelector(`#${CHAT_WINDOW_MESSAGE_CONTAINER_ID}`) as HTMLElement | null;
   }
 
   if (!addon.data.sidePaneBodyMap) return null;
@@ -234,11 +213,11 @@ function getMessageContainer(session: Session): HTMLElement | null {
   if (sectionId === undefined) return null;
   const body = addon.data.sidePaneBodyMap.get(sectionId);
   if (!body) return null;
-  const root = body.querySelector("#ai-bar-chat-root");
+  const root = body.querySelector('#ai-bar-chat-root');
   if (!root?.shadowRoot) return null;
 
-  resizeReaderItemPaneHeight(body, "maximize");
-  return root.shadowRoot.querySelector(".message-container") as HTMLElement;
+  resizeReaderItemPaneHeight(body, 'maximize');
+  return root.shadowRoot.querySelector('.message-container') as HTMLElement;
 }
 
 /**
@@ -248,90 +227,64 @@ function getMessageContainer(session: Session): HTMLElement | null {
 function updateSectionInputArea(sessionId: string, isStreaming: boolean) {
   const body = addon.data.sidePaneBodyMap?.get(sessionId);
   if (!body) return;
-  const root = body.querySelector("#ai-bar-chat-root");
+  const root = body.querySelector('#ai-bar-chat-root');
   if (!root?.shadowRoot) return;
   const shadowRoot = root.shadowRoot;
 
-  const inputArea = shadowRoot.querySelector(".input-area");
+  const inputArea = shadowRoot.querySelector('.input-area');
   if (!inputArea) return;
 
   const doc = body.ownerDocument;
-  const textarea = inputArea.querySelector(
-    "textarea",
-  ) as HTMLTextAreaElement | null;
+  const textarea = inputArea.querySelector('textarea') as HTMLTextAreaElement | null;
   const hasText = (textarea?.value?.trim()?.length ?? 0) > 0;
 
-  const sendBtn = inputArea.querySelector(
-    ".input-send-btn",
-  ) as HTMLButtonElement | null;
+  const sendBtn = inputArea.querySelector('.input-send-btn') as HTMLButtonElement | null;
   if (!sendBtn) return;
 
   if (isStreaming) {
     sendBtn.disabled = false;
-    sendBtn.dataset.mode = "stop";
+    sendBtn.dataset.mode = 'stop';
     sendBtn.classList.remove(
-      "bg-slate-200",
-      "dark:bg-neutral-800",
-      "text-slate-400",
-      "dark:text-neutral-600",
-      "bg-rose-500",
-      "dark:bg-rose-600",
-      "hover:bg-rose-600",
+      'bg-slate-200',
+      'dark:bg-neutral-800',
+      'text-slate-400',
+      'dark:text-neutral-600',
+      'bg-rose-500',
+      'dark:bg-rose-600',
+      'hover:bg-rose-600'
     );
-    sendBtn.classList.add(
-      "bg-rose-500",
-      "dark:bg-rose-600",
-      "hover:bg-rose-600",
-    );
-    sendBtn.innerHTML = "";
+    sendBtn.classList.add('bg-rose-500', 'dark:bg-rose-600', 'hover:bg-rose-600');
+    sendBtn.innerHTML = '';
     const stopIcon = ztoolkit.UI.createElement(
       doc,
-      "span",
+      'span',
       IconView({
         iconMarkup: Icons.Stop,
         sizeRem: 1.5,
-        extraClasses: ["text-white"],
-      }),
+        extraClasses: ['text-white'],
+      })
     );
     sendBtn.appendChild(stopIcon);
   } else {
-    sendBtn.dataset.mode = "send";
+    sendBtn.dataset.mode = 'send';
     if (hasText) {
       sendBtn.disabled = false;
-      sendBtn.classList.remove(
-        "bg-slate-200",
-        "dark:bg-neutral-800",
-        "text-slate-400",
-        "dark:text-neutral-600",
-      );
-      sendBtn.classList.add(
-        "bg-rose-500",
-        "dark:bg-rose-600",
-        "hover:bg-rose-600",
-      );
+      sendBtn.classList.remove('bg-slate-200', 'dark:bg-neutral-800', 'text-slate-400', 'dark:text-neutral-600');
+      sendBtn.classList.add('bg-rose-500', 'dark:bg-rose-600', 'hover:bg-rose-600');
     } else {
       sendBtn.disabled = true;
-      sendBtn.classList.remove(
-        "bg-rose-500",
-        "dark:bg-rose-600",
-        "hover:bg-rose-600",
-      );
-      sendBtn.classList.add(
-        "bg-slate-200",
-        "dark:bg-neutral-800",
-        "text-slate-400",
-        "dark:text-neutral-600",
-      );
+      sendBtn.classList.remove('bg-rose-500', 'dark:bg-rose-600', 'hover:bg-rose-600');
+      sendBtn.classList.add('bg-slate-200', 'dark:bg-neutral-800', 'text-slate-400', 'dark:text-neutral-600');
     }
-    sendBtn.innerHTML = "";
+    sendBtn.innerHTML = '';
     const sendIcon = ztoolkit.UI.createElement(
       doc,
-      "span",
+      'span',
       IconView({
         iconMarkup: Icons.Send,
         sizeRem: 1.5,
-        extraClasses: ["text-white"],
-      }),
+        extraClasses: ['text-white'],
+      })
     );
     sendBtn.appendChild(sendIcon);
   }

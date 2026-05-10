@@ -16,7 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { TagElementProps } from "zotero-plugin-toolkit";
+import { TagElementProps } from 'zotero-plugin-toolkit';
 
 export interface IconViewProps {
   iconMarkup: string;
@@ -24,46 +24,37 @@ export interface IconViewProps {
   extraClasses?: string[];
 }
 
-export function IconView({
-  iconMarkup,
-  sizeRem = 1,
-  extraClasses = [],
-}: IconViewProps): TagElementProps {
+export function IconView({ iconMarkup, sizeRem = 1, extraClasses = [] }: IconViewProps): TagElementProps {
   const trimmedMarkup = iconMarkup.trim();
 
   // If it's a raw SVG or has xmlns, treat as markup
-  if (trimmedMarkup.startsWith("<svg") || trimmedMarkup.includes("xmlns=")) {
-    const finalMarkup = trimmedMarkup.includes("xmlns=")
-      ? trimmedMarkup
-      : trimmedMarkup.replace(
-          "<svg",
-          '<svg xmlns="http://www.w3.org/2000/svg"',
-        );
+  if (trimmedMarkup.startsWith('<svg') || trimmedMarkup.includes('xmlns=')) {
+    const finalMarkup = trimmedMarkup.includes('xmlns=') ? trimmedMarkup : trimmedMarkup.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
     return {
-      tag: "span",
-      namespace: "html",
+      tag: 'span',
+      namespace: 'html',
       styles: {
         width: `${sizeRem}rem`,
         height: `${sizeRem}rem`,
         fontSize: `${sizeRem}rem`,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: "0",
-        lineHeight: "0",
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: '0',
+        lineHeight: '0',
       },
       classList: extraClasses,
       properties: { innerHTML: finalMarkup },
     };
   }
   return {
-    tag: "img",
-    namespace: "html",
+    tag: 'img',
+    namespace: 'html',
     styles: {
       width: `${sizeRem}rem`,
       height: `${sizeRem}rem`,
-      pointerEvents: "none",
-      flexShrink: "0",
+      pointerEvents: 'none',
+      flexShrink: '0',
     },
     classList: extraClasses,
     properties: { src: iconMarkup },

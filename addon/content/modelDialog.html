@@ -13,7 +13,7 @@
       //     this,
       //   );
       // });
-      window.addEventListener("load", () => {
+      window.addEventListener('load', () => {
         window.arguments[0].onBodyLoaded(window);
       });
     </script>
@@ -22,16 +22,11 @@
     <title data-l10n-id="model-dialog-title">Model Providers</title>
   </head>
 
-  <body class="duration-300 transition-colors text-zinc-900 dark:text-zinc-100">
+  <body class="text-zinc-900 transition-colors duration-300 dark:text-zinc-100">
     <div id="root" class="bg-zinc-100 dark:bg-zinc-800">
       <div class="mx-auto min-h-screen max-w-7xl px-8 py-8">
-        <header
-          id="provider-head"
-          class="mb-10 flex items-center justify-between"
-        >
-          <h2 class="text-xl font-semibold" data-l10n-id="model-dialog-title">
-            Model Providers
-          </h2>
+        <header id="provider-head" class="mb-10 flex items-center justify-between">
+          <h2 class="text-xl font-semibold" data-l10n-id="model-dialog-title">Model Providers</h2>
           <div id="add-provider-container">
             <button
               id="add-provider-button"
@@ -54,22 +49,19 @@
             </button>
           </div>
         </header>
-        <div
-          id="provider-block"
-          class="relative min-h-[200px] grid grid-cols-1 md:grid-cols-2 gap-4"
-        ></div>
+        <div id="provider-block" class="relative grid min-h-[200px] grid-cols-1 gap-4 md:grid-cols-2"></div>
       </div>
     </div>
     <!-- Centered modal overlay (at root level for correct fixed positioning) -->
     <div
       id="add-provider-overlay"
-      class="opacity-0 invisible pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all duration-200"
+      class="pointer-events-none invisible fixed inset-0 z-50 flex items-center justify-center bg-black/40 opacity-0 backdrop-blur-sm transition-all duration-200"
     >
       <div
         id="add-provider-popup"
-        class="w-[420px] max-h-[520px] flex flex-col rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-800 overflow-hidden"
+        class="flex max-h-[520px] w-[420px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-800"
       >
-        <div class="p-4 border-b border-gray-100 dark:border-zinc-700">
+        <div class="border-b border-gray-100 p-4 dark:border-zinc-700">
           <input
             id="provider-search-input"
             type="text"
@@ -77,25 +69,19 @@
             class="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition-all focus:border-rose-300 focus:ring-2 focus:ring-rose-100 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100 dark:focus:border-rose-500 dark:focus:ring-rose-900/30"
           />
         </div>
-        <div
-          id="add-provider-list"
-          class="flex flex-col flex-1 min-h-0 overflow-y-auto p-2"
-        ></div>
-        <div
-          id="add-provider-custom"
-          class="border-t border-gray-100 p-2 dark:border-zinc-700"
-        ></div>
+        <div id="add-provider-list" class="flex min-h-0 flex-1 flex-col overflow-y-auto p-2"></div>
+        <div id="add-provider-custom" class="border-t border-gray-100 p-2 dark:border-zinc-700"></div>
       </div>
     </div>
     <!-- Model selection overlay -->
     <div
       id="model-select-overlay"
-      class="opacity-0 invisible pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all duration-200"
+      class="pointer-events-none invisible fixed inset-0 z-50 flex items-center justify-center bg-black/40 opacity-0 backdrop-blur-sm transition-all duration-200"
     >
       <div
-        class="w-[420px] max-h-[520px] flex flex-col rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-800 overflow-hidden"
+        class="flex max-h-[520px] w-[420px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-800"
       >
-        <div class="p-4 border-b border-gray-100 dark:border-zinc-700">
+        <div class="border-b border-gray-100 p-4 dark:border-zinc-700">
           <input
             id="model-search-input"
             type="text"
@@ -103,10 +89,7 @@
             class="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition-all focus:border-rose-300 focus:ring-2 focus:ring-rose-100 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100 dark:focus:border-rose-500 dark:focus:ring-rose-900/30"
           />
         </div>
-        <div
-          id="model-select-list"
-          class="flex flex-col flex-1 min-h-0 overflow-y-auto p-2"
-        ></div>
+        <div id="model-select-list" class="flex min-h-0 flex-1 flex-col overflow-y-auto p-2"></div>
       </div>
     </div>
   </body>

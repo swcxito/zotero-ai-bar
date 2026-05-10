@@ -16,14 +16,11 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { getLocaleID } from "../utils/locale";
-import { config } from "../../package.json";
-import { InputArea } from "../components/inputArea";
-import {
-  convertLegacyLLMConfigByKey,
-  loadProvidersFromFile,
-} from "../utils/providers";
-import { getPref } from "../utils/prefs";
+import { getLocaleID } from '../utils/locale';
+import { config } from '../../package.json';
+import { InputArea } from '../components/inputArea';
+import { convertLegacyLLMConfigByKey, loadProvidersFromFile } from '../utils/providers';
+import { getPref } from '../utils/prefs';
 // import { llmTest } from "./llm";
 export function injectCSS(doc: Document | ShadowRoot, filename: string) {
   // 获取插件内资源的 URL
@@ -33,14 +30,12 @@ export function injectCSS(doc: Document | ShadowRoot, filename: string) {
   if (doc.querySelector(`link[href="${url}"]`)) return;
 
   // 判断是否是 ShadowRoot（通过检查 host 属性而不是 instanceof）
-  const isShadowRoot = "host" in doc && !("head" in doc);
-  const ownerDoc = isShadowRoot
-    ? (doc as any).ownerDocument
-    : (doc as Document);
+  const isShadowRoot = 'host' in doc && !('head' in doc);
+  const ownerDoc = isShadowRoot ? (doc as any).ownerDocument : (doc as Document);
 
-  const link = ownerDoc.createElement("link");
-  link.rel = "stylesheet";
-  link.type = "text/css";
+  const link = ownerDoc.createElement('link');
+  link.rel = 'stylesheet';
+  link.type = 'text/css';
   link.href = url;
 
   // 处理 ShadowRoot 和 Document 的区别
@@ -52,13 +47,13 @@ export function injectCSS(doc: Document | ShadowRoot, filename: string) {
 }
 
 function injectDebugTailwindScript(root: ShadowRoot) {
-  const script = root.querySelector("#debug-tailwind-script");
+  const script = root.querySelector('#debug-tailwind-script');
   if (script) {
     script.remove();
   }
   const url = `chrome://${config.addonRef}/content/tailwind.js`;
-  const newScript = document.createElement("script");
-  newScript.id = "debug-tailwind-script";
+  const newScript = document.createElement('script');
+  newScript.id = 'debug-tailwind-script';
   newScript.src = url;
   root.appendChild(newScript);
 }
@@ -70,14 +65,14 @@ export async function registerReaderItemPaneSection() {
   }
 
   Zotero.ItemPaneManager.registerSection({
-    paneID: "ai-bar-reader",
+    paneID: 'ai-bar-reader',
     pluginID: addon.data.config.addonID,
     header: {
-      l10nID: getLocaleID("item-section-head-text"),
+      l10nID: getLocaleID('item-section-head-text'),
       icon: `chrome://${config.addonRef}/content/icons/favicon.svg`,
     },
     sidenav: {
-      l10nID: getLocaleID("item-section-sidenav-tooltip"),
+      l10nID: getLocaleID('item-section-sidenav-tooltip'),
       icon: `chrome://${config.addonRef}/content/icons/favicon.svg`,
     },
     // Optional
@@ -97,94 +92,76 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
     },
     // Optional, Called when the section data changes (setting item/mode/tabType/inTrash), must be synchronous. return false to cancel the change
     onItemChange: ({ item, setEnabled, tabType }) => {
-      setEnabled(tabType === "reader");
+      setEnabled(tabType === 'reader');
       return true;
     },
     // Called when the section is asked to render, must be synchronous.
-    onRender: ({
-      doc,
-      body,
-      item,
-      setSectionSummary,
-      setSectionButtonStatus,
-    }) => {
+    onRender: ({ doc, body, item, setSectionSummary, setSectionButtonStatus }) => {
       const tabID = Zotero.getMainWindow()?.Zotero_Tabs?.selectedID;
       if (item && addon.data.sidePaneBodyMap && tabID) {
         addon.data.sidePaneBodyMap.set(tabID, body);
       }
-      const root = body.querySelector("#ai-bar-chat-root") as HTMLElement;
-      const shadowRoot = root.attachShadow({ mode: "open" });
-      resizeReaderItemPaneHeight(body, "fit");
+      const root = body.querySelector('#ai-bar-chat-root') as HTMLElement;
+      const shadowRoot = root.attachShadow({ mode: 'open' });
+      resizeReaderItemPaneHeight(body, 'fit');
 
       // 阻止侧边栏被宽内容（表格/公式/代码块）横向撑开
-      body.style.overflowX = "hidden";
-      root.style.contain = "inline-size";
+      body.style.overflowX = 'hidden';
+      root.style.contain = 'inline-size';
 
       // 将 CSS 注入到 Shadow DOM 中
       // injectDebugTailwindScript(shadowRoot);
-      injectCSS(shadowRoot, "katex.min.css");
-      injectCSS(shadowRoot, "atom-one.css");
+      injectCSS(shadowRoot, 'katex.min.css');
+      injectCSS(shadowRoot, 'atom-one.css');
       injectCSS(shadowRoot, `../app.css`);
 
-      const messageContainer = doc.createElement("div");
-      messageContainer.classList.add(
-        "message-container",
-        "flex",
-        "flex-col",
-        "flex-1",
-        "overflow-y-auto",
-        "overflow-x-auto",
-        "min-w-0",
-      );
-      messageContainer.style.userSelect = "text";
+      const messageContainer = doc.createElement('div');
+      messageContainer.classList.add('message-container', 'flex', 'flex-col', 'flex-1', 'overflow-y-auto', 'overflow-x-auto', 'min-w-0');
+      messageContainer.style.userSelect = 'text';
       shadowRoot.appendChild(messageContainer);
       shadowRoot.appendChild(InputArea(doc, tabID));
-      setSectionButtonStatus("clear", { hidden: false });
+      setSectionButtonStatus('clear', { hidden: false });
     },
     // Optional, Called when the section is toggled. Can happen anytime even if the section is not visible or not rendered
     onToggle: ({ item, body }) => {
       // ztoolkit.log("Section toggled!", item?.id);
-      resizeReaderItemPaneHeight(body, "maximize");
+      resizeReaderItemPaneHeight(body, 'maximize');
     },
     // Optional, Buttons to be shown in the section header
     sectionButtons: [
       {
-        type: "clear",
-        icon: "chrome://zotero/skin/16/universal/empty-trash.svg",
-        l10nID: getLocaleID("item-section-button-tooltip"),
+        type: 'clear',
+        icon: 'chrome://zotero/skin/16/universal/empty-trash.svg',
+        l10nID: getLocaleID('item-section-button-tooltip'),
         onClick: () => {
           const currentTab = addon.chatManager.currentTabID;
           if (!currentTab) return;
           const body = addon.data.sidePaneBodyMap?.get(currentTab);
           if (!body) return;
 
-          const root = body.querySelector("#ai-bar-chat-root");
+          const root = body.querySelector('#ai-bar-chat-root');
           if (!root || !root.shadowRoot) return;
           const shadowRoot = root.shadowRoot;
-          const messageContainer =
-            shadowRoot.querySelector(".message-container");
+          const messageContainer = shadowRoot.querySelector('.message-container');
           if (messageContainer) {
-            messageContainer.innerHTML = "";
+            messageContainer.innerHTML = '';
           }
           addon.chatManager.clearSectionHistory(currentTab);
         },
       },
-      ...(__env__ === "development"
+      ...(__env__ === 'development'
         ? [
             {
-              type: "debug",
-              icon: "chrome://zotero/skin/16/universal/note.svg",
+              type: 'debug',
+              icon: 'chrome://zotero/skin/16/universal/note.svg',
               onClick: async () => {
-                ztoolkit.log("[Debug] Loading common_providers.min.json...");
+                ztoolkit.log('[Debug] Loading common_providers.min.json...');
                 const providers = await loadProvidersFromFile();
-                ztoolkit.log("[Debug] Loaded providers:", providers);
-                const llmConfig = getPref("llm.providerConfigs");
-                ztoolkit.log("[Debug] Old llm.providerConfigs:", llmConfig);
-                const result = convertLegacyLLMConfigByKey(
-                  llmConfig,
-                  providers!,
-                );
-                ztoolkit.log("[Debug] Converted UserProviderConfigV2:", result);
+                ztoolkit.log('[Debug] Loaded providers:', providers);
+                const llmConfig = getPref('llm.providerConfigs');
+                ztoolkit.log('[Debug] Old llm.providerConfigs:', llmConfig);
+                const result = convertLegacyLLMConfigByKey(llmConfig, providers!);
+                ztoolkit.log('[Debug] Converted UserProviderConfigV2:', result);
                 // await llmTest();
               },
             } as const,
@@ -198,38 +175,21 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
 // #zotero-item-pane-header
 // body
 //     #ai-bar-chat-root
-export function resizeReaderItemPaneHeight(
-  body: HTMLElement,
-  resizePolicy: "maximize" | "fit" | "auto" = "maximize",
-) {
-  const itemPaneHeader = body.ownerDocument.querySelector(
-    "#zotero-item-pane-header",
-  );
-  const bottomDist = itemPaneHeader
-    ? itemPaneHeader.getBoundingClientRect().bottom
-    : 0;
+export function resizeReaderItemPaneHeight(body: HTMLElement, resizePolicy: 'maximize' | 'fit' | 'auto' = 'maximize') {
+  const itemPaneHeader = body.ownerDocument.querySelector('#zotero-item-pane-header');
+  const bottomDist = itemPaneHeader ? itemPaneHeader.getBoundingClientRect().bottom : 0;
   let sectionHeader = body.previousElementSibling as HTMLElement;
-  if (!sectionHeader || !sectionHeader.classList.contains("head")) {
+  if (!sectionHeader || !sectionHeader.classList.contains('head')) {
     sectionHeader = sectionHeader.previousElementSibling as HTMLElement;
   }
   const sectionHeaderHeight = sectionHeader ? sectionHeader.offsetHeight : 0;
   const sectionHeaderDist = sectionHeader.getBoundingClientRect().bottom;
 
-  const root = body.querySelector("#ai-bar-chat-root") as HTMLElement | null;
-  const messageContainer = root?.shadowRoot?.querySelector(
-    ".message-container",
-  ) as HTMLElement | null;
-  const resolvedPolicy =
-    resizePolicy === "auto"
-      ? messageContainer && messageContainer.childElementCount > 0
-        ? "maximize"
-        : "fit"
-      : resizePolicy;
+  const root = body.querySelector('#ai-bar-chat-root') as HTMLElement | null;
+  const messageContainer = root?.shadowRoot?.querySelector('.message-container') as HTMLElement | null;
+  const resolvedPolicy = resizePolicy === 'auto' ? (messageContainer && messageContainer.childElementCount > 0 ? 'maximize' : 'fit') : resizePolicy;
 
-  const calcHeight =
-    resolvedPolicy === "maximize"
-      ? bottomDist + sectionHeaderHeight + 12
-      : sectionHeaderDist + 6;
+  const calcHeight = resolvedPolicy === 'maximize' ? bottomDist + sectionHeaderHeight + 12 : sectionHeaderDist + 6;
   if (root) root.style.height = `calc(100vh - ${calcHeight}px)`;
-  body?.scrollIntoView({ behavior: "smooth", block: "start" });
+  body?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }

@@ -7,47 +7,39 @@
     <link rel="localization" href="__addonRef__-preferences.ftl" />
     <style>
       /* Drag and drop transitions */
-      [draggable="true"] {
+      [draggable='true'] {
         transition:
           transform 0.2s ease,
           box-shadow 0.2s ease;
       }
 
-      [draggable="true"]:hover {
+      [draggable='true']:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
       }
     </style>
     <script>
-      window.addEventListener("load", () => {
+      window.addEventListener('load', () => {
         window.arguments[0].onBodyLoaded(window);
       });
     </script>
     <title data-l10n-id="pref-prompteditor-title">Prompt Editor</title>
   </head>
 
-  <body class="duration-300 transition-colors">
-    <div id="root" class="bg-zinc-100 dark:bg-zinc-800 min-h-screen">
+  <body class="transition-colors duration-300">
+    <div id="root" class="min-h-screen bg-zinc-100 dark:bg-zinc-800">
       <div class="mx-auto max-w-7xl px-6 py-2 sm:px-8 sm:py-2">
         <div class="flex flex-col gap-6 md:flex-row md:items-start">
           <!-- Left/Top (Prompt List) -->
           <div class="flex w-full flex-col gap-4 md:w-2/5">
             <header>
-              <h2
-                class="text-xl font-semibold text-zinc-900 dark:text-zinc-100"
-                data-l10n-id="pref-prompteditor-section-custom"
-              >
-                Custom Prompts
-              </h2>
+              <h2 class="text-xl font-semibold text-zinc-900 dark:text-zinc-100" data-l10n-id="pref-prompteditor-section-custom">Custom Prompts</h2>
             </header>
 
-            <div
-              id="prompt-list"
-              class="flex flex-col gap-2 overflow-y-auto max-h-[70vh] pr-2 pt-2"
-            >
+            <div id="prompt-list" class="flex max-h-[70vh] flex-col gap-2 overflow-y-auto pr-2 pt-2">
               <!-- Example Prompt Row -->
               <div
-                class="group flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition-all duration-200 ease-in-out hover:border-rose-400 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-rose-400 cursor-pointer"
+                class="group flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition-all duration-200 ease-in-out hover:border-rose-400 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-rose-400"
               >
                 <div class="flex items-center gap-3 overflow-hidden">
                   <!-- Drag Handle -->
@@ -73,19 +65,13 @@
                     </svg>
                   </div>
                   <div class="flex flex-col overflow-hidden">
-                    <span
-                      class="truncate font-medium text-zinc-900 dark:text-zinc-100"
-                      >Summarize</span
-                    >
-                    <span
-                      class="truncate text-sm text-zinc-500 dark:text-zinc-400"
-                      >Summarize the selected text concisely.</span
-                    >
+                    <span class="truncate font-medium text-zinc-900 dark:text-zinc-100">Summarize</span>
+                    <span class="truncate text-sm text-zinc-500 dark:text-zinc-400">Summarize the selected text concisely.</span>
                   </div>
                 </div>
                 <!-- Delete Button -->
                 <button
-                  class="opacity-0 transition-all duration-200 ease-out group-hover:opacity-100 p-1 text-zinc-400 hover:text-red-500 hover:-translate-y-[1px] active:translate-y-0 focus:opacity-100"
+                  class="p-1 text-zinc-400 opacity-0 transition-all duration-200 ease-out hover:-translate-y-[1px] hover:text-red-500 focus:opacity-100 active:translate-y-0 group-hover:opacity-100"
                 >
                   <svg
                     width="18"
@@ -108,19 +94,9 @@
           </div>
 
           <!-- Right/Bottom (Edit Panel) -->
-          <div
-            id="prompt-edit-panel"
-            class="w-full transition-opacity duration-300 ease-out md:w-3/5"
-          >
-            <div
-              class="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900"
-            >
-              <h3
-                class="mb-6 text-lg font-semibold text-zinc-900 dark:text-zinc-100"
-                data-l10n-id="pref-prompteditor-section-edit"
-              >
-                Edit Prompt
-              </h3>
+          <div id="prompt-edit-panel" class="w-full transition-opacity duration-300 ease-out md:w-3/5">
+            <div class="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+              <h3 class="mb-6 text-lg font-semibold text-zinc-900 dark:text-zinc-100" data-l10n-id="pref-prompteditor-section-edit">Edit Prompt</h3>
 
               <div class="mb-4 flex flex-col gap-2">
                 <label
@@ -176,7 +152,7 @@
               <div class="flex justify-end gap-3">
                 <button
                   id="prompt-cancel-btn"
-                  class="rounded-lg px-4 py-2 text-sm font-medium text-zinc-600 transition-all duration-200 ease-out hover:-translate-y-[1px] active:translate-y-0 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                  class="rounded-lg px-4 py-2 text-sm font-medium text-zinc-600 transition-all duration-200 ease-out hover:-translate-y-[1px] hover:bg-zinc-100 active:translate-y-0 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
                   data-l10n-id="pref-prompteditor-button-cancel"
                 >
                   Cancel

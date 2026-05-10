@@ -15,8 +15,8 @@
  *
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
-import { FluentMessageId } from "../../typings/i10n";
-import { Icons } from "../components/common";
+import { FluentMessageId } from '../../typings/i10n';
+import { Icons } from '../components/common';
 
 export const SYSTEM_PROMPT_PREFIX = `# Role
 You are an intelligent and professional research assistant embedded in Zotero. Your goal is to assist researchers by analyzing document fragments.
@@ -53,11 +53,11 @@ export interface AIBarCommand {
 
 export const aiBarCommands: Record<string, AIBarCommand> = {
   explain: {
-    id: "explain",
+    id: 'explain',
     icon: Icons.Book,
-    label: "reader-bar-explain",
+    label: 'reader-bar-explain',
     getPrompt: (targetLanguage: string) =>
-      `${targetLanguage ? `\n**IMPORTANT: You must output your entire explanation in ${targetLanguage}.**\n` : ""}
+      `${targetLanguage ? `\n**IMPORTANT: You must output your entire explanation in ${targetLanguage}.**\n` : ''}
 ### Analysis Strategy
 Please analyze the <selected> text and choose the most appropriate explanation strategy below:
 
@@ -82,16 +82,16 @@ Please analyze the <selected> text and choose the most appropriate explanation s
 `,
   },
   summarize: {
-    id: "summarize",
+    id: 'summarize',
     icon: Icons.Summary,
-    label: "reader-bar-summarize",
+    label: 'reader-bar-summarize',
     getPrompt: (targetLanguage: string) =>
-      `Summarize the <selected> text concisely${targetLanguage ? ` in ${targetLanguage}` : ""}, highlighting the key points.`,
+      `Summarize the <selected> text concisely${targetLanguage ? ` in ${targetLanguage}` : ''}, highlighting the key points.`,
   },
   translate: {
-    id: "translate",
+    id: 'translate',
     icon: Icons.Translate,
-    label: "reader-bar-translate",
+    label: 'reader-bar-translate',
     getPrompt: (targetLanguage: string) => `
 # Task
 Translate the <selected> content into ${targetLanguage}.
@@ -156,9 +156,9 @@ Output:
 `,
   },
   smartCopy: {
-    id: "smartCopy",
+    id: 'smartCopy',
     icon: Icons.SmartCopy,
-    label: "reader-bar-smart-copy",
+    label: 'reader-bar-smart-copy',
     getPrompt: () => `
 # Task
 Clean and format the <selected> text, preserving the original language while removing noise and formatting formulas.

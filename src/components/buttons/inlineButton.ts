@@ -16,11 +16,11 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { TagElementProps } from "zotero-plugin-toolkit";
-import { ButtonBase } from "./buttonBase";
-import { BUTTON_VARIANTS } from "./buttonVariants";
-import { Icons } from "../common";
-import { getString } from "../../utils/locale";
+import { TagElementProps } from 'zotero-plugin-toolkit';
+import { ButtonBase } from './buttonBase';
+import { BUTTON_VARIANTS } from './buttonVariants';
+import { Icons } from '../common';
+import { getString } from '../../utils/locale';
 
 export interface InlineButtonProps {
   onClicked: (e: Event) => void;
@@ -28,16 +28,12 @@ export interface InlineButtonProps {
   classList?: string[];
 }
 
-export function InlineButton({
-  onClicked,
-  label = getString("model-dialog-add-model"),
-  classList,
-}: InlineButtonProps): TagElementProps {
+export function InlineButton({ onClicked, label = getString('model-dialog-add-model'), classList }: InlineButtonProps): TagElementProps {
   return ButtonBase({
     label,
     iconMarkup: Icons.Add,
     classList: classList ?? [...BUTTON_VARIANTS.inline],
-    labelClassList: ["inline-button-label"],
+    labelClassList: ['inline-button-label'],
     onClick: (e) => onClicked(e),
   });
 }

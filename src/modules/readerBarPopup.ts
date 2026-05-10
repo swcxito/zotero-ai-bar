@@ -16,26 +16,21 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { config } from "../../package.json";
-import { getSelectionContext } from "../utils/selectionContext";
-import { getString } from "../utils/locale";
-import { getPref, setPref } from "../utils/prefs";
-import { aiBarCommands } from "../utils/prompts";
-import { ActionButton } from "../components/buttons/actionButton";
-import { ModelInfo } from "../components/modelInfo";
-import {
-  ExpandButton,
-  ExpandMenuItem,
-} from "../components/buttons/expandButton";
-import { Icons } from "../components/common";
+import { config } from '../../package.json';
+import { getSelectionContext } from '../utils/selectionContext';
+import { getString } from '../utils/locale';
+import { getPref, setPref } from '../utils/prefs';
+import { aiBarCommands } from '../utils/prompts';
+import { ActionButton } from '../components/buttons/actionButton';
+import { ModelInfo } from '../components/modelInfo';
+import { ExpandButton, ExpandMenuItem } from '../components/buttons/expandButton';
+import { Icons } from '../components/common';
 
 // TODO 支持其它格式
 
-export function getReaderSourceLabel(
-  reader?: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">,
-) {
+export function getReaderSourceLabel(reader?: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>) {
   const isValidTitle = (value?: unknown) => {
-    if (typeof value !== "string") return false;
+    if (typeof value !== 'string') return false;
     const text = value.trim();
     if (!text) return false;
     return !/^(pdf|epub|snapshot)$/i.test(text);
@@ -43,23 +38,19 @@ export function getReaderSourceLabel(
 
   const getItemTitle = (item?: any) => {
     if (!item) return undefined;
-    const title =
-      item?.getField?.("title") || item?.getDisplayTitle?.() || item?.title;
+    const title = item?.getField?.('title') || item?.getDisplayTitle?.() || item?.title;
     return isValidTitle(title) ? String(title).trim() : undefined;
   };
 
   const getFileName = (item?: any) => {
     if (!item) return undefined;
-    const name =
-      item?.attachmentFilename ||
-      item?.getFilename?.() ||
-      item?.getField?.("filename");
-    if (typeof name === "string" && name.trim()) return name.trim();
+    const name = item?.attachmentFilename || item?.getFilename?.() || item?.getField?.('filename');
+    if (typeof name === 'string' && name.trim()) return name.trim();
 
     const filePath = item?.getFilePath?.();
-    if (typeof filePath === "string" && filePath.trim()) {
-      const normalized = filePath.replace(/\\/g, "/");
-      return normalized.split("/").pop() || undefined;
+    if (typeof filePath === 'string' && filePath.trim()) {
+      const normalized = filePath.replace(/\\/g, '/');
+      return normalized.split('/').pop() || undefined;
     }
 
     return undefined;
@@ -70,9 +61,7 @@ export function getReaderSourceLabel(
     const item = Zotero.Items.get(itemID) as any;
 
     const parentID = item?.parentID || item?.parentItemID;
-    const parentItem = parentID
-      ? (Zotero.Items.get(parentID) as any)
-      : undefined;
+    const parentItem = parentID ? (Zotero.Items.get(parentID) as any) : undefined;
 
     const title = getItemTitle(parentItem) || getItemTitle(item);
     if (title) return title;
@@ -80,7 +69,7 @@ export function getReaderSourceLabel(
     const fileName = getFileName(item);
     if (fileName) return fileName;
   }
-  return getString("item-section-head-text");
+  return getString('item-section-head-text');
 }
 
 /**
@@ -90,10 +79,10 @@ export function getReaderSourceLabel(
  **/
 export function registerAIBarStyleSheet(win: _ZoteroTypes.MainWindow) {
   const doc = win.document;
-  const styles = ztoolkit.UI.createElement(doc, "link", {
+  const styles = ztoolkit.UI.createElement(doc, 'link', {
     properties: {
-      type: "text/css",
-      rel: "stylesheet",
+      type: 'text/css',
+      rel: 'stylesheet',
       href: `chrome://${addon.data.config.addonRef}/content/zoteroAIBar.css`,
     },
   });
@@ -108,10 +97,10 @@ export function registerAIBarStyleSheet(win: _ZoteroTypes.MainWindow) {
 export function registerKaTeXFontSheet(win: _ZoteroTypes.MainWindow) {
   const doc = win.document;
   if (doc.querySelector(`link[href*="katex.min.css"]`)) return;
-  const link = ztoolkit.UI.createElement(doc, "link", {
+  const link = ztoolkit.UI.createElement(doc, 'link', {
     properties: {
-      type: "text/css",
-      rel: "stylesheet",
+      type: 'text/css',
+      rel: 'stylesheet',
       href: `chrome://${addon.data.config.addonRef}/content/styles/katex.min.css`,
     },
   });
@@ -121,55 +110,52 @@ export function registerKaTeXFontSheet(win: _ZoteroTypes.MainWindow) {
 // entry point for reader popup
 export function registerReaderInitializer() {
   Zotero.Reader.registerEventListener(
-    "renderTextSelectionPopup",
+    'renderTextSelectionPopup',
     ({ reader, doc, params, append }) => {
       // addon.hooks.onReaderPopupShow(event);
       addon.data.selection.text = params.annotation.text?.trim();
-      ztoolkit.log(addon.data.selection.text, "selected");
-      if (getPref("extend-selection-context")) {
-        addon.data.selection.contextPromise = getSelectionContext(
-          reader,
-          params,
-        );
+      ztoolkit.log(addon.data.selection.text, 'selected');
+      if (getPref('extend-selection-context')) {
+        addon.data.selection.contextPromise = getSelectionContext(reader, params);
       } else {
         addon.data.selection.contextPromise = Promise.resolve(undefined);
       }
       // ztoolkit.log(doc);
       // ztoolkit.log(append);
       // ztoolkit.log("annotation", params.annotation);
-      ztoolkit.log("Creating Ask AI Bar");
+      ztoolkit.log('Creating Ask AI Bar');
       addon.data.selection.currentAnnotation = params.annotation;
       addon.data.selection.currentReader = reader;
-      if (reader._internalReader._type === "pdf") {
+      if (reader._internalReader._type === 'pdf') {
         append(renderAIBar(doc, reader));
         smartAutoTranslate(reader, params);
       }
     },
-    config.addonID,
+    config.addonID
   );
 }
 
 function smartAutoTranslate(
-  reader: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">,
-  params: { annotation: _ZoteroTypes.Annotations.AnnotationJson },
+  reader: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>,
+  params: { annotation: _ZoteroTypes.Annotations.AnnotationJson }
 ) {
-  if (getPref("translate.enableAuto")) {
-    const autoTranslateContext = getPref("translate.extendContext");
-    const isExtendContextEnabled = getPref("extend-selection-context");
+  if (getPref('translate.enableAuto')) {
+    const autoTranslateContext = getPref('translate.extendContext');
+    const isExtendContextEnabled = getPref('extend-selection-context');
     const followContextSetting =
-      autoTranslateContext === "follow" ||
-      (autoTranslateContext === "always" && isExtendContextEnabled) ||
-      (autoTranslateContext === "never" && !isExtendContextEnabled);
+      autoTranslateContext === 'follow' ||
+      (autoTranslateContext === 'always' && isExtendContextEnabled) ||
+      (autoTranslateContext === 'never' && !isExtendContextEnabled);
     const selectionContextPromise = followContextSetting
       ? addon.data.selection.contextPromise
-      : autoTranslateContext === "always"
+      : autoTranslateContext === 'always'
         ? getSelectionContext(reader, params)
         : Promise.resolve(undefined);
-    const useTranslateModel = getPref("translate.useAlternativeModel");
-    const translateModelId = getPref("translate.modelId");
-    const originalModelId = getPref("llm.modelId");
+    const useTranslateModel = getPref('translate.useAlternativeModel');
+    const translateModelId = getPref('translate.modelId');
+    const originalModelId = getPref('llm.modelId');
     if (useTranslateModel && translateModelId) {
-      setPref("llm.modelId", translateModelId);
+      setPref('llm.modelId', translateModelId);
     }
     addon.chatManager
       .sendChatRequest({
@@ -182,26 +168,19 @@ function smartAutoTranslate(
       // todo remove this temp resolution after chatManager is reconstructed.
       .finally(() => {
         if (useTranslateModel && translateModelId) {
-          setPref("llm.modelId", originalModelId);
+          setPref('llm.modelId', originalModelId);
         }
       });
   }
 }
 
-function renderAIBar(
-  doc: Document,
-  reader: _ZoteroTypes.ReaderInstance<"pdf" | "epub" | "snapshot">,
-): DocumentFragment {
+function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>): DocumentFragment {
   // ── Insert styles ────────────────
-  if (
-    !doc.querySelector(
-      `link[href="chrome://${addon.data.config.addonRef}/content/zoteroAIBar.css"]`,
-    )
-  ) {
-    const styles = ztoolkit.UI.createElement(doc, "link", {
+  if (!doc.querySelector(`link[href="chrome://${addon.data.config.addonRef}/content/zoteroAIBar.css"]`)) {
+    const styles = ztoolkit.UI.createElement(doc, 'link', {
       properties: {
-        type: "text/css",
-        rel: "stylesheet",
+        type: 'text/css',
+        rel: 'stylesheet',
         href: `chrome://${addon.data.config.addonRef}/content/zoteroAIBar.css`,
       },
     });
@@ -210,7 +189,7 @@ function renderAIBar(
 
   function handleAction(input: string) {
     if (!input) return;
-    ztoolkit.log("Action:", input);
+    ztoolkit.log('Action:', input);
     const command = aiBarCommands[input];
 
     if (!addon.data.selection.text && command) return;
@@ -224,20 +203,20 @@ function renderAIBar(
       sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
       isFromPopup: true,
       // Enable auto-copy for smartCopy command only
-      doesCopyResponse: input === "smartCopy",
+      doesCopyResponse: input === 'smartCopy',
       itemId: reader.itemID!,
     });
   }
 
   // Create AI buttons from commands in specific order: explain, translate, smartCopy
   const CommandButtons = () => {
-    const commandOrder = ["explain", "translate", "smartCopy"];
+    const commandOrder = ['explain', 'translate', 'smartCopy'];
     return commandOrder.map((id) => {
       const command = aiBarCommands[id];
       return ActionButton({
         label: getString(command.label),
         icon: command.icon,
-        classList: ["ai-btn"],
+        classList: ['ai-btn'],
         onClick: async () => handleAction(command.id),
       });
     });
@@ -246,10 +225,10 @@ function renderAIBar(
   // Build menu items: built-in + user prompts
   const expandMenuItems: ExpandMenuItem[] = [
     {
-      id: "summarize",
+      id: 'summarize',
       icon: aiBarCommands.summarize.icon,
       label: getString(aiBarCommands.summarize.label),
-      onClick: () => handleAction("summarize"),
+      onClick: () => handleAction('summarize'),
     },
   ];
 
@@ -272,86 +251,83 @@ function renderAIBar(
     });
   }
 
-  const fragment = ztoolkit.UI.createElement(doc, "fragment", {
+  const fragment = ztoolkit.UI.createElement(doc, 'fragment', {
     children: [
       {
-        tag: "div",
-        classList: ["ai-bar-container"],
+        tag: 'div',
+        classList: ['ai-bar-container'],
         children: [
           ModelInfo(),
           ...CommandButtons(),
           ExpandButton({
-            label: getString("reader-bar-expand"),
+            label: getString('reader-bar-expand'),
             menuItems: expandMenuItems,
           }),
           // Ask (Input Group)
           {
-            tag: "div",
-            classList: ["input-group"],
+            tag: 'div',
+            classList: ['input-group'],
             children: [
               {
-                tag: "textarea",
+                tag: 'textarea',
                 properties: {
-                  placeholder: getString("reader-bar-ask-placeholder"),
+                  placeholder: getString('reader-bar-ask-placeholder'),
                   rows: 1,
                 },
                 listeners: [
                   {
-                    type: "focus",
+                    type: 'focus',
                     listener: () => {
                       // Add overlay element to prevent reader's global keydown handler
                       // making sure backspace will ont close popup.
                       // only for Zotero 8
-                      if (!doc.querySelector(".context-menu-overlay")) {
-                        const overlay = doc.createElement("div");
-                        overlay.className = "context-menu-overlay";
-                        overlay.style.cssText =
-                          "position: fixed; inset: 0; pointer-events: none; z-index: -1; opacity: 0;";
+                      if (!doc.querySelector('.context-menu-overlay')) {
+                        const overlay = doc.createElement('div');
+                        overlay.className = 'context-menu-overlay';
+                        overlay.style.cssText = 'position: fixed; inset: 0; pointer-events: none; z-index: -1; opacity: 0;';
                         doc.body.appendChild(overlay);
                       }
                     },
                   },
                   {
-                    type: "blur",
+                    type: 'blur',
                     listener: (e: Event) => {
                       const input = e.currentTarget as HTMLTextAreaElement;
                       if (!input.value) {
                         input.rows = 1;
-                        input.style.height = "auto";
+                        input.style.height = 'auto';
                       }
                       // Remove overlay element when textarea loses focus
-                      const overlay = doc.querySelector(
-                        ".context-menu-overlay",
-                      );
+                      const overlay = doc.querySelector('.context-menu-overlay');
                       if (overlay) {
                         overlay.remove();
                       }
                     },
                   },
                   {
-                    type: "input",
+                    type: 'input',
                     listener: (e: Event) => {
                       const input = e.currentTarget as HTMLTextAreaElement;
                       const group = input.parentElement as HTMLElement;
                       const bar = group.parentElement as HTMLElement;
 
                       if (input.value.length > 0) {
-                        bar.classList.add("has-input");
+                        bar.classList.add('has-input');
                       } else {
-                        bar.classList.remove("has-input");
+                        bar.classList.remove('has-input');
                       }
 
                       // Auto grow height
-                      input.style.height = "auto";
+                      input.style.height = 'auto';
                       const newHeight = Math.min(input.scrollHeight, 100);
-                      input.style.height = newHeight + "px";
+                      input.style.height = newHeight + 'px';
                     },
                   },
                   {
-                    type: "keydown",
+                    type: 'keydown',
                     listener: (e: Event) => {
                       const ke = e as KeyboardEvent;
-                      if (ke.key === "Enter" && !ke.shiftKey) {
+                      if (ke.key === 'Enter' && !ke.shiftKey) {
                         ke.preventDefault();
                         const input = ke.currentTarget as HTMLTextAreaElement;
                         handleAction(input.value.trim());
@@ -361,20 +337,19 @@ function renderAIBar(
                 ],
               },
               {
-                tag: "button",
-                classList: ["ai-send-btn"],
+                tag: 'button',
+                classList: ['ai-send-btn'],
                 properties: {
-                  type: "button",
+                  type: 'button',
                   innerHTML: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`,
                 },
                 listeners: [
                   {
-                    type: "click",
+                    type: 'click',
                     listener: (e: Event) => {
                       // e.stopPropagation();
                       const btn = e.currentTarget as HTMLButtonElement;
-                      const input =
-                        btn.previousElementSibling as HTMLTextAreaElement;
+                      const input = btn.previousElementSibling as HTMLTextAreaElement;
                       handleAction(input.value.trim());
                     },
                   },
@@ -386,10 +361,10 @@ function renderAIBar(
       },
     ],
   });
-  const container = fragment.querySelector(".ai-bar-container") as HTMLElement;
+  const container = fragment.querySelector('.ai-bar-container') as HTMLElement;
   function hideContainerOnTimeout(delay: number = 500) {
     setTimeout(() => {
-      container.style.display = "none";
+      container.style.display = 'none';
     }, delay);
   }
 
@@ -416,7 +391,7 @@ function renderAIBar(
 
   // for click end
   const disableAll = () => {
-    container.querySelectorAll("button, textarea").forEach((el: Element) => {
+    container.querySelectorAll('button, textarea').forEach((el: Element) => {
       (el as HTMLButtonElement | HTMLTextAreaElement).disabled = true;
     });
   };
