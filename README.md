@@ -1,10 +1,11 @@
 # Zotero AI Bar
 
-[![zotero target version](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org) [![zotero target version](https://img.shields.io/badge/Zotero-8-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org) [![Release](https://img.shields.io/github/release/swcxito/zotero-ai-bar?style=flat-square)](https://github.com/swcxito/zotero-ai-bar/releases)
+[![zotero target version](https://img.shields.io/badge/Zotero-7--9-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
+[![Release](https://img.shields.io/github/release/swcxito/zotero-ai-bar?style=flat-square)](https://github.com/swcxito/zotero-ai-bar/releases)
 
 **English** | [简体中文](docs/README_zh-CN.md)
 
-A beautiful and handy AI assistant plugin for Zotero, putting an AI assistant right at your fingertips.
+A beautiful and handy AI toolbar plugin for Zotero, putting an AI assistant right at your fingertips.
 
 You can visit the [**Project Homepage**](https://zotero.fukeke.com) for more information and detailed tutorials.
 
@@ -15,51 +16,33 @@ If you find this project helpful, please consider supporting its development and
 [<img alt="&quot;Buy Me A Coffee&quot;" height="60px" src="docs/assets/red-button.png"/>](https://www.buymeacoffee.com/fukeke)
 [<img alt="Afdian" src="docs/assets/afdian-btn-en.png" height="60px"/>](https://afdian.com/a/fukeke)
 
-## What's New in v1.0beta
+## What's New in v1.0-beta
 
-Changes below are summarized from commits after `v0.3.4`.
+### New Provider & Model Architecture
 
-### Config v2 — New Provider & Model Architecture
-
-- **Data-driven providers**: Replaced hardcoded provider list with `common_providers.min.json` — supports **27 providers** and **763 models** out of the box.
-- **Native SDK dispatch**: Each provider now uses its own AI SDK (`@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/openai`, etc.) instead of routing everything through OpenAI-compatible. Providers with custom endpoints (DeepSeek, Zhipu, MiniMax, etc.) continue to use `@ai-sdk/openai-compatible` with proper namespacing for streaming.
-- **Lazy-loading**: Provider metadata is loaded on-demand to reduce startup overhead.
-- **Multi-env support**: Providers with multiple environment variables (e.g., Azure) show separate input fields in the configuration dialog.
-
-### Redesigned Model Management Dialog
-
-- **Provider browser**: Centered modal with search, alphabetical sorting, and pinned common providers (OpenAI, Google, Anthropic, etc.) at the top.
-- **Model selection popup**: Browse and search provider-specific models with family-based icons. Type a model name and press Enter to add directly.
-- **Family-aware model metadata**: Model family is resolved from `common_providers.json` (default: `unknown` instead of the previous `gpt` fallback).
-- **Dedup protection**: Prevents adding duplicate models within the same provider.
+- Out-of-the-box support for **27 providers** and **763+ models**.
+- **Native SDK dispatch**: Adapt native AI SDKs for major providers, improving compatibility and resolving past provider issues.
+- **Multi-env support (in development)**: Providers with multiple environment variables (e.g., Azure) show separate input fields in the configuration dialog.
+- **Provider & model browser**: Browse providers and models with search, quickly add models without tedious manual entry.
 
 ### Other Improvements
 
 - **Custom prompt management**: Dedicated prompt editor page with drag-to-reorder support.
-- **Smart copy** and improved response interaction.
+- **Smart copy** feature.
 - **Standalone chat window** with host mode integration.
-- **Formula block optimization** for better math rendering.
-- **Refactored chat flow**: `ChatManager` for cleaner request handling.
-- **UI improvements**: Streamlined model selector on toolbar, retry button for failed requests, stream update speed settings with localization.
-- Removed deprecated `providerInfo.ts` and legacy `UserProvider`/`UserProviderModel` types.
-
-## What's New in v0.3
-
-- model selector on the toolbar, no need to open settings page to switch models.
-  ![img.png](docs/assets/img.png)
-
-- Retry button for failed requests, no need to re-enter the prompt.
-  ![img.png](docs/assets/retry.png)
-
-- Added and refined provider/model support, including compatibility updates for Qwen and MiniMax.
-- Improved Zotero 7 compatibility and registration parameter handling.
-- Added stream update speed settings with localization support.
-- Enhanced prompt behavior and selected-text analysis quality.
-- Improved formula rendering and multiple UI/component details for better stability and consistency.
+- **Formula/Code/Table block optimization** to prevent overflow and interface distortion.
 
 ## Features
 
 **Leave the complex work to us, keep the simple operations for yourself.**
+
+### Quick Model Configuration
+
+Easily add and manage AI models through a simple configuration interface, supporting a variety of providers and model choices:
+![img.png](docs/assets/providers.png)
+
+A model selector on the toolbar lets you switch models without opening the settings page.
+![model-sel.png](docs/assets/model-sel.png)
 
 ### Selection Toolbar
 
@@ -103,11 +86,9 @@ Here is a quick tutorial. For detailed instructions, please click and visit the 
 
 1. Install the plugin.
 2. Open the model settings.
-3. Add a provider, enter your API Key and model.
+3. Add a provider, enter your API Key and select a model.
 4. Close the settings page; configurations are saved automatically.
 5. Start using it!
-
-Note: Requests are currently mutually exclusive. Starting a new request will cancel the previous streaming request.
 
 ## Roadmap
 
@@ -117,15 +98,14 @@ Note: Requests are currently mutually exclusive. Starting a new request will can
 - [x] ~~Multi-language Support (English/Chinese)~~
 - [x] ~~Basic Settings~~
 - [x] ~~Documentation~~
-- [ ] Beautify Toolbar
+- [x] Beautify Toolbar
 - [x] ~~Custom Prompts~~
-- [ ] Add Notes
-- [ ] Regenerate Response
 - [x] ~~Standalone Window Option~~
-- [ ] Continuous Conversation
+- [x] Continuous Conversation
+- [x] New Chat Session
+- [ ] Regenerate Response
 - [ ] Attachment Support
-- [ ] New Chat Session
-- More features are on the way...
+- And more...
 
 ## Contribution
 
@@ -133,10 +113,10 @@ Contributions of any kind are welcome! Whether it's code, documentation, testing
 
 ## Acknowledgements
 
-This project is built based on:
-[![Zotero](https://img.shields.io/badge/Zotero-CC2936?style=flat&logo=zotero)](https://www.zotero.org) [![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat&logo=github)](https://github.com/windingwind/zotero-plugin-template)
+This project is built based on:<br/>
+[![Zotero](https://img.shields.io/badge/Zotero-CC2936?style=flat&logo=zotero)](https://www.zotero.org) [![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat&logo=github)](https://github.com/windingwind/zotero-plugin-template) [![GitHub Repo](https://img.shields.io/badge/GitHub-models.dev-blue?logo=github)](https://github.com/anomalyco/models.dev) [![GitHub Repo](https://img.shields.io/badge/GitHub-AI%20SDK-blue?logo=github)](https://github.com/anomalyco/models.dev)
 
-Inspired by parts of the implementation from:
+Inspired by parts of the implementation from:<br/>
 [![GitHub Repo stars](https://img.shields.io/github/stars/windingwind/zotero-pdf-translate?label=zotero-pdf-translate&style=flat&logo=github)](https://github.com/windingwind/zotero-pdf-translate) [![GitHub Repo stars](https://img.shields.io/github/stars/guaguastandup/zotero-pdf2zh?label=Zotero%20PDF2zh&style=flat&logo=github)](https://github.com/guaguastandup/zotero-pdf2zh)
 
 ## License
