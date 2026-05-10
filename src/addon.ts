@@ -43,6 +43,7 @@ class Addon {
     userPrompts?: UserPrompt[];
     // map tab IDs to their side pane root elements
     sidePaneBodyMap?: Map<string, HTMLElement>;
+    inputImages: Map<string, string[]>;
   };
   // Chat state and logic
   public chatManager: ChatManager;
@@ -59,6 +60,7 @@ class Addon {
       initialized: false,
       ztoolkit: createZToolkit(),
       selection: {},
+      inputImages: new Map<string, string[]>(),
     };
     this.chatManager = new ChatManager(resolveInitialTabID());
     this.hooks = hooks;

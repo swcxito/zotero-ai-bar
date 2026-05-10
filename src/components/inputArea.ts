@@ -19,11 +19,12 @@
 import { Icons } from './common';
 import { IconView } from './iconView';
 import { ChatBox } from './chatBox';
+import { ImagePreview } from './imagePreview';
 import { getString } from '../utils/locale';
 import { Session } from '../modules/chatManager';
 
-import { startCaptureMode } from "../modules/capture";
-import { getReaderByTabId } from "../modules/tabObserver";
+import { startCaptureMode } from '../modules/capture';
+import { getReaderByTabId } from '../modules/tabObserver';
 
 /**
  * Build the InputArea widget and wire up all interactive logic.
@@ -35,15 +36,16 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
   const wrapper = doc.createElement('div');
   wrapper.classList.add('input-area-wrapper', 'max-w-3xl', 'w-full', 'mx-auto', 'my-2', 'flex', 'flex-col', 'gap-1');
 
+  // ── image preview strip ─────────────────────────────────────────────────
+  const preview = ImagePreview(doc, sectionId, () => updateScreenshotBtnState());
+
   // ── input row ─────────────────────────────────────────────────────────────
   const container = doc.createElement('div');
   container.classList.add(
     'input-area',
     'w-full',
     'flex',
-    'items-center',
-    'justify-center',
-    'gap-2',
+    'flex-col',
     'bg-slate-50',
     'dark:bg-neutral-900',
     'p-2',
@@ -80,27 +82,21 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
   }
 
   // ── screenshot button (left) ──────────────────────────────────────────
-  const screenshotBtn = doc.createElement("button");
-  screenshotBtn.title = "Screenshot";
+  const screenshotBtn = doc.createElement('button');
+  screenshotBtn.title = 'Screenshot';
   screenshotBtn.classList.add(
-    "input-screenshot-btn",
-    "flex",
-    "justify-center",
-    "p-2.5",
-    "rounded-xl",
-    "text-slate-400",
-    "dark:text-neutral-500",
-    "hover:text-rose-500",
-    "transition-colors",
-    "flex-shrink-0",
+    'input-screenshot-btn',
+    'flex',
+    'justify-center',
+    'p-2.5',
+    'rounded-xl',
+    'text-slate-400',
+    'dark:text-neutral-500',
+    'hover:text-rose-500',
+    'transition-colors',
+    'flex-shrink-0'
   );
-  screenshotBtn.appendChild(
-    ztoolkit.UI.createElement(
-      doc,
-      "span",
-      IconView({ iconMarkup: Icons.Screenshot, sizeRem: 1 }),
-    ),
-  );
+  screenshotBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Screenshot, sizeRem: 1 })));
 
   // ── textarea ──────────────────────────────────────────────────────────────
   const textarea = doc.createElement('textarea') as HTMLTextAreaElement;
@@ -152,10 +148,16 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
     )
   );
 
-  container.appendChild(fullTextBtn);
-  container.appendChild(screenshotBtn);
-  container.appendChild(textarea);
-  container.appendChild(sendBtn);
+  container.appendChild(preview.container);
+
+  const inputRow = doc.createElement('div');
+  inputRow.classList.add('flex', 'items-center', 'justify-center', 'gap-2');
+  inputRow.appendChild(fullTextBtn);
+  inputRow.appendChild(screenshotBtn);
+  inputRow.appendChild(textarea);
+  inputRow.appendChild(sendBtn);
+
+  container.appendChild(inputRow);
 
   // ── disclaimer label ──────────────────────────────────────────────────────
   const disclaimer = doc.createElement('div');
@@ -188,6 +190,18 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
       sendBtn.disabled = true;
       sendBtn.classList.remove('bg-rose-500', 'dark:bg-rose-600', 'hover:bg-rose-600');
       sendBtn.classList.add('bg-slate-200', 'dark:bg-neutral-800', 'text-slate-400', 'dark:text-neutral-600');
+    }
+  }
+
+  function updateScreenshotBtnState() {
+    if (preview.isFull()) {
+      screenshotBtn.classList.add('opacity-40', 'cursor-not-allowed');
+      screenshotBtn.style.pointerEvents = 'none';
+      screenshotBtn.title = '已达到 9 张图片上限';
+    } else {
+      screenshotBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+      screenshotBtn.style.pointerEvents = '';
+      screenshotBtn.title = 'Screenshot';
     }
   }
 
@@ -259,6 +273,34 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
     updateSendBtnState();
   });
 
+  // paste: handle image data from clipboard
+  textarea.addEventListener('paste', (e: ClipboardEvent) => {
+    if (preview.isFull()) return;
+
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const blob = item.getAsFile();
+        if (!blob) continue;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          if (dataUrl) {
+            preview.addImage(dataUrl);
+            updateScreenshotBtnState();
+          }
+        };
+        reader.readAsDataURL(blob);
+        break;
+      }
+    }
+  });
+
   // Enter to send, Shift+Enter for newline
   textarea.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -298,18 +340,25 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
     }
   });
 
-  screenshotBtn.addEventListener("click", () => {
+  screenshotBtn.addEventListener('click', () => {
+    if (preview.isFull()) return;
     if (addon.chatManager.currentTabID) {
       const reader = getReaderByTabId(addon.chatManager.currentTabID);
       if (!reader) {
-        ztoolkit.log("[InputArea] No reader available for capture");
+        ztoolkit.log('[InputArea] No reader available for capture');
         return;
       }
-      if (reader?._type === "pdf") {
-        startCaptureMode(reader as _ZoteroTypes.ReaderInstance<"pdf">);
+      if (reader?._type === 'pdf') {
+        startCaptureMode(reader as _ZoteroTypes.ReaderInstance<'pdf'>, (imageData: string) => {
+          preview.addImage(imageData);
+          updateScreenshotBtnState();
+        });
       }
     }
   });
+
+  preview.render();
+  updateScreenshotBtnState();
 
   return wrapper;
 }

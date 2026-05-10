@@ -16,7 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { config } from "../../package.json";
+import { config } from '../../package.json';
 
 interface Point {
   x: number;
@@ -34,8 +34,9 @@ interface CaptureSession {
   overlay: HTMLElement | null;
   tooltip: HTMLElement | null;
   selection: Selection | null;
-  reader: _ZoteroTypes.ReaderInstance<"pdf"> | null;
+  reader: _ZoteroTypes.ReaderInstance<'pdf'> | null;
   container: HTMLElement | null;
+  onCaptureCallback: ((imageData: string) => void) | null;
 }
 
 const session: CaptureSession = {
@@ -45,19 +46,19 @@ const session: CaptureSession = {
   selection: null,
   reader: null,
   container: null,
+  onCaptureCallback: null,
 };
 
-export function startCaptureMode(
-  reader: _ZoteroTypes.ReaderInstance<"pdf">,
-): void {
+export function startCaptureMode(reader: _ZoteroTypes.ReaderInstance<'pdf'>, onCapture?: (imageData: string) => void): void {
   if (session.isActive) {
     cancelCaptureMode();
     return;
   }
-  ztoolkit.log("reader to capture", reader);
+  session.onCaptureCallback = onCapture ?? null;
+  ztoolkit.log('reader to capture', reader);
   const viewerContainer = getViewerContainer(reader);
   if (!viewerContainer) {
-    ztoolkit.log("[Capture] Cannot find PDF viewer container");
+    ztoolkit.log('[Capture] Cannot find PDF viewer container');
     return;
   }
 
@@ -68,7 +69,7 @@ export function startCaptureMode(
   createOverlay(viewerContainer);
   bindCaptureEvents();
 
-  ztoolkit.log("[Capture] Capture mode started");
+  ztoolkit.log('[Capture] Capture mode started');
 }
 
 export function cancelCaptureMode(): void {
@@ -88,8 +89,9 @@ export function cancelCaptureMode(): void {
   session.selection = null;
   session.reader = null;
   session.container = null;
+  session.onCaptureCallback = null;
 
-  ztoolkit.log("[Capture] Capture mode cancelled");
+  ztoolkit.log('[Capture] Capture mode cancelled');
 }
 
 function completeCapture(): void {
@@ -101,32 +103,34 @@ function completeCapture(): void {
   try {
     const imageData = captureSelectionArea();
     if (imageData) {
-      openCapturePreview(imageData);
+      if (session.onCaptureCallback) {
+        session.onCaptureCallback(imageData);
+      } else {
+        openCapturePreview(imageData);
+      }
     }
   } catch (error) {
-    ztoolkit.log("[Capture] Failed to capture:", error);
+    ztoolkit.log('[Capture] Failed to capture:', error);
   } finally {
     cancelCaptureMode();
   }
 }
 
-function getViewerContainer(
-  reader: _ZoteroTypes.ReaderInstance<"pdf">,
-): HTMLElement | null {
+function getViewerContainer(reader: _ZoteroTypes.ReaderInstance<'pdf'>): HTMLElement | null {
   const iframeWindow = (reader as any)._iframeWindow;
   if (!iframeWindow) return null;
 
   const pdfWindow = iframeWindow[0];
   if (!pdfWindow?.document) return null;
 
-  return pdfWindow.document.querySelector("#viewer") as HTMLElement | null;
+  return pdfWindow.document.querySelector('#viewer') as HTMLElement | null;
 }
 
 function createOverlay(container: HTMLElement): void {
   const doc = container.ownerDocument;
 
-  const overlay = doc.createElement("div");
-  overlay.className = "capture-overlay";
+  const overlay = doc.createElement('div');
+  overlay.className = 'capture-overlay';
   overlay.style.cssText = `
     position: fixed;
     top: 0;
@@ -139,9 +143,9 @@ function createOverlay(container: HTMLElement): void {
     user-select: none;
   `;
 
-  const tooltip = doc.createElement("div");
-  tooltip.className = "capture-tooltip";
-  tooltip.textContent = "Drag to select area, ESC to cancel";
+  const tooltip = doc.createElement('div');
+  tooltip.className = 'capture-tooltip';
+  tooltip.textContent = 'Drag to select area, ESC to cancel';
   tooltip.style.cssText = `
     position: fixed;
     top: 20px;
@@ -166,19 +170,19 @@ function createOverlay(container: HTMLElement): void {
 function bindCaptureEvents(): void {
   const doc = session.container!.ownerDocument;
 
-  doc.addEventListener("mousedown", handleMouseDown, true);
-  doc.addEventListener("mousemove", handleMouseMove, true);
-  doc.addEventListener("mouseup", handleMouseUp, true);
-  doc.addEventListener("keydown", handleKeyDown, true);
+  doc.addEventListener('mousedown', handleMouseDown, true);
+  doc.addEventListener('mousemove', handleMouseMove, true);
+  doc.addEventListener('mouseup', handleMouseUp, true);
+  doc.addEventListener('keydown', handleKeyDown, true);
 }
 
 function unbindCaptureEvents(): void {
   const doc = session.container!.ownerDocument;
 
-  doc.removeEventListener("mousedown", handleMouseDown, true);
-  doc.removeEventListener("mousemove", handleMouseMove, true);
-  doc.removeEventListener("mouseup", handleMouseUp, true);
-  doc.removeEventListener("keydown", handleKeyDown, true);
+  doc.removeEventListener('mousedown', handleMouseDown, true);
+  doc.removeEventListener('mousemove', handleMouseMove, true);
+  doc.removeEventListener('mouseup', handleMouseUp, true);
+  doc.removeEventListener('keydown', handleKeyDown, true);
 }
 
 function handleMouseDown(e: MouseEvent): void {
@@ -186,8 +190,8 @@ function handleMouseDown(e: MouseEvent): void {
   if (e.button !== 0) return;
 
   const doc = (e.target as Node | null)?.ownerDocument || document;
-  const selectionEl = doc.createElement("div");
-  selectionEl.className = "capture-selection";
+  const selectionEl = doc.createElement('div');
+  selectionEl.className = 'capture-selection';
   selectionEl.style.cssText = `
     position: fixed;
     border: 2px solid #3b82f6;
@@ -245,7 +249,7 @@ function handleMouseUp(e: MouseEvent): void {
 function handleKeyDown(e: KeyboardEvent): void {
   if (!session.isActive) return;
 
-  if (e.key === "Escape") {
+  if (e.key === 'Escape') {
     cancelCaptureMode();
     e.preventDefault();
     e.stopPropagation();
@@ -293,7 +297,7 @@ function captureSelectionArea(): string | null {
       pageIndex: number;
     }> = [];
 
-    const canvases = pdfWindow.document.querySelectorAll("canvas");
+    const canvases = pdfWindow.document.querySelectorAll('canvas');
 
     for (let i = 0; i < canvases.length; i++) {
       const canvas = canvases[i] as HTMLCanvasElement;
@@ -315,11 +319,11 @@ function captureSelectionArea(): string | null {
     const captureWidth = selectionRect.right - selectionRect.left;
     const captureHeight = selectionRect.bottom - selectionRect.top;
 
-    const outputCanvas = pdfWindow.document.createElement("canvas");
+    const outputCanvas = pdfWindow.document.createElement('canvas');
     outputCanvas.width = captureWidth * scale;
     outputCanvas.height = captureHeight * scale;
 
-    const ctx = outputCanvas.getContext("2d");
+    const ctx = outputCanvas.getContext('2d');
     if (!ctx) return null;
 
     ctx.scale(scale, scale);
@@ -349,13 +353,13 @@ function captureSelectionArea(): string | null {
         destX,
         destY,
         intersectWidth,
-        intersectHeight,
+        intersectHeight
       );
     }
 
-    return outputCanvas.toDataURL("image/png");
+    return outputCanvas.toDataURL('image/png');
   } catch (error) {
-    ztoolkit.log("[Capture] Error capturing selection:", error);
+    ztoolkit.log('[Capture] Error capturing selection:', error);
     return null;
   }
 }
@@ -366,18 +370,11 @@ export function openCapturePreview(imageData: string): void {
   const dialogWindow = Zotero.getMainWindow().openDialog(
     `chrome://${config.addonRef}/content/captureWindow.html`,
     `${config.addonRef}-capture-preview`,
-    [
-      "chrome",
-      "centerscreen",
-      "resizable",
-      "width=800",
-      "height=600",
-      "dialog=no",
-    ].join(","),
-    windowArgs,
+    ['chrome', 'centerscreen', 'resizable', 'width=800', 'height=600', 'dialog=no'].join(','),
+    windowArgs
   );
 
   if (!dialogWindow) {
-    ztoolkit.log("[Capture] Failed to open preview window");
+    ztoolkit.log('[Capture] Failed to open preview window');
   }
 }

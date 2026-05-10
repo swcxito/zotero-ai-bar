@@ -12,8 +12,7 @@
       }
 
       body {
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         background: #f3f4f6;
         height: 100vh;
         display: flex;
@@ -84,7 +83,6 @@
   </head>
   <body>
     <div id="toolbar">
-
       <button id="copy-btn">Copy</button>
       <button id="close-btn">Close</button>
       <span id="info"></span>
@@ -94,13 +92,13 @@
     </div>
 
     <script>
-      window.addEventListener("load", () => {
+      window.addEventListener('load', () => {
         const imageData = window.arguments?.[0]?.imageData;
-        const img = document.getElementById("captured-image");
-        const info = document.getElementById("info");
+        const img = document.getElementById('captured-image');
+        const info = document.getElementById('info');
 
         if (!imageData) {
-          info.textContent = "No image data";
+          info.textContent = 'No image data';
           return;
         }
 
@@ -110,21 +108,20 @@
           info.textContent = `${img.naturalWidth} × ${img.naturalHeight} px`;
         };
 
-        document.getElementById("close-btn").addEventListener("click", () => {
+        document.getElementById('close-btn').addEventListener('click', () => {
           window.close();
         });
 
-        document.getElementById("copy-btn").addEventListener("click", () => {
+        document.getElementById('copy-btn').addEventListener('click', () => {
           if (navigator.clipboard) {
             fetch(imageData)
               .then((res) => res.blob())
               .then((blob) => {
-                const item = new ClipboardItem({ "image/png": blob });
+                const item = new ClipboardItem({ 'image/png': blob });
                 navigator.clipboard.write([item]);
               });
           }
         });
-
       });
     </script>
   </body>
