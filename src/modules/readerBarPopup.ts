@@ -100,6 +100,24 @@ export function registerAIBarStyleSheet(win: _ZoteroTypes.MainWindow) {
   doc.documentElement?.appendChild(styles);
 }
 
+/**
+ * 将 KaTeX 字体 @font-face 规则注册到主窗口文档级。
+ * 必须在主窗口加载时注入，Shadow DOM 内的 <link> 的 @font-face
+ * 不会注册到浏览器字体表。
+ */
+export function registerKaTeXFontSheet(win: _ZoteroTypes.MainWindow) {
+  const doc = win.document;
+  if (doc.querySelector(`link[href*="katex.min.css"]`)) return;
+  const link = ztoolkit.UI.createElement(doc, "link", {
+    properties: {
+      type: "text/css",
+      rel: "stylesheet",
+      href: `chrome://${addon.data.config.addonRef}/content/styles/katex.min.css`,
+    },
+  });
+  doc.documentElement?.appendChild(link);
+}
+
 // entry point for reader popup
 export function registerReaderInitializer() {
   Zotero.Reader.registerEventListener(

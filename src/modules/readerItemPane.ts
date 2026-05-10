@@ -25,7 +25,6 @@ import {
 } from "../utils/providers";
 import { getPref } from "../utils/prefs";
 // import { llmTest } from "./llm";
-
 export function injectCSS(doc: Document | ShadowRoot, filename: string) {
   // 获取插件内资源的 URL
   const url = `chrome://${config.addonRef}/content/styles/${filename}`;
@@ -124,7 +123,6 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
       // 将 CSS 注入到 Shadow DOM 中
       // injectDebugTailwindScript(shadowRoot);
       injectCSS(shadowRoot, "katex.min.css");
-      injectCSS(shadowRoot, "katex-swap.min.css");
       injectCSS(shadowRoot, "atom-one.css");
       injectCSS(shadowRoot, `../app.css`);
 

@@ -122,7 +122,9 @@ export function ensureChatWindowUI(doc: Document) {
     "flex",
     "flex-col",
     "flex-1",
+    "min-w-0",
     "overflow-y-auto",
+    "overflow-x-hidden",
     "px-1",
     "pb-2",
   );

@@ -35,6 +35,7 @@ export function ChatBox({
     tag: "div",
     classList: [
       "w-full",
+      "min-w-0",
       "flex",
       "animate-in",
       "fade-in",
@@ -56,6 +57,7 @@ export function ChatBox({
         tag: "div",
         classList: [
           "chat-message",
+          "min-w-0",
           "transition-all",
           "duration-300",
           "w-full",

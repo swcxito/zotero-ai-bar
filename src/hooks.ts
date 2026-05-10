@@ -3,6 +3,7 @@ import { registerPrefsScripts } from "./modules/preferenceScript";
 import { createZToolkit } from "./utils/ztoolkit";
 import {
   registerAIBarStyleSheet,
+  registerKaTeXFontSheet,
   registerReaderInitializer,
 } from "./modules/readerBarPopup";
 import { onModelDialogLoad } from "./modules/modelDialog";
@@ -58,6 +59,7 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   registerTabObserver();
   addon.chatManager.currentTabID = win.Zotero_Tabs.selectedID;
   registerAIBarStyleSheet(win);
+  registerKaTeXFontSheet(win);
   // await HelperExampleFactory.dialogExample();
 
   win.MozXULElement.insertFTLIfNeeded(

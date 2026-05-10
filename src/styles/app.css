@@ -128,12 +128,17 @@
     @apply w-full min-w-0 max-w-full border-separate border-spacing-0 rounded-xl border border-rose-200 dark:border-rose-900/50 my-6 overflow-x-auto block text-sm;
   }
 
-  .chat-message math[display="block"] {
-    @apply block overflow-y-hidden py-2 min-w-0 max-w-full;
+  .chat-message .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
   }
 
-  .math-scroll-wrapper {
-    @apply block overflow-x-auto max-w-full;
+  .chat-message .katex-display > .katex {
+    width: max-content;
+    min-width: 100%;
   }
 
   .chat-message th {
