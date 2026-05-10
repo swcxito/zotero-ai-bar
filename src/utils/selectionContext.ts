@@ -318,7 +318,7 @@ async function getPageBatchRecognizerData(itemID: number, startIndex: number) {
     data = await Zotero.PDFWorker._query('getRecognizerData', { buf, password: '' }, [buf]);
   } catch (e: any) {
     const msg = typeof e === 'object' && e.message ? e.message : JSON.stringify(e);
-    throw new Error(`Failed to get recognizer data: ${msg}`);
+    throw new Error(`Failed to get recognizer data: ${msg}`, { cause: e });
   }
 
   // 4. 修正页码偏移

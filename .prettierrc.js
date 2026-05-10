@@ -19,8 +19,6 @@ export default {
   trailingComma: 'es5',
   // 在对象文字中的括号之间打印空格
   bracketSpacing: true,
-  // jsx 标签的反尖括号需要换行
-  jsxBracketSameLine: false,
   // 在jsx中把'>' 是否单独放一行
   bracketSameLine: false,
   // 在单独的箭头函数参数周围包括括号 always：(x) => x \ avoid：x => x
