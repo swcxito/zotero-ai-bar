@@ -135,7 +135,10 @@ export function CardHead({
           IconView({
             iconMarkup: iconUrl,
             sizeRem: 1.5,
-            extraClasses: ["shrink-0"],
+            extraClasses: [
+              "shrink-0",
+              ...(iconUrl.startsWith("chrome://") ? [] : ["provider-icon-img"]),
+            ],
           }),
           // text section
           {

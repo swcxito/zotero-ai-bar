@@ -295,9 +295,13 @@ class ModelDialogV2 {
       const img = this.doc.createElement("img");
       img.src = getModelsDevLogoUrl(providerId);
       img.onerror = () => {
-        img.src = resolveProviderIcon(providerId);
+        const fallback = resolveProviderIcon(providerId);
+        img.src = fallback;
+        if (fallback.startsWith("chrome://")) {
+          img.classList.remove("provider-icon-img");
+        }
       };
-      img.className = "w-4 h-4 shrink-0";
+      img.className = "w-4 h-4 shrink-0 provider-icon-img";
       btn.appendChild(img);
       const span = this.doc.createElement("span");
       span.textContent = name;

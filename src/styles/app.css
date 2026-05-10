@@ -180,4 +180,10 @@
   .ai-bar-error-text {
     @apply text-rose-600 dark:text-rose-400 whitespace-pre-wrap break-words;
   }
+
+  @media (prefers-color-scheme: dark) {
+    .provider-icon-img {
+      filter: invert(1) hue-rotate(180deg) !important;
+    }
+  }
 }
