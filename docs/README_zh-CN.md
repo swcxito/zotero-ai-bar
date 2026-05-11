@@ -11,19 +11,23 @@
 
 ## 赞助
 
+如果你喜欢这个项目，欢迎在 GitHub 上点个 ⭐！
+
 如果你觉得这个项目对你有帮助，欢迎通过以下方式赞助，支持我继续开发和维护这个项目：
 
 [<img alt="爱发电" src="/docs/assets/afdian-btn-zh.png" height="60px"/>](https://afdian.com/a/fukeke)
 [<img alt="&amp;amp;quot;Buy Me A Coffee&amp;amp;quot;" height="60px" src="/docs/assets/red-button.png"/>](https://www.buymeacoffee.com/fukeke)
 
-## v1.0-beta 更新内容
+## v1.2 更新内容
 
 ### 全新供应商 & 模型架构
 
 - 开箱支持 **27 个供应商**和 **763+ 模型**。
 - **原生 SDK 分发**：为主要供应商适配原生的 AI SDK，提高兼容性，解决过往的供应商兼容问题。
-- **多环境变量支持（开发中）**：需要多个环境变量的供应商（如 Azure）在配置对话框中显示独立输入框。
+- **多环境变量支持**：需要多个环境变量的供应商（如 Azure）在配置对话框中显示独立输入框。
 - **供应商及模型浏览器**：提供供应商和模型浏览界面，支持搜索，快速添加模型，避免繁琐的手动输入。
+- **支持图片输入**：可以截图或粘贴图片，不怕图表看不懂！
+  ![img-input.png](assets/img-input.png)
 
 ### 其他改进
 

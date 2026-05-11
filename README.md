@@ -11,19 +11,23 @@ You can visit the [**Project Homepage**](https://zotero.fukeke.com) for more inf
 
 ## Support
 
+If you like this project, please give it a ⭐ on GitHub — it really helps!
+
 If you find this project helpful, please consider supporting its development and maintenance:
 
 [<img alt="&quot;Buy Me A Coffee&quot;" height="60px" src="docs/assets/red-button.png"/>](https://www.buymeacoffee.com/fukeke)
 [<img alt="Afdian" src="docs/assets/afdian-btn-en.png" height="60px"/>](https://afdian.com/a/fukeke)
 
-## What's New in v1.0-beta
+## What's New in v1.2
 
 ### New Provider & Model Architecture
 
 - Out-of-the-box support for **27 providers** and **763+ models**.
 - **Native SDK dispatch**: Adapt native AI SDKs for major providers, improving compatibility and resolving past provider issues.
-- **Multi-env support (in development)**: Providers with multiple environment variables (e.g., Azure) show separate input fields in the configuration dialog.
+- **Multi-env support **: Providers with multiple environment variables (e.g., Azure) show separate input fields in the configuration dialog.
 - **Provider & model browser**: Browse providers and models with search, quickly add models without tedious manual entry.
+- **Image input support**: You can screenshot or paste images, no fear of not understanding charts!
+  ![img-input.png](docs/assets/img-input.png)
 
 ### Other Improvements
 
