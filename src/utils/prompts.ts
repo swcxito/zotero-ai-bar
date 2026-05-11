@@ -79,7 +79,8 @@ export function getAutoImagePrompt(outputLanguage: string): string {
 额外约束：
 请使用准确、专业的学术术语。
 如果图中的某些文字过于模糊无法辨认，请结合上下文给出合理的推测，并注明"推测"字样。
-排版清晰，合理使用加粗和列表，方便阅读。
+排版清晰，合理使用markdown语法，方便阅读。
+如果有多张图片，请**依次解释**。
 
 输出语言要求：请用${lang || '中文'}输出。
 `;
