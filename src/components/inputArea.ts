@@ -25,6 +25,7 @@ import { Session } from '../modules/chatManager';
 
 import { startCaptureMode } from '../modules/capture';
 import { getReaderByTabId } from '../modules/tabObserver';
+import { checkModelSupportsImage } from '../utils/providers';
 
 /**
  * Build the InputArea widget and wire up all interactive logic.
@@ -297,9 +298,30 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
     const messageContainer = root.shadowRoot.querySelector('.message-container') as HTMLElement | null;
     if (!messageContainer) return;
 
-    // Read images and clear preview immediately
+    // Read images — check model support before clearing preview
     const imageUrls = addon.data.inputImages.get(sectionId) || [];
-    if (imageUrls.length > 0) {
+    if (imageUrls.length > 0 && !checkModelSupportsImage()) {
+      const services = Zotero.getMainWindow().Services as any;
+      const flags =
+        services.prompt.BUTTON_POS_0 * services.prompt.BUTTON_TITLE_IS_STRING + services.prompt.BUTTON_POS_1 * services.prompt.BUTTON_TITLE_CANCEL;
+      const result = services.prompt.confirmEx(
+        Zotero.getMainWindow(),
+        getString('image-unsupported-title'),
+        getString('image-unsupported-message'),
+        flags,
+        getString('image-unsupported-send-text'),
+        '',
+        '',
+        '',
+        {}
+      );
+      if (result === 1) return; // user cancelled — keep images in preview
+      // user chose "send text only" — clear images and proceed
+      addon.data.inputImages.delete(sectionId);
+      preview.render();
+      updateScreenshotBtnState();
+      imageUrls.length = 0;
+    } else if (imageUrls.length > 0) {
       addon.data.inputImages.delete(sectionId);
       preview.render();
       updateScreenshotBtnState();

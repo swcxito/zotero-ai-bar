@@ -30,3 +30,7 @@ model-dialog-delete-model = Delete Model
 model-dialog-add-model = Add Model
 
 capture-drag-hint = Drag to select area, ESC to cancel
+
+image-unsupported-title = Model Does Not Support Images
+image-unsupported-message = The selected model does not support image input. Send text only?
+image-unsupported-send-text = Send Text Only

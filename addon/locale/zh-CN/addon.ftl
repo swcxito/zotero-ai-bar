@@ -30,3 +30,7 @@ model-dialog-delete-model = 删除模型
 model-dialog-add-model = 添加模型
 
 capture-drag-hint = 拖拽选取截图区域，按 ESC 取消
+
+image-unsupported-title = 模型不支持图片
+image-unsupported-message = 当前模型不支持图片输入，是否仅发送文字？
+image-unsupported-send-text = 仅发送文字

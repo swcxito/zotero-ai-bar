@@ -3,6 +3,7 @@ import { InputArea } from '../components/inputArea';
 import { renderMarkdown } from '../utils/markdown';
 import { getString } from '../utils/locale';
 import { getReaderSourceLabel } from './readerBarPopup';
+import { checkModelSupportsImage } from '../utils/providers';
 
 export const CHAT_WINDOW_MESSAGE_CONTAINER_ID = 'ai-bar-window-message-container';
 
@@ -32,9 +33,30 @@ async function submitFromWindowInput(doc: Document, input: HTMLTextAreaElement, 
   const container = getMessageContainer(doc);
   if (!container) return;
 
-  // Read images and clear preview immediately
+  // Read images — check model support before clearing preview
   const imageUrls = addon.data.inputImages.get(addon.chatManager.currentTabID) || [];
-  if (imageUrls.length > 0) {
+  if (imageUrls.length > 0 && !checkModelSupportsImage()) {
+    const services = Zotero.getMainWindow().Services as any;
+    const flags =
+      services.prompt.BUTTON_POS_0 * services.prompt.BUTTON_TITLE_IS_STRING + services.prompt.BUTTON_POS_1 * services.prompt.BUTTON_TITLE_CANCEL;
+    const result = services.prompt.confirmEx(
+      Zotero.getMainWindow(),
+      getString('image-unsupported-title'),
+      getString('image-unsupported-message'),
+      flags,
+      getString('image-unsupported-send-text'),
+      '',
+      '',
+      '',
+      {}
+    );
+    if (result === 1) return; // user cancelled — keep images in preview
+    // user chose "send text only" — clear images and proceed
+    addon.data.inputImages.delete(addon.chatManager.currentTabID);
+    const api = (inputAreaWrapper as any)?._imagePreviewAPI;
+    if (api) api.render();
+    imageUrls.length = 0;
+  } else if (imageUrls.length > 0) {
     addon.data.inputImages.delete(addon.chatManager.currentTabID);
     const api = (inputAreaWrapper as any)?._imagePreviewAPI;
     if (api) api.render();
