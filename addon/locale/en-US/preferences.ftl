@@ -77,4 +77,6 @@ pref-use-translate-model =
     .label = Use Dedicated Translation Model
 pref-translate-model-select = Translation Model
 pref-translate-model-default = Default Model
+pref-translate-target-language = Translation Target Language
+pref-translate-target-language-follow = Follow Zotero Language
 pref-help = { $name } Build { $version } { $time }

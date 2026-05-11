@@ -34,7 +34,7 @@ export async function registerPrefsScripts(_window: Window) {
   } else {
     addon.data.prefs.window = _window;
   }
-  updatePrefsUI();
+  await updatePrefsUI();
   bindPrefEvents();
 }
 
@@ -89,7 +89,7 @@ function setInitialSelectorValue(selector: HTMLSelectElement, doc: Document) {
   }
 }
 
-function updatePrefsUI() {
+async function updatePrefsUI() {
   const doc = addon.data.prefs?.window.document;
   if (!doc) return;
 
@@ -121,6 +121,44 @@ function updatePrefsUI() {
   const translateModelSelector = doc.querySelector(makeId('translate-model-selector')) as HTMLSelectElement;
   if (translateModelSelector) {
     populateSelectorFromV2(translateModelSelector, doc, true);
+  }
+
+  // Populate target language selector from Zotero.Styles.locales
+  const targetLangSelector = doc.querySelector(makeId('translate-target-language')) as HTMLSelectElement;
+  if (targetLangSelector) {
+    const currentValue = targetLangSelector.value;
+    // Remove all dynamically-added options except the first ("Follow Zotero Language")
+    while (targetLangSelector.options.length > 1) {
+      targetLangSelector.remove(1);
+    }
+    try {
+      ztoolkit.log('[updatePrefsUI] Zotero.Styles.initialized():', Zotero.Styles.initialized());
+      if (!Zotero.Styles.initialized()) {
+        ztoolkit.log('[updatePrefsUI] Calling Zotero.Styles.init()...');
+        await Zotero.Styles.init();
+        ztoolkit.log('[updatePrefsUI] Zotero.Styles.init() completed');
+      }
+      const locales = Zotero.Styles.locales as Record<string, string>;
+      ztoolkit.log('[updatePrefsUI] Zotero.Styles.locales keys count:', Object.keys(locales).length);
+      const zoteroLocale = Zotero.locale || 'en-US';
+      const sortedCodes = Object.keys(locales).sort();
+      for (const code of sortedCodes) {
+        const opt = doc.createElement('option');
+        opt.value = code;
+        opt.textContent = locales[code];
+        targetLangSelector.appendChild(opt);
+      }
+      // Move current Zotero locale to second position (right after "Follow Zotero Language")
+      const zoteroOpt =
+        Array.from(targetLangSelector.options).find((opt) => opt.value === zoteroLocale) ??
+        Array.from(targetLangSelector.options).find((opt) => opt.value === zoteroLocale.split('-')[0]);
+      if (zoteroOpt && zoteroOpt.index > 1) {
+        targetLangSelector.insertBefore(zoteroOpt, targetLangSelector.options[1]);
+      }
+    } catch (e) {
+      ztoolkit.log('[updatePrefsUI] Failed to populate target languages:', e);
+    }
+    targetLangSelector.value = currentValue;
   }
 
   renderPromptPreview();

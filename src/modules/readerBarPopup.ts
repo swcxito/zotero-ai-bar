@@ -26,6 +26,11 @@ import { ModelInfo } from '../components/modelInfo';
 import { ExpandButton, ExpandMenuItem } from '../components/buttons/expandButton';
 import { Icons } from '../components/common';
 
+function getTargetLanguage(): string {
+  const prefLang = getPref('translate.targetLanguage');
+  return prefLang || Zotero.locale;
+}
+
 // TODO 支持其它格式
 
 export function getReaderSourceLabel(reader?: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>) {
@@ -159,7 +164,7 @@ function smartAutoTranslate(
     }
     addon.chatManager
       .sendChatRequest({
-        userPrompt: aiBarCommands.translate.getPrompt(Zotero.locale),
+        userPrompt: aiBarCommands.translate.getPrompt(getTargetLanguage()),
         sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
         isFromPopup: true,
         contextPromise: selectionContextPromise,
@@ -199,7 +204,7 @@ function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 
 
     addon.chatManager.sendChatRequest({
       // If input matches a command, use the command's prompt; otherwise treat input as a custom prompt
-      userPrompt: command?.getPrompt(Zotero.locale) ?? input,
+      userPrompt: command?.getPrompt(getTargetLanguage()) ?? input,
       sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
       isFromPopup: true,
       // Enable auto-copy for smartCopy command only

@@ -101,6 +101,12 @@
     <label>
       <html:h2 data-l10n-id="pref-translate" />
     </label>
+    <hbox align="center" style="margin-top: 10px">
+      <html:label data-l10n-id="pref-translate-target-language" flex="1" />
+      <html:select class="select" id="__addonRef__-translate-target-language" preference="translate.targetLanguage">
+        <html:option value="" data-l10n-id="pref-translate-target-language-follow" />
+      </html:select>
+    </hbox>
     <hbox align="center" style="margin-top: 8px">
       <checkbox id="__addonRef__-auto-translate" preference="translate.enableAuto" data-l10n-id="pref-auto-translate" style="flex: 1" />
     </hbox>

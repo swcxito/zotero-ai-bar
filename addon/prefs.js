@@ -23,3 +23,4 @@ pref('translate.enableAuto', false);
 pref('translate.extendContext', 'follow');
 pref('translate.useAlternativeModel', false);
 pref('translate.modelId', '');
+pref('translate.targetLanguage', '');

@@ -81,6 +81,8 @@ export type FluentMessageId =
   | 'pref-translate'
   | 'pref-translate-model-default'
   | 'pref-translate-model-select'
+  | 'pref-translate-target-language'
+  | 'pref-translate-target-language-follow'
   | 'pref-ui'
   | 'pref-use-translate-model'
   | 'prefs-title'
