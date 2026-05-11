@@ -21,7 +21,7 @@ import { Session } from './chatManager';
 import { ModelMessage } from 'ai';
 import { onLLMStreamEndV2, onLLMStreamErrorV2, onLLMStreamStartV2, onLLMStreamUpdateV2 } from './chatUI';
 import { ensureWebStreamsGlobals } from '../utils/webStreamsGlobals';
-import { PROVIDER_ENV_KEY_MAP } from '../utils/providers';
+import { resolveApiUrl } from '../utils/providers';
 // import { JSONObject } from "@ai-sdk/provider";
 
 type InstalledAISDKPackage =
@@ -32,7 +32,9 @@ type InstalledAISDKPackage =
   | '@ai-sdk/google'
   | '@ai-sdk/xai'
   | '@ai-sdk/openai'
-  | '@openrouter/ai-sdk-provider';
+  | '@openrouter/ai-sdk-provider'
+  | '@ai-sdk/google-vertex/edge'
+  | '@ai-sdk/google-vertex/anthropic/edge';
 
 type ProviderCreateFunction =
   | typeof import('@ai-sdk/openai-compatible').createOpenAICompatible
@@ -42,7 +44,9 @@ type ProviderCreateFunction =
   | typeof import('@ai-sdk/google').createGoogleGenerativeAI
   | typeof import('@ai-sdk/xai').createXai
   | typeof import('@ai-sdk/openai').createOpenAI
-  | typeof import('@openrouter/ai-sdk-provider').createOpenRouter;
+  | typeof import('@openrouter/ai-sdk-provider').createOpenRouter
+  | typeof import('@ai-sdk/google-vertex/edge').createVertex
+  | typeof import('@ai-sdk/google-vertex/anthropic/edge').createVertexAnthropic;
 
 type ProviderCreateFunctionMap = Partial<Record<InstalledAISDKPackage, ProviderCreateFunction>>;
 
@@ -56,17 +60,20 @@ export async function preloadLLMRuntime() {
     preloadLLMRuntimePromise = (async () => {
       ensureWebStreamsGlobals();
 
-      const [ai, openaiCompatible, openai, amazonBedrock, anthropic, azure, google, xai, openrouter] = await Promise.all([
-        import('ai'),
-        import('@ai-sdk/openai-compatible'),
-        import('@ai-sdk/openai'),
-        import('@ai-sdk/amazon-bedrock'),
-        import('@ai-sdk/anthropic'),
-        import('@ai-sdk/azure'),
-        import('@ai-sdk/google'),
-        import('@ai-sdk/xai'),
-        import('@openrouter/ai-sdk-provider'),
-      ]);
+      const [ai, openaiCompatible, openai, amazonBedrock, anthropic, azure, google, xai, openrouter, googleVertex, googleVertexAnthropic] =
+        await Promise.all([
+          import('ai'),
+          import('@ai-sdk/openai-compatible'),
+          import('@ai-sdk/openai'),
+          import('@ai-sdk/amazon-bedrock'),
+          import('@ai-sdk/anthropic'),
+          import('@ai-sdk/azure'),
+          import('@ai-sdk/google'),
+          import('@ai-sdk/xai'),
+          import('@openrouter/ai-sdk-provider'),
+          import('@ai-sdk/google-vertex/edge'),
+          import('@ai-sdk/google-vertex/anthropic/edge'),
+        ]);
 
       streamTextFn = ai.streamText;
 
@@ -78,6 +85,8 @@ export async function preloadLLMRuntime() {
       CREATE_PROVIDER_FNS['@ai-sdk/google'] = google.createGoogleGenerativeAI;
       CREATE_PROVIDER_FNS['@ai-sdk/xai'] = xai.createXai;
       CREATE_PROVIDER_FNS['@openrouter/ai-sdk-provider'] = openrouter.createOpenRouter;
+      CREATE_PROVIDER_FNS['@ai-sdk/google-vertex/edge'] = googleVertex.createVertex;
+      CREATE_PROVIDER_FNS['@ai-sdk/google-vertex/anthropic/edge'] = googleVertexAnthropic.createVertexAnthropic;
     })().catch((error) => {
       preloadLLMRuntimePromise = undefined;
       throw error;
@@ -230,33 +239,70 @@ function resolveSDKPackage(npm?: string): InstalledAISDKPackage {
   return '@ai-sdk/openai-compatible';
 }
 
+function buildProviderConfig(
+  providerId: string,
+  sdkPackage: InstalledAISDKPackage,
+  providerEnv: Record<string, string>,
+  baseUrl?: string
+): Record<string, unknown> {
+  switch (sdkPackage) {
+    case '@ai-sdk/amazon-bedrock':
+      if (providerEnv['AWS_BEARER_TOKEN_BEDROCK']) {
+        return { region: providerEnv['AWS_REGION'], apiKey: providerEnv['AWS_BEARER_TOKEN_BEDROCK'] };
+      }
+      return {
+        region: providerEnv['AWS_REGION'],
+        accessKeyId: providerEnv['AWS_ACCESS_KEY_ID'],
+        secretAccessKey: providerEnv['AWS_SECRET_ACCESS_KEY'],
+        sessionToken: providerEnv['AWS_SESSION_TOKEN'] || undefined,
+      };
+
+    case '@ai-sdk/azure': {
+      const resourceName = providerEnv['AZURE_RESOURCE_NAME'] || providerEnv['AZURE_COGNITIVE_SERVICES_RESOURCE_NAME'];
+      const azureApiKey = providerEnv['AZURE_API_KEY'] || providerEnv['AZURE_COGNITIVE_SERVICES_API_KEY'];
+      return { resourceName, apiKey: azureApiKey };
+    }
+
+    case '@ai-sdk/google-vertex/edge':
+    case '@ai-sdk/google-vertex/anthropic/edge':
+      return {
+        project: providerEnv['GOOGLE_VERTEX_PROJECT'],
+        location: providerEnv['GOOGLE_VERTEX_LOCATION'],
+      };
+
+    case '@ai-sdk/google':
+      return { apiKey: providerEnv['GEMINI_API_KEY'] };
+
+    default: {
+      // Cloudflare AI Gateway: construct gateway URL from env vars, route via openai-compatible
+      if (providerId === 'cloudflare-ai-gateway') {
+        const accountId = providerEnv['CLOUDFLARE_ACCOUNT_ID'];
+        const gatewayId = providerEnv['CLOUDFLARE_GATEWAY_ID'];
+        const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayId}`;
+        return { apiKey: providerEnv['CLOUDFLARE_API_TOKEN'], baseURL: gatewayUrl };
+      }
+
+      const apiKey = Object.values(providerEnv)[0];
+      if (!apiKey) throw new Error(`API key not configured for ${providerId}`);
+      const result: Record<string, unknown> = { apiKey };
+      if (baseUrl) result.baseURL = resolveApiUrl(baseUrl, providerEnv);
+      return result;
+    }
+  }
+}
+
 function createProvider(
   createFn: ProviderCreateFunction,
   sdkPackage: InstalledAISDKPackage,
-  opts: {
-    apiKey: string;
-    baseUrl?: string;
-    providerId: string;
-    modelId: string;
-  }
+  opts: { providerId: string; modelId: string; config: Record<string, unknown> }
 ) {
   if (sdkPackage === '@ai-sdk/openai-compatible') {
     const fn = createFn as typeof import('@ai-sdk/openai-compatible').createOpenAICompatible;
-    if (!opts.baseUrl) throw new Error(`Base URL required for ${sdkPackage}`);
-    return fn({
-      name: opts.providerId,
-      apiKey: opts.apiKey,
-      baseURL: opts.baseUrl,
-      includeUsage: true,
-    })(opts.modelId);
+    return fn({ name: opts.providerId, ...(opts.config as any), includeUsage: true })(opts.modelId as any);
   }
-  // Native SDKs: openai, anthropic, google, xai, openrouter, etc.
-  const fn = createFn as (config: { apiKey: string; name: string; baseURL?: string }) => any;
-  return fn({
-    apiKey: opts.apiKey,
-    name: opts.providerId,
-    ...(opts.baseUrl ? { baseURL: opts.baseUrl } : {}),
-  })(opts.modelId);
+
+  const fn = createFn as (config: Record<string, unknown>) => (modelId: string) => any;
+  return fn({ name: opts.providerId, ...opts.config })(opts.modelId);
 }
 
 async function createModel() {
@@ -277,21 +323,14 @@ async function createModel() {
       const userAdded = v2.addedModels.find((m) => m.providerId === providerId && m.id === modelId);
       if (!userAdded) throw new Error(`Model not found: ${modelId}`);
     }
-    //TODO UPDATE KEY
-    const envKey = PROVIDER_ENV_KEY_MAP[providerId] || 'API_KEY';
-    const apiKey = v2.env[providerId]?.[envKey];
-    if (!apiKey) throw new Error(`API key not configured for ${providerId}`);
-
+    const providerEnv = v2.env[providerId] ?? {};
     const sdkPackage = resolveSDKPackage(provider.npm);
     const createFn = CREATE_PROVIDER_FNS[sdkPackage];
     if (!createFn) throw new Error(`Provider SDK not loaded: ${sdkPackage}`);
 
-    return createProvider(createFn, sdkPackage, {
-      apiKey,
-      baseUrl: provider.api,
-      providerId,
-      modelId,
-    });
+    const config = buildProviderConfig(providerId, sdkPackage, providerEnv, provider.api);
+
+    return createProvider(createFn, sdkPackage, { providerId, modelId, config });
   }
 
   // V2 custom provider: not in commonProviders but in v2.addedProviders
@@ -300,21 +339,18 @@ async function createModel() {
     const model = v2.addedModels.find((m) => m.providerId === providerId && m.id === modelId);
     if (!model?.name) throw new Error(`Model not found: ${modelId}`);
 
-    const envValues = v2.env[providerId] ?? {};
-    const apiKey = Object.values(envValues)[0];
-    if (!apiKey) throw new Error(`API key not configured for ${providerId}`);
-
+    const providerEnv = v2.env[providerId] ?? {};
     const baseUrl = addedProvider.api;
     if (!baseUrl) throw new Error(`Base URL not configured for ${providerId}`);
 
+    const config = buildProviderConfig(providerId, '@ai-sdk/openai-compatible', providerEnv, baseUrl);
     const createFn = CREATE_PROVIDER_FNS['@ai-sdk/openai-compatible'];
     if (!createFn) throw new Error('OpenAI-compatible SDK not loaded.');
 
-    return createProvider(createFn as typeof import('@ai-sdk/openai-compatible').createOpenAICompatible, '@ai-sdk/openai-compatible', {
-      apiKey,
-      baseUrl,
+    return createProvider(createFn, '@ai-sdk/openai-compatible', {
       providerId,
       modelId: model.name,
+      config,
     });
   }
 

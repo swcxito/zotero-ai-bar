@@ -425,6 +425,14 @@ export const PROVIDER_ENV_KEY_MAP: Record<string, string> = {
   volcengine: 'ARK_API_KEY',
 };
 
+/** Replace `${VAR}` placeholders in a URL template with values from env */
+export function resolveApiUrl(template: string, env: Record<string, string>): string {
+  return template.replace(/\$\{(\w+)\}/g, (_, key: string) => {
+    if (!env[key]) throw new Error(`Environment variable "${key}" is not configured`);
+    return env[key];
+  });
+}
+
 /**
  * 从 providers JSON 初始化配置。
  * 只负责解析并补齐基础字段，不处理兼容性与业务校验。
