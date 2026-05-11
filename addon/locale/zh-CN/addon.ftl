@@ -28,3 +28,5 @@ model-dialog-browse-model = 浏览并选择模型
 model-dialog-type-model = 点击或输入模型名称...
 model-dialog-delete-model = 删除模型
 model-dialog-add-model = 添加模型
+
+capture-drag-hint = 拖拽选取截图区域，按 ESC 取消

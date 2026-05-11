@@ -28,3 +28,5 @@ model-dialog-browse-model = Browse & Select Model
 model-dialog-type-model = Click or type model name...
 model-dialog-delete-model = Delete Model
 model-dialog-add-model = Add Model
+
+capture-drag-hint = Drag to select area, ESC to cancel

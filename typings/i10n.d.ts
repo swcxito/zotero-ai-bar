@@ -3,6 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 export type FluentMessageId =
+  | 'capture-drag-hint'
   | 'chat-copy-markdown'
   | 'chat-copy-text'
   | 'chat-regenerate-response'

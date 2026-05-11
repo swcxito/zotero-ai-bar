@@ -17,6 +17,7 @@
  */
 
 import { config } from '../../package.json';
+import { getString } from '../utils/locale';
 
 interface Point {
   x: number;
@@ -145,7 +146,7 @@ function createOverlay(container: HTMLElement): void {
 
   const tooltip = doc.createElement('div');
   tooltip.className = 'capture-tooltip';
-  tooltip.textContent = 'Drag to select area, ESC to cancel';
+  tooltip.textContent = getString('capture-drag-hint');
   tooltip.style.cssText = `
     position: fixed;
     top: 20px;
