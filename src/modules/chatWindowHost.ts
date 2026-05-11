@@ -68,6 +68,7 @@ async function submitFromWindowInput(doc: Document, input: HTMLTextAreaElement, 
     'flex',
     'flex-col',
     'items-end',
+    'min-w-[160px]',
     'max-w-[85%]',
     'sm:max-w-[75%]',
     'self-end',
@@ -77,10 +78,12 @@ async function submitFromWindowInput(doc: Document, input: HTMLTextAreaElement, 
     'duration-300'
   );
 
-  // Image row above pink bubble
+  // Image row above pink bubble (with bottom border when no text)
   if (imageUrls.length > 0) {
     const imgsRow = doc.createElement('div');
-    imgsRow.classList.add('flex', 'flex-wrap', 'gap-1.5', 'justify-end', 'mb-2');
+    imgsRow.classList.add('flex', 'flex-wrap', 'gap-1.5', 'justify-end', 'pt-1', 'pr-1', 'pb-2');
+    if (!content) imgsRow.classList.add('mb-1', 'border-b-2', 'border-rose-500', 'dark:border-rose-600');
+    else imgsRow.classList.add('mb-2');
     imageUrls.forEach((dataUrl) => {
       const thumb = doc.createElement('img');
       thumb.src = dataUrl;
@@ -124,7 +127,7 @@ async function submitFromWindowInput(doc: Document, input: HTMLTextAreaElement, 
     wrapper.appendChild(imgsRow);
   }
 
-  // Pink bubble (text only) or pink underline (no text)
+  // Pink bubble (text only)
   if (content) {
     const userMessage = ChatBox({ doc, isUser: true }) as HTMLElement;
     const userMessageNode = userMessage.querySelector('.chat-message') as HTMLElement | null;
@@ -133,10 +136,6 @@ async function submitFromWindowInput(doc: Document, input: HTMLTextAreaElement, 
       userMessage.dataset.markdown = content;
     }
     wrapper.appendChild(userMessage);
-  } else if (imageUrls.length > 0) {
-    const underline = doc.createElement('div');
-    underline.classList.add('w-8', 'h-1', 'bg-rose-500', 'dark:bg-rose-600', 'rounded-full');
-    wrapper.appendChild(underline);
   }
 
   container.appendChild(wrapper);
