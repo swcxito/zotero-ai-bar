@@ -232,77 +232,78 @@ function getGoogleThinkingConfig(modelId: string) {
   return { thinkingBudget: 0, includeThoughts: false };
 }
 
-function resolveSDKPackage(npm?: string): InstalledAISDKPackage {
-  if (npm && npm in CREATE_PROVIDER_FNS) {
-    return npm as InstalledAISDKPackage;
+function createProvider(
+  npm: string | undefined,
+  opts: {
+    providerId: string;
+    modelId: string;
+    providerEnv: Record<string, string>;
+    baseUrl?: string;
   }
-  return '@ai-sdk/openai-compatible';
-}
+) {
+  const { providerId, modelId, providerEnv, baseUrl } = opts;
 
-function buildProviderConfig(
-  providerId: string,
-  sdkPackage: InstalledAISDKPackage,
-  providerEnv: Record<string, string>,
-  baseUrl?: string
-): Record<string, unknown> {
-  switch (sdkPackage) {
-    case '@ai-sdk/amazon-bedrock':
+  switch (npm) {
+    case '@ai-sdk/amazon-bedrock': {
+      const c = CREATE_PROVIDER_FNS['@ai-sdk/amazon-bedrock'] as typeof import('@ai-sdk/amazon-bedrock').createAmazonBedrock;
       if (providerEnv['AWS_BEARER_TOKEN_BEDROCK']) {
-        return { region: providerEnv['AWS_REGION'], apiKey: providerEnv['AWS_BEARER_TOKEN_BEDROCK'] };
+        return c({ region: providerEnv['AWS_REGION'], apiKey: providerEnv['AWS_BEARER_TOKEN_BEDROCK'] })(modelId as any);
       }
-      return {
+      return c({
         region: providerEnv['AWS_REGION'],
         accessKeyId: providerEnv['AWS_ACCESS_KEY_ID'],
         secretAccessKey: providerEnv['AWS_SECRET_ACCESS_KEY'],
         sessionToken: providerEnv['AWS_SESSION_TOKEN'] || undefined,
-      };
+      })(modelId as any);
+    }
 
     case '@ai-sdk/azure': {
-      const resourceName = providerEnv['AZURE_RESOURCE_NAME'] || providerEnv['AZURE_COGNITIVE_SERVICES_RESOURCE_NAME'];
-      const azureApiKey = providerEnv['AZURE_API_KEY'] || providerEnv['AZURE_COGNITIVE_SERVICES_API_KEY'];
-      return { resourceName, apiKey: azureApiKey };
+      const c = CREATE_PROVIDER_FNS['@ai-sdk/azure'] as typeof import('@ai-sdk/azure').createAzure;
+      return c({
+        resourceName: providerEnv['AZURE_RESOURCE_NAME'] || providerEnv['AZURE_COGNITIVE_SERVICES_RESOURCE_NAME'],
+        apiKey: providerEnv['AZURE_API_KEY'] || providerEnv['AZURE_COGNITIVE_SERVICES_API_KEY'],
+      })(modelId as any);
     }
 
-    case '@ai-sdk/google-vertex/edge':
-    case '@ai-sdk/google-vertex/anthropic/edge':
-      return {
-        project: providerEnv['GOOGLE_VERTEX_PROJECT'],
-        location: providerEnv['GOOGLE_VERTEX_LOCATION'],
-      };
+    case '@ai-sdk/google-vertex':
+    case '@ai-sdk/google-vertex/edge': {
+      const c = CREATE_PROVIDER_FNS['@ai-sdk/google-vertex/edge'] as typeof import('@ai-sdk/google-vertex/edge').createVertex;
+      return c({ project: providerEnv['GOOGLE_VERTEX_PROJECT'], location: providerEnv['GOOGLE_VERTEX_LOCATION'] })(modelId as any);
+    }
 
-    case '@ai-sdk/google':
-      return { apiKey: providerEnv['GEMINI_API_KEY'] };
+    case '@ai-sdk/google-vertex/anthropic':
+    case '@ai-sdk/google-vertex/anthropic/edge': {
+      const c = CREATE_PROVIDER_FNS[
+        '@ai-sdk/google-vertex/anthropic/edge'
+      ] as typeof import('@ai-sdk/google-vertex/anthropic/edge').createVertexAnthropic;
+      return c({ project: providerEnv['GOOGLE_VERTEX_PROJECT'], location: providerEnv['GOOGLE_VERTEX_LOCATION'] })(modelId as any);
+    }
+
+    case 'ai-gateway-provider': {
+      const c = CREATE_PROVIDER_FNS['@ai-sdk/openai-compatible'] as typeof import('@ai-sdk/openai-compatible').createOpenAICompatible;
+      return c({
+        name: providerId,
+        includeUsage: true,
+        apiKey: providerEnv['CLOUDFLARE_API_TOKEN'],
+        baseURL: `https://gateway.ai.cloudflare.com/v1/${providerEnv['CLOUDFLARE_ACCOUNT_ID']}/${providerEnv['CLOUDFLARE_GATEWAY_ID']}`,
+      })(modelId as any);
+    }
 
     default: {
-      // Cloudflare AI Gateway: construct gateway URL from env vars, route via openai-compatible
-      if (providerId === 'cloudflare-ai-gateway') {
-        const accountId = providerEnv['CLOUDFLARE_ACCOUNT_ID'];
-        const gatewayId = providerEnv['CLOUDFLARE_GATEWAY_ID'];
-        const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayId}`;
-        return { apiKey: providerEnv['CLOUDFLARE_API_TOKEN'], baseURL: gatewayUrl };
-      }
-
       const apiKey = Object.values(providerEnv)[0];
       if (!apiKey) throw new Error(`API key not configured for ${providerId}`);
-      const result: Record<string, unknown> = { apiKey };
-      if (baseUrl) result.baseURL = resolveApiUrl(baseUrl, providerEnv);
-      return result;
+      if (npm && npm in CREATE_PROVIDER_FNS) {
+        const c = CREATE_PROVIDER_FNS[npm as InstalledAISDKPackage] as (cfg: Record<string, unknown>) => (mid: string) => any;
+        const cfg: Record<string, unknown> = { name: providerId, apiKey };
+        if (baseUrl) cfg.baseURL = resolveApiUrl(baseUrl, providerEnv);
+        return c(cfg)(modelId);
+      }
+      const c = CREATE_PROVIDER_FNS['@ai-sdk/openai-compatible'] as typeof import('@ai-sdk/openai-compatible').createOpenAICompatible;
+      const cfg: Record<string, unknown> = { name: providerId, apiKey, includeUsage: true };
+      if (baseUrl) cfg.baseURL = resolveApiUrl(baseUrl, providerEnv);
+      return c(cfg as any)(modelId as any);
     }
   }
-}
-
-function createProvider(
-  createFn: ProviderCreateFunction,
-  sdkPackage: InstalledAISDKPackage,
-  opts: { providerId: string; modelId: string; config: Record<string, unknown> }
-) {
-  if (sdkPackage === '@ai-sdk/openai-compatible') {
-    const fn = createFn as typeof import('@ai-sdk/openai-compatible').createOpenAICompatible;
-    return fn({ name: opts.providerId, ...(opts.config as any), includeUsage: true })(opts.modelId as any);
-  }
-
-  const fn = createFn as (config: Record<string, unknown>) => (modelId: string) => any;
-  return fn({ name: opts.providerId, ...opts.config })(opts.modelId);
 }
 
 async function createModel() {
@@ -312,49 +313,34 @@ async function createModel() {
   if (!v2?.active) throw new Error('No active model selected.');
 
   const { providerId, modelId } = v2.active;
-  const commonProviders = addon.data.commonProviders;
-  const provider = commonProviders?.[providerId];
+  const providerEnv = v2.env[providerId] ?? {};
+  const commonProvider = addon.data.commonProviders?.[providerId];
+  const addedProvider = v2.addedProviders[providerId];
 
-  // V2 path: provider found in common_providers.json → use native SDK dispatch
-  if (provider) {
-    const model = provider.models[modelId];
-    // 校验模型是否存在：commonProviders列表->userAdded
-    if (!model && Object.keys(provider.models).length > 0) {
+  let npm: string | undefined;
+  let baseUrl: string | undefined;
+  let resolvedModelId: string;
+
+  if (commonProvider) {
+    const model = commonProvider.models[modelId];
+    if (!model && Object.keys(commonProvider.models).length > 0) {
       const userAdded = v2.addedModels.find((m) => m.providerId === providerId && m.id === modelId);
       if (!userAdded) throw new Error(`Model not found: ${modelId}`);
     }
-    const providerEnv = v2.env[providerId] ?? {};
-    const sdkPackage = resolveSDKPackage(provider.npm);
-    const createFn = CREATE_PROVIDER_FNS[sdkPackage];
-    if (!createFn) throw new Error(`Provider SDK not loaded: ${sdkPackage}`);
-
-    const config = buildProviderConfig(providerId, sdkPackage, providerEnv, provider.api);
-
-    return createProvider(createFn, sdkPackage, { providerId, modelId, config });
-  }
-
-  // V2 custom provider: not in commonProviders but in v2.addedProviders
-  const addedProvider = v2.addedProviders[providerId];
-  if (addedProvider) {
+    npm = commonProvider.npm;
+    baseUrl = commonProvider.api;
+    resolvedModelId = modelId;
+  } else if (addedProvider) {
     const model = v2.addedModels.find((m) => m.providerId === providerId && m.id === modelId);
     if (!model?.name) throw new Error(`Model not found: ${modelId}`);
-
-    const providerEnv = v2.env[providerId] ?? {};
-    const baseUrl = addedProvider.api;
-    if (!baseUrl) throw new Error(`Base URL not configured for ${providerId}`);
-
-    const config = buildProviderConfig(providerId, '@ai-sdk/openai-compatible', providerEnv, baseUrl);
-    const createFn = CREATE_PROVIDER_FNS['@ai-sdk/openai-compatible'];
-    if (!createFn) throw new Error('OpenAI-compatible SDK not loaded.');
-
-    return createProvider(createFn, '@ai-sdk/openai-compatible', {
-      providerId,
-      modelId: model.name,
-      config,
-    });
+    if (!addedProvider.api) throw new Error(`Base URL not configured for ${providerId}`);
+    baseUrl = addedProvider.api;
+    resolvedModelId = model.id;
+  } else {
+    throw new Error(`Provider or model not found: ${providerId}/${modelId}`);
   }
 
-  throw new Error(`Provider or model not found: ${providerId}/${modelId}`);
+  return createProvider(npm, { providerId, modelId: resolvedModelId, providerEnv, baseUrl });
 }
 
 // export async function llmTest() {
