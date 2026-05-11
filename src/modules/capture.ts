@@ -107,7 +107,7 @@ function completeCapture(): void {
       if (session.onCaptureCallback) {
         session.onCaptureCallback(imageData);
       } else {
-        openCapturePreview(imageData);
+        openCapturePreview([imageData], 0);
       }
     }
   } catch (error) {
@@ -365,8 +365,8 @@ function captureSelectionArea(): string | null {
   }
 }
 
-export function openCapturePreview(imageData: string): void {
-  const windowArgs = { imageData };
+export function openCapturePreview(images: string[], startIndex: number): void {
+  const windowArgs = { images, startIndex };
 
   const dialogWindow = Zotero.getMainWindow().openDialog(
     `chrome://${config.addonRef}/content/captureWindow.html`,

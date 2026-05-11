@@ -13,54 +13,46 @@
 
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        background: #f3f4f6;
+        background: #1f2937;
         height: 100vh;
         display: flex;
         flex-direction: column;
+        user-select: none;
       }
 
       #toolbar {
-        background: white;
-        border-bottom: 1px solid #e5e7eb;
-        padding: 12px 16px;
+        background: #111827;
+        border-bottom: 1px solid #374151;
+        padding: 8px 16px;
         display: flex;
         align-items: center;
         gap: 8px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
       }
 
       #toolbar button {
-        padding: 8px 16px;
-        border: none;
+        padding: 6px 14px;
+        border: 1px solid #4b5563;
         border-radius: 6px;
-        font-size: 14px;
+        font-size: 13px;
         cursor: pointer;
         transition: all 0.2s;
+        background: #1f2937;
+        color: #d1d5db;
       }
 
-      #copy-btn {
-        background: #f3f4f6;
-        color: #374151;
-      }
-
-      #copy-btn:hover {
-        background: #e5e7eb;
+      #toolbar button:hover {
+        background: #374151;
+        color: #f9fafb;
       }
 
       #close-btn {
-        background: transparent;
-        color: #6b7280;
         margin-left: auto;
       }
 
-      #close-btn:hover {
-        background: #f3f4f6;
-      }
-
-      #info {
-        color: #6b7280;
+      #counter {
+        color: #9ca3af;
         font-size: 13px;
-        margin-left: 16px;
+        margin: 0 12px;
       }
 
       #image-container {
@@ -70,43 +62,131 @@
         align-items: center;
         justify-content: center;
         padding: 20px;
-        background: #e5e7eb;
+        position: relative;
       }
 
       #captured-image {
         max-width: 100%;
         max-height: 100%;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
         border-radius: 4px;
+      }
+
+      .nav-btn {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 44px;
+        height: 44px;
+        border: none;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.12);
+        color: white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        transition: background 0.2s;
+      }
+
+      .nav-btn:hover {
+        background: rgba(255, 255, 255, 0.25);
+      }
+
+      .nav-btn svg {
+        width: 22px;
+        height: 22px;
+        stroke: white;
+        stroke-width: 2;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      #prev-btn {
+        left: 16px;
+      }
+
+      #next-btn {
+        right: 16px;
+      }
+
+      #info {
+        color: #9ca3af;
+        font-size: 12px;
+        margin-left: 8px;
       }
     </style>
   </head>
   <body>
     <div id="toolbar">
       <button id="copy-btn">Copy</button>
-      <button id="close-btn">Close</button>
+      <span id="counter"></span>
       <span id="info"></span>
+      <button id="close-btn">Close</button>
     </div>
     <div id="image-container">
+      <button id="prev-btn" class="nav-btn" style="display: none">
+        <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></svg>
+      </button>
       <img id="captured-image" alt="Screenshot" />
+      <button id="next-btn" class="nav-btn" style="display: none">
+        <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></svg>
+      </button>
     </div>
 
     <script>
       window.addEventListener('load', () => {
-        const imageData = window.arguments?.[0]?.imageData;
+        const images = window.arguments?.[0]?.images;
+        const startIndex = window.arguments?.[0]?.startIndex || 0;
         const img = document.getElementById('captured-image');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const counter = document.getElementById('counter');
         const info = document.getElementById('info');
 
-        if (!imageData) {
+        if (!images || images.length === 0) {
           info.textContent = 'No image data';
           return;
         }
 
-        img.src = imageData;
+        let currentIndex = startIndex;
+        const hasMultiple = images.length > 1;
+
+        function showImage(index) {
+          currentIndex = index;
+          img.src = images[currentIndex];
+
+          if (hasMultiple) {
+            counter.textContent = `${currentIndex + 1} / ${images.length}`;
+            prevBtn.style.display = currentIndex > 0 ? '' : 'none';
+            nextBtn.style.display = currentIndex < images.length - 1 ? '' : 'none';
+          }
+        }
+
+        showImage(currentIndex);
 
         img.onload = () => {
           info.textContent = `${img.naturalWidth} × ${img.naturalHeight} px`;
         };
+
+        prevBtn.addEventListener('click', () => {
+          if (currentIndex > 0) showImage(currentIndex - 1);
+        });
+
+        nextBtn.addEventListener('click', () => {
+          if (currentIndex < images.length - 1) showImage(currentIndex + 1);
+        });
+
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            window.close();
+            return;
+          }
+          if (e.key === 'ArrowLeft' && currentIndex > 0) showImage(currentIndex - 1);
+          if (e.key === 'ArrowRight' && currentIndex < images.length - 1) showImage(currentIndex + 1);
+        });
 
         document.getElementById('close-btn').addEventListener('click', () => {
           window.close();
@@ -114,7 +194,7 @@
 
         document.getElementById('copy-btn').addEventListener('click', () => {
           if (navigator.clipboard) {
-            fetch(imageData)
+            fetch(images[currentIndex])
               .then((res) => res.blob())
               .then((blob) => {
                 const item = new ClipboardItem({ 'image/png': blob });

@@ -186,7 +186,7 @@ export function ImagePreview(doc: Document, sectionId: string, onChange?: () => 
 
     // Sidebar mode: check preference for viewer location
     if ((strip.getRootNode() as any).host && getPref('imagePreview.location') === 'window') {
-      openCapturePreview(dataUrl);
+      openCapturePreview(images, index);
       return;
     }
 
