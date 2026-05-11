@@ -37,7 +37,10 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
   wrapper.classList.add('input-area-wrapper', 'max-w-3xl', 'w-full', 'mx-auto', 'my-2', 'flex', 'flex-col', 'gap-1');
 
   // ── image preview strip ─────────────────────────────────────────────────
-  const preview = ImagePreview(doc, sectionId, () => updateScreenshotBtnState());
+  const preview = ImagePreview(doc, sectionId, () => {
+    updateScreenshotBtnState();
+    updateSendBtnState();
+  });
 
   // ── input row ─────────────────────────────────────────────────────────────
   const container = doc.createElement('div');
@@ -182,7 +185,9 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
     const isStreaming = addon.chatManager.sessionsMap.get(sectionId)?.pending.userMessage ?? false;
     if (isStreaming) return; // streaming state is controlled by ChatManager.updateSectionInputArea
     const hasText = textarea.value.trim().length > 0;
-    if (hasText) {
+    const hasImages = preview.getCount() > 0;
+    const canSend = hasText || hasImages;
+    if (canSend) {
       sendBtn.disabled = false;
       sendBtn.classList.remove('bg-slate-200', 'dark:bg-neutral-800', 'text-slate-400', 'dark:text-neutral-600');
       sendBtn.classList.add('bg-rose-500', 'dark:bg-rose-600', 'hover:bg-rose-600');
@@ -219,11 +224,66 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Helper: open image viewer for bubble thumbnails
+  // ─────────────────────────────────────────────────────────────────────────
+  function openBubbleImageViewer(dataUrl: string) {
+    const root = wrapper.getRootNode() as any;
+    let parent: HTMLElement;
+    let ownerDoc: Document;
+
+    // Sidebar mode (inside shadow DOM): mount on reader's iframe body
+    if (root.host) {
+      const reader = getReaderByTabId(addon.chatManager.currentTabID);
+      if (reader) {
+        const iframeWindow = (reader as any)._iframeWindow;
+        const readerDoc = iframeWindow?.[0]?.document;
+        if (readerDoc?.body) {
+          parent = readerDoc.body;
+          ownerDoc = readerDoc;
+        } else {
+          parent = root as unknown as HTMLElement;
+          ownerDoc = doc;
+        }
+      } else {
+        parent = root as unknown as HTMLElement;
+        ownerDoc = doc;
+      }
+    } else {
+      parent = doc.body;
+      ownerDoc = doc;
+    }
+
+    const overlay = ownerDoc.createElement('div');
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);cursor:pointer;';
+    overlay.tabIndex = -1;
+
+    const img = ownerDoc.createElement('img');
+    img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain;border-radius:4px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);';
+    img.src = dataUrl;
+    overlay.appendChild(img);
+
+    const close = () => {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    };
+    overlay.addEventListener('click', (e: MouseEvent) => {
+      if (e.target === overlay) close();
+    });
+    overlay.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    });
+
+    parent.appendChild(overlay);
+    overlay.focus();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Helper: send a user message
   // ─────────────────────────────────────────────────────────────────────────
   async function handleSend() {
     const text = textarea.value.trim();
-    if (!text) return;
+    const imageCount = preview.getCount();
+    if (!text && imageCount === 0) return;
 
     //todo enhance streaming state handling:
     // const sectionState = addon.chatManager.sidebarStates.get(sectionId);
@@ -237,14 +297,71 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
     const messageContainer = root.shadowRoot.querySelector('.message-container') as HTMLElement | null;
     if (!messageContainer) return;
 
-    // Append user bubble
-    const userBubble = ChatBox({
-      doc,
-      isUser: true,
-    }) as HTMLElement;
-    const msgEl = userBubble.querySelector('.chat-message') as HTMLElement | null;
-    if (msgEl) msgEl.textContent = text;
-    messageContainer.appendChild(userBubble);
+    // Read images and clear preview immediately
+    const imageUrls = addon.data.inputImages.get(sectionId) || [];
+    if (imageUrls.length > 0) {
+      addon.data.inputImages.delete(sectionId);
+      preview.render();
+      updateScreenshotBtnState();
+    }
+
+    // Wrapper for right-alignment (matching ChatBox user bubble alignment)
+    const wrapper = doc.createElement('div');
+    wrapper.classList.add(
+      'flex',
+      'flex-col',
+      'items-end',
+      'max-w-[85%]',
+      'sm:max-w-[75%]',
+      'self-end',
+      'animate-in',
+      'fade-in',
+      'slide-in-from-bottom-3',
+      'duration-300'
+    );
+
+    // Image row above pink bubble
+    if (imageUrls.length > 0) {
+      const imgsRow = doc.createElement('div');
+      imgsRow.classList.add('flex', 'flex-wrap', 'gap-1.5', 'justify-end', 'mb-2');
+      imageUrls.forEach((dataUrl) => {
+        const thumb = doc.createElement('img');
+        thumb.src = dataUrl;
+        thumb.classList.add(
+          'w-14',
+          'h-14',
+          'object-cover',
+          'rounded-lg',
+          'cursor-pointer',
+          'hover:ring-2',
+          'hover:ring-rose-400',
+          'dark:hover:ring-rose-600',
+          'transition-shadow',
+          'flex-shrink-0',
+          'shadow-sm',
+          'hover:shadow-md'
+        );
+        thumb.addEventListener('click', () => {
+          openBubbleImageViewer(dataUrl);
+        });
+        imgsRow.appendChild(thumb);
+      });
+      wrapper.appendChild(imgsRow);
+    }
+
+    // Pink bubble (text only) or pink underline (no text)
+    if (text) {
+      const userBubble = ChatBox({ doc, isUser: true }) as HTMLElement;
+      const msgEl = userBubble.querySelector('.chat-message') as HTMLElement | null;
+      if (msgEl) msgEl.textContent = text;
+      wrapper.appendChild(userBubble);
+    } else if (imageUrls.length > 0) {
+      const underline = doc.createElement('div');
+      underline.classList.add('w-8', 'h-1', 'bg-rose-500', 'dark:bg-rose-600', 'rounded-full');
+      wrapper.appendChild(underline);
+    }
+
+    messageContainer.appendChild(wrapper);
     scrollToBottom();
 
     // Clear textarea and reset height
@@ -257,6 +374,7 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
       await addon.chatManager.sendChatRequest({
         userPrompt: text,
         tabId: sectionId,
+        images: imageUrls.length > 0 ? imageUrls : undefined,
       });
     } catch (e) {
       ztoolkit.log('sendChatRequest error:', e);
@@ -359,6 +477,8 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
 
   preview.render();
   updateScreenshotBtnState();
+
+  (wrapper as any)._imagePreviewAPI = preview;
 
   return wrapper;
 }

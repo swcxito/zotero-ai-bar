@@ -12,33 +12,112 @@ function getMessageContainer(doc: Document) {
 
 function updateSendButtonState(input: HTMLTextAreaElement, sendBtn: HTMLButtonElement) {
   const hasText = input.value.trim().length > 0;
-  sendBtn.disabled = !hasText;
-  if (hasText) {
+  const hasImages = (addon.data.inputImages.get(addon.chatManager.currentTabID) || []).length > 0;
+  const canSend = hasText || hasImages;
+  sendBtn.disabled = !canSend;
+  if (canSend) {
     sendBtn.classList.remove('bg-slate-200', 'dark:bg-neutral-800', 'text-slate-400', 'dark:text-neutral-600');
-    sendBtn.classList.add('bg-rose-500', 'text-white', 'hover:bg-rose-400');
+    sendBtn.classList.add('bg-rose-500', 'dark:bg-rose-600', 'hover:bg-rose-600');
   } else {
     sendBtn.classList.add('bg-slate-200', 'dark:bg-neutral-800', 'text-slate-400', 'dark:text-neutral-600');
-    sendBtn.classList.remove('bg-rose-500', 'text-white', 'hover:bg-rose-400');
+    sendBtn.classList.remove('bg-rose-500', 'dark:bg-rose-600', 'hover:bg-rose-600');
   }
 }
 
-async function submitFromWindowInput(doc: Document, input: HTMLTextAreaElement, sendBtn: HTMLButtonElement) {
+async function submitFromWindowInput(doc: Document, input: HTMLTextAreaElement, sendBtn: HTMLButtonElement, inputAreaWrapper?: HTMLElement) {
   const content = input.value.trim();
-  if (!content) return;
+  const hasImages = (addon.data.inputImages.get(addon.chatManager.currentTabID) || []).length > 0;
+  if (!content && !hasImages) return;
 
   const container = getMessageContainer(doc);
   if (!container) return;
 
-  const userMessage = ChatBox({
-    doc,
-    isUser: true,
-  }) as HTMLElement;
-  const userMessageNode = userMessage.querySelector('.chat-message') as HTMLElement | null;
-  if (userMessageNode) {
-    userMessageNode.innerHTML = await renderMarkdown(content);
-    userMessage.dataset.markdown = content;
+  // Read images and clear preview immediately
+  const imageUrls = addon.data.inputImages.get(addon.chatManager.currentTabID) || [];
+  if (imageUrls.length > 0) {
+    addon.data.inputImages.delete(addon.chatManager.currentTabID);
+    const api = (inputAreaWrapper as any)?._imagePreviewAPI;
+    if (api) api.render();
   }
-  container.appendChild(userMessage);
+
+  // Wrapper for right-alignment (matching ChatBox user bubble alignment)
+  const wrapper = doc.createElement('div');
+  wrapper.classList.add(
+    'flex',
+    'flex-col',
+    'items-end',
+    'max-w-[85%]',
+    'sm:max-w-[75%]',
+    'self-end',
+    'animate-in',
+    'fade-in',
+    'slide-in-from-bottom-3',
+    'duration-300'
+  );
+
+  // Image row above pink bubble
+  if (imageUrls.length > 0) {
+    const imgsRow = doc.createElement('div');
+    imgsRow.classList.add('flex', 'flex-wrap', 'gap-1.5', 'justify-end', 'mb-2');
+    imageUrls.forEach((dataUrl) => {
+      const thumb = doc.createElement('img');
+      thumb.src = dataUrl;
+      thumb.classList.add(
+        'w-14',
+        'h-14',
+        'object-cover',
+        'rounded-lg',
+        'cursor-pointer',
+        'hover:ring-2',
+        'hover:ring-rose-400',
+        'dark:hover:ring-rose-600',
+        'transition-shadow',
+        'flex-shrink-0',
+        'shadow-sm',
+        'hover:shadow-md'
+      );
+      thumb.addEventListener('click', () => {
+        const overlay = doc.createElement('div');
+        overlay.style.cssText =
+          'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);cursor:pointer;';
+        overlay.tabIndex = -1;
+        const img = doc.createElement('img') as HTMLImageElement;
+        img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain;border-radius:4px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);';
+        img.src = dataUrl;
+        overlay.appendChild(img);
+        const close = () => {
+          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        };
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) close();
+        });
+        overlay.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') close();
+        });
+        doc.body.appendChild(overlay);
+        overlay.focus();
+      });
+      imgsRow.appendChild(thumb);
+    });
+    wrapper.appendChild(imgsRow);
+  }
+
+  // Pink bubble (text only) or pink underline (no text)
+  if (content) {
+    const userMessage = ChatBox({ doc, isUser: true }) as HTMLElement;
+    const userMessageNode = userMessage.querySelector('.chat-message') as HTMLElement | null;
+    if (userMessageNode) {
+      userMessageNode.innerHTML = await renderMarkdown(content);
+      userMessage.dataset.markdown = content;
+    }
+    wrapper.appendChild(userMessage);
+  } else if (imageUrls.length > 0) {
+    const underline = doc.createElement('div');
+    underline.classList.add('w-8', 'h-1', 'bg-rose-500', 'dark:bg-rose-600', 'rounded-full');
+    wrapper.appendChild(underline);
+  }
+
+  container.appendChild(wrapper);
   container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
 
   input.value = '';
@@ -49,6 +128,7 @@ async function submitFromWindowInput(doc: Document, input: HTMLTextAreaElement, 
     userPrompt: content,
     sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
     tabId: addon.chatManager.currentTabID,
+    images: imageUrls.length > 0 ? imageUrls : undefined,
   });
 }
 
@@ -73,13 +153,13 @@ function bindInputArea(doc: Document, inputArea: HTMLElement) {
   textarea.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter' && !ev.shiftKey) {
       ev.preventDefault();
-      submitFromWindowInput(doc, textarea, sendBtn);
+      submitFromWindowInput(doc, textarea, sendBtn, inputArea);
     }
   });
 
   sendBtn.addEventListener('click', () => {
     if (sendBtn.disabled) return;
-    submitFromWindowInput(doc, textarea, sendBtn);
+    submitFromWindowInput(doc, textarea, sendBtn, inputArea);
   });
 }
 

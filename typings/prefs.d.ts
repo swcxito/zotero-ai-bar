@@ -30,8 +30,8 @@ declare namespace _ZoteroTypes {
       "translate.extendContext": string;
       "translate.useAlternativeModel": boolean;
       "translate.modelId": string;
-      "imagePreview.location": string;
       "translate.targetLanguage": string;
+      "imagePreview.location": string;
     };
   }
 }

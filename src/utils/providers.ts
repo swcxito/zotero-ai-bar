@@ -261,6 +261,29 @@ const PROVIDER_ID_ICON_STEM: Record<string, string> = {
   'moonshotai-cn': 'moonshot',
 };
 
+/**
+ * 检查当前选中的模型是否支持图片输入。
+ * 先查 addedModels，再查 commonProviders 中的模型元数据。
+ */
+export function checkModelSupportsImage(): boolean {
+  const v2 = addon.data.userProviderConfigV2;
+  if (!v2?.active) return false;
+
+  const { providerId, modelId } = v2.active;
+
+  const addedModel = v2.addedModels?.find((m) => m.providerId === providerId && m.id === modelId);
+  if (addedModel?.modalities?.input) {
+    return addedModel.modalities.input.includes('image');
+  }
+
+  const commonModel = addon.data.commonProviders?.[providerId]?.models?.[modelId];
+  if (commonModel?.modalities?.input) {
+    return commonModel.modalities.input.includes('image');
+  }
+
+  return false;
+}
+
 /** 根据 providerId 获取图标 chrome:// URL */
 export function getV2LogoUrl(providerId: string): string {
   const stem = PROVIDER_ID_ICON_STEM[providerId];

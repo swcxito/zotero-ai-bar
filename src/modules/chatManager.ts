@@ -22,6 +22,7 @@
 import { getItemFullText, getItemMetadata } from '../utils/itemContext';
 import { getPref } from '../utils/prefs';
 import { SYSTEM_PROMPT_PREFIX } from '../utils/prompts';
+import { checkModelSupportsImage } from '../utils/providers';
 import { ensureChatWindowReady, focusChatWindow } from '../utils/window';
 import { streamLLMV2 } from './llm';
 import type { ModelMessage, SystemModelMessage, UserModelMessage } from 'ai';
@@ -58,6 +59,7 @@ type ChatRequestParams =
       itemId: number;
       tabId?: string;
       contextPromise?: Promise<string[] | undefined>;
+      images?: string[];
     }
   | {
       userPrompt: string;
@@ -67,6 +69,7 @@ type ChatRequestParams =
       itemId?: number;
       tabId: string;
       contextPromise?: Promise<string[] | undefined>;
+      images?: string[];
     };
 
 export class ChatManager {
@@ -206,10 +209,35 @@ export class ChatManager {
         role: 'system',
         content: systemContent,
       };
+
+      // Build user message content — include images if model supports them
+      const images = params.images ?? addon.data.inputImages.get(tabId);
+      const hasImages = images && images.length > 0;
+      const modelSupportsImage = hasImages && checkModelSupportsImage();
+
+      if (hasImages && !modelSupportsImage) {
+        ztoolkit.log('[chat] Model does not support image input, sending text only');
+      }
+
+      let userContent: UserModelMessage['content'];
+      if (modelSupportsImage) {
+        userContent = [{ type: 'text', text: params.userPrompt }, ...images!.map((dataUrl) => ({ type: 'image' as const, image: dataUrl }))];
+        ztoolkit.log(`[chat] Sending with ${images!.length} image(s)`);
+      } else {
+        userContent = params.userPrompt;
+      }
+
       const userMsg: UserModelMessage = {
         role: 'user',
-        content: params.userPrompt,
+        content: userContent,
       };
+
+      session.pending.userMessage = userMsg;
+
+      // Clear images for this tab after building the message
+      if (hasImages) {
+        addon.data.inputImages.delete(tabId);
+      }
 
       // Build history slice for sidebar multi-turn
       if (session.conversationHistory.length > 0) {
