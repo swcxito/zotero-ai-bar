@@ -27,6 +27,7 @@ export type FluentMessageId =
   | 'pref-auto-attach-fulltext'
   | 'pref-auto-attach-fulltext-desc'
   | 'pref-auto-attach-item-data'
+  | 'pref-auto-image-prompt'
   | 'pref-auto-translate'
   | 'pref-auto-translate-mode'
   | 'pref-auto-translate-mode-always'

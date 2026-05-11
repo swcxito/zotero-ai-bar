@@ -21,7 +21,7 @@
 // todo !! 一个tab不止对应一个文件
 import { getItemFullText, getItemMetadata } from '../utils/itemContext';
 import { getPref } from '../utils/prefs';
-import { SYSTEM_PROMPT_PREFIX } from '../utils/prompts';
+import { SYSTEM_PROMPT_PREFIX, getAutoImagePrompt } from '../utils/prompts';
 import { checkModelSupportsImage } from '../utils/providers';
 import { ensureChatWindowReady, focusChatWindow } from '../utils/window';
 import { streamLLMV2 } from './llm';
@@ -221,7 +221,14 @@ export class ChatManager {
 
       let userContent: UserModelMessage['content'];
       if (modelSupportsImage) {
-        userContent = [{ type: 'text', text: params.userPrompt }, ...images!.map((dataUrl) => ({ type: 'image' as const, image: dataUrl }))];
+        let promptText = params.userPrompt;
+        if (!promptText.trim() && getPref('chat.autoImagePrompt')) {
+          const locale = (Zotero as any).locale || 'zh-CN';
+          const outputLang = String(locale).startsWith('en') ? 'English' : '中文';
+          promptText = getAutoImagePrompt(outputLang);
+          ztoolkit.log('[chat] Auto-supplementing image prompt');
+        }
+        userContent = [{ type: 'text', text: promptText }, ...images!.map((dataUrl) => ({ type: 'image' as const, image: dataUrl }))];
         ztoolkit.log(`[chat] Sending with ${images!.length} image(s)`);
       } else {
         userContent = params.userPrompt;

@@ -51,6 +51,40 @@ export interface AIBarCommand {
   getPrompt: (targetLanguage: string) => string;
 }
 
+export function getAutoImagePrompt(outputLanguage: string): string {
+  const lang = outputLanguage || '';
+  return `核心任务：
+请仔细观察我上传的论文图片，结合上述背景信息，为我提供一份逻辑清晰、结构化的图表深度解析。
+
+输出结构要求：
+请严格按照以下四个维度进行输出：
+
+1. 图片概览与类型 (Overview)
+这是一张什么类型的图表？（如：生存曲线图、荧光染色图、神经网络架构图）
+这张图在整篇论文中试图说明的核心问题是什么？
+
+2. 视觉元素与变量解析 (Variables & Elements)
+坐标轴： 如果是数据图，明确指出 X 轴和 Y 轴分别代表什么变量及其单位。
+图例与标记： 解释不同颜色、形状、线条（实线/虚线）代表的实验组、对照组或特定条件。
+统计学意义： 指出图中是否有误差线（Error bars）、P值标记（如 * 或 **）或其他统计显著性标志，并解释其含义。
+
+3. 核心数据与趋势发现 (Key Findings)
+不要只是罗列数据，请描述出关键的趋势、差异或相关性（例如："A组随着浓度的增加呈现显著下降趋势，而B组保持平稳"）。
+指出图中的极值、拐点或异常数据（如果有）。
+
+4. 科学结论与价值 (Conclusion & Takeaways)
+基于上述客观数据，作者想通过这张图得出什么科学结论？
+这个结论如何支撑该研究？
+
+额外约束：
+请使用准确、专业的学术术语。
+如果图中的某些文字过于模糊无法辨认，请结合上下文给出合理的推测，并注明"推测"字样。
+排版清晰，合理使用加粗和列表，方便阅读。
+
+输出语言要求：请用${lang || '中文'}输出。
+`;
+}
+
 export const aiBarCommands: Record<string, AIBarCommand> = {
   explain: {
     id: 'explain',
