@@ -19,7 +19,7 @@
 import { Icons } from './common';
 import { IconView } from './iconView';
 import { ChatBox } from './chatBox';
-import { ImagePreview } from './imagePreview';
+import { ImagePreview, createImageViewer } from './imagePreview';
 import { getString } from '../utils/locale';
 import { Session } from '../modules/chatManager';
 
@@ -227,7 +227,7 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
   // ─────────────────────────────────────────────────────────────────────────
   // Helper: open image viewer for bubble thumbnails
   // ─────────────────────────────────────────────────────────────────────────
-  function openBubbleImageViewer(dataUrl: string) {
+  function openBubbleImageViewer(images: string[], index: number) {
     const root = wrapper.getRootNode() as any;
     let parent: HTMLElement;
     let ownerDoc: Document;
@@ -254,28 +254,7 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
       ownerDoc = doc;
     }
 
-    const overlay = ownerDoc.createElement('div');
-    overlay.style.cssText =
-      'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);cursor:pointer;';
-    overlay.tabIndex = -1;
-
-    const img = ownerDoc.createElement('img');
-    img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain;border-radius:4px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);';
-    img.src = dataUrl;
-    overlay.appendChild(img);
-
-    const close = () => {
-      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-    };
-    overlay.addEventListener('click', (e: MouseEvent) => {
-      if (e.target === overlay) close();
-    });
-    overlay.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
-    });
-
-    parent.appendChild(overlay);
-    overlay.focus();
+    createImageViewer(images, index, parent, ownerDoc);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -349,7 +328,7 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
       imgsRow.classList.add('flex', 'flex-wrap', 'gap-1.5', 'justify-end', 'pt-1', 'pr-1', 'pb-2');
       if (!text) imgsRow.classList.add('mb-1', 'border-b-2', 'border-rose-500', 'dark:border-rose-600');
       else imgsRow.classList.add('mb-2');
-      imageUrls.forEach((dataUrl) => {
+      imageUrls.forEach((dataUrl, idx) => {
         const thumb = doc.createElement('img');
         thumb.src = dataUrl;
         thumb.classList.add(
@@ -367,7 +346,7 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
           'hover:shadow-md'
         );
         thumb.addEventListener('click', () => {
-          openBubbleImageViewer(dataUrl);
+          openBubbleImageViewer(imageUrls, idx);
         });
         imgsRow.appendChild(thumb);
       });

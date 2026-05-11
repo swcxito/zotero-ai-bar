@@ -1,5 +1,6 @@
 import { ChatBox } from '../components/chatBox';
 import { InputArea } from '../components/inputArea';
+import { createImageViewer } from '../components/imagePreview';
 import { renderMarkdown } from '../utils/markdown';
 import { getString } from '../utils/locale';
 import { getReaderSourceLabel } from './readerBarPopup';
@@ -84,7 +85,7 @@ async function submitFromWindowInput(doc: Document, input: HTMLTextAreaElement, 
     imgsRow.classList.add('flex', 'flex-wrap', 'gap-1.5', 'justify-end', 'pt-1', 'pr-1', 'pb-2');
     if (!content) imgsRow.classList.add('mb-1', 'border-b-2', 'border-rose-500', 'dark:border-rose-600');
     else imgsRow.classList.add('mb-2');
-    imageUrls.forEach((dataUrl) => {
+    imageUrls.forEach((dataUrl, idx) => {
       const thumb = doc.createElement('img');
       thumb.src = dataUrl;
       thumb.classList.add(
@@ -102,25 +103,7 @@ async function submitFromWindowInput(doc: Document, input: HTMLTextAreaElement, 
         'hover:shadow-md'
       );
       thumb.addEventListener('click', () => {
-        const overlay = doc.createElement('div');
-        overlay.style.cssText =
-          'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);cursor:pointer;';
-        overlay.tabIndex = -1;
-        const img = doc.createElement('img') as HTMLImageElement;
-        img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain;border-radius:4px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);';
-        img.src = dataUrl;
-        overlay.appendChild(img);
-        const close = () => {
-          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-        };
-        overlay.addEventListener('click', (e) => {
-          if (e.target === overlay) close();
-        });
-        overlay.addEventListener('keydown', (e) => {
-          if (e.key === 'Escape') close();
-        });
-        doc.body.appendChild(overlay);
-        overlay.focus();
+        createImageViewer(imageUrls, idx, doc.body, doc);
       });
       imgsRow.appendChild(thumb);
     });
