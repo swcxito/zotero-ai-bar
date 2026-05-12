@@ -263,7 +263,8 @@ const PROVIDER_ID_ICON_STEM: Record<string, string> = {
 
 /**
  * 检查当前选中的模型是否支持图片输入。
- * 先查 addedModels，再查 commonProviders 中的模型元数据。
+ * 综合 addedModels、commonProviders、liveProviders 判断，任一来源确认支持即返回 true。
+ * 使用 findModelMetadata 进行模糊匹配，避免因模型 ID/名称不一致导致查找失败。
  */
 export function checkModelSupportsImage(): boolean {
   const v2 = addon.data.userProviderConfigV2;
@@ -272,14 +273,18 @@ export function checkModelSupportsImage(): boolean {
   const { providerId, modelId } = v2.active;
 
   const addedModel = v2.addedModels?.find((m) => m.providerId === providerId && m.id === modelId);
-  if (addedModel?.modalities?.input) {
-    return addedModel.modalities.input.includes('image');
-  }
+  if (addedModel?.modalities?.input?.includes('image')) return true;
 
-  const commonModel = addon.data.commonProviders?.[providerId]?.models?.[modelId];
-  if (commonModel?.modalities?.input) {
-    return commonModel.modalities.input.includes('image');
-  }
+  const modelName = addedModel?.name ?? modelId;
+
+  const commonMeta = findModelMetadata(modelName, modelId, providerId, addon.data.commonProviders);
+  if (commonMeta?.modalities?.input?.includes('image')) return true;
+
+  const liveMeta = findModelMetadata(modelName, modelId, providerId, addon.data.liveProviders);
+  if (liveMeta?.modalities?.input?.includes('image')) return true;
+
+  if (addedModel?.modalities?.input) return false;
+  if (commonMeta?.modalities?.input) return false;
 
   return false;
 }
@@ -573,8 +578,8 @@ export async function loadV2Config(): Promise<UserProviderConfigV2 | null> {
     lightweight.addedModels = lightweight.addedModels.map((m: any) => {
       const meta = modelsFile[m.providerId]?.[m.id] ?? {};
       const merged = { ...meta, ...m };
-      // 如果文件中没有元数据（首次迁移或文件丢失），尝试从 commonProviders 补充
-      if (!merged.family) {
+      // 如果文件中没有元数据，或 modalities 可能陈旧（缺少 image 等），从 providers 补充
+      if (!merged.family || (merged.modalities?.input && !merged.modalities.input.includes('image'))) {
         const fm = findModelMetadata(m.name, m.id, m.providerId, addon.data.liveProviders ?? addon.data.commonProviders);
         if (fm) Object.assign(merged, fm);
       }

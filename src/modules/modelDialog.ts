@@ -408,7 +408,8 @@ class ModelDialogV2 {
 
         const existing = v2.addedModels.find((m) => m.providerId === providerId && m.id === cm.id);
         if (existing) {
-          newAddedModels.push({ ...existing, enabled: cm.enabled });
+          const refreshed = findModelMetadata(cm.name, undefined, providerId as ProviderId, this.getActiveProviders());
+          newAddedModels.push({ ...existing, ...refreshed, enabled: cm.enabled });
         } else {
           // New model — search commonProviders for metadata
           const metadata = findModelMetadata(cm.name, undefined, providerId as ProviderId, this.getActiveProviders());
