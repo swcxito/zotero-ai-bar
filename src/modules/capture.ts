@@ -127,8 +127,16 @@ function getViewerContainer(reader: _ZoteroTypes.ReaderInstance<'pdf'>): HTMLEle
   return pdfWindow.document.querySelector('#viewer') as HTMLElement | null;
 }
 
-function createOverlay(container: HTMLElement): void {
-  const doc = container.ownerDocument;
+function findScrollContainer(viewer: HTMLElement): HTMLElement {
+  const container = viewer.parentElement;
+  if (container && container.scrollHeight > container.clientHeight) {
+    return container;
+  }
+  return viewer.ownerDocument.body;
+}
+
+function createOverlay(viewer: HTMLElement): void {
+  const doc = viewer.ownerDocument;
 
   const overlay = doc.createElement('div');
   overlay.className = 'capture-overlay';
@@ -175,6 +183,7 @@ function bindCaptureEvents(): void {
   doc.addEventListener('mousemove', handleMouseMove, true);
   doc.addEventListener('mouseup', handleMouseUp, true);
   doc.addEventListener('keydown', handleKeyDown, true);
+  doc.addEventListener('wheel', handleWheel, true);
 }
 
 function unbindCaptureEvents(): void {
@@ -184,6 +193,7 @@ function unbindCaptureEvents(): void {
   doc.removeEventListener('mousemove', handleMouseMove, true);
   doc.removeEventListener('mouseup', handleMouseUp, true);
   doc.removeEventListener('keydown', handleKeyDown, true);
+  doc.removeEventListener('wheel', handleWheel, true);
 }
 
 function handleMouseDown(e: MouseEvent): void {
@@ -252,6 +262,19 @@ function handleKeyDown(e: KeyboardEvent): void {
 
   if (e.key === 'Escape') {
     cancelCaptureMode();
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}
+
+function handleWheel(e: WheelEvent): void {
+  if (!session.isActive) return;
+  if (session.selection) return;
+
+  const scroller = findScrollContainer(session.container!);
+  if (scroller && scroller.scrollHeight > scroller.clientHeight) {
+    scroller.scrollTop += e.deltaY * 20;
+    scroller.scrollLeft += e.deltaX * 20;
     e.preventDefault();
     e.stopPropagation();
   }
