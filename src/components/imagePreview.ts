@@ -29,15 +29,17 @@ const ARROW_LEFT_SVG =
 const ARROW_RIGHT_SVG =
   '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>';
 
-function createNavButton(innerHTML: string, extraStyles: string, ownerDoc: Document): HTMLButtonElement {
+function createNavButton(innerHTML: string, extraStyles: string, dark: boolean, ownerDoc: Document): HTMLButtonElement {
   const btn = ownerDoc.createElement('button');
   btn.innerHTML = innerHTML;
-  btn.style.cssText = `position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:none;border-radius:50%;background:rgba(0,0,0,0.5);color:white;cursor:pointer;z-index:1;transition:background 0.2s;${extraStyles}`;
+  const navBg = dark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.15)';
+  const navHoverBg = dark ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.3)';
+  btn.style.cssText = `position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:none;border-radius:50%;background:${navBg};color:white;cursor:pointer;z-index:1;transition:background 0.2s;${extraStyles}`;
   btn.addEventListener('mouseenter', () => {
-    btn.style.background = 'rgba(0,0,0,0.75)';
+    btn.style.background = navHoverBg;
   });
   btn.addEventListener('mouseleave', () => {
-    btn.style.background = 'rgba(0,0,0,0.5)';
+    btn.style.background = navBg;
   });
   return btn;
 }
@@ -50,19 +52,21 @@ export function createImageViewer(
 ): { overlay: HTMLElement; close: () => void } {
   let currentIndex = startIndex;
 
+  const dark = ownerDoc.defaultView?.matchMedia('(prefers-color-scheme: dark)')?.matches ?? false;
+
   const overlay = ownerDoc.createElement('div');
-  overlay.style.cssText =
-    'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);cursor:pointer;user-select:none;';
+  const overlayBg = dark ? 'rgba(0,0,0,0.75)' : 'rgba(0,0,0,0.5)';
+  overlay.style.cssText = `position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:${overlayBg};cursor:pointer;user-select:none;`;
   overlay.tabIndex = -1;
 
   const img = ownerDoc.createElement('img');
-  img.style.cssText =
-    'max-width:85vw;max-height:90vh;object-fit:contain;border-radius:4px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);cursor:default;';
+  const imgShadow = dark ? '0 25px 50px -12px rgba(0,0,0,0.5)' : '0 25px 50px -12px rgba(0,0,0,0.2)';
+  img.style.cssText = `max-width:85vw;max-height:90vh;object-fit:contain;border-radius:4px;box-shadow:${imgShadow};cursor:default;`;
   overlay.appendChild(img);
 
   const counter = ownerDoc.createElement('div');
-  counter.style.cssText =
-    'position:absolute;top:16px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.7);font-size:13px;font-family:sans-serif;pointer-events:none;';
+  const counterColor = dark ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.85)';
+  counter.style.cssText = `position:absolute;top:16px;left:50%;transform:translateX(-50%);color:${counterColor};font-size:13px;font-family:sans-serif;pointer-events:none;`;
 
   let prevBtn: HTMLButtonElement | null = null;
   let nextBtn: HTMLButtonElement | null = null;
@@ -81,14 +85,14 @@ export function createImageViewer(
   }
 
   if (images.length > 1) {
-    prevBtn = createNavButton(ARROW_LEFT_SVG, 'left:12px;', ownerDoc);
+    prevBtn = createNavButton(ARROW_LEFT_SVG, 'left:12px;', dark, ownerDoc);
     prevBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (currentIndex > 0) showImage(currentIndex - 1);
     });
     overlay.appendChild(prevBtn);
 
-    nextBtn = createNavButton(ARROW_RIGHT_SVG, 'right:12px;', ownerDoc);
+    nextBtn = createNavButton(ARROW_RIGHT_SVG, 'right:12px;', dark, ownerDoc);
     nextBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (currentIndex < images.length - 1) showImage(currentIndex + 1);

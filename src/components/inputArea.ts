@@ -18,21 +18,25 @@
 
 import { Icons } from './common';
 import { IconView } from './iconView';
-import { ChatBox } from './chatBox';
 import { ImagePreview, createImageViewer } from './imagePreview';
 import { getString } from '../utils/locale';
 import { Session } from '../modules/chatManager';
 
 import { startCaptureMode } from '../modules/capture';
 import { getReaderByTabId } from '../modules/tabObserver';
-import { checkModelSupportsImage } from '../utils/providers';
+import { checkModelSupportsImage, promptModelImageUnsupported } from '../utils/providers';
+import { createUserMessageBubble } from './userBubble';
 
 /**
  * Build the InputArea widget and wire up all interactive logic.
  * @param doc   The owner Document (from the Zotero item-pane body).
  * @param sectionId  The Zotero item ID that identifies this sidebar section.
  */
-export function InputArea(doc: Document, sectionId: string): HTMLElement {
+export function InputArea(
+  doc: Document,
+  sectionId: string,
+  opts?: { onRenderUserBubble?: (bubble: HTMLElement, text: string) => Promise<void> | void; sourceLabel?: string }
+): HTMLElement {
   // ── outer wrapper (contains input-row + disclaimer) ──────────────────────
   const wrapper = doc.createElement('div');
   wrapper.classList.add('input-area-wrapper', 'max-w-3xl', 'w-full', 'mx-auto', 'my-2', 'flex', 'flex-col', 'gap-1');
@@ -215,10 +219,10 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
   // Helper: scroll message container to bottom
   // ─────────────────────────────────────────────────────────────────────────
   function scrollToBottom() {
-    const body = addon.data.sidePaneBodyMap?.get(sectionId);
-    if (!body) return;
-    const root = body.querySelector('#ai-bar-chat-root');
-    const container = root?.shadowRoot?.querySelector('.message-container');
+    const rootNode = textarea.getRootNode() as any;
+    const container: HTMLElement | null = rootNode.host
+      ? ((rootNode as ShadowRoot).querySelector('.message-container') as HTMLElement | null)
+      : ((doc as Document).querySelector('#ai-bar-window-message-container') as HTMLElement | null);
     if (container) {
       container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
     }
@@ -269,32 +273,17 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
     // const sectionState = addon.chatManager.sidebarStates.get(sectionId);
     // if (sectionState?.isStreaming) return;
 
-    // Get message container from shadow DOM
-    const body = addon.data.sidePaneBodyMap?.get(sectionId);
-    if (!body) return;
-    const root = body.querySelector('#ai-bar-chat-root');
-    if (!root?.shadowRoot) return;
-    const messageContainer = root.shadowRoot.querySelector('.message-container') as HTMLElement | null;
+    // Get message container — sidebar (shadow DOM) or window (regular DOM)
+    const rootNode = textarea.getRootNode() as any;
+    const messageContainer: HTMLElement | null = rootNode.host
+      ? ((rootNode as ShadowRoot).querySelector('.message-container') as HTMLElement | null)
+      : ((doc as Document).querySelector('#ai-bar-window-message-container') as HTMLElement | null);
     if (!messageContainer) return;
 
     // Read images — check model support before clearing preview
     const imageUrls = addon.data.inputImages.get(sectionId) || [];
     if (imageUrls.length > 0 && !checkModelSupportsImage()) {
-      const services = Zotero.getMainWindow().Services as any;
-      const flags =
-        services.prompt.BUTTON_POS_0 * services.prompt.BUTTON_TITLE_IS_STRING + services.prompt.BUTTON_POS_1 * services.prompt.BUTTON_TITLE_CANCEL;
-      const result = services.prompt.confirmEx(
-        Zotero.getMainWindow(),
-        getString('image-unsupported-title'),
-        getString('image-unsupported-message'),
-        flags,
-        getString('image-unsupported-send-text'),
-        '',
-        '',
-        '',
-        {}
-      );
-      if (result === 1) return; // user cancelled — keep images in preview
+      if (!promptModelImageUnsupported()) return; // user cancelled — keep images in preview
       // user chose "send text only" — clear images and proceed
       addon.data.inputImages.delete(sectionId);
       preview.render();
@@ -306,62 +295,9 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
       updateScreenshotBtnState();
     }
 
-    // Wrapper for right-alignment (matching ChatBox user bubble alignment)
-    const wrapper = doc.createElement('div');
-    wrapper.classList.add(
-      'flex',
-      'flex-col',
-      'items-end',
-      'min-w-[160px]',
-      'max-w-[85%]',
-      'sm:max-w-[75%]',
-      'self-end',
-      'animate-in',
-      'fade-in',
-      'slide-in-from-bottom-3',
-      'duration-300'
-    );
-
-    // Image row above pink bubble (with bottom border when no text)
-    if (imageUrls.length > 0) {
-      const imgsRow = doc.createElement('div');
-      imgsRow.classList.add('flex', 'flex-wrap', 'gap-1.5', 'justify-end', 'pt-1', 'pr-1', 'pb-2');
-      if (!text) imgsRow.classList.add('mb-1', 'border-b-2', 'border-rose-500', 'dark:border-rose-600');
-      else imgsRow.classList.add('mb-2');
-      imageUrls.forEach((dataUrl, idx) => {
-        const thumb = doc.createElement('img');
-        thumb.src = dataUrl;
-        thumb.classList.add(
-          'w-14',
-          'h-14',
-          'object-cover',
-          'rounded-lg',
-          'cursor-pointer',
-          'hover:ring-2',
-          'hover:ring-rose-400',
-          'dark:hover:ring-rose-600',
-          'transition-shadow',
-          'flex-shrink-0',
-          'shadow-sm',
-          'hover:shadow-md'
-        );
-        thumb.addEventListener('click', () => {
-          openBubbleImageViewer(imageUrls, idx);
-        });
-        imgsRow.appendChild(thumb);
-      });
-      wrapper.appendChild(imgsRow);
-    }
-
-    // Pink bubble (text only)
-    if (text) {
-      const userBubble = ChatBox({ doc, isUser: true }) as HTMLElement;
-      const msgEl = userBubble.querySelector('.chat-message') as HTMLElement | null;
-      if (msgEl) msgEl.textContent = text;
-      wrapper.appendChild(userBubble);
-    }
-
-    messageContainer.appendChild(wrapper);
+    const userBubble = createUserMessageBubble(doc, text, imageUrls, openBubbleImageViewer);
+    await opts?.onRenderUserBubble?.(userBubble, text);
+    messageContainer.appendChild(userBubble);
     scrollToBottom();
 
     // Clear textarea and reset height
@@ -373,6 +309,7 @@ export function InputArea(doc: Document, sectionId: string): HTMLElement {
     try {
       await addon.chatManager.sendChatRequest({
         userPrompt: text,
+        sourceLabel: opts?.sourceLabel,
         tabId: sectionId,
         images: imageUrls.length > 0 ? imageUrls : undefined,
       });

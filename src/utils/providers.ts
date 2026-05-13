@@ -22,6 +22,7 @@
 import { config } from '../../package.json';
 import type { UserProviderConfig } from '../types';
 import { getPref, setPref } from './prefs';
+import { getString } from './locale';
 
 /** 模态类型 */
 export type ModalityType = 'audio' | 'image' | 'pdf' | 'text' | 'video';
@@ -287,6 +288,28 @@ export function checkModelSupportsImage(): boolean {
   if (commonMeta?.modalities?.input) return false;
 
   return false;
+}
+
+/**
+ * Show a confirm dialog when the current model does not support image input.
+ * Returns true if the user chose "send text only", false if cancelled.
+ */
+export function promptModelImageUnsupported(): boolean {
+  const services = Zotero.getMainWindow().Services as any;
+  const flags =
+    services.prompt.BUTTON_POS_0 * services.prompt.BUTTON_TITLE_IS_STRING + services.prompt.BUTTON_POS_1 * services.prompt.BUTTON_TITLE_CANCEL;
+  const result = services.prompt.confirmEx(
+    Zotero.getMainWindow(),
+    getString('image-unsupported-title'),
+    getString('image-unsupported-message'),
+    flags,
+    getString('image-unsupported-send-text'),
+    '',
+    '',
+    '',
+    {}
+  );
+  return result === 0;
 }
 
 /** 根据 providerId 获取图标 chrome:// URL */
