@@ -21,7 +21,7 @@ import { config } from '../../package.json';
 import { InputArea } from '../components/inputArea';
 import { convertLegacyLLMConfigByKey, loadProvidersFromFile } from '../utils/providers';
 import { getPref } from '../utils/prefs';
-// import { llmTest } from "./llm";
+
 export function injectCSS(doc: Document | ShadowRoot, filename: string) {
   // 获取插件内资源的 URL
   const url = `chrome://${config.addonRef}/content/styles/${filename}`;
@@ -44,18 +44,6 @@ export function injectCSS(doc: Document | ShadowRoot, filename: string) {
   } else {
     (doc as Document).head.appendChild(link);
   }
-}
-
-function injectDebugTailwindScript(root: ShadowRoot) {
-  const script = root.querySelector('#debug-tailwind-script');
-  if (script) {
-    script.remove();
-  }
-  const url = `chrome://${config.addonRef}/content/tailwind.js`;
-  const newScript = document.createElement('script');
-  newScript.id = 'debug-tailwind-script';
-  newScript.src = url;
-  root.appendChild(newScript);
 }
 
 export async function registerReaderItemPaneSection() {
@@ -110,7 +98,7 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
       root.style.contain = 'inline-size';
 
       // 将 CSS 注入到 Shadow DOM 中
-      // injectDebugTailwindScript(shadowRoot);
+
       injectCSS(shadowRoot, 'katex.min.css');
       injectCSS(shadowRoot, 'atom-one.css');
       injectCSS(shadowRoot, `../app.css`);
@@ -162,7 +150,6 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
                 ztoolkit.log('[Debug] Old llm.providerConfigs:', llmConfig);
                 const result = convertLegacyLLMConfigByKey(llmConfig, providers!);
                 ztoolkit.log('[Debug] Converted UserProviderConfigV2:', result);
-                // await llmTest();
               },
             } as const,
           ]

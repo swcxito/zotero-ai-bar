@@ -310,54 +310,6 @@ async function createModel() {
   return await createProvider(npm, { providerId, modelId: resolvedModelId, providerEnv, baseUrl });
 }
 
-// export async function llmTest() {
-//   ztoolkit.log("LLM test function called");
-//   const fn = CREATE_PROVIDER_FNS["@ai-sdk/anthropic"] as typeof import("@ai-sdk/anthropic").createAnthropic | undefined;
-//   if (fn && streamTextFn) {
-//     try {
-//       const minimax = fn({
-//         apiKey:
-//         baseURL: "https://api.minimaxi.com/anthropic/v1",
-//         name: "minimax-cn",
-//       });
-//       const { textStream } = streamTextFn({
-//         model: minimax("minimax-m2.7"),
-//         prompt: "Write a poem about embedding models.",
-//         providerOptions: V2_PROVIDER_OPTIONS,
-//         onError: ({ error }: { error: unknown }) => {
-//           const err = error as any;
-//           ztoolkit.log("llmTest onError captured:");
-//           ztoolkit.log("  name:", err?.name);
-//           ztoolkit.log("  message:", err?.message);
-//           ztoolkit.log("  statusCode:", err?.statusCode);
-//           ztoolkit.log("  url:", err?.url);
-//           ztoolkit.log("  requestBodyValues:", err?.requestBodyValues);
-//           ztoolkit.log("  responseHeaders:", err?.responseHeaders);
-//           ztoolkit.log("  responseBody:", err?.responseBody);
-//         },
-//       });
-//
-//       for await (const textPart of textStream) {
-//         ztoolkit.log(textPart);
-//       }
-//       ztoolkit.log("llmTest completed successfully");
-//     } catch (error: any) {
-//       ztoolkit.log("llmTest error details:");
-//       ztoolkit.log("  name:", error?.name);
-//       ztoolkit.log("  message:", error?.message);
-//       ztoolkit.log("  statusCode:", error?.statusCode);
-//       ztoolkit.log("  url:", error?.url);
-//       ztoolkit.log("  requestBody:", error?.requestBodyValues);
-//       ztoolkit.log("  responseHeaders:", error?.responseHeaders);
-//       ztoolkit.log("  responseBody:", error?.responseBody);
-//       ztoolkit.log("  cause:", error?.cause);
-//       ztoolkit.log("  full error:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
-//     }
-//   } else {
-//     ztoolkit.log(fn, streamTextFn);
-//   }
-// }
-
 function getRefreshRateFromPref() {
   const speed = getPref('llm.streamUpdateSpeed');
   switch (speed) {
