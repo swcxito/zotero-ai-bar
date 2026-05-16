@@ -281,54 +281,64 @@ function countOccurrencesInFullText(fullText: string | string[], selected: strin
  * @param  startIndex - 起始页索引（0-based，必须 > 4）
  * @returns {Promise<Object>} 返回包含 metadata 和 pages 数组的数据对象
  */
+
+const _batchRecognizerCache = new Map<number, Promise<any>>();
+
 async function getPageBatchRecognizerData(itemID: number, startIndex: number) {
-  // 1. 获取附件并读取文件
-  const attachment = await Zotero.Items.getAsync(itemID);
-  if (!attachment.isPDFAttachment()) {
-    throw new Error(`Item ${itemID} is not a PDF attachment`);
-  }
+  const cached = _batchRecognizerCache.get(itemID);
+  if (cached) return cached;
 
-  const path = await attachment.getFilePathAsync();
-  if (!path) {
-    throw new Error(`Attachment ${itemID} has no valid file path`);
-  }
-
-  const rawData = await IOUtils.read(path);
-  let buf = new Uint8Array(rawData).buffer;
-
-  // 2. 删除头部页面（仅删除头部，不裁剪尾部）
-  // deletePages 使用 PDFAssembler 重组 PDF 成本高，而 getRecognizerData 只读前5页，
-  // 尾部页数对其无影响，故不做尾部裁剪
-  const pageIndexesToDelete = Array.from({ length: startIndex }, (_, i) => i);
-
-  try {
-    const result = await Zotero.PDFWorker._query('deletePages', { buf, pageIndexes: pageIndexesToDelete, password: '' }, [buf]);
-    buf = result.buf;
-  } catch (e: any) {
-    Zotero.debug(`[Plugin] Failed to delete pages for offset ${startIndex}: ${e.message}`);
-    throw e;
-  }
-
-  // 3. 获取数据
-  let data;
-  try {
-    data = await Zotero.PDFWorker._query('getRecognizerData', { buf, password: '' }, [buf]);
-  } catch (e: any) {
-    const msg = typeof e === 'object' && e.message ? e.message : JSON.stringify(e);
-    throw new Error(`Failed to get recognizer data: ${msg}`, { cause: e });
-  }
-
-  // 4. 修正页码偏移
-  if (data?.pages) {
-    for (const page of data.pages) {
-      page.pageIndex += startIndex;
+  const promise = (async () => {
+    // 1. 获取附件并读取文件
+    const attachment = await Zotero.Items.getAsync(itemID);
+    if (!attachment.isPDFAttachment()) {
+      throw new Error(`Item ${itemID} is not a PDF attachment`);
     }
-    if (data.totalPages) {
-      data.totalPages += startIndex;
-    }
-  }
 
-  return data;
+    const path = await attachment.getFilePathAsync();
+    if (!path) {
+      throw new Error(`Attachment ${itemID} has no valid file path`);
+    }
+
+    const rawData = await IOUtils.read(path);
+    let buf = new Uint8Array(rawData).buffer;
+
+    // 2. 删除头部页面（仅删除头部，不裁剪尾部）
+    // deletePages 使用 PDFAssembler 重组 PDF 成本高，而 getRecognizerData 只读前5页，
+    // 尾部页数对其无影响，故不做尾部裁剪
+    const pageIndexesToDelete = Array.from({ length: startIndex }, (_, i) => i);
+
+    try {
+      const result = await Zotero.PDFWorker._query('deletePages', { buf, pageIndexes: pageIndexesToDelete, password: '' }, [buf]);
+      buf = result.buf;
+    } catch (e: any) {
+      Zotero.debug(`[Plugin] Failed to delete pages for offset ${startIndex}: ${e.message}`);
+      throw e;
+    }
+
+    // 3. 获取数据
+    let data;
+    try {
+      data = await Zotero.PDFWorker._query('getRecognizerData', { buf, password: '' }, [buf]);
+    } catch (e: any) {
+      const msg = typeof e === 'object' && e.message ? e.message : JSON.stringify(e);
+      throw new Error(`Failed to get recognizer data: ${msg}`, { cause: e });
+    }
+
+    // 4. 修正页码偏移
+    if (data?.pages) {
+      for (const page of data.pages) {
+        page.pageIndex += startIndex;
+      }
+      if (data.totalPages) {
+        data.totalPages += startIndex;
+      }
+    }
+
+    return data;
+  })();
+  _batchRecognizerCache.set(itemID, promise);
+  return promise;
 }
 
 interface AnnotationRect {

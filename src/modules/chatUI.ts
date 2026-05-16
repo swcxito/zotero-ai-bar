@@ -74,28 +74,34 @@ export function onLLMStreamStartV2(session: Session) {
 
 export async function onLLMStreamUpdateV2(data: { session: Session; fullText: string }) {
   const pop = data.session.pending.messagePop;
-  if (pop) {
-    const chatMessage = pop.querySelector('.chat-message-content');
-    if (chatMessage) {
-      chatMessage.innerHTML = await renderMarkdown(data.fullText);
-      (pop as HTMLElement).dataset.markdown = data.fullText;
-    }
-    const container = pop.parentElement;
-    if (container) {
-      if (!data.session.pending.shouldAutoScroll) {
-        return;
-      }
+  if (!pop) return;
 
-      const containerTop = container.getBoundingClientRect().top;
-      const popTop = (pop as HTMLElement).getBoundingClientRect().top;
+  const chatMessage = pop.querySelector('.chat-message-content');
+  if (!chatMessage) return;
 
-      // Stop auto-scroll for this response once the latest reply reaches container top.
-      if (popTop <= containerTop) {
-        data.session.pending.shouldAutoScroll = false;
-        return;
-      }
-      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+  const newLen = data.fullText.length;
+  const prevLen = data.session.pending.lastRenderedLength ?? 0;
+  if (newLen - prevLen < 20 && prevLen > 0) return;
+
+  chatMessage.innerHTML = await renderMarkdown(data.fullText);
+  (pop as HTMLElement).dataset.markdown = data.fullText;
+  data.session.pending.lastRenderedLength = newLen;
+
+  const container = pop.parentElement;
+  if (container) {
+    if (!data.session.pending.shouldAutoScroll) {
+      return;
     }
+
+    const containerTop = container.getBoundingClientRect().top;
+    const popTop = (pop as HTMLElement).getBoundingClientRect().top;
+
+    // Stop auto-scroll for this response once the latest reply reaches container top.
+    if (popTop <= containerTop) {
+      data.session.pending.shouldAutoScroll = false;
+      return;
+    }
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
   }
 }
 

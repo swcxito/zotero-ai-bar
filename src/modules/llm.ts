@@ -127,19 +127,8 @@ function buildErrorMessage(error: unknown): string {
 
 function handleStreamError(session: Session, error: unknown) {
   const message = buildErrorMessage(error);
-
-  // Write error directly into the message pop DOM
-  const pop = session.pending.messagePop;
-  if (pop) {
-    const contentEl = pop.querySelector('.chat-message-content');
-    if (contentEl) {
-      const escaped = message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      contentEl.innerHTML = `<div class="ai-bar-error-text">${escaped}</div>`;
-    }
-  }
   ztoolkit.log('LLM stream error:', session.id, message);
 
-  // Delegate cleanup + edge cases (pop doesn't exist, window mode, etc.)
   try {
     onLLMStreamErrorV2({ session, error: message });
   } catch (e) {

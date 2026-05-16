@@ -44,6 +44,7 @@ export class Session {
     shouldCopyResponse?: boolean;
     userMessage?: UserModelMessage;
     isNewSource?: boolean;
+    lastRenderedLength?: number;
   } = {};
   constructor(id: string) {
     this.id = id;
