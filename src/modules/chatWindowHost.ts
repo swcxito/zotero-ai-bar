@@ -35,8 +35,7 @@ export function ensureChatWindowUI(doc: Document) {
       if (text) {
         const msgEl = bubble.querySelector('.chat-message') as HTMLElement | null;
         if (msgEl) {
-          const html = await renderMarkdown(text);
-          msgEl.innerHTML = html;
+          msgEl.innerHTML = await renderMarkdown(text);
           (msgEl as any).dataset.markdown = text;
         }
       }

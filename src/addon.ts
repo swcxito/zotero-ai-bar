@@ -44,6 +44,7 @@ class Addon {
     // map tab IDs to their side pane root elements
     sidePaneBodyMap?: Map<string, HTMLElement>;
     inputImages: Map<string, string[]>;
+    _tabObserverID?: string;
   };
   // Chat state and logic
   public chatManager: ChatManager;

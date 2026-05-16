@@ -31,6 +31,7 @@ import { createUserMessageBubble } from './userBubble';
  * Build the InputArea widget and wire up all interactive logic.
  * @param doc   The owner Document (from the Zotero item-pane body).
  * @param sectionId  The Zotero item ID that identifies this sidebar section.
+ * @param opts
  */
 export function InputArea(
   doc: Document,

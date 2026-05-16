@@ -16,9 +16,6 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-// src/modules/selectionContext.ts
-
-import { get } from 'http';
 import { getPref } from './prefs';
 
 /**

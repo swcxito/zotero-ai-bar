@@ -18,12 +18,12 @@ export async function openPromptEditor(onClosed: () => void = () => {}) {
 }
 
 export class PromptEditor {
-  private doc: Document;
-  private promptList: HTMLElement | null;
+  private readonly doc: Document;
+  private readonly promptList: HTMLElement | null;
   private editPanel: HTMLElement | null;
-  private nameInput: HTMLInputElement | null;
-  private descInput: HTMLInputElement | null;
-  private contentInput: HTMLTextAreaElement | null;
+  private readonly nameInput: HTMLInputElement | null;
+  private readonly descInput: HTMLInputElement | null;
+  private readonly contentInput: HTMLTextAreaElement | null;
   private selectedPromptId: string | null = null;
   private prompts: UserPrompt[] = [];
 

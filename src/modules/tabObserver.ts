@@ -27,9 +27,10 @@ export function registerTabObserver() {
         }
       },
     },
-    ['tab'], // 监听 tab 类型
+    ['tab'],
     'myObserverID'
   );
+  addon.data._tabObserverID = observerID;
 }
 
 export function getReaderByTabId(id: string) {

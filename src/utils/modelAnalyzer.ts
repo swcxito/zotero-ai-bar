@@ -1,4 +1,3 @@
-import { config } from '../../package.json';
 import { ModelIcons } from '../components/common';
 
 /**
@@ -154,7 +153,6 @@ export function analyzeModelName(modelName: string): ModelAnalysisResult {
     // Pattern: Letter + Number (common in versions like k2.5, m2, r1)
     if (/^[a-z]\d+(\.\d+)*$/.test(token)) {
       versionParts.push(token);
-      continue;
     }
   }
 
