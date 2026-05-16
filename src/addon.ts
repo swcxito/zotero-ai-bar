@@ -45,6 +45,7 @@ class Addon {
     sidePaneBodyMap?: Map<string, HTMLElement>;
     inputImages: Map<string, string[]>;
     _tabObserverID?: string;
+    _readerPopupHandler?: (event: any) => void;
   };
   // Chat state and logic
   public chatManager: ChatManager;

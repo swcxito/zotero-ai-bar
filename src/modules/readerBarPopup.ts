@@ -114,30 +114,34 @@ export function registerKaTeXFontSheet(win: _ZoteroTypes.MainWindow) {
 
 // entry point for reader popup
 export function registerReaderInitializer() {
-  Zotero.Reader.registerEventListener(
-    'renderTextSelectionPopup',
-    ({ reader, doc, params, append }) => {
-      // addon.hooks.onReaderPopupShow(event);
-      addon.data.selection.text = params.annotation.text?.trim();
-      ztoolkit.log(addon.data.selection.text, 'selected');
-      if (getPref('extend-selection-context')) {
-        addon.data.selection.contextPromise = getSelectionContext(reader, params);
-      } else {
-        addon.data.selection.contextPromise = Promise.resolve(undefined);
-      }
-      // ztoolkit.log(doc);
-      // ztoolkit.log(append);
-      // ztoolkit.log("annotation", params.annotation);
-      ztoolkit.log('Creating Ask AI Bar');
-      addon.data.selection.currentAnnotation = params.annotation;
-      addon.data.selection.currentReader = reader;
-      if (reader._internalReader._type === 'pdf') {
-        append(renderAIBar(doc, reader));
-        smartAutoTranslate(reader, params);
-      }
-    },
-    config.addonID
-  );
+  const handler = ({ reader, doc, params, append }: any) => {
+    // addon.hooks.onReaderPopupShow(event);
+    addon.data.selection.text = params.annotation.text?.trim();
+    ztoolkit.log(addon.data.selection.text, 'selected');
+    if (getPref('extend-selection-context')) {
+      addon.data.selection.contextPromise = getSelectionContext(reader, params);
+    } else {
+      addon.data.selection.contextPromise = Promise.resolve(undefined);
+    }
+    // ztoolkit.log(doc);
+    // ztoolkit.log(append);
+    // ztoolkit.log("annotation", params.annotation);
+    ztoolkit.log('Creating Ask AI Bar');
+    addon.data.selection.currentAnnotation = params.annotation;
+    addon.data.selection.currentReader = reader;
+    if (reader._internalReader._type === 'pdf') {
+      append(renderAIBar(doc, reader));
+      smartAutoTranslate(reader, params);
+    }
+  };
+  addon.data._readerPopupHandler = handler;
+  Zotero.Reader.registerEventListener('renderTextSelectionPopup', handler, config.addonID);
+}
+
+export function unregisterReaderInitializer() {
+  if (addon.data._readerPopupHandler) {
+    Zotero.Reader.unregisterEventListener('renderTextSelectionPopup', addon.data._readerPopupHandler);
+  }
 }
 
 function smartAutoTranslate(

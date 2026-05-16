@@ -1,7 +1,7 @@
 import { initLocale } from './utils/locale';
 import { registerPrefsScripts } from './modules/preferenceScript';
 import { createZToolkit } from './utils/ztoolkit';
-import { registerAIBarStyleSheet, registerKaTeXFontSheet, registerReaderInitializer } from './modules/readerBarPopup';
+import { registerAIBarStyleSheet, registerKaTeXFontSheet, registerReaderInitializer, unregisterReaderInitializer } from './modules/readerBarPopup';
 import { onModelDialogLoad } from './modules/modelDialog';
 import { onPromptEditorLoad } from './modules/promptEditor';
 import { getPref, setPref, registerPrefs } from './utils/prefs';
@@ -20,7 +20,7 @@ async function onStartup() {
 
   addon.chatManager.chatHostMode = addon.chatManager.getCurrentHostMode();
 
-  if (getPref('chat.openOnStartup') === true && addon.chatManager.getCurrentHostMode() === 'window') {
+  if (getPref('chat.openOnStartup') && addon.chatManager.getCurrentHostMode() === 'window') {
     await ensureChatWindowReady();
   }
 
@@ -98,6 +98,10 @@ async function onMainWindowUnload(win: Window): Promise<void> {
 
 function onShutdown(): void {
   ztoolkit.unregisterAll();
+  if (addon.data._tabObserverID) {
+    Zotero.Notifier.unregisterObserver(addon.data._tabObserverID);
+  }
+  unregisterReaderInitializer();
   addon.data.dialog?.window?.close();
   if (isWindowAlive(addon.chatManager.chatWindow)) {
     addon.chatManager.chatWindow?.close();
