@@ -48,6 +48,7 @@ export class Session {
   } = {};
   constructor(id: string) {
     this.id = id;
+    this.fullTextEnabled = getPref('chat.autoAttachFullText') ?? false;
   }
 }
 

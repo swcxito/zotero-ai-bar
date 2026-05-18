@@ -20,6 +20,7 @@ import { Icons } from './common';
 import { IconView } from './iconView';
 import { ImagePreview, createImageViewer } from './imagePreview';
 import { getString } from '../utils/locale';
+import { getPref } from '../utils/prefs';
 import { Session } from '../modules/chatManager';
 
 import { startCaptureMode } from '../modules/capture';
@@ -85,7 +86,8 @@ export function InputArea(
     'flex-shrink-0'
   );
   fullTextBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.FileText, sizeRem: 1 })));
-  if (addon.chatManager.sessionsMap.get(sectionId)?.fullTextEnabled) {
+  const fullTextEnabled = addon.chatManager.sessionsMap.get(sectionId)?.fullTextEnabled ?? getPref('chat.autoAttachFullText');
+  if (fullTextEnabled) {
     fullTextBtn.classList.remove('text-slate-400', 'dark:text-neutral-500', 'hover:text-rose-500');
     fullTextBtn.classList.add('text-rose-500', 'dark:text-rose-400');
     fullTextBtn.title = getString('input-full-text-tooltip');
