@@ -19,6 +19,7 @@
 import { CardHead } from './cardHead';
 import { CardModelRow } from './modelRow';
 import { InlineButton } from './buttons/inlineButton';
+import { modelRowDataMap, cardDataMap } from './common';
 
 export interface ProviderCardV2Props {
   providerId: string;
@@ -98,7 +99,7 @@ export function ProviderCard({
     const names = new Set<string>();
     modelCardList?.querySelectorAll(':scope > div').forEach((rowEl) => {
       if (skipRow && rowEl === skipRow) return;
-      const data = (rowEl as RowWithGetData).getData();
+      const data = modelRowDataMap.get(rowEl)!();
       if (data.name) names.add(data.name.toLowerCase());
     });
     return names;
@@ -163,15 +164,13 @@ export function ProviderCard({
     isCollapsed = !isCollapsed;
   }
 
-  interface RowWithGetData extends HTMLDivElement {
-    getData: () => { id: string; name: string; enabled: boolean };
-  }
-
-  (card as any).getData = () => {
+  cardDataMap.set(card, () => {
     const modelRows = modelCardList?.querySelectorAll(':scope > div');
     const collected: { id: string; name: string; enabled: boolean }[] = [];
     modelRows?.forEach((row: Element) => {
-      const data = (row as RowWithGetData).getData();
+      const getData = modelRowDataMap.get(row);
+      if (!getData) return;
+      const data = getData();
       if (data.id && data.name !== '') {
         collected.push(data);
       }
@@ -197,7 +196,7 @@ export function ProviderCard({
       })),
     });
     return result;
-  };
+  });
 
   const header = ztoolkit.UI.createElement(
     doc,

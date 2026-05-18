@@ -51,27 +51,14 @@ export class Session {
   }
 }
 
-type ChatRequestParams =
-  | {
-      userPrompt: string;
-      sourceLabel?: string;
-      doesCopyResponse?: boolean;
-      isFromPopup?: boolean;
-      itemId: number;
-      tabId?: string;
-      contextPromise?: Promise<string[] | undefined>;
-      images?: string[];
-    }
-  | {
-      userPrompt: string;
-      sourceLabel?: string;
-      doesCopyResponse?: boolean;
-      isFromPopup?: boolean;
-      itemId?: number;
-      tabId: string;
-      contextPromise?: Promise<string[] | undefined>;
-      images?: string[];
-    };
+type ChatRequestParams = {
+  userPrompt: string;
+  sourceLabel?: string;
+  doesCopyResponse?: boolean;
+  isFromPopup?: boolean;
+  contextPromise?: Promise<string[] | undefined>;
+  images?: string[];
+} & ({ itemId: number; tabId?: string } | { itemId?: number; tabId: string });
 
 export class ChatManager {
   public chatHostMode?: ChatHostMode;
@@ -165,7 +152,7 @@ export class ChatManager {
     this.sessionsMap.set(tabId, session);
 
     const route = this.getCurrentHostMode();
-    const metadata = itemId !== undefined ? getItemMetadata(itemId) : undefined;
+    const metadata = itemId !== undefined && getPref('chat.autoAttachItemData') ? getItemMetadata(itemId) : undefined;
 
     session.pending.isNewSource = !!params.sourceLabel && session.sourceLabel !== params.sourceLabel;
 

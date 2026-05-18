@@ -31,7 +31,7 @@ import {
   filterGoogleEnvKeys,
 } from '../utils/providers';
 import { getModelIconPath } from '../utils/modelAnalyzer';
-import { ModelIcons } from '../components/common';
+import { cardDataMap, ModelIcons } from '../components/common';
 import type { UserProviderConfigV2, CommonProviders, AddedProvider, AddedModel, ProviderId, Provider } from '../utils/providers';
 
 function buildModelRows(v2: UserProviderConfigV2, providerId: string): { id: string; name: string; enabled: boolean }[] {
@@ -195,7 +195,7 @@ class ModelDialogV2 {
 
   private getExistingProviderIds(): Set<string> {
     const ids = new Set<string>();
-    this.root?.querySelectorAll('.provider-card').forEach((card) => ids.add((card as any).getData?.().providerId ?? ''));
+    this.root?.querySelectorAll('.provider-card').forEach((card) => ids.add(cardDataMap.get(card)!().providerId ?? ''));
     return ids;
   }
 
@@ -360,19 +360,11 @@ class ModelDialogV2 {
     const newAddedModels: AddedModel[] = [];
     const newAddedProviders: Record<string, AddedProvider> = {};
 
-    interface CardWithGetData extends HTMLElement {
-      getData: () => {
-        providerId: string;
-        envValues: Record<string, string>;
-        baseUrl?: string;
-        models: { id: string; name: string; enabled: boolean }[];
-      };
-    }
-
     const cards = container.querySelectorAll('.provider-card');
     cards.forEach((cardElement) => {
-      const card = cardElement as CardWithGetData;
-      const cardData = card.getData();
+      const getData = cardDataMap.get(cardElement);
+      if (!getData) return;
+      const cardData = getData();
       const { providerId, envValues: cardEnv, baseUrl, models: cardModels } = cardData;
 
       // 过滤掉名为空的模型行（getData已做，此处兜底）
@@ -544,20 +536,21 @@ class ModelDialogV2 {
       }
     };
 
-    // Replace old event listeners by cloning (previous handler cleared)
-    const existingHandler = (this.modelSearchInput as any)._modelSelectHandler;
-    if (existingHandler) {
-      this.modelSearchInput.removeEventListener('keydown', existingHandler);
-    }
+    // Replace old event listeners (previous handlers cleared)
+    const prevKeyHandler = (this.modelSearchInput as any)._modelSelectKeyHandler;
+    const prevInputHandler = (this.modelSearchInput as any)._modelSelectInputHandler;
+    if (prevKeyHandler) this.modelSearchInput.removeEventListener('keydown', prevKeyHandler);
+    if (prevInputHandler) this.modelSearchInput.removeEventListener('input', prevInputHandler);
 
     renderList('');
+
+    const inputHandler = () => renderList(this.modelSearchInput!.value);
 
     const searchHandler = (e: KeyboardEvent) => {
       if (e.key === 'Enter') {
         const val = this.modelSearchInput!.value.trim();
         if (val) {
           this.closeModelSelect();
-          // Match as model ID first, then name, then treat as raw ID
           const foundById = models[val];
           if (foundById) {
             onSelect(val, foundById.name);
@@ -575,11 +568,10 @@ class ModelDialogV2 {
       renderList(this.modelSearchInput!.value);
     };
 
-    this.modelSearchInput.addEventListener('input', () => {
-      renderList(this.modelSearchInput!.value);
-    });
+    this.modelSearchInput.addEventListener('input', inputHandler);
     this.modelSearchInput.addEventListener('keydown', searchHandler);
-    (this.modelSearchInput as any)._modelSelectHandler = searchHandler;
+    (this.modelSearchInput as any)._modelSelectInputHandler = inputHandler;
+    (this.modelSearchInput as any)._modelSelectKeyHandler = searchHandler;
 
     this.modelSearchInput.value = '';
 

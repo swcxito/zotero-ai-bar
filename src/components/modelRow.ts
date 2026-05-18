@@ -17,7 +17,7 @@
  */
 
 import { ButtonBase } from './buttons/buttonBase';
-import { Icons } from './common';
+import { Icons, modelRowDataMap } from './common';
 import { getString } from '../utils/locale';
 
 export interface CardModelRowProps {
@@ -128,13 +128,13 @@ export function CardModelRow({ doc, data, onSelectModel }: CardModelRowProps) {
   if (data?.id) {
     (row as HTMLElement).dataset.modelId = data.id;
   }
-  (row as any).getData = () => {
+  modelRowDataMap.set(row, () => {
     const nameValue = (row.querySelector('input[type="text"]') as HTMLInputElement).value;
     return {
       id: (row as HTMLElement).dataset.modelId || nameValue || crypto.randomUUID(),
       name: nameValue,
       enabled: (row.querySelector('input[type="checkbox"]') as HTMLInputElement).checked,
     };
-  };
+  });
   return row;
 }

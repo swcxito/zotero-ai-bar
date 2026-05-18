@@ -167,7 +167,8 @@ function safeParseLegacyLLMConfig(llmConfig: string | UserProviderConfig[] | nul
   try {
     const parsed = JSON.parse(llmConfig);
     return Array.isArray(parsed) ? (parsed as UserProviderConfig[]) : [];
-  } catch {
+  } catch (e) {
+    ztoolkit.log('Failed to parse legacy LLM config:', e);
     return [];
   }
 }
@@ -571,7 +572,8 @@ async function loadV2ModelsFile(): Promise<Record<string, Record<string, any>>> 
     const filePath = getV2ModelsPath();
     if (!(await IOUtils.exists(filePath))) return {};
     return await IOUtils.readJSON(filePath);
-  } catch {
+  } catch (e) {
+    ztoolkit.log('Failed to load V2 models file:', e);
     return {};
   }
 }
@@ -617,7 +619,8 @@ export async function loadV2Config(): Promise<UserProviderConfigV2 | null> {
     });
 
     return lightweight;
-  } catch {
+  } catch (e) {
+    ztoolkit.log('Failed to load V2 config:', e);
     return null;
   }
 }
@@ -665,8 +668,8 @@ export async function initIconCache(): Promise<void> {
       _iconCache = await IOUtils.readJSON(filePath);
       return;
     }
-  } catch {
-    /* fall through */
+  } catch (e) {
+    ztoolkit.log('Failed to init icon cache:', e);
   }
 
   _iconCache = {};
@@ -709,8 +712,8 @@ export async function cacheProviderIcon(providerId: string): Promise<void> {
     cache[providerId] = `data:image/svg+xml;base64,${base64}`;
     await flushIconCache();
     ztoolkit.log('[cacheProviderIcon] Cached icon for', providerId);
-  } catch {
-    /* 静默失败 */
+  } catch (e) {
+    ztoolkit.log('Failed to cache provider icon:', e);
   }
 }
 
@@ -767,34 +770,8 @@ export async function fetchLiveProviders(): Promise<CommonProviders> {
 }
 
 /** Provider ID */
-export type ProviderId =
-  | 'openai'
-  | 'anthropic'
-  | 'google'
-  | 'azure'
-  | 'amazon'
-  | 'cohere'
-  | 'mistral'
-  | 'grok'
-  | 'deepseek'
-  | 'groq'
-  | 'perplexity'
-  | 'openrouter'
-  | 'alibaba-cloud'
-  | 'ai21'
-  | 'zhipu'
-  | 'minimax'
-  | 'moonshot'
-  | 'novita'
-  | 'qwen'
-  | 'togetherai'
-  | 'fireworks'
-  | 'hyperbolic'
-  | 'zai'
-  | 'tngtech'
-  | 'sarapa'
-  | 'vertex'
-  | string; // 允许自定义 provider ID
+// Known provider IDs are listed for autocomplete; custom IDs are always allowed.
+export type ProviderId = string;
 
 /** 模型家族 */
 export type ModelFamily =
