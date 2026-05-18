@@ -35,37 +35,33 @@ export async function getSelectionContext(
   if (isCrossPage) ztoolkit.log('跨页选中');
   const index = parseSortIndex(selected.sortIndex);
 
-  if (itemID && index?.indexType === 'pdf' && reader._internalReader._type === 'pdf') {
+  if (itemID && index?.indexType === 'pdf' && reader._internalReader._type === 'pdf' && lineCount <= 40) {
     const selectedPageIndexes = isCrossPage ? [index.pageIndex!, index.pageIndex! + 1] : [index.pageIndex!];
     const fullText = await Zotero.PDFWorker.getFullText(itemID, selectedPageIndexes);
-    // ztoolkit.log("full-text", fullText);
-    // get context by search
-    if (lineCount <= 40) {
-      // search in fullText
-      const matches = countOccurrencesInFullText(fullText.text, selectedText);
-      const macheCount = matches.length;
-      const contextSize = getPref('extend-selection-size') || 70;
-      ztoolkit.log('search-matches', matches);
-      if (macheCount == 1) {
-        selectionContext = getContextAroundIndex(fullText.text, [matches[0].start, matches[0].end], contextSize + 30);
-        ztoolkit.log('selected context by search:', selectionContext);
-      } else if (selectedText.split(' ').length <= 5 || selectedText.length <= 5) {
-        // words only, use position match
-        // ztoolkit.log(selected.position?.rects);
-        let data;
-        let currentPage;
-        if (index.pageIndex! <= 4 && !isCrossPage) {
-          data = await Zotero.PDFWorker.getRecognizerData(itemID);
-          currentPage = data.pages[index.pageIndex!];
-        } else {
-          data = await getPageBatchRecognizerData(itemID, index.pageIndex!);
-          currentPage = data.pages[0];
-        }
-        ztoolkit.log('data:', data);
-        ztoolkit.log('current-page:', currentPage);
-        selectionContext = getContextByPosition(selected, currentPage, contextSize, isCrossPage ? data.pages[index.pageIndex! + 1] : undefined);
-        ztoolkit.log('selected context by position:', selectionContext);
+
+    // search in fullText
+    const matches = countOccurrencesInFullText(fullText.text, selectedText);
+    const macheCount = matches.length;
+    const contextSize = getPref('extend-selection-size') || 70;
+    ztoolkit.log('search-matches', matches);
+    if (macheCount == 1) {
+      selectionContext = getContextAroundIndex(fullText.text, [matches[0].start, matches[0].end], contextSize + 30);
+      ztoolkit.log('selected context by search:', selectionContext);
+    } else if (selectedText.split(' ').length <= 5 || selectedText.length <= 5) {
+      // words only, use position match
+      let data;
+      let currentPage;
+      if (index.pageIndex! <= 4 && !isCrossPage) {
+        data = await Zotero.PDFWorker.getRecognizerData(itemID);
+        currentPage = data.pages[index.pageIndex!];
+      } else {
+        data = await getPageBatchRecognizerData(itemID, index.pageIndex!);
+        currentPage = data.pages[0];
       }
+      ztoolkit.log('data:', data);
+      ztoolkit.log('current-page:', currentPage);
+      selectionContext = getContextByPosition(selected, currentPage, contextSize, isCrossPage ? data.pages[index.pageIndex! + 1] : undefined);
+      ztoolkit.log('selected context by position:', selectionContext);
     }
   }
   //TODO: get context by index epub
@@ -283,10 +279,16 @@ function countOccurrencesInFullText(fullText: string | string[], selected: strin
  */
 
 const _batchRecognizerCache = new Map<number, Promise<any>>();
+const MAX_CACHE_SIZE = 8;
 
 async function getPageBatchRecognizerData(itemID: number, startIndex: number) {
   const cached = _batchRecognizerCache.get(itemID);
   if (cached) return cached;
+
+  if (_batchRecognizerCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = _batchRecognizerCache.keys().next().value;
+    _batchRecognizerCache.delete(firstKey);
+  }
 
   const promise = (async () => {
     // 1. 获取附件并读取文件

@@ -76,7 +76,7 @@ export class PromptEditor {
     const row = this.doc.createElement('div');
     const selected = this.selectedPromptId === prompt.id;
     row.className = [
-      'group flex items-center justify-between gap-3 rounded-xl border bg-white p-4 shadow-sm transition-all cursor-pointer dark:bg-zinc-900',
+      'prompt-row group flex items-center justify-between gap-3 rounded-xl border bg-white p-4 shadow-sm transition-all cursor-pointer dark:bg-zinc-900',
       selected
         ? 'border-rose-400 ring-1 ring-rose-300 dark:border-rose-400 dark:ring-rose-800'
         : 'border-zinc-200 hover:border-rose-400 dark:border-zinc-700 dark:hover:border-rose-400',
@@ -272,10 +272,26 @@ export class PromptEditor {
     });
   }
 
+  private _toggleRowSelection(selectId: string | null) {
+    const prevRow = this.promptList?.querySelector('.prompt-row.border-rose-400') as HTMLElement | null;
+    if (prevRow) {
+      prevRow.classList.remove('border-rose-400', 'ring-1', 'ring-rose-300', 'dark:border-rose-400', 'dark:ring-rose-800');
+      prevRow.classList.add('border-zinc-200', 'hover:border-rose-400', 'dark:border-zinc-700', 'dark:hover:border-rose-400');
+    }
+    if (selectId) {
+      const newRow = this.promptList?.querySelector(`.prompt-row[data-prompt-id="${selectId}"]`) as HTMLElement | null;
+      if (newRow) {
+        newRow.classList.remove('border-zinc-200', 'hover:border-rose-400', 'dark:border-zinc-700', 'dark:hover:border-rose-400');
+        newRow.classList.add('border-rose-400', 'ring-1', 'ring-rose-300', 'dark:border-rose-400', 'dark:ring-rose-800');
+      }
+    }
+  }
+
   selectPrompt(id: string) {
     const prompt = this.prompts.find((item) => item.id === id);
     if (!prompt) return;
 
+    this._toggleRowSelection(id);
     this.selectedPromptId = id;
     if (this.nameInput) {
       this.nameInput.value = prompt.name;
@@ -287,10 +303,10 @@ export class PromptEditor {
       this.contentInput.value = prompt.prompt;
     }
     this.editPanel?.classList.remove('opacity-60', 'pointer-events-none');
-    this.renderList();
   }
 
   clearEditForm() {
+    this._toggleRowSelection(null);
     this.selectedPromptId = null;
     if (this.nameInput) {
       this.nameInput.value = '';
@@ -302,7 +318,6 @@ export class PromptEditor {
       this.contentInput.value = '';
     }
     this.editPanel?.classList.add('opacity-60', 'pointer-events-none');
-    this.renderList();
   }
 
   save() {

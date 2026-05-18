@@ -149,6 +149,10 @@ export class ChatManager {
     }
 
     const session = this.sessionsMap.get(tabId) ?? new Session(tabId);
+    if (!this.sessionsMap.has(tabId) && this.sessionsMap.size >= 12) {
+      const oldest = this.sessionsMap.keys().next().value;
+      this.sessionsMap.delete(oldest);
+    }
     this.sessionsMap.set(tabId, session);
 
     const route = this.getCurrentHostMode();

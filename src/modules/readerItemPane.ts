@@ -162,23 +162,37 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
 // #zotero-item-pane-header
 // body
 //     #ai-bar-chat-root
+let _resizeScheduled = false;
+let _resizePending: { body: HTMLElement; policy: 'maximize' | 'fit' | 'auto' } | undefined;
+
 export function resizeReaderItemPaneHeight(body: HTMLElement, resizePolicy: 'maximize' | 'fit' | 'auto' = 'maximize') {
-  const itemPaneHeader = body.ownerDocument.querySelector('#zotero-item-pane-header');
-  const bottomDist = itemPaneHeader ? itemPaneHeader.getBoundingClientRect().bottom : 0;
-  let sectionHeader = body.previousElementSibling as HTMLElement;
-  if (!sectionHeader || !sectionHeader.classList.contains('head')) {
-    sectionHeader = sectionHeader.previousElementSibling as HTMLElement;
-  }
-  const sectionHeaderHeight = sectionHeader ? sectionHeader.offsetHeight : 0;
-  const sectionHeaderDist = sectionHeader.getBoundingClientRect().bottom;
+  _resizePending = { body, policy: resizePolicy };
+  if (_resizeScheduled) return;
+  _resizeScheduled = true;
+  setTimeout(() => {
+    _resizeScheduled = false;
+    const pending = _resizePending;
+    _resizePending = undefined;
+    if (!pending) return;
 
-  const root = body.querySelector('#ai-bar-chat-root') as HTMLElement | null;
-  const messageContainer = root?.shadowRoot?.querySelector('.message-container') as HTMLElement | null;
-  const resolvedPolicy = resizePolicy === 'auto' ? (messageContainer && messageContainer.childElementCount > 0 ? 'maximize' : 'fit') : resizePolicy;
+    const itemPaneHeader = pending.body.ownerDocument.querySelector('#zotero-item-pane-header');
+    const bottomDist = itemPaneHeader ? itemPaneHeader.getBoundingClientRect().bottom : 0;
+    let sectionHeader = pending.body.previousElementSibling as HTMLElement;
+    if (!sectionHeader || !sectionHeader.classList.contains('head')) {
+      sectionHeader = sectionHeader.previousElementSibling as HTMLElement;
+    }
+    const sectionHeaderHeight = sectionHeader ? sectionHeader.offsetHeight : 0;
+    const sectionHeaderDist = sectionHeader.getBoundingClientRect().bottom;
 
-  const calcHeight = resolvedPolicy === 'maximize' ? bottomDist + sectionHeaderHeight + 12 : sectionHeaderDist + 6;
-  if (root) root.style.height = `calc(100vh - ${calcHeight}px)`;
-  body?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const root = pending.body.querySelector('#ai-bar-chat-root') as HTMLElement | null;
+    const messageContainer = root?.shadowRoot?.querySelector('.message-container') as HTMLElement | null;
+    const resolvedPolicy =
+      pending.policy === 'auto' ? (messageContainer && messageContainer.childElementCount > 0 ? 'maximize' : 'fit') : pending.policy;
+
+    const calcHeight = resolvedPolicy === 'maximize' ? bottomDist + sectionHeaderHeight + 12 : sectionHeaderDist + 6;
+    if (root) root.style.height = `calc(100vh - ${calcHeight}px)`;
+    pending.body?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 }
 
 export function scrollToBottom(container: HTMLElement) {

@@ -45,10 +45,8 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
 
   win.MozXULElement.insertFTLIfNeeded(`${addon.data.config.addonRef}-mainWindow.ftl`);
 
-  // Config v2: lazy-load provider metadata, prefer persisted v2 config
-  await ensureCommonProviders();
-
-  const v2FromPref = await loadV2Config();
+  // Config v2: load provider metadata, persisted config & icon cache in parallel
+  const [, v2FromPref] = await Promise.all([ensureCommonProviders(), loadV2Config()]);
   if (v2FromPref) {
     addon.data.userProviderConfigV2 = v2FromPref;
     ztoolkit.log('[hooks] Loaded v2 config from pref:', {
