@@ -24,6 +24,7 @@ import { Session } from '../modules/chatManager';
 
 import { startCaptureMode } from '../modules/capture';
 import { getReaderByTabId } from '../modules/tabObserver';
+import { scrollToBottom as doScrollToBottom, setSendBtnEnabled } from '../modules/readerItemPane';
 import { checkModelSupportsImage, promptModelImageUnsupported } from '../utils/providers';
 import { createUserMessageBubble } from './userBubble';
 
@@ -193,15 +194,7 @@ export function InputArea(
     const hasText = textarea.value.trim().length > 0;
     const hasImages = preview.getCount() > 0;
     const canSend = hasText || hasImages;
-    if (canSend) {
-      sendBtn.disabled = false;
-      sendBtn.classList.remove('bg-slate-200', 'dark:bg-neutral-800', 'text-slate-400', 'dark:text-neutral-600');
-      sendBtn.classList.add('bg-rose-500', 'dark:bg-rose-600', 'hover:bg-rose-600');
-    } else {
-      sendBtn.disabled = true;
-      sendBtn.classList.remove('bg-rose-500', 'dark:bg-rose-600', 'hover:bg-rose-600');
-      sendBtn.classList.add('bg-slate-200', 'dark:bg-neutral-800', 'text-slate-400', 'dark:text-neutral-600');
-    }
+    setSendBtnEnabled(sendBtn, canSend);
   }
 
   function updateScreenshotBtnState() {
@@ -225,7 +218,7 @@ export function InputArea(
       ? ((rootNode as ShadowRoot).querySelector('.message-container') as HTMLElement | null)
       : ((doc as Document).querySelector('#ai-bar-window-message-container') as HTMLElement | null);
     if (container) {
-      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+      doScrollToBottom(container);
     }
   }
 

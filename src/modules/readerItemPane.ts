@@ -180,3 +180,22 @@ export function resizeReaderItemPaneHeight(body: HTMLElement, resizePolicy: 'max
   if (root) root.style.height = `calc(100vh - ${calcHeight}px)`;
   body?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+export function scrollToBottom(container: HTMLElement) {
+  container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+}
+
+const BTN_ENABLED = ['bg-rose-500', 'dark:bg-rose-600', 'hover:bg-rose-600'] as const;
+const BTN_DISABLED = ['bg-slate-200', 'dark:bg-neutral-800', 'text-slate-400', 'dark:text-neutral-600'] as const;
+
+export function setSendBtnEnabled(btn: HTMLButtonElement, enabled: boolean) {
+  if (enabled) {
+    btn.disabled = false;
+    btn.classList.remove(...BTN_DISABLED);
+    btn.classList.add(...BTN_ENABLED);
+  } else {
+    btn.disabled = true;
+    btn.classList.remove(...BTN_ENABLED);
+    btn.classList.add(...BTN_DISABLED);
+  }
+}

@@ -28,6 +28,7 @@ import {
   ensureCommonProviders,
   fetchLiveProviders,
   saveV2Config,
+  filterGoogleEnvKeys,
 } from '../utils/providers';
 import { getModelIconPath } from '../utils/modelAnalyzer';
 import { ModelIcons } from '../components/common';
@@ -35,12 +36,6 @@ import type { UserProviderConfigV2, CommonProviders, AddedProvider, AddedModel, 
 
 function buildModelRows(v2: UserProviderConfigV2, providerId: string): { id: string; name: string; enabled: boolean }[] {
   return (v2.addedModels ?? []).filter((m) => m.providerId === providerId).map((m) => ({ id: m.id, name: m.name, enabled: m.enabled }));
-}
-
-/** Google 的 GOOGLE_GENERATIVE_AI_API_KEY 与 GEMINI_API_KEY 可互换，统一只显示/存储后者 */
-function filterGoogleEnvKeys(providerId: string, envKeys: string[]): string[] {
-  if (providerId !== 'google') return envKeys;
-  return envKeys.filter((k) => k !== 'GOOGLE_GENERATIVE_AI_API_KEY');
 }
 
 export async function openDialog(onDialogClosed: () => void = () => {}) {
@@ -75,6 +70,9 @@ class ModelDialogV2 {
   private static readonly PINNED_ORDER = ['openai', 'google', 'anthropic', 'alibaba-cn', 'deepseek', 'moonshotai-cn', 'minimax-cn', 'zhipuai'];
   private static readonly PINNED_SET = new Set(ModelDialogV2.PINNED_ORDER);
 
+  private static readonly SELECT_ITEM_CLASS =
+    'flex w-full items-center gap-3 px-4 py-1.5 text-left text-sm text-zinc-700 transition-colors hover:bg-rose-400 hover:text-white dark:text-zinc-200';
+
   constructor(private readonly win: Window) {
     this.doc = win.document;
     this.root = this.doc.querySelector('#root');
@@ -86,6 +84,10 @@ class ModelDialogV2 {
     this.modelOverlay = this.doc.querySelector('#model-select-overlay');
     this.modelSearchInput = this.doc.querySelector('#model-search-input');
     this.modelList = this.doc.querySelector('#model-select-list');
+  }
+
+  private setBodyScrollLock(lock: boolean) {
+    this.doc.body.style.overflow = lock ? 'hidden' : '';
   }
 
   async init() {
@@ -247,8 +249,7 @@ class ModelDialogV2 {
 
     const appendButton = (providerId: string, name: string) => {
       const btn = this.doc.createElement('button');
-      btn.className =
-        'flex w-full items-center gap-3 px-4 py-1.5 text-left text-sm text-zinc-700 transition-colors hover:bg-rose-400 hover:text-white dark:text-zinc-200';
+      btn.className = ModelDialogV2.SELECT_ITEM_CLASS;
       const img = this.doc.createElement('img');
       img.src = getModelsDevLogoUrl(providerId);
       img.onerror = () => {
@@ -492,12 +493,12 @@ class ModelDialogV2 {
     if (this.searchInput) this.searchInput.value = '';
     this.overlay?.classList.remove('opacity-100');
     this.overlay?.classList.add('opacity-0', 'invisible', 'pointer-events-none');
-    this.doc.body.style.overflow = '';
+    this.setBodyScrollLock(false);
   }
 
   private showPopup() {
     this.refreshProviderList();
-    this.doc.body.style.overflow = 'hidden';
+    this.setBodyScrollLock(true);
     this.overlay?.classList.remove('opacity-0', 'invisible', 'pointer-events-none');
     this.overlay?.classList.add('opacity-100');
     this.searchInput?.focus();
@@ -521,8 +522,7 @@ class ModelDialogV2 {
 
       for (const [id, m] of filtered) {
         const btn = this.doc.createElement('button');
-        btn.className =
-          'flex w-full items-center gap-3 px-4 py-1.5 text-left text-sm text-zinc-700 transition-colors hover:bg-rose-400 hover:text-white dark:text-zinc-200';
+        btn.className = ModelDialogV2.SELECT_ITEM_CLASS;
 
         const iconSlot = this.doc.createElement('span');
         iconSlot.className = 'w-4 h-4 shrink-0 inline-flex items-center justify-center';
@@ -590,7 +590,7 @@ class ModelDialogV2 {
 
     this.modelOverlay.classList.remove('opacity-0', 'invisible', 'pointer-events-none');
     this.modelOverlay.classList.add('opacity-100');
-    this.doc.body.style.overflow = 'hidden';
+    this.setBodyScrollLock(true);
     this.modelSearchInput.focus();
   }
 
@@ -598,7 +598,7 @@ class ModelDialogV2 {
     this.interacting = false;
     this.modelOverlay?.classList.remove('opacity-100');
     this.modelOverlay?.classList.add('opacity-0', 'invisible', 'pointer-events-none');
-    this.doc.body.style.overflow = '';
+    this.setBodyScrollLock(false);
   }
 }
 

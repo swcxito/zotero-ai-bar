@@ -17,10 +17,10 @@
  */
 
 import { ChatBox } from '../components/chatBox';
-import { renderMarkdown } from '../utils/markdown';
+import { escapeHtml, renderMarkdown } from '../utils/markdown';
 import { ensureChatWindow } from '../utils/window';
 import { CHAT_WINDOW_MESSAGE_CONTAINER_ID, ensureChatWindowUI } from './chatWindowHost';
-import { resizeReaderItemPaneHeight } from './readerItemPane';
+import { resizeReaderItemPaneHeight, scrollToBottom, setSendBtnEnabled } from './readerItemPane';
 import { Session } from './chatManager';
 import { IconView } from '../components/iconView';
 import { Icons } from '../components/common';
@@ -69,7 +69,7 @@ export function onLLMStreamStartV2(session: Session) {
 
   container.appendChild(pop);
   session.pending.messagePop = pop;
-  container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+  scrollToBottom(container as HTMLElement);
 }
 
 export async function onLLMStreamUpdateV2(data: { session: Session; fullText: string }) {
@@ -101,7 +101,7 @@ export async function onLLMStreamUpdateV2(data: { session: Session; fullText: st
       data.session.pending.shouldAutoScroll = false;
       return;
     }
-    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    scrollToBottom(container as HTMLElement);
   }
 }
 
@@ -113,10 +113,7 @@ export function onLLMStreamEndV2(session: Session) {
       actions.classList.remove('hidden');
       const container = pop.parentElement;
       if (container && session.pending.shouldAutoScroll) {
-        container.scrollTo({
-          top: container.scrollHeight,
-          behavior: 'smooth',
-        });
+        scrollToBottom(container as HTMLElement);
       }
     }
 
@@ -174,10 +171,7 @@ export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
       actions.classList.remove('hidden');
       const actionsContainer = pop.parentElement;
       if (actionsContainer && data.session.pending.shouldAutoScroll) {
-        actionsContainer.scrollTo({
-          top: actionsContainer.scrollHeight,
-          behavior: 'smooth',
-        });
+        scrollToBottom(actionsContainer as HTMLElement);
       }
     }
     const chatMessage = pop.querySelector('.chat-message-content');
@@ -191,16 +185,12 @@ export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
     }
     const container = pop.parentElement;
     if (container && data.session.pending.shouldAutoScroll) {
-      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+      scrollToBottom(container as HTMLElement);
     }
   }
   // Clear streaming state
   updateSectionInputArea(data.session.id, false);
   cleanupRequestData(data.session);
-}
-
-function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
 function cleanupRequestData(session: Session) {
@@ -248,50 +238,14 @@ function updateSectionInputArea(sessionId: string, isStreaming: boolean) {
   if (!sendBtn) return;
 
   if (isStreaming) {
-    sendBtn.disabled = false;
     sendBtn.dataset.mode = 'stop';
-    sendBtn.classList.remove(
-      'bg-slate-200',
-      'dark:bg-neutral-800',
-      'text-slate-400',
-      'dark:text-neutral-600',
-      'bg-rose-500',
-      'dark:bg-rose-600',
-      'hover:bg-rose-600'
-    );
-    sendBtn.classList.add('bg-rose-500', 'dark:bg-rose-600', 'hover:bg-rose-600');
+    setSendBtnEnabled(sendBtn, true);
     sendBtn.innerHTML = '';
-    const stopIcon = ztoolkit.UI.createElement(
-      doc,
-      'span',
-      IconView({
-        iconMarkup: Icons.Stop,
-        sizeRem: 1.5,
-        extraClasses: ['text-white'],
-      })
-    );
-    sendBtn.appendChild(stopIcon);
+    sendBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Stop, sizeRem: 1.5, extraClasses: ['text-white'] })));
   } else {
     sendBtn.dataset.mode = 'send';
-    if (hasText) {
-      sendBtn.disabled = false;
-      sendBtn.classList.remove('bg-slate-200', 'dark:bg-neutral-800', 'text-slate-400', 'dark:text-neutral-600');
-      sendBtn.classList.add('bg-rose-500', 'dark:bg-rose-600', 'hover:bg-rose-600');
-    } else {
-      sendBtn.disabled = true;
-      sendBtn.classList.remove('bg-rose-500', 'dark:bg-rose-600', 'hover:bg-rose-600');
-      sendBtn.classList.add('bg-slate-200', 'dark:bg-neutral-800', 'text-slate-400', 'dark:text-neutral-600');
-    }
+    setSendBtnEnabled(sendBtn, hasText);
     sendBtn.innerHTML = '';
-    const sendIcon = ztoolkit.UI.createElement(
-      doc,
-      'span',
-      IconView({
-        iconMarkup: Icons.Send,
-        sizeRem: 1.5,
-        extraClasses: ['text-white'],
-      })
-    );
-    sendBtn.appendChild(sendIcon);
+    sendBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Send, sizeRem: 1.5, extraClasses: ['text-white'] })));
   }
 }

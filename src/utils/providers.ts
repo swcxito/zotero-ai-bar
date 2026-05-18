@@ -476,6 +476,12 @@ export const PROVIDER_ENV_KEY_MAP: Record<string, string> = {
   volcengine: 'ARK_API_KEY',
 };
 
+/** GOOGLE_GENERATIVE_AI_API_KEY and GEMINI_API_KEY are interchangeable — only show/store the latter */
+export function filterGoogleEnvKeys(providerId: string, envKeys: string[]): string[] {
+  if (providerId !== 'google') return envKeys;
+  return envKeys.filter((k) => k !== 'GOOGLE_GENERATIVE_AI_API_KEY');
+}
+
 /** Replace `${VAR}` placeholders in a URL template with values from env */
 export function resolveApiUrl(template: string, env: Record<string, string>): string {
   return template.replace(/\$\{(\w+)\}/g, (_, key: string) => {

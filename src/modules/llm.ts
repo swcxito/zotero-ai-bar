@@ -226,50 +226,43 @@ async function createProvider(
       })(modelId as any);
     }
 
-    case '@ai-sdk/google': {
-      const { createGoogleGenerativeAI } = (SDK_CACHE['@ai-sdk/google'] ??= await import('@ai-sdk/google'));
-      return createGoogleGenerativeAI({ name: providerId, apiKey: providerEnv['GEMINI_API_KEY'] })(modelId as any);
-    }
+    default:
+      return createGenericProvider(npm, opts);
+  }
+}
 
-    case '@ai-sdk/openai': {
-      const { createOpenAI } = (SDK_CACHE['@ai-sdk/openai'] ??= await import('@ai-sdk/openai'));
-      const apiKey = Object.values(providerEnv)[0];
-      if (!apiKey) throw new Error(`API key not configured for ${providerId}`);
-      const cfg: Record<string, unknown> = { name: providerId, apiKey };
-      if (baseUrl) cfg.baseURL = resolveApiUrl(baseUrl, providerEnv);
-      return createOpenAI(cfg)(modelId as any);
-    }
+/** Unified factory for openai, anthropic, xai, openrouter, google, openai-compatible */
+async function createGenericProvider(
+  npm: string | undefined,
+  opts: { providerId: string; modelId: string; providerEnv: Record<string, string>; baseUrl?: string }
+) {
+  const { providerId, modelId, providerEnv, baseUrl } = opts;
 
-    case '@ai-sdk/anthropic': {
-      const { createAnthropic } = (SDK_CACHE['@ai-sdk/anthropic'] ??= await import('@ai-sdk/anthropic'));
-      const cfg: Record<string, unknown> = { name: providerId, apiKey: Object.values(providerEnv)[0] };
-      if (baseUrl) cfg.baseURL = resolveApiUrl(baseUrl, providerEnv);
-      return createAnthropic(cfg)(modelId as any);
-    }
+  const apiKey = Object.values(providerEnv)[0];
+  if (!apiKey) throw new Error(`API key not configured for ${providerId}`);
 
-    case '@ai-sdk/xai': {
-      const { createXai } = (SDK_CACHE['@ai-sdk/xai'] ??= await import('@ai-sdk/xai'));
-      const cfg: Record<string, unknown> = { name: providerId, apiKey: Object.values(providerEnv)[0] };
-      if (baseUrl) cfg.baseURL = resolveApiUrl(baseUrl, providerEnv);
-      return createXai(cfg)(modelId as any);
-    }
+  const cfg: Record<string, unknown> = { name: providerId, apiKey };
+  if (npm === '@ai-sdk/openai-compatible' || !npm) cfg.includeUsage = true;
+  if (baseUrl) cfg.baseURL = resolveApiUrl(baseUrl, providerEnv);
 
-    case '@openrouter/ai-sdk-provider': {
-      const { createOpenRouter } = (SDK_CACHE['@openrouter/ai-sdk-provider'] ??= await import('@openrouter/ai-sdk-provider'));
-      const cfg: Record<string, unknown> = { name: providerId, apiKey: Object.values(providerEnv)[0] };
-      if (baseUrl) cfg.baseURL = resolveApiUrl(baseUrl, providerEnv);
-      return createOpenRouter(cfg)(modelId as any);
-    }
+  const sdk = await loadSDK(npm || '@ai-sdk/openai-compatible');
+  return sdk(cfg as any)(modelId as any);
+}
 
-    case '@ai-sdk/openai-compatible':
-    default: {
-      const { createOpenAICompatible } = (SDK_CACHE['@ai-sdk/openai-compatible'] ??= await import('@ai-sdk/openai-compatible'));
-      const apiKey = Object.values(providerEnv)[0];
-      if (!apiKey) throw new Error(`API key not configured for ${providerId}`);
-      const cfg: Record<string, unknown> = { name: providerId, apiKey, includeUsage: true };
-      if (baseUrl) cfg.baseURL = resolveApiUrl(baseUrl, providerEnv);
-      return createOpenAICompatible(cfg as any)(modelId as any);
-    }
+async function loadSDK(npm: string): Promise<(cfg: Record<string, unknown>) => any> {
+  switch (npm) {
+    case '@ai-sdk/openai':
+      return (SDK_CACHE['@ai-sdk/openai'] ??= await import('@ai-sdk/openai')).createOpenAI;
+    case '@ai-sdk/anthropic':
+      return (SDK_CACHE['@ai-sdk/anthropic'] ??= await import('@ai-sdk/anthropic')).createAnthropic;
+    case '@ai-sdk/xai':
+      return (SDK_CACHE['@ai-sdk/xai'] ??= await import('@ai-sdk/xai')).createXai;
+    case '@openrouter/ai-sdk-provider':
+      return (SDK_CACHE['@openrouter/ai-sdk-provider'] ??= await import('@openrouter/ai-sdk-provider')).createOpenRouter;
+    case '@ai-sdk/google':
+      return (SDK_CACHE['@ai-sdk/google'] ??= await import('@ai-sdk/google')).createGoogleGenerativeAI;
+    default:
+      return (SDK_CACHE['@ai-sdk/openai-compatible'] ??= await import('@ai-sdk/openai-compatible')).createOpenAICompatible;
   }
 }
 
