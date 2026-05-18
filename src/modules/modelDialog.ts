@@ -71,7 +71,7 @@ class ModelDialogV2 {
   private static readonly PINNED_SET = new Set(ModelDialogV2.PINNED_ORDER);
 
   private static readonly SELECT_ITEM_CLASS =
-    'flex w-full items-center gap-3 px-4 py-1.5 text-left text-sm text-zinc-700 transition-colors hover:bg-rose-400 hover:text-white dark:text-zinc-200';
+    'flex w-full items-center gap-3 px-4 py-1.5 text-left text-sm text-zinc-700 transition-colors duration-300 hover:duration-150 ease-in hover:ease-out motion-reduce:duration-0 hover:bg-rose-400 hover:text-white dark:text-zinc-200';
 
   constructor(private readonly win: Window) {
     this.doc = win.document;
