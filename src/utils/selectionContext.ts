@@ -286,7 +286,7 @@ async function getPageBatchRecognizerData(itemID: number, startIndex: number) {
   if (cached) return cached;
 
   if (_batchRecognizerCache.size >= MAX_CACHE_SIZE) {
-    const firstKey = _batchRecognizerCache.keys().next().value;
+    const firstKey = _batchRecognizerCache.keys().next().value!;
     _batchRecognizerCache.delete(firstKey);
   }
 
