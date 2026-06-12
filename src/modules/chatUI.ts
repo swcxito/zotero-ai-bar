@@ -72,7 +72,7 @@ export function onLLMStreamStartV2(session: Session) {
   scrollToBottom(container as HTMLElement);
 }
 
-export async function onLLMStreamUpdateV2(data: { session: Session; fullText: string }) {
+export async function onLLMStreamUpdateV2(data: { session: Session; fullText: string; force?: boolean }) {
   const pop = data.session.pending.messagePop;
   if (!pop) return;
 
@@ -81,7 +81,7 @@ export async function onLLMStreamUpdateV2(data: { session: Session; fullText: st
 
   const newLen = data.fullText.length;
   const prevLen = data.session.pending.lastRenderedLength ?? 0;
-  if (newLen - prevLen < 20 && prevLen > 0) return;
+  if (!data.force && newLen - prevLen < 20 && prevLen > 0) return;
 
   chatMessage.innerHTML = await renderMarkdown(data.fullText);
   (pop as HTMLElement).dataset.markdown = data.fullText;

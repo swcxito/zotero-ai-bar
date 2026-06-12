@@ -91,7 +91,7 @@ export async function streamLLMV2(
       }
     }
 
-    await onLLMStreamUpdateV2({ session, fullText });
+    await onLLMStreamUpdateV2({ session, fullText, force: true });
     onLLMStreamEndV2(session);
   } catch (error: any) {
     // Skip abort errors from intentional stop — treat as normal end
