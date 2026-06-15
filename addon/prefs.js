@@ -20,7 +20,7 @@ pref('chat.autoAttachFullText', false);
 pref('chat.autoAttachItemData', false);
 pref('chat.openOnStartup', false);
 pref('chat.autoImagePrompt', true);
-pref('agent.enabled', false);
+pref('agent.enabled', true);
 pref('translate.enableAuto', false);
 pref('translate.extendContext', 'follow');
 pref('translate.useAlternativeModel', false);

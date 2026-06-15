@@ -73,7 +73,6 @@ pref-auto-image-prompt =
     .label = 自动补充纯图片消息提示词
 pref-agent-enabled =
     .label = 启用 Agent / 工具调用
-pref-agent-enabled-desc = 允许 AI 使用工具（搜索文档、提出澄清问题等）。请谨慎使用。
 pref-translate = 翻译设置
 pref-auto-translate =
     .label = 自动翻译选文

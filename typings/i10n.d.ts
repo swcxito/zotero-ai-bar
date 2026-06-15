@@ -30,7 +30,6 @@ export type FluentMessageId =
   | 'model-dialog-type-model'
   | 'pref-advanced'
   | 'pref-agent-enabled'
-  | 'pref-agent-enabled-desc'
   | 'pref-auto-attach-fulltext'
   | 'pref-auto-attach-fulltext-desc'
   | 'pref-auto-attach-item-data'

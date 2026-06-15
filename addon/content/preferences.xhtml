@@ -51,6 +51,9 @@
         <html:input type="number" min="256" max="8192" step="256" value="2048" style="text-align: left" preference="llm.maxTokens" />
       </vbox>
     </hbox>
+    <hbox align="start" style="margin-top: 6px">
+      <checkbox id="__addonRef__-agent-enabled" preference="agent.enabled" data-l10n-id="pref-agent-enabled" style="flex: 1" />
+    </hbox>
   </groupbox>
   <groupbox>
     <label>
@@ -88,12 +91,6 @@
     </hbox>
     <hbox align="start" style="margin-top: 6px">
       <checkbox id="__addonRef__-auto-image-prompt" preference="chat.autoImagePrompt" data-l10n-id="pref-auto-image-prompt" />
-    </hbox>
-    <hbox align="start" style="margin-top: 6px">
-      <vbox flex="1">
-        <checkbox id="__addonRef__-agent-enabled" preference="agent.enabled" data-l10n-id="pref-agent-enabled" />
-        <html:small data-l10n-id="pref-agent-enabled-desc" style="margin-left: 22px" class="pref-warning-text" />
-      </vbox>
     </hbox>
     <vbox id="__addonRef__-prompt-preview-container" style="margin-top: 10px">
       <hbox align="center" style="margin-bottom: 8px">
