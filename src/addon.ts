@@ -55,18 +55,29 @@ class Addon {
   public api: object;
 
   constructor() {
-    this.data = {
-      alive: true,
-      config,
-      env: __env__,
-      initialized: false,
-      ztoolkit: createZToolkit(),
-      selection: {},
-      inputImages: new Map<string, string[]>(),
-    };
-    this.chatManager = new ChatManager(resolveInitialTabID());
-    this.hooks = hooks;
-    this.api = {};
+    try {
+      this.data = {
+        alive: true,
+        config,
+        env: __env__,
+        initialized: false,
+        ztoolkit: createZToolkit(),
+        selection: {},
+        inputImages: new Map<string, string[]>(),
+      };
+      Services.console.logStringMessage('[zaibar-addon] data initialized');
+      this.chatManager = new ChatManager(resolveInitialTabID());
+      Services.console.logStringMessage('[zaibar-addon] ChatManager created');
+      this.hooks = hooks;
+      this.api = {};
+      Zotero.debug(`[${config.addonRef}] Addon constructor finished`);
+      Services.console.logStringMessage('[zaibar-addon] constructor finished');
+    } catch (e: any) {
+      const msg = `[${config.addonRef}] Addon constructor failed: ${e?.message || e}`;
+      Zotero.debug(msg);
+      Services.console.logStringMessage(msg);
+      throw e;
+    }
   }
 }
 

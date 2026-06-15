@@ -24,6 +24,8 @@ import type { UserProviderConfig } from '../types';
 import { getPref, setPref } from './prefs';
 import { getString } from './locale';
 
+Zotero.debug('[zaibar-providers] module loaded');
+
 /** 模态类型 */
 export type ModalityType = 'audio' | 'image' | 'pdf' | 'text' | 'video';
 
@@ -79,7 +81,6 @@ export interface Model {
   family: ModelFamily;
   attachment?: boolean;
   reasoning: boolean;
-  tool_call?: boolean;
   structured_output?: boolean;
   temperature: boolean;
   knowledge?: string;
@@ -641,7 +642,7 @@ const LIVE_FILTER_PATTERNS = [
   /:exacto$|v\d+:\d+$/, // 特定后缀: :exacto, v1:0
 ];
 
-const LIVE_FIELDS_TO_REMOVE = ['attachment', 'tool_call', 'structured_output', 'knowledge', 'release_date', 'last_updated', 'open_weights'];
+const LIVE_FIELDS_TO_REMOVE = ['attachment', 'structured_output', 'knowledge', 'release_date', 'last_updated', 'open_weights'];
 
 /** 生成 models.dev 的 logo URL */
 export function getModelsDevLogoUrl(providerId: string): string {

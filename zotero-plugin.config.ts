@@ -48,6 +48,21 @@ export default defineConfig({
         splitting: false,
         // 移除死代码
         ignoreAnnotations: false,
+        // Firefox 115 的插件沙箱缺少 Web Streams，但 AI SDK 需要它们。
+        // 在 bundle 初始化前从主窗口拷贝到全局对象，避免模块顶层引用时抛错。
+        banner: {
+          js: `
+(function () {
+  const g = typeof globalThis !== 'undefined' ? globalThis : this;
+  const mainWin = typeof Zotero !== 'undefined' && Zotero.getMainWindow ? Zotero.getMainWindow() : null;
+  if (!mainWin) return;
+  if (typeof g.console === 'undefined' && mainWin.console) g.console = mainWin.console;
+  for (const name of ['TransformStream', 'ReadableStream', 'WritableStream', 'TextEncoder', 'TextDecoder', 'TextDecoderStream', 'DOMException']) {
+    if (typeof g[name] === 'undefined' && mainWin[name]) g[name] = mainWin[name];
+  }
+})();
+`,
+        },
       },
       // CSS bundle with Tailwind
       {

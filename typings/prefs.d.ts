@@ -27,6 +27,7 @@ declare namespace _ZoteroTypes {
       "chat.autoAttachItemData": boolean;
       "chat.openOnStartup": boolean;
       "chat.autoImagePrompt": boolean;
+      "agent.enabled": boolean;
       "translate.enableAuto": boolean;
       "translate.extendContext": string;
       "translate.useAlternativeModel": boolean;

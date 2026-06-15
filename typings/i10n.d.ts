@@ -3,6 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 export type FluentMessageId =
+  | 'agent-max-iterations-reached'
   | 'capture-drag-hint'
   | 'chat-copy-markdown'
   | 'chat-copy-text'
@@ -28,6 +29,8 @@ export type FluentMessageId =
   | 'model-dialog-title'
   | 'model-dialog-type-model'
   | 'pref-advanced'
+  | 'pref-agent-enabled'
+  | 'pref-agent-enabled-desc'
   | 'pref-auto-attach-fulltext'
   | 'pref-auto-attach-fulltext-desc'
   | 'pref-auto-attach-item-data'
@@ -101,4 +104,14 @@ export type FluentMessageId =
   | 'reader-bar-explain'
   | 'reader-bar-smart-copy'
   | 'reader-bar-summarize'
-  | 'reader-bar-translate';
+  | 'reader-bar-translate'
+  | 'tool-call-ask-user'
+  | 'tool-call-ask-user-custom-placeholder'
+  | 'tool-call-ask-user-submit'
+  | 'tool-call-glob'
+  | 'tool-call-grep'
+  | 'tool-call-read'
+  | 'tool-call-status-done'
+  | 'tool-call-status-error'
+  | 'tool-call-status-pending'
+  | 'tool-call-status-running';

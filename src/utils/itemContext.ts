@@ -21,6 +21,7 @@
  * Returns structured metadata including title, abstract, authors, publication, etc.
  */
 export type ItemMetadata = {
+  itemId?: number;
   title?: string;
   authors?: string[];
   abstract?: string;
@@ -55,6 +56,7 @@ export function getItemMetadata(itemId: number): ItemMetadata | undefined {
 
     // Extract metadata
     const metadata: ItemMetadata = {};
+    metadata.itemId = targetItem.id;
 
     // Title
     const title = targetItem.getField('title') as string;

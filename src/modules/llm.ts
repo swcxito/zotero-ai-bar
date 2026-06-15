@@ -17,31 +17,41 @@
  */
 
 import { getPref } from '../utils/prefs';
-import { Session } from './chatManager';
-import { ModelMessage } from 'ai';
-import { onLLMStreamEndV2, onLLMStreamErrorV2, onLLMStreamStartV2, onLLMStreamUpdateV2 } from './chatUI';
+import type { Session } from './chatManager';
+import { ToolLoopAgent, stepCountIs, type ModelMessage } from 'ai';
+import { onLLMStreamEndV2, onLLMStreamErrorV2, onLLMStreamStartV2, onLLMStreamUpdateV2, consumeAgentStream } from './chatUI';
 import { ensureWebStreamsGlobals } from '../utils/webStreamsGlobals';
 import { resolveApiUrl } from '../utils/providers';
+import { buildTools } from './agentTools';
 // import { JSONObject } from "@ai-sdk/provider";
 
 const SDK_CACHE: Record<string, any> = {};
 
+const MAX_AGENT_ITERATIONS = 10;
+
 let streamTextFn: typeof import('ai').streamText | undefined;
 let preloadLLMRuntimePromise: Promise<void> | undefined;
 
+Zotero.debug('[zaibar-llm] module loaded');
+
 export async function preloadLLMRuntime() {
+  Zotero.debug('[zaibar-llm] preloadLLMRuntime called');
   if (!preloadLLMRuntimePromise) {
     preloadLLMRuntimePromise = (async () => {
+      Zotero.debug('[zaibar-llm] importing ai SDK...');
       ensureWebStreamsGlobals();
       const ai = await import('ai');
       streamTextFn = ai.streamText;
+      Zotero.debug('[zaibar-llm] ai SDK imported, streamText=' + typeof ai.streamText);
     })().catch((error) => {
       preloadLLMRuntimePromise = undefined;
+      Zotero.debug('[zaibar-llm] preloadLLMRuntime failed: ' + (error?.message || error));
       throw error;
     });
   }
 
   await preloadLLMRuntimePromise;
+  Zotero.debug('[zaibar-llm] preloadLLMRuntime done');
 }
 
 export async function streamLLMV2(
@@ -50,50 +60,96 @@ export async function streamLLMV2(
   // externalController?: InstanceType<typeof AbortController>,
   refreshRate: number = getRefreshRateFromPref()
 ) {
+  Zotero.debug('[zaibar-llm] streamLLMV2 started, session=' + session.id);
   let streamErrorHandled = false;
 
   try {
     await preloadLLMRuntime();
     onLLMStreamStartV2(session);
     const model = await createModel();
+    Zotero.debug(
+      '[zaibar-llm] model created: ' +
+        (addon.data.userProviderConfigV2?.active?.providerId || '?') +
+        '/' +
+        (addon.data.userProviderConfigV2?.active?.modelId || '?')
+    );
 
     const temp100 = getPref('llm.temperature100');
     const temp = temp100 / 100;
     const maxTokens = getPref('llm.maxTokens') || 2000;
     const messages = await messagesOrPromise;
+    Zotero.debug('[zaibar-llm] messages count=' + messages.length);
 
     const providerOptions = {
       ...V2_PROVIDER_OPTIONS,
       google: getGoogleThinkingConfig(addon.data.userProviderConfigV2?.active?.modelId ?? ''),
     };
 
-    const { textStream } = streamTextFn!({
-      model: model,
-      messages: messages,
-      abortSignal: session.pending.abortController?.signal,
-      temperature: temp,
-      maxOutputTokens: maxTokens,
-      providerOptions,
-      onError: ({ error }: { error: unknown }) => {
-        streamErrorHandled = true;
-        handleStreamError(session, error);
-      },
-    });
+    const agentEnabled = getPref('agent.enabled');
+    const tools = agentEnabled ? buildTools() : undefined;
+    ztoolkit.log('[llm] agentEnabled:', agentEnabled, 'tools:', Object.keys(tools ?? {}));
+    Zotero.debug('[zaibar-llm] agentEnabled=' + agentEnabled + ', toolCount=' + Object.keys(tools ?? {}).length);
 
-    let fullText = '';
-    let count = 0;
+    if (agentEnabled) {
+      Zotero.debug('[zaibar-llm] using ToolLoopAgent');
 
-    for await (const textPart of textStream) {
-      fullText += textPart;
-      count++;
-      if (count % refreshRate === 0) {
-        await onLLMStreamUpdateV2({ session, fullText });
+      // System prompt is passed as agent instructions; remaining messages are
+      // the conversation history plus the current user message.
+      const systemMessage = session.pending.systemMessage;
+      const conversationMessages = messages.filter((m) => m.role !== 'system');
+
+      const agent = new ToolLoopAgent({
+        model,
+        instructions: systemMessage?.content,
+        tools,
+        toolChoice: 'auto',
+        stopWhen: stepCountIs(MAX_AGENT_ITERATIONS),
+        experimental_context: session,
+        providerOptions,
+        temperature: temp,
+        maxOutputTokens: maxTokens,
+        maxRetries: 2,
+      });
+
+      const result = await agent.stream({
+        messages: conversationMessages,
+        abortSignal: session.pending.abortController?.signal,
+      });
+
+      session.pending.isAgentMode = true;
+      await consumeAgentStream(session, result, refreshRate);
+    } else {
+      Zotero.debug('[zaibar-llm] consuming text stream');
+      const result = streamTextFn!({
+        model: model,
+        messages: messages,
+        abortSignal: session.pending.abortController?.signal,
+        temperature: temp,
+        maxOutputTokens: maxTokens,
+        providerOptions,
+        onError: ({ error }: { error: unknown }) => {
+          streamErrorHandled = true;
+          Zotero.debug('[zaibar-llm] streamText onError: ' + (error as any)?.message);
+          handleStreamError(session, error);
+        },
+      });
+
+      let fullText = '';
+      let count = 0;
+
+      for await (const textPart of result.textStream) {
+        fullText += textPart;
+        count++;
+        if (count % refreshRate === 0) {
+          await onLLMStreamUpdateV2({ session, fullText });
+        }
       }
-    }
 
-    await onLLMStreamUpdateV2({ session, fullText, force: true });
-    onLLMStreamEndV2(session);
+      await onLLMStreamUpdateV2({ session, fullText, force: true });
+      onLLMStreamEndV2(session);
+    }
   } catch (error: any) {
+    Zotero.debug('[zaibar-llm] streamLLMV2 catch: ' + (error?.name || '') + ' ' + (error?.message || error));
     // Skip abort errors from intentional stop — treat as normal end
     if (error?.name === 'AbortError') {
       onLLMStreamEndV2(session);
@@ -104,6 +160,7 @@ export async function streamLLMV2(
       handleStreamError(session, error);
     }
   } finally {
+    Zotero.debug('[zaibar-llm] streamLLMV2 finally');
     // session.abortController = undefined;
   }
 }
@@ -178,7 +235,8 @@ async function createProvider(
     baseUrl?: string;
   }
 ) {
-  const { providerId, modelId, providerEnv, baseUrl } = opts;
+  const { providerId, modelId, providerEnv } = opts;
+  Zotero.debug('[zaibar-llm] createProvider providerId=' + providerId + ', npm=' + npm + ', modelId=' + modelId);
 
   switch (npm) {
     case '@ai-sdk/amazon-bedrock': {
@@ -266,13 +324,15 @@ async function loadSDK(npm: string): Promise<(cfg: Record<string, unknown>) => a
   }
 }
 
-async function createModel() {
+export async function createModel() {
   await preloadLLMRuntime();
+  Zotero.debug('[zaibar-llm] createModel start');
 
   const v2 = addon.data.userProviderConfigV2;
   if (!v2?.active) throw new Error('No active model selected.');
 
   const { providerId, modelId } = v2.active;
+  Zotero.debug('[zaibar-llm] createModel active=' + providerId + '/' + modelId);
   const providerEnv = v2.env[providerId] ?? {};
   const commonProvider = addon.data.commonProviders?.[providerId];
   const addedProvider = v2.addedProviders[providerId];
@@ -300,7 +360,10 @@ async function createModel() {
     throw new Error(`Provider or model not found: ${providerId}/${modelId}`);
   }
 
-  return await createProvider(npm, { providerId, modelId: resolvedModelId, providerEnv, baseUrl });
+  Zotero.debug('[zaibar-llm] createModel provider npm=' + npm + ', baseUrl=' + (baseUrl ? 'yes' : 'no'));
+  const model = await createProvider(npm, { providerId, modelId: resolvedModelId, providerEnv, baseUrl });
+  Zotero.debug('[zaibar-llm] createModel done');
+  return model;
 }
 
 function getRefreshRateFromPref() {

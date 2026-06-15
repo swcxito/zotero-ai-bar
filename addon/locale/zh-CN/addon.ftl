@@ -34,3 +34,19 @@ capture-drag-hint = 拖拽选取截图区域，按 ESC 取消
 image-unsupported-title = 模型不支持图片
 image-unsupported-message = 当前模型不支持图片输入，是否仅发送文字？
 image-unsupported-send-text = 仅发送文字
+
+# Agent / 工具调用
+tool-call-grep = 搜索文档
+tool-call-read = 读取条目
+tool-call-glob = 搜索文库
+tool-call-ask-user = 询问用户
+
+tool-call-status-running = 执行中...
+tool-call-status-done = 完成
+tool-call-status-error = 出错
+tool-call-status-pending = 等待用户输入...
+
+tool-call-ask-user-custom-placeholder = 或输入自定义回答...
+tool-call-ask-user-submit = 提交
+
+agent-max-iterations-reached = Agent 已达到最大执行步数。您可以继续对话。

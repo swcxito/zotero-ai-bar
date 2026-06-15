@@ -29,6 +29,8 @@ import type { ModelMessage, SystemModelMessage, UserModelMessage } from 'ai';
 import { getItemIdFromTab } from './tabObserver';
 import type { ItemMetadata } from '../utils/itemContext';
 
+Zotero.debug('[zaibar-chatManager] module loaded');
+
 export type ChatHostMode = 'sidebar' | 'window';
 
 /** Per-section (per-document tab) state for sidebar chat */
@@ -37,20 +39,50 @@ export class Session {
   conversationHistory: ModelMessage[] = [];
   sourceLabel?: string;
   fullTextEnabled: boolean = false;
+  agentEnabled: boolean = false;
+  itemId?: number;
   pending: {
     shouldAutoScroll?: boolean;
     messagePop?: Element;
     abortController?: InstanceType<typeof AbortController>;
     shouldCopyResponse?: boolean;
     userMessage?: UserModelMessage;
+    systemMessage?: SystemModelMessage;
     isNewSource?: boolean;
     lastRenderedLength?: number;
+    // --- agent ---
+    isAgentMode?: boolean;
+    toolCalls?: Map<string, AgentToolCall>;
+    toolResults?: Map<string, AgentToolResult>;
+    toolCallBoxes?: Map<string, HTMLElement>;
+    userAnswerResolve?: (value: AgentUserAnswer[]) => void;
+    userAnswerReject?: (reason?: any) => void;
   } = {};
   constructor(id: string) {
     this.id = id;
     this.fullTextEnabled = getPref('chat.autoAttachFullText') ?? false;
+    this.agentEnabled = getPref('agent.enabled') ?? false;
+    ztoolkit.log('[chat] new Session', id, 'agentEnabled=', this.agentEnabled);
   }
 }
+
+export type AgentToolCall = {
+  toolCallId: string;
+  toolName: string;
+  args: any;
+};
+
+export type AgentToolResult = {
+  toolCallId: string;
+  toolName: string;
+  result: any;
+};
+
+export type AgentUserAnswer = {
+  question: string;
+  selectedOptions: string[];
+  customInput?: string;
+};
 
 type ChatRequestParams = {
   userPrompt: string;
@@ -97,8 +129,9 @@ export class ChatManager {
     metadata?: ItemMetadata;
     itemId?: number;
     fullTextEnabled?: boolean;
+    agentEnabled?: boolean;
   }): Promise<string> {
-    const { selectedText, selectionContext, metadata, itemId, fullTextEnabled } = params;
+    const { selectedText, selectionContext, metadata, itemId, fullTextEnabled, agentEnabled } = params;
     const contextLeft = selectionContext?.[0] || '';
     const contextRight = selectionContext?.[2] || '';
     let systemPrompt = SYSTEM_PROMPT_PREFIX;
@@ -107,6 +140,7 @@ export class ChatManager {
     if (getPref('chat.autoAttachItemData') && metadata) {
       const metadataLines: string[] = ['# Item Metadata'];
       const metadataFieldLabels: Array<[keyof ItemMetadata, string]> = [
+        ['itemId', 'Item ID'],
         ['title', 'Title'],
         ['authors', 'Authors'],
         ['abstract', 'Abstract'],
@@ -132,6 +166,20 @@ export class ChatManager {
       }
     }
 
+    // Agent instructions: ask user when intent is unclear
+    if (agentEnabled) {
+      systemPrompt += `
+
+# Agent Instructions
+You have access to tools. Before taking any action, make sure you understand the user's request.
+If the user's goal, question, or required output format is ambiguous, incomplete, or could reasonably be interpreted in more than one way, do NOT guess. Use the \`ask_user\` tool to ask 1–3 concise clarifying questions.
+Each question should:
+- Offer 2–5 concrete options when possible.
+- Include an "Other (please specify)" or custom input option when the answer is open-ended.
+- Be brief and written in the same language as the user's message.
+Only proceed with tool calls or answers once the intent is clear. If the user provides a vague follow-up (e.g., "explain this", "analyze", "help"), ask what aspect they care about, what depth they want, or what output format they prefer.`;
+    }
+
     // Append volatile context at the end to improve prompt cache hits
     systemPrompt +=
       '\n\nContent:' +
@@ -155,6 +203,9 @@ export class ChatManager {
       this.sessionsMap.delete(oldest);
     }
     this.sessionsMap.set(tabId, session);
+    session.itemId = itemId;
+
+    ztoolkit.log('[chat] sendChatRequest', { tabId, itemId, agentEnabled: session.agentEnabled, sourceLabel: params.sourceLabel });
 
     const route = this.getCurrentHostMode();
     const metadata = itemId !== undefined && getPref('chat.autoAttachItemData') ? getItemMetadata(itemId) : undefined;
@@ -197,6 +248,7 @@ export class ChatManager {
         metadata,
         itemId: itemId,
         fullTextEnabled: session.fullTextEnabled,
+        agentEnabled: session.agentEnabled,
       });
       const systemMsg: SystemModelMessage = {
         role: 'system',
@@ -233,6 +285,7 @@ export class ChatManager {
       };
 
       session.pending.userMessage = userMsg;
+      session.pending.systemMessage = systemMsg;
 
       // Clear images for this tab after building the message
       if (hasImages) {

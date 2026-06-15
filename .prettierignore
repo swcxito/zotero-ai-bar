@@ -9,5 +9,6 @@ pnpm-lock.yaml
 .scaffold
 **/*.min.css
 *.min.json
+.tmp-test
 addon/content/app.css
 addon/content/styles

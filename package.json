@@ -47,6 +47,7 @@
     "marked-highlight": "^2.2.4",
     "marked-katex-extension": "^5.1.8",
     "marked-xhtml": "^1.0.15",
+    "zod": "^3.25.7",
     "zotero-plugin-toolkit": "^5.1.2"
   },
   "devDependencies": {

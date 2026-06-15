@@ -34,3 +34,19 @@ capture-drag-hint = Drag to select area, ESC to cancel
 image-unsupported-title = Model Does Not Support Images
 image-unsupported-message = The selected model does not support image input. Send text only?
 image-unsupported-send-text = Send Text Only
+
+# Agent / tool calling
+tool-call-grep = Search document
+tool-call-read = Read item
+tool-call-glob = Search library
+tool-call-ask-user = Ask user
+
+tool-call-status-running = Running...
+tool-call-status-done = Done
+tool-call-status-error = Error
+tool-call-status-pending = Waiting for user...
+
+tool-call-ask-user-custom-placeholder = Or type your own answer...
+tool-call-ask-user-submit = Submit
+
+agent-max-iterations-reached = Agent reached the maximum number of steps. You may continue the conversation.
