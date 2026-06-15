@@ -39,6 +39,7 @@ image-unsupported-send-text = Send Text Only
 tool-call-grep = Search document
 tool-call-read = Read item
 tool-call-glob = Search library
+tool-call-tree = List library tree
 tool-call-ask-user = Ask user
 
 tool-call-status-running = Running...

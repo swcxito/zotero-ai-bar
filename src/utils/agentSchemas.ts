@@ -45,3 +45,12 @@ export const globSchema = z.object({
 });
 
 export type GlobPayload = z.infer<typeof globSchema>;
+
+export const treeSchema = z.object({
+  rootCollectionKey: z.string().optional().describe('Start from a specific collection key; omit to start from the library root.'),
+  depth: z.number().int().min(1).max(5).optional().default(2).describe('Maximum depth of subcollections to traverse (1–5).'),
+  includeItems: z.boolean().optional().default(true).describe('Whether to list item titles under leaf collections.'),
+  itemLimit: z.number().int().min(1).max(200).optional().default(20).describe('Max items to list per collection when includeItems is true (1–200).'),
+});
+
+export type TreePayload = z.infer<typeof treeSchema>;

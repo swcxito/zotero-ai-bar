@@ -1,5 +1,5 @@
 import { grepInText } from '../src/utils/textSearch';
-import { askUserSchema, grepSchema, readSchema, globSchema } from '../src/utils/agentSchemas';
+import { askUserSchema, grepSchema, readSchema, globSchema, treeSchema } from '../src/utils/agentSchemas';
 
 function assert(condition: boolean, message: string) {
   if (!condition) {
@@ -57,6 +57,14 @@ function runTests() {
   assert(!globSchema.safeParse({ query: 'x', limit: 0 }).success, 'glob limit 0');
   assert(globSchema.safeParse({ query: 'x', limit: 25 }).success, 'glob valid limit');
   assert(!globSchema.safeParse({ query: 'x', limit: 100 }).success, 'glob limit above 50');
+
+  // treeSchema
+  assert(treeSchema.safeParse({}).success, 'tree defaults valid');
+  assert(treeSchema.safeParse({ rootCollectionKey: 'ABC123', depth: 3, includeItems: true, itemLimit: 200 }).success, 'tree valid');
+  assert(!treeSchema.safeParse({ depth: 0 }).success, 'tree depth below 1');
+  assert(!treeSchema.safeParse({ depth: 6 }).success, 'tree depth above 5');
+  assert(!treeSchema.safeParse({ itemLimit: 0 }).success, 'tree itemLimit 0');
+  assert(!treeSchema.safeParse({ itemLimit: 201 }).success, 'tree itemLimit above 200');
 
   console.log('All agent tool tests passed.');
 }

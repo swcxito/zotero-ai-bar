@@ -21,6 +21,7 @@ const ICON_MAP: Record<string, string> = {
   grep: Icons.Search,
   read: Icons.Book,
   glob: Icons.FolderOpen,
+  tree: Icons.Tree,
   ask_user: Icons.CircleQuestion,
 };
 

@@ -39,6 +39,7 @@ image-unsupported-send-text = 仅发送文字
 tool-call-grep = 搜索文档
 tool-call-read = 读取条目
 tool-call-glob = 搜索文库
+tool-call-tree = 列出文库结构
 tool-call-ask-user = 询问用户
 
 tool-call-status-running = 执行中...

@@ -114,4 +114,5 @@ export type FluentMessageId =
   | 'tool-call-status-done'
   | 'tool-call-status-error'
   | 'tool-call-status-pending'
-  | 'tool-call-status-running';
+  | 'tool-call-status-running'
+  | 'tool-call-tree';

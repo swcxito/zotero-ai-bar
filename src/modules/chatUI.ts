@@ -307,6 +307,11 @@ export function onToolCallEndV2(session: Session, toolResult: any) {
     return;
   }
 
+  if (toolResult.toolName === 'tree' && output && typeof output === 'object' && typeof output.tree === 'string') {
+    updateToolCallBox(box, getString('tool-call-status-done'), output.tree);
+    return;
+  }
+
   const summary = hasError ? getString('tool-call-status-error') : getString('tool-call-status-done');
   updateToolCallBox(box, summary, JSON.stringify(output, null, 2));
 }

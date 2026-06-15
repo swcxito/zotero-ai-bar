@@ -8,7 +8,7 @@
 import { tool, asSchema } from 'ai';
 import type { Session, AgentUserAnswer } from './chatManager';
 import { getItemFullText } from '../utils/itemContext';
-import { getZoteroItem, readItemText, searchLibraryItems } from '../utils/zoteroItemAccess';
+import { getZoteroItem, readItemText, searchLibraryItems, buildLibraryTree } from '../utils/zoteroItemAccess';
 import { grepInText } from '../utils/textSearch';
 import { onAgentAskUser } from './chatUI';
 import {
@@ -16,13 +16,15 @@ import {
   grepSchema,
   readSchema,
   globSchema,
+  treeSchema,
   type AskUserPayload,
   type GrepPayload,
   type ReadPayload,
   type GlobPayload,
+  type TreePayload,
 } from '../utils/agentSchemas';
 
-export type { AskUserPayload, GrepPayload, ReadPayload, GlobPayload } from '../utils/agentSchemas';
+export type { AskUserPayload, GrepPayload, ReadPayload, GlobPayload, TreePayload } from '../utils/agentSchemas';
 
 function getSession(options: { experimental_context?: unknown }): Session | undefined {
   return options.experimental_context as Session | undefined;
@@ -104,6 +106,24 @@ export const globTool = tool({
   },
 });
 
+export const treeTool = tool({
+  description:
+    'List the hierarchical structure of the Zotero library like the Linux tree command. Returns a formatted text with collection/item metadata in square brackets.',
+  inputSchema: asSchema(treeSchema),
+  execute: async (input: TreePayload) => {
+    const result = await buildLibraryTree({
+      rootCollectionKey: input.rootCollectionKey,
+      depth: input.depth,
+      includeItems: input.includeItems,
+      itemLimit: input.itemLimit,
+    });
+    if (typeof result === 'object' && 'error' in result) {
+      throw new Error(result.error);
+    }
+    return { tree: result };
+  },
+});
+
 // ───────────────────────────────────────────────────────────────────────────
 // Tool registry
 // ───────────────────────────────────────────────────────────────────────────
@@ -114,5 +134,6 @@ export function buildTools() {
     grep: grepTool,
     read: readTool,
     glob: globTool,
+    tree: treeTool,
   };
 }
