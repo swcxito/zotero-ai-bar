@@ -31,6 +31,13 @@ function getTargetLanguage(): string {
   return prefLang || Zotero.locale;
 }
 
+function getTranslatePrompt(targetLanguage: string): string {
+  if (getPref('agent.enabled')) {
+    return `Translate the selected text into ${targetLanguage}.`;
+  }
+  return aiBarCommands.translate.getPrompt(targetLanguage);
+}
+
 // TODO 支持其它格式
 
 export function getReaderSourceLabel(reader?: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>) {
@@ -208,7 +215,7 @@ function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 
 
     addon.chatManager.sendChatRequest({
       // If input matches a command, use the command's prompt; otherwise treat input as a custom prompt
-      userPrompt: command?.getPrompt(getTargetLanguage()) ?? input,
+      userPrompt: input === 'translate' ? getTranslatePrompt(getTargetLanguage()) : (command?.getPrompt(getTargetLanguage()) ?? input),
       sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
       isFromPopup: true,
       // Enable auto-copy for smartCopy command only

@@ -17,14 +17,16 @@ import {
   readSchema,
   globSchema,
   treeSchema,
+  translateSchema,
   type AskUserPayload,
   type GrepPayload,
   type ReadPayload,
   type GlobPayload,
   type TreePayload,
+  type TranslatePayload,
 } from '../utils/agentSchemas';
 
-export type { AskUserPayload, GrepPayload, ReadPayload, GlobPayload, TreePayload } from '../utils/agentSchemas';
+export type { AskUserPayload, GrepPayload, ReadPayload, GlobPayload, TreePayload, TranslatePayload } from '../utils/agentSchemas';
 
 function getSession(options: { experimental_context?: unknown }): Session | undefined {
   return options.experimental_context as Session | undefined;
@@ -124,6 +126,15 @@ export const treeTool = tool({
   },
 });
 
+export const translateTool = tool({
+  description:
+    'Present a translation result to the user in a structured, visually formatted card. Use this tool whenever you need to show a translation of selected text. Determine the text type (word, abbreviation, sentence, or paragraph) and fill in the appropriate fields.',
+  inputSchema: asSchema(translateSchema),
+  execute: async (input: TranslatePayload) => {
+    return input;
+  },
+});
+
 // ───────────────────────────────────────────────────────────────────────────
 // Tool registry
 // ───────────────────────────────────────────────────────────────────────────
@@ -135,5 +146,6 @@ export function buildTools() {
     read: readTool,
     glob: globTool,
     tree: treeTool,
+    translate: translateTool,
   };
 }

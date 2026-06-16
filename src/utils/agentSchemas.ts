@@ -54,3 +54,26 @@ export const treeSchema = z.object({
 });
 
 export type TreePayload = z.infer<typeof treeSchema>;
+
+const meaningSchema = z.object({
+  pos: z.string().describe('Part of speech, e.g. "adj.", "n."'),
+  meaning: z.string().describe('Meaning'),
+});
+
+export const translateSchema = z.object({
+  originalText: z.string().describe('The original text being translated.'),
+  translatedText: z.string().describe('The translated text.'),
+  textType: z
+    .enum(['word', 'abbreviation'])
+    .describe(
+      'Type of the selected text. Use this tool ONLY for single words and abbreviations; for sentences or paragraphs, output the translation directly in your response text.'
+    ),
+  pronunciation: z.string().optional().describe('IPA pronunciation (for words only).'),
+  meaning: meaningSchema.optional().describe('Primary meaning in the current context (for words only).'),
+  otherMeanings: z.array(meaningSchema).optional().describe('Other common meanings (for words only).'),
+  fullForm: z.string().optional().describe('Full form in English (for abbreviations only).'),
+  explanation: z.string().optional().describe('Brief explanation (for abbreviations only).'),
+  targetLanguage: z.string().optional().describe('Target language name.'),
+});
+
+export type TranslatePayload = z.infer<typeof translateSchema>;

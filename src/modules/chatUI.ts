@@ -316,6 +316,121 @@ export function onToolCallEndV2(session: Session, toolResult: any) {
   updateToolCallBox(box, summary, JSON.stringify(output, null, 2));
 }
 
+function buildTranslateDetails(doc: Document, output: any): HTMLElement {
+  const t = output.textType as string;
+  const container = doc.createElement('div');
+  container.classList.add(
+    'translate-result',
+    'flex',
+    'flex-col',
+    'gap-1',
+    'my-2',
+    'p-4',
+    'rounded-xl',
+    'shadow-lg',
+    'border',
+    'border-slate-200',
+    'dark:border-zinc-700',
+    'border-l-4',
+    'border-l-rose-500',
+    'bg-white',
+    'dark:bg-zinc-900'
+  );
+
+  if (t === 'word') {
+    const wordEl = doc.createElement('div');
+    wordEl.classList.add('text-2xl', 'font-bold', 'text-slate-800', 'dark:text-zinc-100');
+    wordEl.textContent = output.originalText;
+    container.appendChild(wordEl);
+
+    if (output.pronunciation) {
+      const pronEl = doc.createElement('div');
+      pronEl.classList.add('text-base', 'text-rose-600', 'dark:text-rose-400', 'font-mono');
+      pronEl.textContent = output.pronunciation;
+      container.appendChild(pronEl);
+    }
+
+    if (output.meaning) {
+      const meaningEl = doc.createElement('div');
+      meaningEl.classList.add('text-lg', 'text-slate-700', 'dark:text-zinc-200');
+      const posSpan = doc.createElement('span');
+      posSpan.classList.add('italic', 'mr-1');
+      posSpan.textContent = output.meaning.pos;
+      meaningEl.appendChild(posSpan);
+      const meaningText = doc.createElement('span');
+      meaningText.classList.add('font-bold');
+      meaningText.textContent = output.meaning.meaning;
+      meaningEl.appendChild(meaningText);
+      container.appendChild(meaningEl);
+    }
+
+    if (output.otherMeanings && output.otherMeanings.length > 0) {
+      const divider = doc.createElement('div');
+      divider.classList.add('border-t', 'border-slate-200', 'dark:border-zinc-600', 'my-1');
+      container.appendChild(divider);
+
+      for (const m of output.otherMeanings as Array<{ pos: string; meaning: string }>) {
+        const otherEl = doc.createElement('div');
+        otherEl.classList.add('text-base', 'text-slate-500', 'dark:text-zinc-400');
+        const posSpan = doc.createElement('span');
+        posSpan.classList.add('italic', 'mr-1');
+        posSpan.textContent = m.pos;
+        otherEl.appendChild(posSpan);
+        otherEl.appendChild(doc.createTextNode(m.meaning));
+        container.appendChild(otherEl);
+      }
+    }
+  } else if (t === 'abbreviation') {
+    const abbrEl = doc.createElement('div');
+    abbrEl.classList.add('text-2xl', 'font-bold', 'text-slate-800', 'dark:text-zinc-100');
+    abbrEl.textContent = output.originalText;
+    container.appendChild(abbrEl);
+
+    if (output.fullForm) {
+      const fullEl = doc.createElement('div');
+      fullEl.classList.add(
+        'rounded-md',
+        'bg-rose-100',
+        'dark:bg-rose-900/40',
+        'px-1.5',
+        'py-0.5',
+        'font-mono',
+        'text-base',
+        'font-medium',
+        'text-rose-700',
+        'dark:text-rose-300',
+        'inline-block'
+      );
+      fullEl.textContent = output.fullForm;
+      container.appendChild(fullEl);
+    }
+
+    const trans = output.translatedText;
+    if (trans) {
+      const transEl = doc.createElement('div');
+      transEl.classList.add('text-lg', 'text-slate-700', 'dark:text-zinc-200');
+      const label = doc.createElement('span');
+      label.classList.add('text-sm', 'text-slate-500', 'dark:text-zinc-400', 'mr-1');
+      label.textContent = 'abbr.';
+      transEl.appendChild(label);
+      const transText = doc.createElement('span');
+      transText.classList.add('font-bold');
+      transText.textContent = trans;
+      transEl.appendChild(transText);
+      container.appendChild(transEl);
+    }
+
+    if (output.explanation) {
+      const explEl = doc.createElement('div');
+      explEl.classList.add('text-base', 'text-slate-500', 'dark:text-zinc-400');
+      explEl.textContent = output.explanation;
+      container.appendChild(explEl);
+    }
+  }
+
+  return container;
+}
+
 /**
  * Consume the fullStream from a ToolLoopAgent result, rendering text deltas
  * and tool-call / tool-result UI in the current chat message bubble.
@@ -340,6 +455,7 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
   let textBuffer = '';
   let textChunkCount = 0;
   let aborted = false;
+  let suppressTextAfterTranslate = false;
 
   function ensureTextSegment(): HTMLElement {
     if (!currentTextSegment) {
@@ -375,6 +491,7 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
 
       switch (part.type) {
         case 'text-delta': {
+          if (suppressTextAfterTranslate) break;
           if (firstText) {
             firstText = false;
             if (currentTextSegment) currentTextSegment.innerHTML = '';
@@ -390,12 +507,25 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
         case 'tool-call':
           await flushTextBuffer();
           startNewTextSegment();
-          // ask_user renders its own question cards; skip the generic ToolCallBox
-          if (part.toolName !== 'ask_user') {
+          // ask_user renders its own question cards; translate renders its own card on result
+          if (part.toolName !== 'ask_user' && part.toolName !== 'translate') {
             onToolCallStartV2(session, part);
           }
           break;
         case 'tool-result':
+          if (part.toolName === 'translate') {
+            suppressTextAfterTranslate = true;
+            if (currentTextSegment) {
+              currentTextSegment.innerHTML = '';
+              textBuffer = '';
+            }
+            const output = part.output ?? part.result;
+            if (output && typeof output === 'object') {
+              const card = buildTranslateDetails(doc, output);
+              chatMessage!.appendChild(card);
+            }
+            break;
+          }
           // ask_user results are already shown by the Q&A cards
           if (part.toolName !== 'ask_user') {
             onToolCallEndV2(session, part);
@@ -421,9 +551,11 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
     }
   }
 
-  // Flush remaining text
-  ensureTextSegment();
-  await flushTextBuffer();
+  // Flush remaining text (skip if buffer is empty to avoid creating an empty segment)
+  if (textBuffer) {
+    ensureTextSegment();
+    await flushTextBuffer();
+  }
 
   // Collect markdown for copy/regenerate from all rendered segments
   (pop as HTMLElement).dataset.markdown = Array.from(chatMessage.querySelectorAll('.chat-message-content'))
