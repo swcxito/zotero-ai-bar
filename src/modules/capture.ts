@@ -403,16 +403,31 @@ export async function capturePageByNumber(
     throw new Error('PDF viewer document not accessible');
   }
 
+  // Determine the actual total page count from PDFViewerApplication when available
+  let totalPages = 0;
+  const pdfApp =
+    pdfWindow.PDFViewerApplication ?? iframeWindow.PDFViewerApplication ?? (reader as any)._primaryView?._iframeWindow?.PDFViewerApplication;
+  if (pdfApp?.pdfDocument?.numPages) {
+    totalPages = pdfApp.pdfDocument.numPages;
+  }
+
   // Find all rendered page canvases in the viewer (same pattern as captureSelectionArea)
   const canvases = Array.from(pdfWindow.document.querySelectorAll('canvas'));
   if (canvases.length === 0) {
     throw new Error('No PDF pages are currently rendered');
   }
 
-  // pdf.js viewer creates one canvas per page in DOM order.
   const pageIndex = pageNumber - 1;
-  if (pageIndex < 0 || pageIndex >= canvases.length) {
-    throw new Error(`Page ${pageNumber} is out of range (1-${canvases.length})`);
+
+  // Validate against the real total page count if known
+  const pageCountForMsg = totalPages > 0 ? totalPages : canvases.length;
+  if (pageIndex < 0 || pageNumber > pageCountForMsg) {
+    throw new Error(`Page ${pageNumber} is out of range (1-${pageCountForMsg})`);
+  }
+
+  // If the requested page hasn't been rendered yet (lazy loading)
+  if (pageIndex >= canvases.length) {
+    throw new Error(`Page ${pageNumber} is not rendered yet. Please scroll to it in the PDF viewer first.`);
   }
 
   const sourceCanvas = canvases[pageIndex] as HTMLCanvasElement;
