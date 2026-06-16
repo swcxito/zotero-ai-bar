@@ -39,8 +39,7 @@ function getSession(options: { experimental_context?: unknown }): Session | unde
 // ───────────────────────────────────────────────────────────────────────────
 
 export const askUserTool = tool({
-  description:
-    'Ask the user one or more clarifying questions. Each question provides 2–5 options and may optionally allow a custom text input below the options.',
+  description: 'Ask the user one or more clarifying questions. Each question provides 2–5 options plus a custom text input.',
   inputSchema: asSchema(askUserSchema),
   execute: async (input: AskUserPayload, options): Promise<AgentUserAnswer[]> => {
     const session = getSession(options);

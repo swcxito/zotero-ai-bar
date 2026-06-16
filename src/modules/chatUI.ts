@@ -621,7 +621,6 @@ export function onAgentAskUser(session: Session, payload: any) {
   const questions: Array<{
     question: string;
     options: string[];
-    allowCustomInput?: boolean;
     multiple?: boolean;
   }> = payload.questions || [];
 
@@ -652,6 +651,8 @@ export function onAgentAskUser(session: Session, payload: any) {
     const inputType = q.multiple ? 'checkbox' : 'radio';
     const groupName = `agent-ask-${session.id}-${qIndex}`;
 
+    const customOptIndex = q.options.length; // virtual index for the custom input option
+
     q.options.forEach((option, optIndex) => {
       const label = doc.createElement('label');
       label.classList.add('flex', 'items-center', 'gap-2', 'text-sm', 'text-slate-700', 'dark:text-zinc-200', 'mb-1', 'cursor-pointer');
@@ -664,6 +665,9 @@ export function onAgentAskUser(session: Session, payload: any) {
         if (inputType === 'radio') {
           state[qIndex].selected.clear();
           state[qIndex].selected.add(optIndex);
+          // clear custom input when a preset option is selected
+          state[qIndex].customInput = '';
+          customInput.value = '';
         } else {
           if (input.checked) {
             state[qIndex].selected.add(optIndex);
@@ -678,30 +682,60 @@ export function onAgentAskUser(session: Session, payload: any) {
       qWrapper.appendChild(label);
     });
 
-    if (q.allowCustomInput) {
-      const customInput = doc.createElement('input') as HTMLInputElement;
-      customInput.type = 'text';
-      customInput.classList.add(
-        'w-full',
-        'mt-2',
-        'px-2',
-        'py-1',
-        'text-sm',
-        'rounded',
-        'border',
-        'border-slate-300',
-        'dark:border-zinc-600',
-        'bg-white',
-        'dark:bg-zinc-900',
-        'text-slate-800',
-        'dark:text-zinc-100'
-      );
-      customInput.placeholder = getString('tool-call-ask-user-custom-placeholder');
-      customInput.addEventListener('input', () => {
-        state[qIndex].customInput = customInput.value;
-      });
-      qWrapper.appendChild(customInput);
-    }
+    // Always show custom input with a radio/checkbox before it
+    const customLabel = doc.createElement('label');
+    customLabel.classList.add('flex', 'items-center', 'gap-2', 'text-sm', 'text-slate-700', 'dark:text-zinc-200', 'mb-1', 'cursor-pointer');
+
+    const customRadio = doc.createElement('input') as HTMLInputElement;
+    customRadio.type = inputType;
+    customRadio.name = groupName;
+    customRadio.value = '__custom__';
+
+    const customInput = doc.createElement('input') as HTMLInputElement;
+    customInput.type = 'text';
+    customInput.classList.add(
+      'flex-1',
+      'px-2',
+      'py-1',
+      'text-sm',
+      'rounded',
+      'border',
+      'border-slate-300',
+      'dark:border-zinc-600',
+      'bg-white',
+      'dark:bg-zinc-900',
+      'text-slate-800',
+      'dark:text-zinc-100'
+    );
+    customInput.placeholder = getString('tool-call-ask-user-custom-placeholder');
+
+    customRadio.addEventListener('change', () => {
+      if (inputType === 'radio') {
+        state[qIndex].selected.clear();
+        state[qIndex].selected.add(customOptIndex);
+      } else {
+        if (customRadio.checked) {
+          state[qIndex].selected.add(customOptIndex);
+        } else {
+          state[qIndex].selected.delete(customOptIndex);
+        }
+      }
+    });
+
+    customInput.addEventListener('focus', () => {
+      // Auto-select the custom radio/checkbox when user starts typing
+      if (!customRadio.checked) {
+        customRadio.checked = true;
+        customRadio.dispatchEvent(new Event('change'));
+      }
+    });
+    customInput.addEventListener('input', () => {
+      state[qIndex].customInput = customInput.value;
+    });
+
+    customLabel.appendChild(customRadio);
+    customLabel.appendChild(customInput);
+    qWrapper.appendChild(customLabel);
 
     wrapper.appendChild(qWrapper);
   });
@@ -728,13 +762,16 @@ export function onAgentAskUser(session: Session, payload: any) {
       abortSignal.removeEventListener('abort', onAbort);
     }
 
-    const answers = questions.map((q, i) => ({
-      question: q.question,
-      selectedOptions: Array.from(state[i].selected)
-        .sort((a, b) => a - b)
-        .map((idx) => q.options[idx]),
-      customInput: state[i].customInput || undefined,
-    }));
+    const answers = questions.map((q, i) => {
+      const selectedIndices = Array.from(state[i].selected).sort((a, b) => a - b);
+      const selectedOptions = selectedIndices.filter((idx) => idx < q.options.length).map((idx) => q.options[idx]);
+      const hasCustom = selectedIndices.includes(q.options.length);
+      return {
+        question: q.question,
+        selectedOptions,
+        customInput: hasCustom && state[i].customInput ? state[i].customInput : undefined,
+      };
+    });
 
     try {
       // Replace question controls with a collapsible Q&A result card

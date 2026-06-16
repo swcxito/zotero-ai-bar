@@ -10,7 +10,6 @@ import { z } from 'zod';
 const askUserQuestionSchema = z.object({
   question: z.string().describe('The clarifying question to ask the user.'),
   options: z.array(z.string()).min(2).max(5).describe('2–5 options for the user to choose from.'),
-  allowCustomInput: z.boolean().optional().describe('Whether to show an extra text input below the options.'),
   multiple: z.boolean().optional().describe('Whether the user can select multiple options.'),
 });
 
