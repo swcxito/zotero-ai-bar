@@ -455,7 +455,7 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
   let textBuffer = '';
   let textChunkCount = 0;
   let aborted = false;
-  let suppressTextAfterTranslate = false;
+  let fullMarkdownBuffer = ''; // accumulate raw markdown for copy
 
   function ensureTextSegment(): HTMLElement {
     if (!currentTextSegment) {
@@ -491,12 +491,12 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
 
       switch (part.type) {
         case 'text-delta': {
-          if (suppressTextAfterTranslate) break;
           if (firstText) {
             firstText = false;
             if (currentTextSegment) currentTextSegment.innerHTML = '';
           }
           textBuffer += part.text; // AI SDK v6: field is `text`, not `textDelta`
+          fullMarkdownBuffer += part.text;
           textChunkCount++;
           if (textChunkCount % refreshRate === 0) {
             ensureTextSegment();
@@ -514,11 +514,8 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
           break;
         case 'tool-result':
           if (part.toolName === 'translate') {
-            suppressTextAfterTranslate = true;
-            if (currentTextSegment) {
-              currentTextSegment.innerHTML = '';
-              textBuffer = '';
-            }
+            await flushTextBuffer();
+            startNewTextSegment();
             const output = part.output ?? part.result;
             if (output && typeof output === 'object') {
               const card = buildTranslateDetails(doc, output);
@@ -531,9 +528,15 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
             onToolCallEndV2(session, part);
           }
           break;
-        case 'tool-error':
+        case 'tool-error': {
           ztoolkit.log('[chatUI] agent stream tool error part:', part);
+          const errMsg = part.error || 'Tool execution failed';
+          const errEl = doc.createElement('div');
+          errEl.classList.add('ai-bar-error-text', 'text-xs', 'my-1');
+          errEl.textContent = `Tool error: ${errMsg}`;
+          chatMessage!.appendChild(errEl);
           break;
+        }
         case 'error':
           ztoolkit.log('[chatUI] agent stream error part:', part);
           break;
@@ -557,10 +560,8 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
     await flushTextBuffer();
   }
 
-  // Collect markdown for copy/regenerate from all rendered segments
-  (pop as HTMLElement).dataset.markdown = Array.from(chatMessage.querySelectorAll('.chat-message-content'))
-    .map((el) => el.textContent || '')
-    .join('\n\n');
+  // Collect raw markdown for copy/regenerate
+  (pop as HTMLElement).dataset.markdown = fullMarkdownBuffer.trim();
 
   if (!aborted) {
     try {

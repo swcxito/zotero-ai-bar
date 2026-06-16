@@ -159,14 +159,22 @@ export class ChatManager {
     }
 
     // Append full text if enabled (stable → cacheable)
+    // In agent mode, avoid stuffing the entire document into the system prompt
+    // because the agent can read it on-demand via the read tool. Instead,
+    // just note that the full text is available.
     if (fullTextEnabled && itemId !== undefined) {
-      const fullText = await getItemFullText(itemId);
-      if (fullText) {
-        systemPrompt += '\n\n# Full Document Text\n<fulldoc>\n' + fullText + '\n</fulldoc>';
+      if (agentEnabled) {
+        systemPrompt +=
+          '\n\n# Full Document Text\nThe full text of the current document is available. Use the `read` tool to read it in chunks if needed.';
+      } else {
+        const fullText = await getItemFullText(itemId);
+        if (fullText) {
+          systemPrompt += '\n\n# Full Document Text\n<fulldoc>\n' + fullText + '\n</fulldoc>';
+        }
       }
     }
 
-    // Agent instructions: ask user when intent is unclear
+    // Agent instructions: ask user when intent is unclear, plus tool usage guide
     if (agentEnabled) {
       systemPrompt += `
 
@@ -177,7 +185,13 @@ Each question should:
 - Offer 2–5 concrete options when possible.
 - Include an "Other (please specify)" or custom input option when the answer is open-ended.
 - Be brief and written in the same language as the user's message.
-Only proceed with tool calls or answers once the intent is clear. If the user provides a vague follow-up (e.g., "explain this", "analyze", "help"), ask what aspect they care about, what depth they want, or what output format they prefer.`;
+Only proceed with tool calls or answers once the intent is clear. If the user provides a vague follow-up (e.g., "explain this", "analyze", "help"), ask what aspect they care about, what depth they want, or what output format they prefer.
+
+## Tool Usage Guide
+- **Current document questions**: If the answer is not in the provided context, use \`grep\` to search the full text first. If you need to read a specific section, use \`read\` with startOffset/endOffset to avoid loading the entire document at once (read in chunks of about 8000 characters).
+- **Library-wide questions**: Use \`glob\` to find relevant items, then use \`read\` to inspect their content. Do not guess based on titles alone.
+- **Unclear user intent**: Use \`ask_user\` with 2–5 concrete options before proceeding.
+- **Translation**: Use the \`translate\` tool ONLY for single words and abbreviations. For sentences or paragraphs, output the translation directly in your response text.`;
     }
 
     // Append volatile context at the end to improve prompt cache hits

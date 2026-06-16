@@ -21,9 +21,13 @@ export const askUserSchema = z.object({
 export type AskUserPayload = z.infer<typeof askUserSchema>;
 
 export const grepSchema = z.object({
-  pattern: z.string().describe('Case-insensitive literal or regex pattern to search for.'),
+  pattern: z
+    .string()
+    .describe(
+      'Case-insensitive literal or regex pattern to search for in the current document. Use this to locate specific sections before reading them in detail with the `read` tool.'
+    ),
   useRegex: z.boolean().optional().describe('Treat pattern as a regular expression.'),
-  maxResults: z.number().int().min(1).max(50).optional().describe('Maximum number of matches to return.'),
+  maxResults: z.number().int().min(1).max(50).optional().describe('Maximum number of matching excerpts to return.'),
 });
 
 export type GrepPayload = z.infer<typeof grepSchema>;
@@ -32,7 +36,14 @@ export const readSchema = z.object({
   itemId: z.number().describe('The Zotero item ID to read.'),
   includeFullText: z.boolean().optional().describe('Whether to include the full text of the item attachment.'),
   startOffset: z.number().int().min(0).optional().describe('Character offset to start reading from (0-based).'),
-  endOffset: z.number().int().min(0).optional().describe('Character offset to stop reading at (exclusive).'),
+  endOffset: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe(
+      'Character offset to stop reading at (exclusive). For long documents, read in chunks of about 8000 characters (e.g., 0-8000, then 8000-16000).'
+    ),
 });
 
 export type ReadPayload = z.infer<typeof readSchema>;
@@ -41,7 +52,15 @@ export const globSchema = z.object({
   query: z.string().describe('Search query string (title, author, abstract, etc.).'),
   itemType: z.string().optional().describe('Filter by Zotero item type, e.g. journalArticle, book.'),
   tag: z.string().optional().describe('Filter by tag.'),
-  limit: z.number().int().min(1).max(50).optional().describe('Maximum number of results to return.'),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .optional()
+    .describe(
+      'Maximum number of results to return. Use the returned itemId with the `read` tool to inspect the full text or metadata of any result.'
+    ),
 });
 
 export type GlobPayload = z.infer<typeof globSchema>;
@@ -66,7 +85,7 @@ export const translateSchema = z.object({
   textType: z
     .enum(['word', 'abbreviation'])
     .describe(
-      'Type of the selected text. Use this tool ONLY for single words and abbreviations; for sentences or paragraphs, output the translation directly in your response text.'
+      'Type of the selected text. Use this tool ONLY for single words and abbreviations. For sentences or paragraphs, output the translation directly in your response text.'
     ),
   pronunciation: z.string().optional().describe('IPA pronunciation (for words only).'),
   meaning: meaningSchema.optional().describe('Primary meaning in the current context (for words only).'),

@@ -128,7 +128,7 @@ export const treeTool = tool({
 
 export const translateTool = tool({
   description:
-    'Present a translation result to the user in a structured, visually formatted card. Use this tool whenever you need to show a translation of selected text. Determine the text type (word, abbreviation, sentence, or paragraph) and fill in the appropriate fields.',
+    'Present a translation result to the user in a structured, visually formatted card. Use this tool ONLY for single words and abbreviations. After calling this tool, continue your response with one concise sentence that places the translation back into the original context (e.g., how the word is used in this sentence).',
   inputSchema: asSchema(translateSchema),
   execute: async (input: TranslatePayload) => {
     return input;
