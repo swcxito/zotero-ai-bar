@@ -388,6 +388,89 @@ function captureSelectionArea(): string | null {
   }
 }
 
+export async function capturePageByNumber(
+  reader: _ZoteroTypes.ReaderInstance<'pdf'>,
+  pageNumber: number,
+  scale: number = 1.0
+): Promise<{ dataUrl: string; width: number; height: number; pageNumber: number }> {
+  const iframeWindow = (reader as any)._iframeWindow;
+  if (!iframeWindow) {
+    throw new Error('PDF iframe not available');
+  }
+
+  const pdfWindow = iframeWindow[0] ?? iframeWindow;
+  if (!pdfWindow?.document) {
+    throw new Error('PDF viewer document not accessible');
+  }
+
+  // Find all rendered page canvases in the viewer (same pattern as captureSelectionArea)
+  const canvases = Array.from(pdfWindow.document.querySelectorAll('canvas'));
+  if (canvases.length === 0) {
+    throw new Error('No PDF pages are currently rendered');
+  }
+
+  // pdf.js viewer creates one canvas per page in DOM order.
+  const pageIndex = pageNumber - 1;
+  if (pageIndex < 0 || pageIndex >= canvases.length) {
+    throw new Error(`Page ${pageNumber} is out of range (1-${canvases.length})`);
+  }
+
+  const sourceCanvas = canvases[pageIndex] as HTMLCanvasElement;
+
+  // If the canvas has no size, the page hasn't been rendered yet.
+  if (sourceCanvas.width === 0 || sourceCanvas.height === 0) {
+    throw new Error(`Page ${pageNumber} is not rendered yet. Please scroll to it in the PDF viewer first.`);
+  }
+
+  const outputCanvas = pdfWindow.document.createElement('canvas');
+  const outW = Math.round(sourceCanvas.width * scale);
+  const outH = Math.round(sourceCanvas.height * scale);
+  outputCanvas.width = outW;
+  outputCanvas.height = outH;
+
+  const ctx = outputCanvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Failed to get canvas context');
+  }
+
+  ctx.drawImage(sourceCanvas, 0, 0, outW, outH);
+  const dataUrl = outputCanvas.toDataURL('image/png');
+
+  return {
+    dataUrl,
+    width: outW,
+    height: outH,
+    pageNumber,
+  };
+}
+
+export async function getPDFReaderForItem(itemId: number): Promise<_ZoteroTypes.ReaderInstance<'pdf'> | null> {
+  const item = Zotero.Items.get(itemId);
+  if (!item) {
+    return null;
+  }
+
+  let attachmentId: number;
+  if (item.isAttachment()) {
+    attachmentId = itemId;
+  } else {
+    const bestAttachment = await item.getBestAttachment();
+    if (!bestAttachment) {
+      return null;
+    }
+    attachmentId = bestAttachment.id;
+  }
+
+  const readers = Zotero.Reader._readers;
+  for (const reader of readers) {
+    if (reader.itemID === attachmentId && (reader as any)._type === 'pdf') {
+      return reader as _ZoteroTypes.ReaderInstance<'pdf'>;
+    }
+  }
+
+  return null;
+}
+
 export function openCapturePreview(images: string[], startIndex: number): void {
   const windowArgs = { images, startIndex };
 

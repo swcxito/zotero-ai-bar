@@ -41,7 +41,8 @@ tool-call-read = Read item
 tool-call-glob = Search library
 tool-call-tree = List library tree
 tool-call-translate = Translation
-tool-call-ask-user = Ask user
+tool-call-capture-page = Capture page
+
 
 tool-call-status-running = Running...
 tool-call-status-done = Done

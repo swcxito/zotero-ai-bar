@@ -26,6 +26,8 @@ import type { Session } from './chatManager';
 import { IconView } from '../components/iconView';
 import { Icons } from '../components/common';
 import { getString } from '../utils/locale';
+import { createImageViewer } from '../components/imagePreview';
+import { getReaderByTabId } from './tabObserver';
 
 Zotero.debug('[zaibar-chatUI] module loaded');
 
@@ -273,6 +275,7 @@ export function onToolCallStartV2(session: Session, toolCall: any) {
     toolName: toolCall.toolName,
     summary: getString('tool-call-status-running'),
     details: JSON.stringify(toolCall.input ?? toolCall.args, null, 2),
+    isExpanded: toolCall.toolName === 'capture_page',
   });
   chatMessage.appendChild(box);
   session.pending.toolCallBoxes = session.pending.toolCallBoxes || new Map();
@@ -309,6 +312,43 @@ export function onToolCallEndV2(session: Session, toolResult: any) {
 
   if (toolResult.toolName === 'tree' && output && typeof output === 'object' && typeof output.tree === 'string') {
     updateToolCallBox(box, getString('tool-call-status-done'), output.tree);
+    return;
+  }
+
+  if (toolResult.toolName === 'capture_page' && output && typeof output === 'object' && output.dataUrl) {
+    const imgDoc = box.ownerDocument;
+    const img = imgDoc.createElement('img');
+    img.src = output.dataUrl;
+    img.classList.add('max-w-full', 'max-h-96', 'object-contain', 'rounded-lg', 'cursor-pointer');
+    img.addEventListener('click', () => {
+      const root = box.getRootNode() as any;
+      let parent: HTMLElement;
+      let ownerDoc: Document;
+      if (root.host) {
+        const reader = getReaderByTabId(addon.chatManager.currentTabID);
+        if (reader) {
+          const iframeWindow = (reader as any)._iframeWindow;
+          const readerDoc = iframeWindow?.[0]?.document;
+          if (readerDoc?.body) {
+            parent = readerDoc.body;
+            ownerDoc = readerDoc;
+          } else {
+            parent = root as unknown as HTMLElement;
+            ownerDoc = imgDoc;
+          }
+        } else {
+          parent = root as unknown as HTMLElement;
+          ownerDoc = imgDoc;
+        }
+      } else {
+        parent = imgDoc.body;
+        ownerDoc = imgDoc;
+      }
+      createImageViewer([output.dataUrl], 0, parent, ownerDoc);
+    });
+    updateToolCallBox(box, `Page ${output.pageNumber}`, img);
+    if (!session.capturedPageImages) session.capturedPageImages = [];
+    session.capturedPageImages.push(output.dataUrl);
     return;
   }
 

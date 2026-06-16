@@ -41,6 +41,7 @@ export class Session {
   fullTextEnabled: boolean = false;
   agentEnabled: boolean = false;
   itemId?: number;
+  capturedPageImages?: string[];
   pending: {
     shouldAutoScroll?: boolean;
     messagePop?: Element;
@@ -191,7 +192,8 @@ Only proceed with tool calls or answers once the intent is clear. If the user pr
 - **Current document questions**: If the answer is not in the provided context, use \`grep\` to search the full text first. If you need to read a specific section, use \`read\` with startOffset/endOffset to avoid loading the entire document at once (read in chunks of about 8000 characters).
 - **Library-wide questions**: Use \`glob\` to find relevant items, then use \`read\` to inspect their content. Do not guess based on titles alone.
 - **Unclear user intent**: Use \`ask_user\` with 2–5 concrete options before proceeding.
-- **Translation**: Use the \`translate\` tool ONLY for single words and abbreviations. For sentences or paragraphs, output the translation directly in your response text.`;
+- **Translation**: Use the \`translate\` tool ONLY for single words and abbreviations. For sentences or paragraphs, output the translation directly in your response text.
+- **Page capture**: Use the \`capture_page\` tool to render a specific PDF page as an image when the user wants to see a figure, table, or visual content. After capturing, tell the user the page is displayed and ask what they would like to know about it.`;
     }
 
     // Append volatile context at the end to improve prompt cache hits
@@ -270,8 +272,10 @@ Only proceed with tool calls or answers once the intent is clear. If the user pr
       };
 
       // Build user message content — include images if model supports them
-      const images = params.images ?? addon.data.inputImages.get(tabId);
-      const hasImages = images && images.length > 0;
+      const inputImages = params.images ?? addon.data.inputImages.get(tabId) ?? [];
+      const capturedImages = session.capturedPageImages ?? [];
+      const images = [...capturedImages, ...inputImages];
+      const hasImages = images.length > 0;
       const modelSupportsImage = hasImages && checkModelSupportsImage();
 
       if (hasImages && !modelSupportsImage) {
@@ -287,8 +291,8 @@ Only proceed with tool calls or answers once the intent is clear. If the user pr
           promptText = getAutoImagePrompt(outputLang);
           ztoolkit.log('[chat] Auto-supplementing image prompt');
         }
-        userContent = [{ type: 'text', text: promptText }, ...images!.map((dataUrl) => ({ type: 'image' as const, image: dataUrl }))];
-        ztoolkit.log(`[chat] Sending with ${images!.length} image(s)`);
+        userContent = [{ type: 'text', text: promptText }, ...images.map((dataUrl) => ({ type: 'image' as const, image: dataUrl }))];
+        ztoolkit.log(`[chat] Sending with ${images.length} image(s)`);
       } else {
         userContent = params.userPrompt;
       }
@@ -302,8 +306,11 @@ Only proceed with tool calls or answers once the intent is clear. If the user pr
       session.pending.systemMessage = systemMsg;
 
       // Clear images for this tab after building the message
-      if (hasImages) {
+      if (inputImages.length > 0) {
         addon.data.inputImages.delete(tabId);
+      }
+      if (capturedImages.length > 0) {
+        session.capturedPageImages = [];
       }
 
       // Build history slice for sidebar multi-turn

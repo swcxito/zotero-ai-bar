@@ -41,7 +41,8 @@ tool-call-read = 读取条目
 tool-call-glob = 搜索文库
 tool-call-tree = 列出文库结构
 tool-call-translate = 翻译展示
-tool-call-ask-user = 询问用户
+tool-call-capture-page = 截取页面
+
 
 tool-call-status-running = 执行中...
 tool-call-status-done = 完成

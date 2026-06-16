@@ -94,4 +94,11 @@ export const translateSchema = z.object({
   targetLanguage: z.string().optional().describe('Target language name.'),
 });
 
+export const capturePageSchema = z.object({
+  pageNumber: z.number().int().min(1).describe('The 1-based page number to capture.'),
+  itemId: z.number().int().optional().describe('Zotero item ID. Defaults to the current document.'),
+});
+
+export type CapturePagePayload = z.infer<typeof capturePageSchema>;
+
 export type TranslatePayload = z.infer<typeof translateSchema>;

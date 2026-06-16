@@ -24,6 +24,7 @@ const ICON_MAP: Record<string, string> = {
   tree: Icons.Tree,
   ask_user: Icons.CircleQuestion,
   translate: Icons.Translate,
+  capture_page: Icons.Screenshot,
 };
 
 export function ToolCallBox({ doc, toolName, icon, summary, details, isExpanded = false }: ToolCallBoxProps): HTMLElement {

@@ -11,6 +11,8 @@ import { getItemFullText } from '../utils/itemContext';
 import { getZoteroItem, readItemText, searchLibraryItems, buildLibraryTree } from '../utils/zoteroItemAccess';
 import { grepInText } from '../utils/textSearch';
 import { onAgentAskUser } from './chatUI';
+import { getReaderByTabId } from './tabObserver';
+import { capturePageByNumber, getPDFReaderForItem } from './capture';
 import {
   askUserSchema,
   grepSchema,
@@ -18,15 +20,17 @@ import {
   globSchema,
   treeSchema,
   translateSchema,
+  capturePageSchema,
   type AskUserPayload,
   type GrepPayload,
   type ReadPayload,
   type GlobPayload,
   type TreePayload,
   type TranslatePayload,
+  type CapturePagePayload,
 } from '../utils/agentSchemas';
 
-export type { AskUserPayload, GrepPayload, ReadPayload, GlobPayload, TreePayload, TranslatePayload } from '../utils/agentSchemas';
+export type { AskUserPayload, GrepPayload, ReadPayload, GlobPayload, TreePayload, TranslatePayload, CapturePagePayload } from '../utils/agentSchemas';
 
 function getSession(options: { experimental_context?: unknown }): Session | undefined {
   return options.experimental_context as Session | undefined;
@@ -134,12 +138,35 @@ export const translateTool = tool({
   },
 });
 
+export const capturePageTool = tool({
+  description:
+    'Capture a specific page of a PDF as an image and display it in the chat. Use this when the user wants to see a figure, table, or visual content from a document. If no itemId is provided, the current document is used.',
+  inputSchema: asSchema(capturePageSchema),
+  execute: async (input: CapturePagePayload, options) => {
+    const session = getSession(options);
+    let reader: _ZoteroTypes.ReaderInstance<'pdf'> | null = null;
+
+    if (input.itemId !== undefined) {
+      reader = await getPDFReaderForItem(input.itemId);
+    } else if (session) {
+      reader = getReaderByTabId(session.id) as _ZoteroTypes.ReaderInstance<'pdf'> | null;
+    }
+
+    if (!reader) {
+      throw new Error('No PDF reader available for this item. Please open it in the PDF reader first.');
+    }
+
+    const result = await capturePageByNumber(reader, input.pageNumber);
+    return result;
+  },
+});
+
 // ───────────────────────────────────────────────────────────────────────────
 // Tool registry
 // ───────────────────────────────────────────────────────────────────────────
 
-export function buildTools() {
-  return {
+export function buildTools(options?: { imageSupport?: boolean }) {
+  const tools: Record<string, any> = {
     ask_user: askUserTool,
     grep: grepTool,
     read: readTool,
@@ -147,4 +174,8 @@ export function buildTools() {
     tree: treeTool,
     translate: translateTool,
   };
+  if (options?.imageSupport) {
+    tools.capture_page = capturePageTool;
+  }
+  return tools;
 }
