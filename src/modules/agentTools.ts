@@ -78,7 +78,7 @@ export const grepTool = tool({
     if (!fullText) {
       throw new Error('Full text not available for this item.');
     }
-    const results = grepInText(fullText, input.pattern, input.useRegex ?? false, input.maxResults ?? 20);
+    const results = grepInText(fullText, input.pattern, input.useRegex ?? false, input.maxResults ?? 20, input.contextLines ?? 2);
     return { matches: results.length, excerpts: results };
   },
 });
