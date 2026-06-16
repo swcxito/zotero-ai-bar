@@ -312,8 +312,15 @@ export function onToolCallEndV2(session: Session, toolResult: any) {
     return;
   }
 
-  const summary = hasError ? getString('tool-call-status-error') : getString('tool-call-status-done');
-  updateToolCallBox(box, summary, JSON.stringify(output, null, 2));
+  if (hasError) {
+    const errDoc = box.ownerDocument;
+    const errEl = errDoc.createElement('span');
+    errEl.classList.add('text-red-600', 'dark:text-red-400');
+    errEl.textContent = JSON.stringify(output, null, 2);
+    updateToolCallBox(box, getString('tool-call-status-error'), errEl);
+  } else {
+    updateToolCallBox(box, getString('tool-call-status-done'), JSON.stringify(output, null, 2));
+  }
 }
 
 function buildTranslateDetails(doc: Document, output: any): HTMLElement {
@@ -531,10 +538,21 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
         case 'tool-error': {
           ztoolkit.log('[chatUI] agent stream tool error part:', part);
           const errMsg = part.error || 'Tool execution failed';
-          const errEl = doc.createElement('div');
-          errEl.classList.add('ai-bar-error-text', 'text-xs', 'my-1');
-          errEl.textContent = `Tool error: ${errMsg}`;
-          chatMessage!.appendChild(errEl);
+          const errEl = doc.createElement('span');
+          errEl.classList.add('text-red-600', 'dark:text-red-400');
+          errEl.textContent = errMsg;
+          const box = session.pending.toolCallBoxes?.get(part.toolCallId);
+          if (box) {
+            updateToolCallBox(box, getString('tool-call-status-error'), errEl);
+          } else {
+            const errBox = ToolCallBox({
+              doc,
+              toolName: part.toolName || 'unknown',
+              summary: getString('tool-call-status-error'),
+              details: errEl,
+            });
+            chatMessage!.appendChild(errBox);
+          }
           break;
         }
         case 'error':
