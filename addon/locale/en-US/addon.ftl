@@ -49,6 +49,13 @@ tool-call-status-done = Done
 tool-call-status-error = Error
 tool-call-status-pending = Waiting for user...
 
+thinking-effort-none = —
+thinking-effort-low = L
+thinking-effort-medium = M
+thinking-effort-high = H
+thinking-effort-xhigh = X
+thinking-card-title = Thinking
+
 tool-call-ask-user-custom-placeholder = Or type your own answer...
 tool-call-ask-user-submit = Submit
 

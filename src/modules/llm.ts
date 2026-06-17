@@ -19,7 +19,16 @@
 import { getPref } from '../utils/prefs';
 import type { Session } from './chatManager';
 import { ToolLoopAgent, stepCountIs, type ModelMessage } from 'ai';
-import { onLLMStreamEndV2, onLLMStreamErrorV2, onLLMStreamStartV2, onLLMStreamUpdateV2, consumeAgentStream } from './chatUI';
+import {
+  onLLMStreamEndV2,
+  onLLMStreamErrorV2,
+  onLLMStreamStartV2,
+  onLLMStreamUpdateV2,
+  consumeAgentStream,
+  onReasoningStartV2,
+  onReasoningDeltaV2,
+  onReasoningEndV2,
+} from './chatUI';
 import { ensureWebStreamsGlobals } from '../utils/webStreamsGlobals';
 import { resolveApiUrl, type Model } from '../utils/providers';
 import { buildTools } from './agentTools';
@@ -79,10 +88,19 @@ export async function streamLLMV2(
     const messages = await messagesOrPromise;
     Zotero.debug('[zaibar-llm] messages count=' + messages.length);
 
-    const providerOptions = {
-      ...V2_PROVIDER_OPTIONS,
-      google: getGoogleThinkingConfig(addon.data.userProviderConfigV2?.active?.modelId ?? ''),
-    };
+    const activeProviderId = addon.data.userProviderConfigV2?.active?.providerId ?? '';
+    const providerOptions: Record<string, any> = {};
+    for (const [k, v] of Object.entries(V2_PROVIDER_OPTIONS)) {
+      providerOptions[k] = v;
+    }
+    providerOptions.google = getGoogleThinkingConfig(addon.data.userProviderConfigV2?.active?.modelId ?? '', session.thinkingEffort);
+    const thinkingOpts = getThinkingProviderOptions(activeProviderId, session.thinkingEffort);
+    if (thinkingOpts && activeProviderId) {
+      providerOptions[activeProviderId] = {
+        ...providerOptions[activeProviderId],
+        ...thinkingOpts,
+      };
+    }
 
     const agentEnabled = getPref('agent.enabled');
     const tools = agentEnabled ? buildTools() : undefined;
@@ -117,7 +135,7 @@ export async function streamLLMV2(
       session.pending.isAgentMode = true;
       await consumeAgentStream(session, result, refreshRate);
     } else {
-      Zotero.debug('[zaibar-llm] consuming text stream');
+      Zotero.debug('[zaibar-llm] consuming full stream');
       const result = streamTextFn!({
         model: model,
         messages: messages,
@@ -135,11 +153,24 @@ export async function streamLLMV2(
       let fullText = '';
       let count = 0;
 
-      for await (const textPart of result.textStream) {
-        fullText += textPart;
-        count++;
-        if (count % refreshRate === 0) {
-          await onLLMStreamUpdateV2({ session, fullText });
+      for await (const part of result.fullStream) {
+        switch (part.type) {
+          case 'reasoning-start':
+            onReasoningStartV2(session);
+            break;
+          case 'reasoning-delta':
+            onReasoningDeltaV2(session, part.text);
+            break;
+          case 'reasoning-end':
+            onReasoningEndV2(session);
+            break;
+          case 'text-delta':
+            fullText += part.text;
+            count++;
+            if (count % refreshRate === 0) {
+              await onLLMStreamUpdateV2({ session, fullText });
+            }
+            break;
         }
       }
 
@@ -220,31 +251,81 @@ function handleStreamError(session: Session, error: unknown) {
  * Namespaces match the `name` param passed to createOpenAICompatible (v2 providerId).
  */
 const V2_PROVIDER_OPTIONS: Record<string, any> = {
-  'alibaba-cn': { enable_thinking: false, enable_search: true },
-  alibaba: { enable_thinking: false, enable_search: true },
-  'alibaba-coding-plan': { enable_thinking: false, enable_search: true },
-  'alibaba-coding-plan-cn': { enable_thinking: false, enable_search: true },
-  zhipuai: { thinking: { type: 'disabled' } },
-  'zhipuai-coding-plan': { thinking: { type: 'disabled' } },
-  zai: { thinking: { type: 'disabled' } },
-  'zai-coding-plan': { thinking: { type: 'disabled' } },
-  'minimax-cn': { thinking: { type: 'disabled' } },
-  // "minimax-cn": { thinking: { type: "adaptive" }, effort: "max" },
-  anthropic: { thinking: { type: 'disabled' } },
+  'alibaba-cn': { enable_search: true },
+  alibaba: { enable_search: true },
+  'alibaba-coding-plan': { enable_search: true },
+  'alibaba-coding-plan-cn': { enable_search: true },
 };
+
+function getThinkingProviderOptions(providerId: string, effort: 'none' | 'low' | 'medium' | 'high' | 'xhigh'): Record<string, any> | undefined {
+  if (effort === 'none') {
+    switch (providerId) {
+      case 'anthropic':
+        return { thinking: { type: 'disabled' } };
+      case 'zhipuai':
+      case 'zhipuai-coding-plan':
+      case 'zai':
+      case 'zai-coding-plan':
+      case 'minimax-cn':
+        return { thinking: { type: 'disabled' } };
+      case 'alibaba':
+      case 'alibaba-cn':
+      case 'alibaba-coding-plan':
+      case 'alibaba-coding-plan-cn':
+        return { enable_thinking: false };
+      default:
+        return undefined;
+    }
+  }
+
+  switch (providerId) {
+    case 'openai':
+    case 'openrouter': {
+      const map: Record<string, string> = { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh' };
+      return { reasoningEffort: map[effort] };
+    }
+    case 'anthropic': {
+      if (effort === 'low') return { thinking: { type: 'adaptive' } };
+      const budgetMap: Record<string, number> = { medium: 4096, high: 8192, xhigh: 16384 };
+      return { thinking: { type: 'enabled', budgetTokens: budgetMap[effort] } };
+    }
+    case 'zhipuai':
+    case 'zhipuai-coding-plan':
+    case 'zai':
+    case 'zai-coding-plan':
+      return { thinking: { type: 'adaptive' } };
+    case 'minimax-cn': {
+      if (effort === 'low') return { thinking: { type: 'adaptive' } };
+      const budgetMap: Record<string, number> = { medium: 4096, high: 8192, xhigh: 16384 };
+      return { thinking: { type: 'enabled', budgetTokens: budgetMap[effort] } };
+    }
+    case 'alibaba':
+    case 'alibaba-cn':
+    case 'alibaba-coding-plan':
+    case 'alibaba-coding-plan-cn':
+      return { enable_thinking: true };
+    default:
+      return undefined;
+  }
+}
 
 /**
  * Gemini 3 系列使用 thinkingLevel 控制推理深度，
- * Gemini 2.5 系列使用 thinkingBudget 控制思考 token 数（-1 禁用）。
+ * Gemini 2.5 系列使用 thinkingBudget 控制思考 token 数。
  */
-function getGoogleThinkingConfig(modelId: string) {
+function getGoogleThinkingConfig(modelId: string, effort: 'none' | 'low' | 'medium' | 'high' | 'xhigh') {
+  if (effort === 'none') {
+    return { thinkingBudget: 0, includeThoughts: false };
+  }
+  const levelMap: Record<string, string> = { low: 'low', medium: 'medium', high: 'high', xhigh: 'high' };
   if (modelId.startsWith('gemini-3')) {
-    return { thinkingLevel: 'low', includeThoughts: false };
+    return { thinkingLevel: levelMap[effort], includeThoughts: true };
   }
+  const budgetMap: Record<string, number> = { low: 256, medium: 1024, high: 4096, xhigh: 8192 };
   if (modelId.startsWith('gemini-2.5')) {
-    return { thinkingBudget: -1, includeThoughts: false };
+    return { thinkingBudget: budgetMap[effort], includeThoughts: true };
   }
-  return { thinkingBudget: 0, includeThoughts: false };
+  return { thinkingBudget: budgetMap[effort] ?? 0, includeThoughts: true };
 }
 
 async function createProvider(

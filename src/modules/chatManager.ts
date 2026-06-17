@@ -40,6 +40,7 @@ export class Session {
   sourceLabel?: string;
   fullTextEnabled: boolean = false;
   agentEnabled: boolean = false;
+  thinkingEffort: 'none' | 'low' | 'medium' | 'high' | 'xhigh' = 'none';
   itemId?: number;
   capturedPageImages?: string[];
   pending: {
@@ -58,12 +59,16 @@ export class Session {
     toolCallBoxes?: Map<string, HTMLElement>;
     userAnswerResolve?: (value: AgentUserAnswer[]) => void;
     userAnswerReject?: (reason?: any) => void;
+    // --- reasoning ---
+    reasoningBox?: HTMLElement;
+    reasoningTextEl?: HTMLElement;
   } = {};
   constructor(id: string) {
     this.id = id;
     this.fullTextEnabled = getPref('chat.autoAttachFullText') ?? false;
     this.agentEnabled = getPref('agent.enabled') ?? false;
-    ztoolkit.log('[chat] new Session', id, 'agentEnabled=', this.agentEnabled);
+    this.thinkingEffort = this.agentEnabled ? 'medium' : 'none';
+    ztoolkit.log('[chat] new Session', id, 'agentEnabled=', this.agentEnabled, 'thinkingEffort=', this.thinkingEffort);
   }
 }
 

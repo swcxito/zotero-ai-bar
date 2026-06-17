@@ -25,6 +25,7 @@ const ICON_MAP: Record<string, string> = {
   ask_user: Icons.CircleQuestion,
   translate: Icons.Translate,
   capture_page: Icons.Screenshot,
+  thinking: Icons.Brain,
 };
 
 export function ToolCallBox({ doc, toolName, icon, summary, details, isExpanded = false }: ToolCallBoxProps): HTMLElement {
@@ -103,8 +104,7 @@ export function ToolCallBox({ doc, toolName, icon, summary, details, isExpanded 
   const chevron = container.querySelector('.tool-call-chevron') as HTMLElement;
 
   let expanded = isExpanded;
-  function toggle() {
-    expanded = !expanded;
+  function applyState() {
     if (expanded) {
       detailsPanel.classList.remove('max-h-0', 'overflow-hidden');
       detailsPanel.classList.add('max-h-[32rem]', 'overflow-y-auto');
@@ -115,9 +115,13 @@ export function ToolCallBox({ doc, toolName, icon, summary, details, isExpanded 
       chevron?.classList.remove('rotate-180');
     }
   }
+  function toggle() {
+    expanded = !expanded;
+    applyState();
+  }
 
   header.addEventListener('click', toggle);
-  if (expanded) toggle();
+  applyState();
   return container;
 }
 

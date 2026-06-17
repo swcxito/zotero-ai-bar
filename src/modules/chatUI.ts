@@ -69,7 +69,6 @@ export function onLLMStreamStartV2(session: Session) {
 
     const contentEl = doc.createElement('div');
     contentEl.classList.add('chat-message-content');
-    contentEl.innerHTML = 'Thinking...';
     chatMessage.appendChild(contentEl);
   }
 
@@ -483,6 +482,69 @@ function buildTranslateDetails(doc: Document, output: any): HTMLElement {
   return container;
 }
 
+export function onReasoningStartV2(session: Session) {
+  const pop = session.pending.messagePop as HTMLElement | undefined;
+  if (!pop) return;
+  const chatMessage = pop.querySelector('.chat-message') as HTMLElement | null;
+  if (!chatMessage) return;
+
+  const doc = pop.ownerDocument!;
+  const reasoningText = doc.createElement('div');
+  reasoningText.classList.add('whitespace-pre-wrap');
+
+  const box = ToolCallBox({
+    doc,
+    toolName: 'thinking',
+    icon: Icons.Brain,
+    summary: getString('thinking-card-title'),
+    details: reasoningText,
+    isExpanded: true,
+  });
+
+  // Remove any empty placeholder content divs so the reasoning card lands at
+  // the true end of the stream order (text will create a fresh div after it).
+  const contentDivs = chatMessage.querySelectorAll('.chat-message-content');
+  for (const div of contentDivs) {
+    if (!div.innerHTML.trim()) {
+      div.remove();
+    }
+  }
+  chatMessage.appendChild(box);
+
+  session.pending.reasoningBox = box;
+  session.pending.reasoningTextEl = reasoningText;
+}
+
+export function onReasoningDeltaV2(session: Session, text: string) {
+  if (session.pending.reasoningTextEl) {
+    session.pending.reasoningTextEl.textContent += text;
+  }
+  const container = (session.pending.messagePop as HTMLElement | undefined)?.parentElement;
+  if (container && session.pending.shouldAutoScroll) {
+    scrollToBottom(container as HTMLElement);
+  }
+}
+
+export function onReasoningEndV2(session: Session) {
+  const box = session.pending.reasoningBox as HTMLElement | undefined;
+  if (!box) return;
+
+  // Force-collapse (not toggle) so the card always folds up when this
+  // reasoning segment ends, regardless of manual interaction during streaming.
+  const detailsPanel = box.querySelector('.tool-call-details') as HTMLElement | null;
+  const chevron = box.querySelector('.tool-call-chevron') as HTMLElement | null;
+  if (detailsPanel) {
+    detailsPanel.classList.remove('max-h-[32rem]', 'overflow-y-auto');
+    detailsPanel.classList.add('max-h-0', 'overflow-hidden');
+  }
+  if (chevron) {
+    chevron.classList.remove('rotate-180');
+  }
+
+  session.pending.reasoningBox = undefined;
+  session.pending.reasoningTextEl = undefined;
+}
+
 /**
  * Consume the fullStream from a ToolLoopAgent result, rendering text deltas
  * and tool-call / tool-result UI in the current chat message bubble.
@@ -542,6 +604,25 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
       }
 
       switch (part.type) {
+        case 'reasoning-start': {
+          // If the current text segment is an empty placeholder, drop it so
+          // the reasoning card is appended in true stream order and the next
+          // text-delta creates a fresh segment after the reasoning card.
+          if (currentTextSegment && !currentTextSegment.innerHTML.trim()) {
+            currentTextSegment.remove();
+            currentTextSegment = null;
+          }
+          onReasoningStartV2(session);
+          break;
+        }
+        case 'reasoning-delta': {
+          onReasoningDeltaV2(session, part.text);
+          break;
+        }
+        case 'reasoning-end': {
+          onReasoningEndV2(session);
+          break;
+        }
         case 'text-delta': {
           if (firstText) {
             firstText = false;

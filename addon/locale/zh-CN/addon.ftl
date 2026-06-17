@@ -49,6 +49,13 @@ tool-call-status-done = 完成
 tool-call-status-error = 出错
 tool-call-status-pending = 等待用户输入...
 
+thinking-effort-none = —
+thinking-effort-low = 低
+thinking-effort-medium = 中
+thinking-effort-high = 高
+thinking-effort-xhigh = 极高
+thinking-card-title = 思考中
+
 tool-call-ask-user-custom-placeholder = 或输入自定义回答...
 tool-call-ask-user-submit = 提交
 

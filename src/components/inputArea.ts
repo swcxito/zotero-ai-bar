@@ -131,6 +131,53 @@ export function InputArea(
   // max-height approximately 5 lines, overflow scrolls
   textarea.style.maxHeight = '7rem';
 
+  // ── thinking effort button (right of textarea) ────────────────────────────
+  const session = addon.chatManager.sessionsMap.get(sectionId) ?? new Session(sectionId);
+  addon.chatManager.sessionsMap.set(sectionId, session);
+
+  const effortOrder: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh'> = ['none', 'low', 'medium', 'high', 'xhigh'];
+  const effortLabelMap: Record<string, string> = {
+    none: getString('thinking-effort-none'),
+    low: getString('thinking-effort-low'),
+    medium: getString('thinking-effort-medium'),
+    high: getString('thinking-effort-high'),
+    xhigh: getString('thinking-effort-xhigh'),
+  };
+
+  const thinkingBtn = doc.createElement('button');
+  thinkingBtn.title = 'Thinking effort';
+  thinkingBtn.classList.add(
+    'input-thinking-btn',
+    'flex',
+    'items-center',
+    'justify-center',
+    'gap-1',
+    'p-2',
+    'rounded-xl',
+    'text-xs',
+    'font-semibold',
+    'transition-colors',
+    'flex-shrink-0'
+  );
+
+  function updateThinkingBtnAppearance() {
+    const effort = session.thinkingEffort;
+    thinkingBtn.innerHTML = '';
+    thinkingBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Brain, sizeRem: 0.875 })));
+    const labelSpan = doc.createElement('span');
+    labelSpan.textContent = effortLabelMap[effort];
+    thinkingBtn.appendChild(labelSpan);
+
+    if (effort !== 'none') {
+      thinkingBtn.classList.remove('text-slate-400', 'dark:text-neutral-500', 'hover:text-rose-500');
+      thinkingBtn.classList.add('text-rose-500', 'dark:text-rose-400');
+    } else {
+      thinkingBtn.classList.remove('text-rose-500', 'dark:text-rose-400');
+      thinkingBtn.classList.add('text-slate-400', 'dark:text-neutral-500', 'hover:text-rose-500');
+    }
+  }
+  updateThinkingBtnAppearance();
+
   // ── send / stop button (right) ────────────────────────────────────────────
   const sendBtn = doc.createElement('button') as HTMLButtonElement;
   sendBtn.disabled = true;
@@ -167,6 +214,7 @@ export function InputArea(
   inputRow.appendChild(fullTextBtn);
   inputRow.appendChild(screenshotBtn);
   inputRow.appendChild(textarea);
+  inputRow.appendChild(thinkingBtn);
   inputRow.appendChild(sendBtn);
 
   container.appendChild(inputRow);
@@ -374,6 +422,121 @@ export function InputArea(
       handleSend();
     }
   });
+
+  // Thinking effort button — simple inline dropdown
+  wrapper.style.position = 'relative';
+
+  function removeThinkingDropdown() {
+    const existing = wrapper.querySelector('.thinking-effort-dropdown') as HTMLElement | null;
+    if (existing) existing.remove();
+  }
+
+  function buildThinkingDropdown(): HTMLElement {
+    removeThinkingDropdown();
+    const dropdown = doc.createElement('div');
+    dropdown.classList.add('thinking-effort-dropdown');
+    dropdown.style.position = 'absolute';
+    dropdown.style.bottom = '100%';
+    dropdown.style.right = '0';
+    dropdown.style.marginBottom = '6px';
+    dropdown.style.minWidth = '120px';
+    dropdown.style.borderRadius = '8px';
+    dropdown.style.padding = '4px 0';
+    dropdown.style.fontSize = '13px';
+    dropdown.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+    dropdown.style.zIndex = '100';
+    dropdown.style.backgroundColor = '#fff';
+    dropdown.style.border = '1px solid #e5e7eb';
+
+    for (const effort of effortOrder) {
+      const item = doc.createElement('div');
+      item.textContent = effortLabelMap[effort];
+      item.style.padding = '6px 12px';
+      item.style.cursor = 'pointer';
+      item.style.whiteSpace = 'nowrap';
+      const isSelected = session.thinkingEffort === effort;
+      item.style.color = isSelected ? '#f43f5e' : '#374151';
+      item.style.fontWeight = isSelected ? '600' : '400';
+      item.addEventListener('click', () => {
+        session.thinkingEffort = effort;
+        updateThinkingBtnAppearance();
+        removeThinkingDropdown();
+      });
+      item.addEventListener('mouseenter', () => {
+        item.style.backgroundColor = '#f3f4f6';
+      });
+      item.addEventListener('mouseleave', () => {
+        item.style.backgroundColor = 'transparent';
+      });
+      dropdown.appendChild(item);
+    }
+    return dropdown;
+  }
+
+  let hoverCloseTimer: number | undefined;
+
+  function cancelHoverClose() {
+    if (hoverCloseTimer !== undefined) {
+      window.clearTimeout(hoverCloseTimer);
+      hoverCloseTimer = undefined;
+    }
+  }
+  function scheduleHoverClose() {
+    cancelHoverClose();
+    hoverCloseTimer = window.setTimeout(() => {
+      removeThinkingDropdown();
+      hoverCloseTimer = undefined;
+    }, 250);
+  }
+
+  function openThinkingDropdown() {
+    cancelHoverClose();
+    if (!wrapper.querySelector('.thinking-effort-dropdown')) {
+      const dropdown = buildThinkingDropdown();
+      wrapper.appendChild(dropdown);
+    }
+  }
+
+  // Hover-only: open on mouseenter, close when the pointer leaves the
+  // button/dropdown region.  We track the region with mousemove + a short
+  // close timer so that moving between the button and the dropdown (which
+  // are separated by a small gap) does not close it.
+  function isOverThinkingRegion(target: Node | null): boolean {
+    if (!target) return false;
+    if (thinkingBtn.contains(target)) return true;
+    const dd = wrapper.querySelector('.thinking-effort-dropdown');
+    return !!dd && dd.contains(target);
+  }
+
+  thinkingBtn.addEventListener('mouseenter', openThinkingDropdown);
+
+  // Document-level mousemove: if the pointer is not over the button or the
+  // dropdown, schedule a close.  This is more reliable than mouseleave on
+  // individual elements when moving across the gap between them.
+  doc.addEventListener(
+    'mousemove',
+    (e: MouseEvent) => {
+      const dd = wrapper.querySelector('.thinking-effort-dropdown');
+      if (!dd) return;
+      const target = e.target as Node | null;
+      if (isOverThinkingRegion(target)) {
+        cancelHoverClose();
+      } else {
+        scheduleHoverClose();
+      }
+    },
+    true
+  );
+
+  // Close dropdown when clicking outside
+  const outsideClickHandler = (e: Event) => {
+    if (thinkingBtn.contains(e.target as Node)) return;
+    const dd = wrapper.querySelector('.thinking-effort-dropdown');
+    if (dd && !dd.contains(e.target as Node)) {
+      removeThinkingDropdown();
+    }
+  };
+  doc.addEventListener('click', outsideClickHandler, true);
 
   // Full-text toggle button
   fullTextBtn.addEventListener('click', () => {
