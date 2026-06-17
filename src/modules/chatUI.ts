@@ -98,17 +98,28 @@ export async function onLLMStreamUpdateV2(data: { session: Session; fullText: st
     if (!data.session.pending.shouldAutoScroll) {
       return;
     }
-
-    const containerTop = container.getBoundingClientRect().top;
-    const popTop = (pop as HTMLElement).getBoundingClientRect().top;
-
-    // Stop auto-scroll for this response once the latest reply reaches container top.
-    if (popTop <= containerTop) {
-      data.session.pending.shouldAutoScroll = false;
+    if (shouldStopAutoScroll(data.session, pop as HTMLElement, container as HTMLElement)) {
       return;
     }
     scrollToBottom(container as HTMLElement);
   }
+}
+
+/**
+ * Stop auto-scrolling once the user message (the bubble immediately preceding
+ * the AI reply) has scrolled out of the visible area. Returns true if
+ * auto-scroll has been disabled (either just now or previously).
+ */
+function shouldStopAutoScroll(session: Session, pop: HTMLElement, container: HTMLElement): boolean {
+  if (!session.pending.shouldAutoScroll) return true;
+  const containerTop = container.getBoundingClientRect().top;
+  const userBubble = pop.previousElementSibling as HTMLElement | null;
+  const refEl = userBubble || pop;
+  if (refEl.getBoundingClientRect().bottom <= containerTop) {
+    session.pending.shouldAutoScroll = false;
+    return true;
+  }
+  return false;
 }
 
 export function onLLMStreamEndV2(session: Session, usage?: TokenUsage) {
@@ -686,6 +697,15 @@ export function onReasoningDeltaV2(session: Session, text: string) {
   if (session.pending.reasoningTextEl) {
     session.pending.reasoningTextEl.textContent += text;
   }
+  // Auto-scroll the thinking card's details panel so the latest reasoning
+  // stays in view while tokens stream in.
+  const reasoningBox = session.pending.reasoningBox as HTMLElement | undefined;
+  if (reasoningBox) {
+    const detailsPanel = reasoningBox.querySelector('.tool-call-details') as HTMLElement | null;
+    if (detailsPanel) {
+      detailsPanel.scrollTop = detailsPanel.scrollHeight;
+    }
+  }
   const container = (session.pending.messagePop as HTMLElement | undefined)?.parentElement;
   if (container && session.pending.shouldAutoScroll) {
     scrollToBottom(container as HTMLElement);
@@ -861,8 +881,15 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
         }
       }
 
-      if (session.pending.shouldAutoScroll && chatMessage.parentElement) {
-        scrollToBottom(chatMessage.parentElement as HTMLElement);
+      if (session.pending.shouldAutoScroll) {
+        const container = (pop as HTMLElement).parentElement as HTMLElement | null;
+        if (container) {
+          if (shouldStopAutoScroll(session, pop as HTMLElement, container)) {
+            // user message has scrolled out of view — stop following
+          } else {
+            scrollToBottom(container);
+          }
+        }
       }
     }
   } catch (e: any) {
