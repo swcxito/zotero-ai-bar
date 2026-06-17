@@ -437,7 +437,16 @@ export function InputArea(
 
   function removeThinkingDropdown() {
     const existing = wrapper.querySelector('.thinking-effort-dropdown') as HTMLElement | null;
-    if (existing) existing.remove();
+    if (!existing) return;
+    existing.style.opacity = '0';
+    existing.style.transform = 'scale(0.95)';
+    const view = doc.defaultView;
+    if (!view) {
+      existing.remove();
+      return;
+    }
+    existing.addEventListener('transitionend', () => existing.remove(), { once: true });
+    view.setTimeout(() => existing.remove(), 160);
   }
 
   function buildThinkingDropdown(): HTMLElement {
@@ -456,6 +465,23 @@ export function InputArea(
     dropdown.style.zIndex = '100';
     dropdown.style.backgroundColor = '#fff';
     dropdown.style.border = '1px solid #e5e7eb';
+    dropdown.style.opacity = '0';
+    dropdown.style.transform = 'scale(0.95)';
+    dropdown.style.transformOrigin = 'bottom right';
+    // Defer the transition + final state to the next frame so the browser
+    // commits the initial (opacity:0) state first — without this, the two
+    // style writes may be batched into one frame and skip the animation.
+    const view = doc.defaultView;
+    if (view) {
+      view.requestAnimationFrame(() => {
+        dropdown.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
+        dropdown.style.opacity = '1';
+        dropdown.style.transform = 'scale(1)';
+      });
+    } else {
+      dropdown.style.opacity = '1';
+      dropdown.style.transform = 'scale(1)';
+    }
 
     for (const effort of effortOrder) {
       const item = doc.createElement('div');
@@ -488,13 +514,13 @@ export function InputArea(
 
   function cancelHoverClose() {
     if (hoverCloseTimer !== undefined) {
-      window.clearTimeout(hoverCloseTimer);
+      doc.defaultView?.clearTimeout(hoverCloseTimer);
       hoverCloseTimer = undefined;
     }
   }
   function scheduleHoverClose() {
     cancelHoverClose();
-    hoverCloseTimer = window.setTimeout(() => {
+    hoverCloseTimer = doc.defaultView?.setTimeout(() => {
       removeThinkingDropdown();
       hoverCloseTimer = undefined;
     }, 250);
@@ -509,29 +535,28 @@ export function InputArea(
   }
 
   // Hover-only: open on mouseenter, close when the pointer leaves the
-  // button/dropdown region.  We track the region with mousemove + a short
-  // close timer so that moving between the button and the dropdown (which
-  // are separated by a small gap) does not close it.
-  function isOverThinkingRegion(target: Node | null): boolean {
-    if (!target) return false;
-    if (thinkingBtn.contains(target)) return true;
+  // button/dropdown region.  We use composedPath() so the check works even
+  // though this listener sits at document level and the dropdown lives inside
+  // a shadow DOM (where event.target is retargeted to the shadow host).
+  function isOverThinkingRegion(e: MouseEvent): boolean {
     const dd = wrapper.querySelector('.thinking-effort-dropdown');
-    return !!dd && dd.contains(target);
+    const path = e.composedPath();
+    return path.includes(thinkingBtn) || (!!dd && path.includes(dd as EventTarget));
   }
 
   thinkingBtn.addEventListener('mouseenter', openThinkingDropdown);
   thinkingBtn.addEventListener('mouseleave', scheduleHoverClose);
 
-  // Document-level mousemove: if the pointer is not over the button or the
-  // dropdown, schedule a close.  This is more reliable than mouseleave on
-  // individual elements when moving across the gap between them.
+  // Track pointer position globally while the dropdown is open.  Only start
+  // the close countdown once the pointer is genuinely outside both the button
+  // and the dropdown — moving between them (across the small gap) keeps it
+  // open because we cancel whenever the pointer re-enters either region.
   doc.addEventListener(
     'mousemove',
     (e: MouseEvent) => {
       const dd = wrapper.querySelector('.thinking-effort-dropdown');
       if (!dd) return;
-      const target = e.target as Node | null;
-      if (isOverThinkingRegion(target)) {
+      if (isOverThinkingRegion(e)) {
         cancelHoverClose();
       } else {
         scheduleHoverClose();

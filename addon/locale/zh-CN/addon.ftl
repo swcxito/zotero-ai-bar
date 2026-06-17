@@ -52,7 +52,7 @@ tool-call-status-done = 完成
 tool-call-status-error = 出错
 tool-call-status-pending = 等待用户输入...
 
-thinking-effort-none = —
+thinking-effort-none = 关
 thinking-effort-low = 低
 thinking-effort-medium = 中
 thinking-effort-high = 高
