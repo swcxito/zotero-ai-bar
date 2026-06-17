@@ -73,6 +73,7 @@ pref-auto-image-prompt =
     .label = Auto-supplement Prompt for Image-only Messages
 pref-agent-enabled =
     .label = Enable Agent / Tool Calling
+pref-default-thinking-effort = Default Thinking Effort
 pref-translate = Translation Settings
 pref-auto-translate =
     .label = Auto Translate Selected Text

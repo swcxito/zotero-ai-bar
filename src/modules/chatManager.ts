@@ -71,7 +71,8 @@ export class Session {
     this.id = id;
     this.fullTextEnabled = getPref('chat.autoAttachFullText') ?? false;
     this.agentEnabled = getPref('agent.enabled') ?? false;
-    this.thinkingEffort = this.agentEnabled ? 'medium' : 'none';
+    const savedEffort = getPref('chat.thinkingEffort') as Session['thinkingEffort'] | undefined;
+    this.thinkingEffort = savedEffort ?? 'none';
     ztoolkit.log('[chat] new Session', id, 'agentEnabled=', this.agentEnabled, 'thinkingEffort=', this.thinkingEffort);
   }
 }

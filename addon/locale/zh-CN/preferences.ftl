@@ -73,6 +73,7 @@ pref-auto-image-prompt =
     .label = 自动补充纯图片消息提示词
 pref-agent-enabled =
     .label = 启用 Agent / 工具调用
+pref-default-thinking-effort = 默认思考强度
 pref-translate = 翻译设置
 pref-auto-translate =
     .label = 自动翻译选文

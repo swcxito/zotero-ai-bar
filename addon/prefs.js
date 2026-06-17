@@ -21,6 +21,7 @@ pref('chat.autoAttachItemData', false);
 pref('chat.openOnStartup', false);
 pref('chat.autoImagePrompt', true);
 pref('agent.enabled', true);
+pref('chat.thinkingEffort', 'none');
 pref('translate.enableAuto', false);
 pref('translate.extendContext', 'follow');
 pref('translate.useAlternativeModel', false);

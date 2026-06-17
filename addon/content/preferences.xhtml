@@ -1,5 +1,6 @@
 <linkset xmlns:html="http://www.w3.org/1999/xhtml">
   <html:link rel="localization" href="__addonRef__-preferences.ftl" />
+  <html:link rel="localization" href="__addonRef__-addon.ftl" />
 </linkset>
 <html:style>
   button { justify-content: center; } #__addonRef__-prompt-table-container tbody tr:nth-child(even):not(.selected),
@@ -53,6 +54,16 @@
     </hbox>
     <hbox align="start" style="margin-top: 6px">
       <checkbox id="__addonRef__-agent-enabled" preference="agent.enabled" data-l10n-id="pref-agent-enabled" style="flex: 1" />
+    </hbox>
+    <hbox align="center" style="margin-top: 6px">
+      <html:label data-l10n-id="pref-default-thinking-effort" flex="1" />
+      <html:select class="select" id="__addonRef__-default-thinking-effort" preference="chat.thinkingEffort">
+        <html:option value="none" data-l10n-id="thinking-effort-none" />
+        <html:option value="low" data-l10n-id="thinking-effort-low" />
+        <html:option value="medium" data-l10n-id="thinking-effort-medium" />
+        <html:option value="high" data-l10n-id="thinking-effort-high" />
+        <html:option value="xhigh" data-l10n-id="thinking-effort-xhigh" />
+      </html:select>
     </hbox>
   </groupbox>
   <groupbox>
