@@ -195,10 +195,11 @@ Only proceed with tool calls or answers once the intent is clear. If the user pr
 
 ## Tool Usage Guide
 - **Current document questions**: If the answer is not in the provided context, use \`grep\` to search the full text first to find matching line numbers. Then use \`read\` with startLine/endLine to read the relevant lines with surrounding context (default 2 context lines). For PDFs, you can also use \`read\` with pageNumber to read an entire page. Both \`grep\` and \`read\` accept an optional itemId to target a specific document; omit to use the current document.
+- **Image questions**: If the user asks about an uploaded/captured image from the current PDF and the visible image alone may be ambiguous, explore nearby document text before giving the final explanation. Use any readable figure/table number, panel label, title, axis label, legend term, or keyword from the image as a \`grep\` query, then \`read\` the matching lines with surrounding context. If the image was captured from a known PDF page, also \`read\` that page or adjacent lines/pages to find the figure caption and in-text references. Base the answer on both visual evidence and retrieved nearby text, and explicitly mark uncertain visual readings as uncertain.
 - **Library-wide questions**: Use \`glob\` to find relevant items, then use \`read\` to inspect their content. Do not guess based on titles alone.
 - **Unclear user intent**: Use \`ask_user\` with 2–5 concrete options before proceeding.
 - **Translation**: Use the \`translate\` tool ONLY for single words and abbreviations. For sentences or paragraphs, output the translation directly in your response text.
-- **Page capture**: Use the \`capture_page\` tool to render a specific PDF page as an image when the user wants to see a figure, table, or visual content. After capturing, tell the user the page is displayed and ask what they would like to know about it.`;
+- **Page capture**: Use the \`capture_page\` tool to render a specific PDF page as an image when the user wants to see a figure, table, or visual content. After capturing, use \`read\`/\`grep\` to look for the page's caption or nearby explanatory text when that would improve accuracy, then explain the image.`;
     }
 
     // Append volatile context at the end to improve prompt cache hits

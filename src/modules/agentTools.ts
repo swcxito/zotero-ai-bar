@@ -158,7 +158,7 @@ export const translateTool = tool({
 
 export const capturePageTool = tool({
   description:
-    'Capture a specific page of a PDF as an image and display it in the chat. Use this when the user wants to see a figure, table, or visual content from a document. If no itemId is provided, the current document is used. Note: this tool produces an image output and requires a vision-capable model. If the current model does not support image input, you should inform the user and handle the request using text-only tools (grep, read) instead, or ask the user to switch to a vision model.',
+    'Capture a specific page of a PDF as an image and display it in the chat. Use this when the user wants to see or analyze a figure, table, diagram, or other visual content from a document. If no itemId is provided, the current document is used. The returned pageNumber can be used with read(pageNumber) or grep/read searches to inspect the same page, nearby caption, and in-text references before explaining the image. Note: this tool produces an image output and requires a vision-capable model. If the current model does not support image input, you should inform the user and handle the request using text-only tools (grep, read) instead, or ask the user to switch to a vision model.',
   inputSchema: asSchema(capturePageSchema),
   execute: async (input: CapturePagePayload, options) => {
     const session = getSession(options);
