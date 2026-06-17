@@ -13,6 +13,7 @@ import { grepInText } from '../utils/textSearch';
 import { onAgentAskUser } from './chatUI';
 import { getReaderByTabId } from './tabObserver';
 import { capturePageByNumber, getPDFReaderForItem } from './capture';
+import { checkModelSupportsImage } from '../utils/providers';
 import {
   askUserSchema,
   grepSchema,
@@ -155,10 +156,15 @@ export const translateTool = tool({
 
 export const capturePageTool = tool({
   description:
-    'Capture a specific page of a PDF as an image and display it in the chat. Use this when the user wants to see a figure, table, or visual content from a document. If no itemId is provided, the current document is used.',
+    'Capture a specific page of a PDF as an image and display it in the chat. Use this when the user wants to see a figure, table, or visual content from a document. If no itemId is provided, the current document is used. Note: this tool produces an image output and requires a vision-capable model. If the current model does not support image input, you should inform the user and handle the request using text-only tools (grep, read) instead, or ask the user to switch to a vision model.',
   inputSchema: asSchema(capturePageSchema),
   execute: async (input: CapturePagePayload, options) => {
     const session = getSession(options);
+    if (!checkModelSupportsImage()) {
+      throw new Error(
+        'The current model does not support image input, so capture_page cannot be used. Please handle the user request using text-based tools (grep, read) instead, or ask the user to switch to a vision-capable model and try again.'
+      );
+    }
     let reader: _ZoteroTypes.ReaderInstance<'pdf'> | null = null;
 
     if (input.itemId !== undefined) {
@@ -180,17 +186,14 @@ export const capturePageTool = tool({
 // Tool registry
 // ───────────────────────────────────────────────────────────────────────────
 
-export function buildTools(options?: { imageSupport?: boolean }) {
-  const tools: Record<string, any> = {
+export function buildTools(_options?: { imageSupport?: boolean }) {
+  return {
     ask_user: askUserTool,
     grep: grepTool,
     read: readTool,
     glob: globTool,
     tree: treeTool,
     translate: translateTool,
+    capture_page: capturePageTool,
   };
-  if (options?.imageSupport) {
-    tools.capture_page = capturePageTool;
-  }
-  return tools;
 }

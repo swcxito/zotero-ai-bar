@@ -21,7 +21,7 @@ import type { Session } from './chatManager';
 import { ToolLoopAgent, stepCountIs, type ModelMessage } from 'ai';
 import { onLLMStreamEndV2, onLLMStreamErrorV2, onLLMStreamStartV2, onLLMStreamUpdateV2, consumeAgentStream } from './chatUI';
 import { ensureWebStreamsGlobals } from '../utils/webStreamsGlobals';
-import { resolveApiUrl, checkModelSupportsImage } from '../utils/providers';
+import { resolveApiUrl } from '../utils/providers';
 import { buildTools } from './agentTools';
 // import { JSONObject } from "@ai-sdk/provider";
 
@@ -86,7 +86,7 @@ export async function streamLLMV2(
     };
 
     const agentEnabled = getPref('agent.enabled');
-    const tools = agentEnabled ? buildTools({ imageSupport: checkModelSupportsImage() }) : undefined;
+    const tools = agentEnabled ? buildTools() : undefined;
     ztoolkit.log('[llm] agentEnabled:', agentEnabled, 'tools:', Object.keys(tools ?? {}));
     Zotero.debug('[zaibar-llm] agentEnabled=' + agentEnabled + ', toolCount=' + Object.keys(tools ?? {}).length);
 

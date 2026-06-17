@@ -404,59 +404,112 @@ export async function capturePageByNumber(
   }
 
   // Determine the actual total page count from PDFViewerApplication when available
-  let totalPages = 0;
   const pdfApp =
     pdfWindow.PDFViewerApplication ?? iframeWindow.PDFViewerApplication ?? (reader as any)._primaryView?._iframeWindow?.PDFViewerApplication;
-  if (pdfApp?.pdfDocument?.numPages) {
-    totalPages = pdfApp.pdfDocument.numPages;
-  }
-
-  // Find all rendered page canvases in the viewer (same pattern as captureSelectionArea)
-  const canvases = Array.from(pdfWindow.document.querySelectorAll('canvas'));
-  if (canvases.length === 0) {
-    throw new Error('No PDF pages are currently rendered');
-  }
-
-  const pageIndex = pageNumber - 1;
+  const totalPages = pdfApp?.pdfDocument?.numPages ?? 0;
 
   // Validate against the real total page count if known
-  const pageCountForMsg = totalPages > 0 ? totalPages : canvases.length;
-  if (pageIndex < 0 || pageNumber > pageCountForMsg) {
-    throw new Error(`Page ${pageNumber} is out of range (1-${pageCountForMsg})`);
+  if (totalPages > 0 && (pageNumber < 1 || pageNumber > totalPages)) {
+    throw new Error(`Page ${pageNumber} is out of range (1-${totalPages})`);
   }
 
-  // If the requested page hasn't been rendered yet (lazy loading)
-  if (pageIndex >= canvases.length) {
-    throw new Error(`Page ${pageNumber} is not rendered yet. Please scroll to it in the PDF viewer first.`);
-  }
-
-  const sourceCanvas = canvases[pageIndex] as HTMLCanvasElement;
-
-  // If the canvas has no size, the page hasn't been rendered yet.
-  if (sourceCanvas.width === 0 || sourceCanvas.height === 0) {
-    throw new Error(`Page ${pageNumber} is not rendered yet. Please scroll to it in the PDF viewer first.`);
-  }
-
-  const outputCanvas = pdfWindow.document.createElement('canvas');
-  const outW = Math.round(sourceCanvas.width * scale);
-  const outH = Math.round(sourceCanvas.height * scale);
-  outputCanvas.width = outW;
-  outputCanvas.height = outH;
-
-  const ctx = outputCanvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('Failed to get canvas context');
-  }
-
-  ctx.drawImage(sourceCanvas, 0, 0, outW, outH);
-  const dataUrl = outputCanvas.toDataURL('image/png');
-
-  return {
-    dataUrl,
-    width: outW,
-    height: outH,
-    pageNumber,
+  // pdf.js creates a <div class="page" data-page-number="N"> for every page
+  // up front (for scroll sizing), but only renders the canvas for pages near
+  // the viewport — off-screen canvases are destroyed to save memory. So we
+  // must locate the canvas by data-page-number, never by DOM index.
+  const findPageCanvas = (): HTMLCanvasElement | null => {
+    const pageDiv = pdfWindow.document.querySelector(`.page[data-page-number="${pageNumber}"]`) as HTMLElement | null;
+    if (!pageDiv) return null;
+    return pageDiv.querySelector('canvas') as HTMLCanvasElement | null;
   };
+
+  // Copy a source canvas into a new output canvas at the requested scale.
+  const copyCanvas = (source: HTMLCanvasElement) => {
+    const outputCanvas = pdfWindow.document.createElement('canvas');
+    const outW = Math.round(source.width * scale);
+    const outH = Math.round(source.height * scale);
+    outputCanvas.width = outW;
+    outputCanvas.height = outH;
+    const ctx = outputCanvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Failed to get canvas context');
+    }
+    ctx.drawImage(source, 0, 0, outW, outH);
+    return {
+      dataUrl: outputCanvas.toDataURL('image/png'),
+      width: outW,
+      height: outH,
+      pageNumber,
+    };
+  };
+
+  // Path 1: reuse an already-rendered canvas (page currently in/near viewport)
+  const sourceCanvas = findPageCanvas();
+  if (sourceCanvas && sourceCanvas.width > 0 && sourceCanvas.height > 0) {
+    return copyCanvas(sourceCanvas);
+  }
+
+  // Path 2: scroll the target page into view so pdf.js renders it, wait for
+  // the canvas to appear, then copy it. We do NOT call page.render() directly
+  // — Firefox Xray wrappers between the plugin realm and the pdf.js iframe
+  // realm break pdf.js's parameter destructuring.
+  try {
+    pdfApp?.pdfViewer?.scrollPageIntoView?.({ pageNumber });
+  } catch (e) {
+    ztoolkit.log('[capture] scrollPageIntoView failed:', e);
+  }
+  try {
+    if (pdfApp?.pdfViewer) pdfApp.pdfViewer.currentPageNumber = pageNumber;
+  } catch (e) {
+    ztoolkit.log('[capture] set currentPageNumber failed:', e);
+  }
+  // Direct DOM scroll — most reliable across realms
+  try {
+    pdfWindow.document.querySelector(`.page[data-page-number="${pageNumber}"]`)?.scrollIntoView();
+  } catch (e) {
+    ztoolkit.log('[capture] DOM scrollIntoView failed:', e);
+  }
+
+  const rendered = await waitForCanvasRendered(pdfWindow, pageNumber, 10000);
+  if (!rendered) {
+    throw new Error(
+      `Failed to capture page ${pageNumber}: it did not render in time. ` + 'Please scroll to that page in the PDF viewer first, then retry.'
+    );
+  }
+
+  const freshCanvas = findPageCanvas();
+  if (!freshCanvas || freshCanvas.width === 0 || freshCanvas.height === 0) {
+    throw new Error(
+      `Failed to capture page ${pageNumber}: the page canvas is not available. ` + 'Please scroll to that page in the PDF viewer first, then retry.'
+    );
+  }
+
+  return copyCanvas(freshCanvas);
+}
+
+/**
+ * Wait until a specific PDF page canvas is rendered (non-zero size).
+ * Resolves true on success, false on timeout.
+ */
+function waitForCanvasRendered(pdfWindow: any, pageNumber: number, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const check = () => {
+      const pageDiv = pdfWindow.document.querySelector(`.page[data-page-number="${pageNumber}"]`) as HTMLElement | null;
+      const canvas = pageDiv?.querySelector('canvas') as HTMLCanvasElement | null;
+      if (canvas && canvas.width > 0 && canvas.height > 0) {
+        // Give pdf.js a tick to finish painting
+        setTimeout(() => resolve(true), 200);
+        return;
+      }
+      if (Date.now() - start > timeoutMs) {
+        resolve(false);
+        return;
+      }
+      setTimeout(check, 150);
+    };
+    check();
+  });
 }
 
 export async function getPDFReaderForItem(itemId: number): Promise<_ZoteroTypes.ReaderInstance<'pdf'> | null> {
