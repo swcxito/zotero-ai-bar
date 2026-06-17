@@ -391,7 +391,7 @@ function captureSelectionArea(): string | null {
 export async function capturePageByNumber(
   reader: _ZoteroTypes.ReaderInstance<'pdf'>,
   pageNumber: number,
-  scale: number = 0.6
+  scale: number = 0.3
 ): Promise<{ dataUrl: string; width: number; height: number; pageNumber: number }> {
   const iframeWindow = (reader as any)._iframeWindow;
   if (!iframeWindow) {

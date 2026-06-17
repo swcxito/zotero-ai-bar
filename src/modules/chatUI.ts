@@ -28,6 +28,7 @@ import { Icons } from '../components/common';
 import { getString } from '../utils/locale';
 import { createImageViewer } from '../components/imagePreview';
 import { getReaderByTabId } from './tabObserver';
+import { buildErrorMessage } from './llm';
 
 Zotero.debug('[zaibar-chatUI] module loaded');
 
@@ -738,9 +739,14 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
           }
           break;
         }
-        case 'error':
+        case 'error': {
           ztoolkit.log('[chatUI] agent stream error part:', part);
+          const errObj = (part as any)?.error ?? part;
+          const errMsg = buildErrorMessage(errObj);
+          onLLMStreamErrorV2({ session, error: errMsg });
+          aborted = true;
           break;
+        }
       }
 
       if (session.pending.shouldAutoScroll && chatMessage.parentElement) {
@@ -752,6 +758,9 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
       aborted = true;
     } else {
       ztoolkit.log('[chatUI] agent stream iteration failed:', e);
+      const errMsg = buildErrorMessage(e);
+      onLLMStreamErrorV2({ session, error: errMsg });
+      aborted = true;
     }
   }
 

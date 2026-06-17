@@ -217,7 +217,7 @@ function getActiveModelMetadata(): Model | undefined {
   );
 }
 
-function buildErrorMessage(error: unknown): string {
+export function buildErrorMessage(error: unknown): string {
   const err = error as any;
   let message: string;
   if (typeof err?.message === 'string' && err.message) {
