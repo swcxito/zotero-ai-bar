@@ -225,9 +225,19 @@ Separate what is visibly readable in the image from what is supplied by document
     }
 
     // Append volatile context at the end to improve prompt cache hits
-    systemPrompt +=
-      '\n\nContent:' +
-      (!selectedText ? `${contextLeft}\n${contextRight}`.trim() : `${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`);
+    if (selectedText) {
+      systemPrompt += '\n\nContent:' + `${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`;
+    } else {
+      // No text is selected by the user. Provide the surrounding context only
+      // as reading reference and explicitly state that nothing is selected,
+      // so the model does not treat context text as a "selection".
+      const ctx = `${contextLeft}\n${contextRight}`.trim();
+      systemPrompt +=
+        '\n\n# Current Context\n' +
+        'The user has NOT selected any text in the document. Do NOT claim or imply that the user selected something. ' +
+        'The text below is surrounding document context for reference only, not a selection.' +
+        (ctx ? `\n\nContent:\n${ctx}` : '');
+    }
 
     return systemPrompt;
   }
