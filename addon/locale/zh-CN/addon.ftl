@@ -64,3 +64,10 @@ tool-call-ask-user-custom-placeholder = 或输入自定义回答...
 tool-call-ask-user-submit = 提交
 
 agent-max-iterations-reached = Agent 已达到最大执行步数。您可以继续对话。
+
+token-usage-input = 输入
+token-usage-output = 输出
+token-usage-total = 合计
+token-usage-context = 上下文
+token-usage-context-window = 上下文窗口
+token-usage-context-window-unknown = 当前模型的上下文窗口大小未知

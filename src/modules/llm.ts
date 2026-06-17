@@ -176,7 +176,13 @@ export async function streamLLMV2(
 
       if (!streamErrorHandled) {
         await onLLMStreamUpdateV2({ session, fullText, force: true });
-        onLLMStreamEndV2(session);
+        let usage: any;
+        try {
+          usage = await result.usage;
+        } catch (e) {
+          Zotero.debug('[zaibar-llm] usage fetch failed: ' + (e?.message || e));
+        }
+        onLLMStreamEndV2(session, usage);
       }
     }
   } catch (error: any) {

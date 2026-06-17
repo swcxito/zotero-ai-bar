@@ -64,3 +64,10 @@ tool-call-ask-user-custom-placeholder = Or type your own answer...
 tool-call-ask-user-submit = Submit
 
 agent-max-iterations-reached = Agent reached the maximum number of steps. You may continue the conversation.
+
+token-usage-input = Input
+token-usage-output = Output
+token-usage-total = Total
+token-usage-context = Context
+token-usage-context-window = Context window
+token-usage-context-window-unknown = Context window size unknown for this model

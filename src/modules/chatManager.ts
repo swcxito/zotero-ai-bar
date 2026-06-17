@@ -43,6 +43,8 @@ export class Session {
   thinkingEffort: 'none' | 'low' | 'medium' | 'high' | 'xhigh' = 'none';
   itemId?: number;
   capturedPageImages?: string[];
+  /** Token usage returned by the most recent request (persists across pending resets). */
+  lastUsage?: TokenUsage;
   pending: {
     shouldAutoScroll?: boolean;
     messagePop?: Element;
@@ -89,6 +91,12 @@ export type AgentUserAnswer = {
   selectedOptions: string[];
   customInput?: string;
 };
+
+export interface TokenUsage {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+}
 
 type ChatRequestParams = {
   userPrompt: string;

@@ -22,7 +22,7 @@ import { escapeHtml, renderMarkdown } from '../utils/markdown';
 import { ensureChatWindow } from '../utils/window';
 import { CHAT_WINDOW_MESSAGE_CONTAINER_ID, ensureChatWindowUI } from './chatWindowHost';
 import { resizeReaderItemPaneHeight, scrollToBottom, setSendBtnEnabled } from './readerItemPane';
-import type { Session } from './chatManager';
+import type { Session, TokenUsage } from './chatManager';
 import { IconView } from '../components/iconView';
 import { Icons } from '../components/common';
 import { getString } from '../utils/locale';
@@ -111,12 +111,13 @@ export async function onLLMStreamUpdateV2(data: { session: Session; fullText: st
   }
 }
 
-export function onLLMStreamEndV2(session: Session) {
+export function onLLMStreamEndV2(session: Session, usage?: TokenUsage) {
   const pop = session.pending.messagePop;
   if (pop) {
     const actions = pop.querySelector('.chat-actions');
     if (actions) {
       actions.classList.remove('hidden');
+      appendUsageBadge(actions as HTMLElement, usage);
       const container = pop.parentElement;
       if (container && session.pending.shouldAutoScroll) {
         scrollToBottom(container as HTMLElement);
@@ -155,6 +156,114 @@ export function onLLMStreamEndV2(session: Session) {
   }
   updateSectionInputArea(session.id, false);
   cleanupRequestData(session);
+  if (usage) {
+    session.lastUsage = normalizeUsage(usage);
+    updateContextTokenIndicator(session.id, session.lastUsage);
+  }
+}
+
+function normalizeUsage(raw: any): TokenUsage {
+  if (!raw || typeof raw !== 'object') return {};
+  const promptTokens = typeof raw.inputTokens === 'number' ? raw.inputTokens : typeof raw.promptTokens === 'number' ? raw.promptTokens : undefined;
+  const completionTokens =
+    typeof raw.outputTokens === 'number' ? raw.outputTokens : typeof raw.completionTokens === 'number' ? raw.completionTokens : undefined;
+  const totalTokens =
+    typeof raw.totalTokens === 'number'
+      ? raw.totalTokens
+      : promptTokens !== undefined && completionTokens !== undefined
+        ? promptTokens + completionTokens
+        : undefined;
+  return { promptTokens, completionTokens, totalTokens };
+}
+
+function formatTokenCount(n: number | undefined): string {
+  if (n === undefined || Number.isNaN(n)) return '—';
+  if (n < 1000) return String(n);
+  if (n < 100000) return (n / 1000).toFixed(1) + 'K';
+  return Math.round(n / 1000) + 'K';
+}
+
+function appendUsageBadge(actions: HTMLElement, usage: any): void {
+  const normalized = normalizeUsage(usage);
+  const hasAny = normalized.promptTokens !== undefined || normalized.completionTokens !== undefined || normalized.totalTokens !== undefined;
+  if (!hasAny) return;
+  const doc = actions.ownerDocument!;
+  const existing = actions.querySelector('.chat-token-usage');
+  if (existing) existing.remove();
+  const badge = doc.createElement('span');
+  badge.classList.add(
+    'chat-token-usage',
+    'ml-auto',
+    'text-xs',
+    'font-medium',
+    'px-2',
+    'py-0.5',
+    'rounded-md',
+    'bg-slate-200/80',
+    'text-slate-700',
+    'dark:bg-zinc-700/80',
+    'dark:text-zinc-200',
+    'select-none',
+    'whitespace-nowrap'
+  );
+  const promptStr = formatTokenCount(normalized.promptTokens);
+  const compStr = formatTokenCount(normalized.completionTokens);
+  badge.textContent = `↑${promptStr} ↓${compStr}`;
+  const titleParts: string[] = [];
+  if (normalized.promptTokens !== undefined) titleParts.push(`${getString('token-usage-input')}: ${normalized.promptTokens.toLocaleString()}`);
+  if (normalized.completionTokens !== undefined)
+    titleParts.push(`${getString('token-usage-output')}: ${normalized.completionTokens.toLocaleString()}`);
+  if (normalized.totalTokens !== undefined) titleParts.push(`${getString('token-usage-total')}: ${normalized.totalTokens.toLocaleString()}`);
+  badge.title = titleParts.join(' · ');
+  actions.appendChild(badge);
+}
+
+function updateContextTokenIndicator(sessionId: string, usage: TokenUsage): void {
+  let indicator: HTMLElement | null = null;
+  const body = addon.data.sidePaneBodyMap?.get(sessionId);
+  if (body) {
+    const root = body.querySelector('#ai-bar-chat-root');
+    if (root?.shadowRoot) {
+      indicator = root.shadowRoot.querySelector('.input-context-tokens') as HTMLElement | null;
+    }
+  }
+  if (!indicator && addon.chatManager.getCurrentHostMode() === 'window') {
+    try {
+      const chatWindow = ensureChatWindow();
+      indicator = chatWindow.document.querySelector('.input-context-tokens') as HTMLElement | null;
+    } catch (e) {
+      // window not ready — skip
+    }
+  }
+  if (!indicator) return;
+  const promptTokens = usage.promptTokens;
+  const contextLimit = getActiveModelContextLimit();
+  const ctxStr = formatTokenCount(promptTokens);
+  let text: string;
+  if (contextLimit && contextLimit > 0 && promptTokens !== undefined) {
+    const pct = Math.min(100, (promptTokens / contextLimit) * 100);
+    const pctStr = pct < 1 ? pct.toFixed(1) : Math.round(pct).toString();
+    text = `${getString('token-usage-context')}: ${ctxStr} / ${formatTokenCount(contextLimit)} · ${pctStr}%`;
+  } else if (promptTokens !== undefined) {
+    text = `${getString('token-usage-context')}: ${ctxStr}`;
+  } else {
+    text = `${getString('token-usage-context')}: —`;
+  }
+  indicator.textContent = text;
+  indicator.title = contextLimit
+    ? `${getString('token-usage-context-window')}: ${contextLimit.toLocaleString()}`
+    : getString('token-usage-context-window-unknown');
+}
+
+function getActiveModelContextLimit(): number | undefined {
+  const v2 = addon.data.userProviderConfigV2;
+  const active = v2?.active;
+  if (!active) return undefined;
+  const model =
+    addon.data.commonProviders?.[active.providerId]?.models[active.modelId] ??
+    v2?.addedModels.find((m) => m.providerId === active.providerId && m.id === active.modelId);
+  const limit = (model as any)?.limit?.context;
+  return typeof limit === 'number' && limit > 0 ? limit : undefined;
 }
 
 export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
@@ -776,6 +885,7 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
   // Collect raw markdown for copy/regenerate
   (pop as HTMLElement).dataset.markdown = fullMarkdownBuffer.trim();
 
+  let agentUsage: any;
   if (!aborted) {
     try {
       const response = await result.response;
@@ -785,12 +895,20 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
         }
         session.conversationHistory.push(...response.messages);
       }
+      agentUsage = (response as any)?.usage;
+      if (!agentUsage) {
+        try {
+          agentUsage = await (result as any).usage;
+        } catch (e) {
+          ztoolkit.log('[chatUI] agent usage fetch failed:', e);
+        }
+      }
     } catch (e) {
       ztoolkit.log('[chatUI] failed to get agent response messages:', e);
     }
   }
 
-  onLLMStreamEndV2(session);
+  onLLMStreamEndV2(session, agentUsage);
 }
 
 export function onAgentAskUser(session: Session, payload: any) {

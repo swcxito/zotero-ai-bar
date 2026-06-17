@@ -219,13 +219,22 @@ export function InputArea(
 
   container.appendChild(inputRow);
 
-  // ── disclaimer label ──────────────────────────────────────────────────────
+  // ── disclaimer + context token usage row ──────────────────────────────────
+  const footerRow = doc.createElement('div');
+  footerRow.classList.add('flex', 'items-center', 'justify-center', 'gap-2', 'px-2', 'pb-1', 'flex-wrap');
+
   const disclaimer = doc.createElement('div');
-  disclaimer.classList.add('text-xs', 'text-center', 'text-slate-400', 'dark:text-neutral-500', 'px-2', 'pb-1');
+  disclaimer.classList.add('text-xs', 'text-center', 'text-slate-400', 'dark:text-neutral-500');
   disclaimer.textContent = getString('input-ai-disclaimer');
+  footerRow.appendChild(disclaimer);
+
+  const contextTokens = doc.createElement('span');
+  contextTokens.classList.add('input-context-tokens', 'text-xs', 'text-slate-400', 'dark:text-neutral-500', 'whitespace-nowrap', 'select-none');
+  contextTokens.textContent = '';
+  footerRow.appendChild(contextTokens);
 
   wrapper.appendChild(container);
-  wrapper.appendChild(disclaimer);
+  wrapper.appendChild(footerRow);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Helper: auto-resize textarea height
