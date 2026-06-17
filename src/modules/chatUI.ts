@@ -309,6 +309,19 @@ export function onToolCallEndV2(session: Session, toolResult: any) {
     return;
   }
 
+  if (toolResult.toolName === 'grep' && output && typeof output === 'object') {
+    const input = toolResult.input ?? toolResult.args ?? {};
+    const detailsEl = buildGrepDetails(box.ownerDocument!, input, output);
+    const excerpts = Array.isArray(output.excerpts) ? output.excerpts : [];
+    const matchCount = typeof output.matches === 'number' ? output.matches : excerpts.length;
+    const patternStr = typeof input.pattern === 'string' && input.pattern ? `“${input.pattern}”` : '';
+    const summary = patternStr
+      ? `${getString('tool-call-status-done')} · ${matchCount} ${matchCount === 1 ? 'match' : 'matches'} · ${patternStr}`
+      : `${getString('tool-call-status-done')} · ${matchCount} ${matchCount === 1 ? 'match' : 'matches'}`;
+    updateToolCallBox(box, summary, detailsEl);
+    return;
+  }
+
   if (toolResult.toolName === 'tree' && output && typeof output === 'object' && typeof output.tree === 'string') {
     updateToolCallBox(box, getString('tool-call-status-done'), output.tree);
     return;
@@ -365,6 +378,50 @@ export function onToolCallEndV2(session: Session, toolResult: any) {
   } else {
     updateToolCallBox(box, getString('tool-call-status-done'), JSON.stringify(output, null, 2));
   }
+}
+
+function buildGrepDetails(doc: Document, input: any, output: any): HTMLElement {
+  const container = doc.createElement('div');
+  container.classList.add('flex', 'flex-col', 'gap-2');
+
+  const params = doc.createElement('div');
+  params.classList.add('flex', 'flex-wrap', 'gap-x-1.5', 'gap-y-1', 'pb-2', 'border-b', 'border-slate-200', 'dark:border-zinc-700');
+  const paramItems: string[] = [];
+  if (typeof input.pattern === 'string' && input.pattern) paramItems.push(`pattern: ${input.pattern}`);
+  if (input.useRegex) paramItems.push('regex: true');
+  if (input.maxResults != null) paramItems.push(`max: ${input.maxResults}`);
+  if (input.itemId != null) paramItems.push(`itemId: ${input.itemId}`);
+  for (const item of paramItems) {
+    const pill = doc.createElement('span');
+    pill.classList.add(
+      'inline-flex',
+      'items-center',
+      'px-2',
+      'py-0.5',
+      'rounded-md',
+      'bg-slate-200/70',
+      'dark:bg-zinc-700/70',
+      'text-slate-600',
+      'dark:text-zinc-300'
+    );
+    pill.textContent = item;
+    params.appendChild(pill);
+  }
+  container.appendChild(params);
+
+  const results = doc.createElement('div');
+  results.classList.add('whitespace-pre-wrap');
+  const excerpts = Array.isArray(output.excerpts) ? output.excerpts : [];
+  const lines: string[] = [];
+  for (const m of excerpts) {
+    const lineNo = m?.line != null ? `${m.line}` : '?';
+    const pageStr = m?.page != null ? `(P${m.page})` : '';
+    lines.push(`${lineNo}${pageStr}| ${m?.excerpt ?? ''}`);
+  }
+  results.textContent = lines.length > 0 ? lines.join('\n') : '(no matches)';
+  container.appendChild(results);
+
+  return container;
 }
 
 function buildTranslateDetails(doc: Document, output: any): HTMLElement {
