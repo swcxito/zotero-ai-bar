@@ -21,6 +21,7 @@ input-stop-tooltip = Stop generating
 input-screenshot-tooltip = Screenshot
 input-screenshot-full-tooltip = Image limit reached (9)
 input-thinking-tooltip = Thinking effort
+thinking-effort-title = Thinking depth
 
 model-dialog-title = Model Providers
 model-dialog-add-provider = Add Provider

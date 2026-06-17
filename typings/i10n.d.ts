@@ -113,6 +113,7 @@ export type FluentMessageId =
   | 'thinking-effort-low'
   | 'thinking-effort-medium'
   | 'thinking-effort-none'
+  | 'thinking-effort-title'
   | 'thinking-effort-xhigh'
   | 'token-usage-context'
   | 'token-usage-context-window'

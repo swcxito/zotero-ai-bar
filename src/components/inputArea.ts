@@ -159,6 +159,7 @@ export function InputArea(
     'transition-colors',
     'flex-shrink-0'
   );
+  thinkingBtn.style.position = 'relative';
 
   function updateThinkingBtnAppearance() {
     const effort = session.thinkingEffort;
@@ -432,14 +433,12 @@ export function InputArea(
     }
   });
 
-  // Thinking effort button — simple inline dropdown
-  wrapper.style.position = 'relative';
-
+  // Thinking effort button — simple inline dropdown anchored above the button.
   function removeThinkingDropdown() {
-    const existing = wrapper.querySelector('.thinking-effort-dropdown') as HTMLElement | null;
+    const existing = thinkingBtn.querySelector('.thinking-effort-dropdown') as HTMLElement | null;
     if (!existing) return;
     existing.style.opacity = '0';
-    existing.style.transform = 'scale(0.95)';
+    existing.style.transform = 'translateX(-50%) scale(0.95)';
     const view = doc.defaultView;
     if (!view) {
       existing.remove();
@@ -455,19 +454,19 @@ export function InputArea(
     dropdown.classList.add('thinking-effort-dropdown');
     dropdown.style.position = 'absolute';
     dropdown.style.bottom = '100%';
-    dropdown.style.right = '0';
-    dropdown.style.marginBottom = '6px';
-    dropdown.style.minWidth = '120px';
+    dropdown.style.left = '50%';
+    dropdown.style.marginBottom = '4px';
+    dropdown.style.minWidth = '104px';
     dropdown.style.borderRadius = '8px';
-    dropdown.style.padding = '4px 0';
-    dropdown.style.fontSize = '13px';
+    dropdown.style.padding = '3px 0';
+    dropdown.style.fontSize = '12px';
     dropdown.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
     dropdown.style.zIndex = '100';
     dropdown.style.backgroundColor = '#fff';
     dropdown.style.border = '1px solid #e5e7eb';
     dropdown.style.opacity = '0';
-    dropdown.style.transform = 'scale(0.95)';
-    dropdown.style.transformOrigin = 'bottom right';
+    dropdown.style.transform = 'translateX(-50%) scale(0.95)';
+    dropdown.style.transformOrigin = 'bottom center';
     // Defer the transition + final state to the next frame so the browser
     // commits the initial (opacity:0) state first — without this, the two
     // style writes may be batched into one frame and skip the animation.
@@ -476,19 +475,34 @@ export function InputArea(
       view.requestAnimationFrame(() => {
         dropdown.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
         dropdown.style.opacity = '1';
-        dropdown.style.transform = 'scale(1)';
+        dropdown.style.transform = 'translateX(-50%) scale(1)';
       });
     } else {
       dropdown.style.opacity = '1';
-      dropdown.style.transform = 'scale(1)';
+      dropdown.style.transform = 'translateX(-50%) scale(1)';
     }
+
+    // Title row
+    const title = doc.createElement('div');
+    title.textContent = getString('thinking-effort-title');
+    title.style.padding = '2px 10px 3px';
+    title.style.fontSize = '10px';
+    title.style.lineHeight = '1.2';
+    title.style.color = '#9ca3af';
+    title.style.fontWeight = '600';
+    title.style.letterSpacing = '0.04em';
+    title.style.textTransform = 'uppercase';
+    title.style.userSelect = 'none';
+    dropdown.appendChild(title);
 
     for (const effort of effortOrder) {
       const item = doc.createElement('div');
       item.textContent = effortLabelMap[effort];
-      item.style.padding = '6px 12px';
+      item.style.padding = '3px 10px';
       item.style.cursor = 'pointer';
       item.style.whiteSpace = 'nowrap';
+      item.style.lineHeight = '1.4';
+      item.style.textAlign = 'left';
       const isSelected = session.thinkingEffort === effort;
       item.style.color = isSelected ? '#f43f5e' : '#374151';
       item.style.fontWeight = isSelected ? '600' : '400';
@@ -528,9 +542,9 @@ export function InputArea(
 
   function openThinkingDropdown() {
     cancelHoverClose();
-    if (!wrapper.querySelector('.thinking-effort-dropdown')) {
+    if (!thinkingBtn.querySelector('.thinking-effort-dropdown')) {
       const dropdown = buildThinkingDropdown();
-      wrapper.appendChild(dropdown);
+      thinkingBtn.appendChild(dropdown);
     }
   }
 
@@ -539,7 +553,7 @@ export function InputArea(
   // though this listener sits at document level and the dropdown lives inside
   // a shadow DOM (where event.target is retargeted to the shadow host).
   function isOverThinkingRegion(e: MouseEvent): boolean {
-    const dd = wrapper.querySelector('.thinking-effort-dropdown');
+    const dd = thinkingBtn.querySelector('.thinking-effort-dropdown');
     const path = e.composedPath();
     return path.includes(thinkingBtn) || (!!dd && path.includes(dd as EventTarget));
   }
@@ -554,7 +568,7 @@ export function InputArea(
   doc.addEventListener(
     'mousemove',
     (e: MouseEvent) => {
-      const dd = wrapper.querySelector('.thinking-effort-dropdown');
+      const dd = thinkingBtn.querySelector('.thinking-effort-dropdown');
       if (!dd) return;
       if (isOverThinkingRegion(e)) {
         cancelHoverClose();
@@ -568,7 +582,7 @@ export function InputArea(
   // Close dropdown when clicking outside
   const outsideClickHandler = (e: Event) => {
     if (thinkingBtn.contains(e.target as Node)) return;
-    const dd = wrapper.querySelector('.thinking-effort-dropdown');
+    const dd = thinkingBtn.querySelector('.thinking-effort-dropdown');
     if (dd && !dd.contains(e.target as Node)) {
       removeThinkingDropdown();
     }

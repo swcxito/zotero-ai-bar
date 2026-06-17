@@ -21,6 +21,7 @@ input-stop-tooltip = 停止生成
 input-screenshot-tooltip = 截图
 input-screenshot-full-tooltip = 已达到 9 张图片上限
 input-thinking-tooltip = 思考强度
+thinking-effort-title = 思考深度
 
 model-dialog-title = 模型提供商
 model-dialog-add-provider = 添加提供商
