@@ -21,7 +21,7 @@ import type { Session } from './chatManager';
 import { ToolLoopAgent, stepCountIs, type ModelMessage } from 'ai';
 import { onLLMStreamEndV2, onLLMStreamErrorV2, onLLMStreamStartV2, onLLMStreamUpdateV2, consumeAgentStream } from './chatUI';
 import { ensureWebStreamsGlobals } from '../utils/webStreamsGlobals';
-import { resolveApiUrl } from '../utils/providers';
+import { resolveApiUrl, type Model } from '../utils/providers';
 import { buildTools } from './agentTools';
 // import { JSONObject } from "@ai-sdk/provider";
 
@@ -74,8 +74,7 @@ export async function streamLLMV2(
         (addon.data.userProviderConfigV2?.active?.modelId || '?')
     );
 
-    const temp100 = getPref('llm.temperature100');
-    const temp = temp100 / 100;
+    const modelSettings = buildModelSettings();
     const maxTokens = getPref('llm.maxTokens') || 2000;
     const messages = await messagesOrPromise;
     Zotero.debug('[zaibar-llm] messages count=' + messages.length);
@@ -106,7 +105,6 @@ export async function streamLLMV2(
         stopWhen: stepCountIs(MAX_AGENT_ITERATIONS),
         experimental_context: session,
         providerOptions,
-        temperature: temp,
         maxOutputTokens: maxTokens,
         maxRetries: 2,
       });
@@ -124,7 +122,7 @@ export async function streamLLMV2(
         model: model,
         messages: messages,
         abortSignal: session.pending.abortController?.signal,
-        temperature: temp,
+        ...modelSettings,
         maxOutputTokens: maxTokens,
         providerOptions,
         onError: ({ error }: { error: unknown }) => {
@@ -145,8 +143,10 @@ export async function streamLLMV2(
         }
       }
 
-      await onLLMStreamUpdateV2({ session, fullText, force: true });
-      onLLMStreamEndV2(session);
+      if (!streamErrorHandled) {
+        await onLLMStreamUpdateV2({ session, fullText, force: true });
+        onLLMStreamEndV2(session);
+      }
     }
   } catch (error: any) {
     Zotero.debug('[zaibar-llm] streamLLMV2 catch: ' + (error?.name || '') + ' ' + (error?.message || error));
@@ -163,6 +163,27 @@ export async function streamLLMV2(
     Zotero.debug('[zaibar-llm] streamLLMV2 finally');
     // session.abortController = undefined;
   }
+}
+
+function buildModelSettings() {
+  const temp100 = getPref('llm.temperature100');
+  const modelMetadata = getActiveModelMetadata();
+  if (modelMetadata?.temperature === false) {
+    Zotero.debug('[zaibar-llm] temperature disabled for active model');
+    return {};
+  }
+  return { temperature: temp100 / 100 };
+}
+
+function getActiveModelMetadata(): Model | undefined {
+  const v2 = addon.data.userProviderConfigV2;
+  const active = v2?.active;
+  if (!active) return undefined;
+
+  return (
+    addon.data.commonProviders?.[active.providerId]?.models[active.modelId] ??
+    v2?.addedModels.find((model) => model.providerId === active.providerId && model.id === active.modelId)
+  );
 }
 
 function buildErrorMessage(error: unknown): string {
