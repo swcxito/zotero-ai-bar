@@ -7,6 +7,11 @@
 
 import { getItemFullText, getItemMetadata } from './itemContext';
 
+export type PageTextResult = {
+  pageTexts: string[];
+  fullText: string;
+};
+
 export type ReadItemResult = {
   itemId: number;
   title?: string;
@@ -29,6 +34,44 @@ export function getZoteroItem(itemId: number): any | undefined {
     return item || undefined;
   } catch (e) {
     ztoolkit.log('getZoteroItem failed:', e);
+    return undefined;
+  }
+}
+
+/**
+ * Get per-page full text for a PDF attachment using PDFWorker.
+ * PDFWorker.getFullText returns a single string with pages separated by `\f` (form feed).
+ * We split on `\f` to get per-page text and replace `\f` with `\n` in the searchable full text.
+ */
+export async function getItemFullTextByPage(itemId: number): Promise<PageTextResult | undefined> {
+  try {
+    const item = Zotero.Items.get(itemId);
+    if (!item) return undefined;
+
+    let attachmentId = itemId;
+    if (item.isRegularItem?.() && !item.isAttachment?.()) {
+      const attachmentIDs: number[] = item.getAttachments?.() ?? [];
+      const pdfAtt = attachmentIDs.find((aid) => {
+        const att = Zotero.Items.get(aid) as any;
+        return att?.attachmentContentType === 'application/pdf';
+      });
+      if (pdfAtt === undefined) return undefined;
+      attachmentId = pdfAtt;
+    }
+
+    const attachment = Zotero.Items.get(attachmentId) as any;
+    if (!attachment || attachment.attachmentContentType !== 'application/pdf') return undefined;
+
+    if (typeof Zotero.PDFWorker?.getFullText !== 'function') return undefined;
+
+    const result = await Zotero.PDFWorker.getFullText(attachmentId);
+    if (!result?.text || typeof result.text !== 'string') return undefined;
+
+    const pageTexts = result.text.split('\f');
+    const fullText = result.text.replace(/\f/g, '\n');
+    return { pageTexts, fullText };
+  } catch (e) {
+    ztoolkit.log('getItemFullTextByPage failed:', e);
     return undefined;
   }
 }

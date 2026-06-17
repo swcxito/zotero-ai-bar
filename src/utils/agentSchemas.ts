@@ -26,6 +26,7 @@ export const grepSchema = z.object({
       'Case-insensitive literal or regex pattern to search for in the current document. Use this to locate specific sections before reading them in detail with the `read` tool.'
     ),
   useRegex: z.boolean().optional().describe('Treat pattern as a regular expression.'),
+  includePageNumbers: z.boolean().optional().describe('Include PDF page numbers in results. Only works for PDF attachments.'),
   contextLines: z.number().int().min(0).max(10).optional().describe('Number of context lines to include before and after each match (default 2).'),
   maxResults: z.number().int().min(1).max(50).optional().describe('Maximum number of matching excerpts to return.'),
 });

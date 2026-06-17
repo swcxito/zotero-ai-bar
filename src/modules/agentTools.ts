@@ -8,7 +8,7 @@
 import { tool, asSchema } from 'ai';
 import type { Session, AgentUserAnswer } from './chatManager';
 import { getItemFullText } from '../utils/itemContext';
-import { getZoteroItem, readItemText, searchLibraryItems, buildLibraryTree } from '../utils/zoteroItemAccess';
+import { getZoteroItem, readItemText, searchLibraryItems, buildLibraryTree, getItemFullTextByPage } from '../utils/zoteroItemAccess';
 import { grepInText } from '../utils/textSearch';
 import { onAgentAskUser } from './chatUI';
 import { getReaderByTabId } from './tabObserver';
@@ -74,11 +74,26 @@ export const grepTool = tool({
     if (!item) {
       throw new Error(`Item not found: ${itemId}`);
     }
-    const fullText = await getItemFullText(itemId);
+
+    let fullText: string | undefined;
+    let pageTexts: string[] | undefined;
+
+    if (input.includePageNumbers) {
+      const pageResult = await getItemFullTextByPage(itemId);
+      if (pageResult) {
+        fullText = pageResult.fullText;
+        pageTexts = pageResult.pageTexts;
+      }
+    }
+
+    if (!fullText) {
+      fullText = await getItemFullText(itemId);
+    }
     if (!fullText) {
       throw new Error('Full text not available for this item.');
     }
-    const results = grepInText(fullText, input.pattern, input.useRegex ?? false, input.maxResults ?? 20, input.contextLines ?? 2);
+
+    const results = grepInText(fullText, input.pattern, input.useRegex ?? false, input.maxResults ?? 20, input.contextLines ?? 2, pageTexts);
     return { matches: results.length, excerpts: results };
   },
 });
