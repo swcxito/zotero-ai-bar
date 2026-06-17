@@ -386,7 +386,7 @@ function buildGrepDetails(doc: Document, input: any, output: any): HTMLElement {
   container.classList.add('flex', 'flex-col', 'gap-2');
 
   const params = doc.createElement('div');
-  params.classList.add('flex', 'flex-wrap', 'gap-x-1.5', 'gap-y-1', 'pb-2', 'border-b', 'border-slate-200', 'dark:border-zinc-700');
+  params.classList.add('flex', 'flex-wrap', 'gap-x-3', 'gap-y-1.5', 'pb-2', 'border-b', 'border-slate-200', 'dark:border-zinc-700');
   const paramItems: string[] = [];
   if (typeof input.pattern === 'string' && input.pattern) paramItems.push(`pattern: ${input.pattern}`);
   if (input.useRegex) paramItems.push('regex: true');
@@ -397,8 +397,8 @@ function buildGrepDetails(doc: Document, input: any, output: any): HTMLElement {
     pill.classList.add(
       'inline-flex',
       'items-center',
-      'px-2',
-      'py-0.5',
+      'px-1.5',
+      'py-0',
       'rounded-md',
       'bg-slate-200/70',
       'dark:bg-zinc-700/70',
