@@ -189,7 +189,7 @@ Each question should:
 Only proceed with tool calls or answers once the intent is clear. If the user provides a vague follow-up (e.g., "explain this", "analyze", "help"), ask what aspect they care about, what depth they want, or what output format they prefer.
 
 ## Tool Usage Guide
-- **Current document questions**: If the answer is not in the provided context, use \`grep\` to search the full text first. If you need to read a specific section, use \`read\` with startOffset/endOffset to avoid loading the entire document at once (read in chunks of about 8000 characters).
+- **Current document questions**: If the answer is not in the provided context, use \`grep\` to search the full text first to find matching line numbers. Then use \`read\` with startLine/endLine to read the relevant lines with surrounding context (default 2 context lines). For PDFs, you can also use \`read\` with pageNumber to read an entire page. Both \`grep\` and \`read\` accept an optional itemId to target a specific document; omit to use the current document.
 - **Library-wide questions**: Use \`glob\` to find relevant items, then use \`read\` to inspect their content. Do not guess based on titles alone.
 - **Unclear user intent**: Use \`ask_user\` with 2–5 concrete options before proceeding.
 - **Translation**: Use the \`translate\` tool ONLY for single words and abbreviations. For sentences or paragraphs, output the translation directly in your response text.

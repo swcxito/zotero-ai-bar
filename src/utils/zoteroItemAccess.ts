@@ -18,7 +18,10 @@ export type ReadItemResult = {
   itemType?: string;
   abstract?: string;
   authors?: string[];
-  fullText?: string;
+  text?: string;
+  page?: number;
+  lineRange?: { start: number; end: number };
+  targetRange?: { start: number; end: number };
 };
 
 export type GlobItem = {
@@ -76,15 +79,31 @@ export async function getItemFullTextByPage(itemId: number): Promise<PageTextRes
   }
 }
 
+function formatLines(lines: string[], start: number, end: number, targetStart?: number, targetEnd?: number, lineOffset: number = 0): string {
+  const maxWidth = String(lineOffset + end).length;
+  const parts: string[] = [];
+  for (let i = start; i < end; i++) {
+    const lineNum = String(lineOffset + i + 1).padStart(maxWidth, ' ');
+    const inTarget = targetStart !== undefined && targetEnd !== undefined && i >= targetStart && i < targetEnd;
+    parts.push(`${inTarget ? '>' : ' '} ${lineNum} | ${lines[i]}`);
+  }
+  return parts.join('\n');
+}
+
 /**
  * Read a Zotero item's metadata and optionally a slice of its attachment text.
+ * Supports line-based and page-based reading with context lines.
  */
 export async function readItemText(
-  itemId: number,
-  includeFullText?: boolean,
-  startOffset?: number,
-  endOffset?: number
+  itemId: number | undefined,
+  pageNumber?: number,
+  startLine?: number,
+  endLine?: number,
+  contextLines?: number
 ): Promise<ReadItemResult | { error: string }> {
+  if (!itemId) {
+    return { error: 'No item ID provided.' };
+  }
   const item = getZoteroItem(itemId);
   if (!item) {
     return { error: `Item not found: ${itemId}` };
@@ -99,15 +118,77 @@ export async function readItemText(
     authors: metadata?.authors,
   };
 
-  if (includeFullText) {
-    const fullText = await getItemFullText(itemId);
-    if (fullText) {
-      const start = Math.max(0, startOffset ?? 0);
-      const end = endOffset !== undefined ? Math.max(start, endOffset) : undefined;
-      result.fullText = end !== undefined ? fullText.slice(start, end) : fullText.slice(start);
-    } else {
-      result.fullText = '';
+  // Only read text if any reading param is provided
+  if (pageNumber !== undefined || startLine !== undefined || endLine !== undefined) {
+    let targetItemId = itemId;
+
+    // Resolve parent item to its PDF attachment
+    if (item.isRegularItem?.() && !item.isAttachment?.()) {
+      const attachmentIDs: number[] = item.getAttachments?.() ?? [];
+      const pdfAttachments = attachmentIDs.filter((aid) => {
+        const att = Zotero.Items.get(aid) as any;
+        return att?.attachmentContentType === 'application/pdf';
+      });
+      if (pdfAttachments.length === 0) {
+        return { error: `No PDF attachment found for item ${itemId}` };
+      }
+      if (pdfAttachments.length > 1) {
+        const attachmentList = pdfAttachments
+          .map((aid) => {
+            const att = Zotero.Items.get(aid) as any;
+            const title = (att.getField('title') as string) || '(no title)';
+            return `  - ${title} (attachment ID: ${aid})`;
+          })
+          .join('\n');
+        return {
+          error: `Item ${itemId} has ${pdfAttachments.length} PDF attachments. Please specify which attachment to read by providing the attachment ID directly.\nAvailable PDF attachments:\n${attachmentList}`,
+        };
+      }
+      targetItemId = pdfAttachments[0];
+    } else if (!item.isAttachment?.()) {
+      return { error: `Item ${itemId} is not a readable attachment or parent item.` };
     }
+
+    const pageResult = await getItemFullTextByPage(targetItemId);
+    if (!pageResult) {
+      return { error: `Full text not available for item ${targetItemId}` };
+    }
+
+    // Page-based reading
+    if (pageNumber !== undefined) {
+      if (pageNumber < 1 || pageNumber > pageResult.pageTexts.length) {
+        return { error: `Page ${pageNumber} is out of range (1-${pageResult.pageTexts.length})` };
+      }
+      const pageText = pageResult.pageTexts[pageNumber - 1];
+      const lines = pageText.split('\n');
+
+      let lineOffset = 0;
+      for (let p = 0; p < pageNumber - 1; p++) {
+        lineOffset += pageResult.pageTexts[p].split('\n').length;
+      }
+
+      result.text = formatLines(lines, 0, lines.length, undefined, undefined, lineOffset);
+      result.page = pageNumber;
+      result.lineRange = { start: lineOffset + 1, end: lineOffset + lines.length };
+      result.targetRange = { start: lineOffset + 1, end: lineOffset + lines.length };
+      return result;
+    }
+
+    // Line-based reading
+    const allLines = pageResult.fullText.split('\n');
+    const targetStart = Math.max(0, (startLine ?? 1) - 1);
+    const targetEnd = endLine !== undefined ? Math.min(allLines.length, endLine) : targetStart + 1;
+    if (targetStart >= allLines.length) {
+      return { error: `Start line ${startLine} is out of range (1-${allLines.length})` };
+    }
+
+    const ctx = Math.max(0, Math.min(10, contextLines ?? 2));
+    const readStart = Math.max(0, targetStart - ctx);
+    const readEnd = Math.min(allLines.length, targetEnd + ctx);
+
+    result.text = formatLines(allLines, readStart, readEnd, targetStart, targetEnd);
+    result.lineRange = { start: readStart + 1, end: readEnd };
+    result.targetRange = { start: targetStart + 1, end: targetEnd };
   }
 
   return result;

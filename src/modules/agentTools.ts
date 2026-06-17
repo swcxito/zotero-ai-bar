@@ -60,16 +60,14 @@ export const askUserTool = tool({
 });
 
 export const grepTool = tool({
-  description: 'Search the full text of the current article using a case-insensitive literal or regex pattern.',
+  description:
+    'Search the full text of an article using a case-insensitive literal or regex pattern. Returns line numbers and PDF page numbers for each match. If itemId is omitted, the current document is searched. You may pass either a parent item ID or an attachment ID directly.',
   inputSchema: asSchema(grepSchema),
   execute: async (input: GrepPayload, options) => {
     const session = getSession(options);
-    if (!session) {
-      throw new Error('No session context for grep');
-    }
-    const itemId = session.itemId;
+    const itemId = input.itemId ?? session?.itemId;
     if (!itemId) {
-      throw new Error('No article is associated with this session.');
+      throw new Error('No item specified and no current document is open.');
     }
     const item = getZoteroItem(itemId);
     if (!item) {
@@ -79,12 +77,10 @@ export const grepTool = tool({
     let fullText: string | undefined;
     let pageTexts: string[] | undefined;
 
-    if (input.includePageNumbers) {
-      const pageResult = await getItemFullTextByPage(itemId);
-      if (pageResult) {
-        fullText = pageResult.fullText;
-        pageTexts = pageResult.pageTexts;
-      }
+    const pageResult = await getItemFullTextByPage(itemId);
+    if (pageResult) {
+      fullText = pageResult.fullText;
+      pageTexts = pageResult.pageTexts;
     }
 
     if (!fullText) {
@@ -94,16 +90,22 @@ export const grepTool = tool({
       throw new Error('Full text not available for this item.');
     }
 
-    const results = grepInText(fullText, input.pattern, input.useRegex ?? false, input.maxResults ?? 20, input.contextLines ?? 2, pageTexts);
+    const results = grepInText(fullText, input.pattern, input.useRegex ?? false, input.maxResults ?? 20, pageTexts);
     return { matches: results.length, excerpts: results };
   },
 });
 
 export const readTool = tool({
-  description: 'Read metadata and optionally a slice of the full text from a Zotero item by itemId.',
+  description:
+    'Read metadata and text from a Zotero item by itemId. Supports page-based reading (pageNumber) or line-based reading (startLine/endLine) with surrounding context. If itemId is omitted, the current document is used. You may pass either a parent item ID (reads the first PDF attachment) or an attachment ID directly.',
   inputSchema: asSchema(readSchema),
-  execute: async (input: ReadPayload) => {
-    const result = await readItemText(input.itemId, input.includeFullText, input.startOffset, input.endOffset);
+  execute: async (input: ReadPayload, options) => {
+    const session = getSession(options);
+    const itemId = input.itemId ?? session?.itemId;
+    if (!itemId) {
+      throw new Error('No item specified and no current document is open.');
+    }
+    const result = await readItemText(itemId, input.pageNumber, input.startLine, input.endLine, input.contextLines);
     if ('error' in result) {
       throw new Error(result.error);
     }

@@ -315,6 +315,11 @@ export function onToolCallEndV2(session: Session, toolResult: any) {
     return;
   }
 
+  if (toolResult.toolName === 'read' && output && typeof output === 'object' && output.text) {
+    updateToolCallBox(box, getString('tool-call-status-done'), output.text);
+    return;
+  }
+
   if (toolResult.toolName === 'capture_page' && output && typeof output === 'object' && output.dataUrl) {
     const imgDoc = box.ownerDocument;
     const img = imgDoc.createElement('img');

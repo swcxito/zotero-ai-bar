@@ -23,28 +23,21 @@ export const grepSchema = z.object({
   pattern: z
     .string()
     .describe(
-      'Case-insensitive literal or regex pattern to search for in the current document. Use this to locate specific sections before reading them in detail with the `read` tool.'
+      'Case-insensitive literal or regex pattern to search for in the document. Use this to locate specific sections before reading them in detail with the `read` tool.'
     ),
+  itemId: z.number().optional().describe('The Zotero item or attachment ID to search. Omit to search the current document.'),
   useRegex: z.boolean().optional().describe('Treat pattern as a regular expression.'),
-  includePageNumbers: z.boolean().optional().describe('Include PDF page numbers in results. Only works for PDF attachments.'),
-  contextLines: z.number().int().min(0).max(10).optional().describe('Number of context lines to include before and after each match (default 2).'),
   maxResults: z.number().int().min(1).max(50).optional().describe('Maximum number of matching excerpts to return.'),
 });
 
 export type GrepPayload = z.infer<typeof grepSchema>;
 
 export const readSchema = z.object({
-  itemId: z.number().describe('The Zotero item ID to read.'),
-  includeFullText: z.boolean().optional().describe('Whether to include the full text of the item attachment.'),
-  startOffset: z.number().int().min(0).optional().describe('Character offset to start reading from (0-based).'),
-  endOffset: z
-    .number()
-    .int()
-    .min(0)
-    .optional()
-    .describe(
-      'Character offset to stop reading at (exclusive). For long documents, read in chunks of about 8000 characters (e.g., 0-8000, then 8000-16000).'
-    ),
+  itemId: z.number().optional().describe('The Zotero item or attachment ID to read. Omit to use the current document.'),
+  pageNumber: z.number().int().min(1).optional().describe('Read a specific page by page number (1-based).'),
+  startLine: z.number().int().min(1).optional().describe('Start line number (1-based). Use with endLine to read a line range.'),
+  endLine: z.number().int().min(1).optional().describe('End line number (inclusive).'),
+  contextLines: z.number().int().min(0).max(10).optional().describe('Context lines to include before and after the target range (default 2).'),
 });
 
 export type ReadPayload = z.infer<typeof readSchema>;
