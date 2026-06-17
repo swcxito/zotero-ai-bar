@@ -587,6 +587,9 @@ export function onReasoningEndV2(session: Session) {
   const box = session.pending.reasoningBox as HTMLElement | undefined;
   if (!box) return;
 
+  const summaryEl = box.querySelector('.tool-call-summary') as HTMLElement | null;
+  if (summaryEl) summaryEl.textContent = getString('thinking-card-done');
+
   // Force-collapse (not toggle) so the card always folds up when this
   // reasoning segment ends, regardless of manual interaction during streaming.
   const detailsPanel = box.querySelector('.tool-call-details') as HTMLElement | null;

@@ -18,6 +18,9 @@ reader-bar-ask-placeholder = 问问 AI...
 input-ai-disclaimer = 以上回答由AI生成，其回答未必正确无误。
 input-full-text-tooltip = 附加全文
 input-stop-tooltip = 停止生成
+input-screenshot-tooltip = 截图
+input-screenshot-full-tooltip = 已达到 9 张图片上限
+input-thinking-tooltip = 思考强度
 
 model-dialog-title = 模型提供商
 model-dialog-add-provider = 添加提供商
@@ -55,6 +58,7 @@ thinking-effort-medium = 中
 thinking-effort-high = 高
 thinking-effort-xhigh = 极高
 thinking-card-title = 思考中
+thinking-card-done = 已思考
 
 tool-call-ask-user-custom-placeholder = 或输入自定义回答...
 tool-call-ask-user-submit = 提交

@@ -95,7 +95,7 @@ export function InputArea(
 
   // ── screenshot button (left) ──────────────────────────────────────────
   const screenshotBtn = doc.createElement('button');
-  screenshotBtn.title = 'Screenshot';
+  screenshotBtn.title = getString('input-screenshot-tooltip');
   screenshotBtn.classList.add(
     'input-screenshot-btn',
     'flex',
@@ -145,7 +145,7 @@ export function InputArea(
   };
 
   const thinkingBtn = doc.createElement('button');
-  thinkingBtn.title = 'Thinking effort';
+  thinkingBtn.title = getString('input-thinking-tooltip');
   thinkingBtn.classList.add(
     'input-thinking-btn',
     'flex',
@@ -251,11 +251,11 @@ export function InputArea(
     if (preview.isFull()) {
       screenshotBtn.classList.add('opacity-40', 'cursor-not-allowed');
       screenshotBtn.style.pointerEvents = 'none';
-      screenshotBtn.title = '已达到 9 张图片上限';
+      screenshotBtn.title = getString('input-screenshot-full-tooltip');
     } else {
       screenshotBtn.classList.remove('opacity-40', 'cursor-not-allowed');
       screenshotBtn.style.pointerEvents = '';
-      screenshotBtn.title = 'Screenshot';
+      screenshotBtn.title = getString('input-screenshot-tooltip');
     }
   }
 
@@ -470,6 +470,8 @@ export function InputArea(
       });
       dropdown.appendChild(item);
     }
+    dropdown.addEventListener('mouseenter', cancelHoverClose);
+    dropdown.addEventListener('mouseleave', scheduleHoverClose);
     return dropdown;
   }
 
@@ -509,6 +511,7 @@ export function InputArea(
   }
 
   thinkingBtn.addEventListener('mouseenter', openThinkingDropdown);
+  thinkingBtn.addEventListener('mouseleave', scheduleHoverClose);
 
   // Document-level mousemove: if the pointer is not over the button or the
   // dropdown, schedule a close.  This is more reliable than mouseleave on

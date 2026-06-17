@@ -18,6 +18,9 @@ reader-bar-ask-placeholder = Ask AI...
 input-ai-disclaimer = AI-generated content may not be accurate.
 input-full-text-tooltip = Attach full text
 input-stop-tooltip = Stop generating
+input-screenshot-tooltip = Screenshot
+input-screenshot-full-tooltip = Image limit reached (9)
+input-thinking-tooltip = Thinking effort
 
 model-dialog-title = Model Providers
 model-dialog-add-provider = Add Provider
@@ -55,6 +58,7 @@ thinking-effort-medium = M
 thinking-effort-high = H
 thinking-effort-xhigh = X
 thinking-card-title = Thinking
+thinking-card-done = Thought
 
 tool-call-ask-user-custom-placeholder = Or type your own answer...
 tool-call-ask-user-submit = Submit
