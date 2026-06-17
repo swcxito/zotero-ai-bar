@@ -27,7 +27,7 @@ import { buildTools } from './agentTools';
 
 const SDK_CACHE: Record<string, any> = {};
 
-const MAX_AGENT_ITERATIONS = 10;
+const MAX_AGENT_ITERATIONS = 30;
 
 let streamTextFn: typeof import('ai').streamText | undefined;
 let preloadLLMRuntimePromise: Promise<void> | undefined;
