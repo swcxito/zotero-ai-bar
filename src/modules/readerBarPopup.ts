@@ -180,6 +180,7 @@ function smartAutoTranslate(
         isFromPopup: true,
         contextPromise: selectionContextPromise,
         itemId: reader.itemID!,
+        thinkingEffort: 'none',
       })
       // todo remove this temp resolution after chatManager is reconstructed.
       .finally(() => {
@@ -220,6 +221,8 @@ function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 
       isFromPopup: true,
       // Enable auto-copy for smartCopy command only
       doesCopyResponse: input === 'smartCopy',
+      // Disable thinking for translate — it's a direct, deterministic task.
+      thinkingEffort: input === 'translate' ? 'none' : undefined,
       itemId: reader.itemID!,
     });
   }

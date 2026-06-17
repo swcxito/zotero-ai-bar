@@ -93,8 +93,9 @@ export async function streamLLMV2(
     for (const [k, v] of Object.entries(V2_PROVIDER_OPTIONS)) {
       providerOptions[k] = v;
     }
-    providerOptions.google = getGoogleThinkingConfig(addon.data.userProviderConfigV2?.active?.modelId ?? '', session.thinkingEffort);
-    const thinkingOpts = getThinkingProviderOptions(activeProviderId, session.thinkingEffort);
+    const effectiveEffort = session.pending.thinkingEffortOverride ?? session.thinkingEffort;
+    providerOptions.google = getGoogleThinkingConfig(addon.data.userProviderConfigV2?.active?.modelId ?? '', effectiveEffort);
+    const thinkingOpts = getThinkingProviderOptions(activeProviderId, effectiveEffort);
     if (thinkingOpts && activeProviderId) {
       providerOptions[activeProviderId] = {
         ...providerOptions[activeProviderId],
@@ -179,7 +180,7 @@ export async function streamLLMV2(
         let usage: any;
         try {
           usage = await result.usage;
-        } catch (e) {
+        } catch (e: any) {
           Zotero.debug('[zaibar-llm] usage fetch failed: ' + (e?.message || e));
         }
         onLLMStreamEndV2(session, usage);

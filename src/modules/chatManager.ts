@@ -64,6 +64,8 @@ export class Session {
     // --- reasoning ---
     reasoningBox?: HTMLElement;
     reasoningTextEl?: HTMLElement;
+    /** Per-request override of session.thinkingEffort. */
+    thinkingEffortOverride?: Session['thinkingEffort'];
   } = {};
   constructor(id: string) {
     this.id = id;
@@ -105,6 +107,8 @@ type ChatRequestParams = {
   isFromPopup?: boolean;
   contextPromise?: Promise<string[] | undefined>;
   images?: string[];
+  /** Override the session's thinkingEffort for this single request. */
+  thinkingEffort?: Session['thinkingEffort'];
 } & ({ itemId: number; tabId?: string } | { itemId?: number; tabId: string });
 
 export class ChatManager {
@@ -335,6 +339,7 @@ Only proceed with tool calls or answers once the intent is clear. If the user pr
     })();
 
     session.sourceLabel = params.sourceLabel ?? session.sourceLabel;
+    session.pending.thinkingEffortOverride = params.thinkingEffort;
 
     if (route === 'window') {
       await ensureChatWindowReady();
