@@ -148,8 +148,9 @@ export class ChatManager {
     itemId?: number;
     fullTextEnabled?: boolean;
     agentEnabled?: boolean;
+    hasImages?: boolean;
   }): Promise<string> {
-    const { selectedText, selectionContext, metadata, itemId, fullTextEnabled, agentEnabled } = params;
+    const { selectedText, selectionContext, metadata, itemId, fullTextEnabled, agentEnabled, hasImages } = params;
     const contextLeft = selectionContext?.[0] || '';
     const contextRight = selectionContext?.[2] || '';
     let systemPrompt = SYSTEM_PROMPT_PREFIX;
@@ -214,6 +215,15 @@ Only proceed with tool calls or answers once the intent is clear. If the user pr
 - **Page capture**: Use the \`capture_page\` tool to render a specific PDF page as an image when the user wants to see a figure, table, or visual content. After capturing, use \`read\`/\`grep\` to look for the page's caption or nearby explanatory text when that would improve accuracy, then explain the image.`;
     }
 
+    if (hasImages) {
+      systemPrompt += `
+
+# Image Analysis Instructions
+The current user message includes one or more images. For this turn, analyze the uploaded images directly and use selected text or surrounding document text only as context.
+When the general instructions mention <selected>, do not treat them as limiting the task to text only. Prioritize visible image evidence, then captions or nearby document context, then clearly marked inference.
+Separate what is visibly readable in the image from what is supplied by document context. Mark unclear OCR, small labels, approximate values, and inferred experimental conditions as uncertain.`;
+    }
+
     // Append volatile context at the end to improve prompt cache hits
     systemPrompt +=
       '\n\nContent:' +
@@ -276,6 +286,13 @@ Only proceed with tool calls or answers once the intent is clear. If the user pr
         selectionContextLength: selectionContext?.length ?? 0,
       });
 
+      // Build user message content — include images if model supports them
+      const inputImages = params.images ?? addon.data.inputImages.get(tabId) ?? [];
+      const capturedImages = session.capturedPageImages ?? [];
+      const images = [...capturedImages, ...inputImages];
+      const hasImages = images.length > 0;
+      const modelSupportsImage = hasImages && checkModelSupportsImage();
+
       const systemContent = await this.buildSystemContent({
         selectedText,
         selectionContext,
@@ -283,18 +300,12 @@ Only proceed with tool calls or answers once the intent is clear. If the user pr
         itemId: itemId,
         fullTextEnabled: session.fullTextEnabled,
         agentEnabled: session.agentEnabled,
+        hasImages: modelSupportsImage,
       });
       const systemMsg: SystemModelMessage = {
         role: 'system',
         content: systemContent,
       };
-
-      // Build user message content — include images if model supports them
-      const inputImages = params.images ?? addon.data.inputImages.get(tabId) ?? [];
-      const capturedImages = session.capturedPageImages ?? [];
-      const images = [...capturedImages, ...inputImages];
-      const hasImages = images.length > 0;
-      const modelSupportsImage = hasImages && checkModelSupportsImage();
 
       if (hasImages && !modelSupportsImage) {
         ztoolkit.log('[chat] Model does not support image input, sending text only');
