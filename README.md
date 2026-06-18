@@ -18,6 +18,32 @@ If you find this project helpful, please consider supporting its development and
 [<img alt="&quot;Buy Me A Coffee&quot;" height="60px" src="docs/assets/red-button.png"/>](https://www.buymeacoffee.com/fukeke)
 [<img alt="Afdian" src="docs/assets/afdian-btn-en.png" height="60px"/>](https://afdian.com/a/fukeke)
 
+## What's New in v1.3
+
+### Agent / Tool Calling
+
+- **Autonomous agent mode**: The AI can now call tools to search the document, read pages/lines, search your library, capture PDF pages as images, ask you clarifying questions, and more — no need to manually feed context.
+- **Tool call cards**: Each tool invocation renders as a collapsible card showing inputs and outputs inline, interleaved with the reply text in stream order.
+
+### Thinking Effort Control
+
+- A new **thinking effort** selector on the input bar lets you pick reasoning depth (`none / low / medium / high / xhigh`) per session.
+- A **default thinking effort** setting is available in the preferences (defaults to `none`).
+- Translate actions automatically bypass reasoning for speed.
+
+### Token Usage Display
+
+- Each AI reply shows a **per-request token badge** (input ↑ / output ↓) next to the action buttons.
+- A **context token indicator** next to the disclaimer shows current context usage and the percentage of the model's context window (when known).
+
+### Other Improvements
+
+- **Smarter auto-scroll**: The chat now auto-scrolls only until your message scrolls out of view, so you can freely scroll up to read earlier replies while generation continues.
+- **Thinking card auto-scroll**: Reasoning content stays in view as it streams in.
+- **Selection-aware prompts**: When no text is selected, the model is explicitly told so — no more "you selected..." hallucinations.
+- **Animated thinking-effort dropdown** with a "Thinking depth" title.
+- Various UI polish and bug fixes.
+
 ## What's New in v1.2
 
 ### New Provider & Model Architecture
@@ -107,6 +133,9 @@ Here is a quick tutorial. For detailed instructions, please click and visit the 
 - [x] ~~Standalone Window Option~~
 - [x] Continuous Conversation
 - [x] New Chat Session
+- [x] Agent / Tool Calling
+- [x] Thinking Effort Control
+- [x] Token Usage Display
 - [ ] Regenerate Response
 - [ ] Attachment Support
 - And more...
