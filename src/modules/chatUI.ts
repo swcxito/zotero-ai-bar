@@ -105,17 +105,11 @@ export async function onLLMStreamUpdateV2(data: { session: Session; fullText: st
   }
 }
 
-/**
- * Stop auto-scrolling once the user message (the bubble immediately preceding
- * the AI reply) has scrolled out of the visible area. Returns true if
- * auto-scroll has been disabled (either just now or previously).
- */
 function shouldStopAutoScroll(session: Session, pop: HTMLElement, container: HTMLElement): boolean {
   if (!session.pending.shouldAutoScroll) return true;
+  const stopOffset = 24;
   const containerTop = container.getBoundingClientRect().top;
-  const userBubble = pop.previousElementSibling as HTMLElement | null;
-  const refEl = userBubble || pop;
-  if (refEl.getBoundingClientRect().bottom <= containerTop) {
+  if (pop.getBoundingClientRect().top <= containerTop + stopOffset) {
     session.pending.shouldAutoScroll = false;
     return true;
   }
@@ -884,9 +878,7 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
       if (session.pending.shouldAutoScroll) {
         const container = (pop as HTMLElement).parentElement as HTMLElement | null;
         if (container) {
-          if (shouldStopAutoScroll(session, pop as HTMLElement, container)) {
-            // user message has scrolled out of view — stop following
-          } else {
+          if (!shouldStopAutoScroll(session, pop as HTMLElement, container)) {
             scrollToBottom(container);
           }
         }
