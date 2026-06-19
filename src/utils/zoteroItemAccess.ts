@@ -29,6 +29,7 @@ export type GlobItem = {
   key: string;
   title: string;
   itemType: string;
+  attachments?: { id: number; title: string }[];
 };
 
 export function getZoteroItem(itemId: number): any | undefined {
@@ -259,12 +260,29 @@ function itemToGlobItem(itemId: number): GlobItem {
   const item = Zotero.Items.get(itemId) as any;
   const itemTypeID = item.itemTypeID;
   const itemType = itemTypeID ? Zotero.ItemTypes.getLocalizedString(itemTypeID) : item.itemType;
-  return {
+  const result: GlobItem = {
     itemId,
     key: item.key,
     title: (item.getField('title') as string) || '(no title)',
     itemType: itemType || 'unknown',
   };
+
+  if (item.isRegularItem?.() && !item.isAttachment?.()) {
+    const attachmentIDs: number[] = item.getAttachments?.() ?? [];
+    const attachments = attachmentIDs
+      .map((aid) => {
+        const att = Zotero.Items.get(aid) as any;
+        if (!att) return undefined;
+        const title = (att.getField('title') as string) || '(no title)';
+        return { id: aid, title };
+      })
+      .filter((a): a is { id: number; title: string } => a !== undefined);
+    if (attachments.length > 1) {
+      result.attachments = attachments;
+    }
+  }
+
+  return result;
 }
 
 export type TreeOptions = {
