@@ -944,19 +944,23 @@ function buildTranslateDetails(doc: Document, output: any): HTMLElement {
       container.appendChild(pronEl);
     }
 
-    if (output.meaning) {
+    if (output.pos || output.definition) {
       const meaningEl = doc.createElement('div');
       meaningEl.classList.add('text-lg', 'text-slate-700', 'dark:text-zinc-200');
-      const posSpan = doc.createElement('span');
-      posSpan.classList.add('mr-1');
-      posSpan.style.fontFamily = `ui-serif, Georgia, 'Times New Roman', Cambria, 'Songti SC', 'SimSun', 'Noto Serif CJK SC', serif`;
-      posSpan.style.fontStyle = 'italic';
-      posSpan.textContent = output.meaning.pos;
-      meaningEl.appendChild(posSpan);
-      const meaningText = doc.createElement('span');
-      meaningText.classList.add('font-bold');
-      meaningText.textContent = output.meaning.meaning;
-      meaningEl.appendChild(meaningText);
+      if (output.pos) {
+        const posSpan = doc.createElement('span');
+        posSpan.classList.add('mr-1');
+        posSpan.style.fontFamily = `ui-serif, Georgia, 'Times New Roman', Cambria, 'Songti SC', 'SimSun', 'Noto Serif CJK SC', serif`;
+        posSpan.style.fontStyle = 'italic';
+        posSpan.textContent = output.pos;
+        meaningEl.appendChild(posSpan);
+      }
+      if (output.definition) {
+        const meaningText = doc.createElement('span');
+        meaningText.classList.add('font-bold');
+        meaningText.textContent = output.definition;
+        meaningEl.appendChild(meaningText);
+      }
       container.appendChild(meaningEl);
     }
 
@@ -965,7 +969,7 @@ function buildTranslateDetails(doc: Document, output: any): HTMLElement {
       divider.classList.add('border-t', 'border-slate-200', 'dark:border-zinc-600', 'my-1');
       container.appendChild(divider);
 
-      for (const m of output.otherMeanings as Array<{ pos: string; meaning: string }>) {
+      for (const m of output.otherMeanings as Array<{ pos: string; definition: string }>) {
         const otherEl = doc.createElement('div');
         otherEl.classList.add('text-base', 'text-slate-500', 'dark:text-zinc-400');
         const posSpan = doc.createElement('span');
@@ -974,7 +978,7 @@ function buildTranslateDetails(doc: Document, output: any): HTMLElement {
         posSpan.style.fontStyle = 'italic';
         posSpan.textContent = m.pos;
         otherEl.appendChild(posSpan);
-        otherEl.appendChild(doc.createTextNode(m.meaning));
+        otherEl.appendChild(doc.createTextNode(m.definition));
         container.appendChild(otherEl);
       }
     }

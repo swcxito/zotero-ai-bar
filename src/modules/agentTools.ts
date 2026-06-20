@@ -148,10 +148,30 @@ export const treeTool = tool({
 });
 
 export const translateTool = tool({
-  description:
-    'Present a translation result to the user in a structured, visually formatted card. Use this tool ONLY for single words and abbreviations. After calling this tool, continue your response with one concise sentence that places the translation back into the original context (e.g., how the word is used in this sentence).',
+  description: [
+    'Present a translation result to the user in a structured, visually formatted card. Use this tool ONLY for single words and abbreviations.',
+    'For `word`: top-level `pos` (e.g. "adj.") and `definition` (the meaning text only, no POS prefix) are REQUIRED. `otherMeanings` is an array of {pos, definition} objects.',
+    'For `abbreviation`: `fullForm` is REQUIRED.',
+    'After calling this tool, continue your response with one concise sentence that places the translation back into the original context (e.g., how the word is used in this sentence).',
+  ].join(' '),
   inputSchema: asSchema(translateSchema),
   execute: async (input: TranslatePayload) => {
+    if (input.textType === 'word') {
+      if (!input.pos?.trim() || !input.definition?.trim()) {
+        throw new Error(
+          'translate: for textType="word", top-level `pos` and `definition` are required and must be non-empty. `pos` is the part of speech only (e.g. "adj."); `definition` is the meaning text only (no POS prefix). Re-call the tool with both fields.'
+        );
+      }
+    } else if (input.textType === 'abbreviation') {
+      if (!input.fullForm?.trim()) {
+        throw new Error(
+          'translate: for textType="abbreviation", `fullForm` is required and must be non-empty. Re-call the tool with the full English form of the abbreviation.'
+        );
+      }
+    }
+    if (!input.translatedText?.trim()) {
+      throw new Error('translate: `translatedText` is required and must be non-empty. Re-call the tool with the translated text.');
+    }
     return input;
   },
 });
