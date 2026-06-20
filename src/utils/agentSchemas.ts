@@ -26,7 +26,11 @@ export const grepSchema = z.object({
       'Case-insensitive literal or regex pattern to search for in the document. Use this to locate specific sections before reading them in detail with the `read` tool.'
     ),
   itemId: z.number().optional().describe('The Zotero item or attachment ID to search. Omit to search the current document.'),
-  useRegex: z.boolean().optional().describe('Treat pattern as a regular expression.'),
+  useRegex: z
+    .boolean()
+    .optional()
+    .default(true)
+    .describe('Treat pattern as a regular expression (default: true). Set to false for a literal case-insensitive match.'),
   maxResults: z.number().int().min(1).max(50).optional().describe('Maximum number of matching excerpts to return.'),
 });
 

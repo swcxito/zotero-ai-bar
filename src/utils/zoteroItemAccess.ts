@@ -259,7 +259,7 @@ export async function searchLibraryItems(
 function itemToGlobItem(itemId: number): GlobItem {
   const item = Zotero.Items.get(itemId) as any;
   const itemTypeID = item.itemTypeID;
-  const itemType = itemTypeID ? Zotero.ItemTypes.getLocalizedString(itemTypeID) : item.itemType;
+  const itemType = itemTypeID ? Zotero.ItemTypes.getName(itemTypeID) : item.itemType;
   const result: GlobItem = {
     itemId,
     key: item.key,
