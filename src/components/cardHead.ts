@@ -77,6 +77,38 @@ export function CardHead({
     classList: ['text-xs', 'font-semibold', 'opacity-60', 'truncate', 'cursor-default', 'text-zinc-700', 'dark:text-zinc-300'],
     properties: { innerText: providerName },
   };
+  const customNameInput: TagElementProps = {
+    tag: 'input',
+    classList: [
+      'text-xs',
+      'font-semibold',
+      'opacity-80',
+      'truncate',
+      'text-zinc-700',
+      'dark:text-zinc-300',
+      'rounded-sm',
+      'bg-white',
+      'dark:bg-zinc-900',
+      'border',
+      'border-gray-300',
+      'dark:border-zinc-700',
+      'outline-none',
+      'focus:ring-1',
+      'focus:ring-rose-300',
+      'transition-all',
+      'duration-200',
+      'ease-in-out',
+      'px-2',
+      'py-1',
+      'w-32',
+      'custom-name-input',
+    ],
+    properties: {
+      type: 'text',
+      value: providerName || '',
+      placeholder: 'Provider Name',
+    },
+  };
   const urlInput: TagElementProps = {
     tag: 'input',
     classList: [
@@ -133,7 +165,11 @@ export function CardHead({
           {
             tag: 'div',
             classList: ['flex', 'flex-1', 'flex-col', 'xl:flex-row', 'xl:items-center', 'gap-2', 'min-w-10'],
-            children: [isCustom ? urlInput : nameLabel, ...envKeys.map((key) => makeEnvInput(key, envValues[key] ?? ''))],
+            children: [
+              isCustom ? customNameInput : nameLabel,
+              ...(isCustom ? [urlInput] : []),
+              ...envKeys.map((key) => makeEnvInput(key, envValues[key] ?? '')),
+            ],
           },
           // tail buttons
           {

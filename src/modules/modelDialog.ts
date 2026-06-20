@@ -176,7 +176,7 @@ class ModelDialogV2 {
       providerId,
       providerName: addedProvider?.name ?? commonProvider?.name ?? providerId,
       iconUrl: resolveProviderIcon(providerId),
-      baseUrl: commonProvider?.api,
+      baseUrl: addedProvider?.api ?? commonProvider?.api,
       envKeys,
       envValues,
       isCustom,
@@ -365,7 +365,7 @@ class ModelDialogV2 {
       const getData = cardDataMap.get(cardElement);
       if (!getData) return;
       const cardData = getData();
-      const { providerId, envValues: cardEnv, baseUrl, models: cardModels } = cardData;
+      const { providerId, envValues: cardEnv, baseUrl, customName, models: cardModels } = cardData;
 
       // 过滤掉名为空的模型行（getData已做，此处兜底）
       const validModels = cardModels.filter((m) => m.id.trim() !== '');
@@ -437,9 +437,10 @@ class ModelDialogV2 {
         newAddedProviders[providerId] = rest as AddedProvider;
       } else {
         // Custom provider
+        const fallbackName = v2.addedProviders[providerId]?.name ?? providerId;
         newAddedProviders[providerId] = {
           id: providerId as ProviderId,
-          name: v2.addedProviders[providerId]?.name ?? providerId,
+          name: customName || fallbackName,
           env: ['API_KEY'],
           ...(baseUrl ? { api: baseUrl } : {}),
         };

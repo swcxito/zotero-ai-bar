@@ -85,5 +85,11 @@ export const ModelIcons: Record<string, string> = {
 export const modelRowDataMap = new WeakMap<Element, () => { id: string; name: string; enabled: boolean }>();
 export const cardDataMap = new WeakMap<
   Element,
-  () => { providerId: string; envValues: Record<string, string>; baseUrl?: string; models: Array<{ id: string; name: string; enabled: boolean }> }
+  () => {
+    providerId: string;
+    envValues: Record<string, string>;
+    baseUrl?: string;
+    customName?: string;
+    models: Array<{ id: string; name: string; enabled: boolean }>;
+  }
 >();

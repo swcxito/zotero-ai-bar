@@ -184,6 +184,7 @@ export function ProviderCard({
       providerId,
       envValues: envValuesOut,
       baseUrl: isCustom ? (card.querySelector('.url-input') as HTMLInputElement).value : undefined,
+      customName: isCustom ? (card.querySelector('.custom-name-input') as HTMLInputElement)?.value?.trim() || undefined : undefined,
       models: collected,
     };
     ztoolkit.log('[ProviderCard.getData]', {
