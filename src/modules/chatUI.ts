@@ -37,9 +37,16 @@ export function onLLMStreamStartV2(session: Session) {
   ztoolkit.log('LLM stream started:', session.id);
 
   updateSectionInputArea(session.id, true);
+  // Reset all auto-scroll state for the new turn.
   session.pending.shouldAutoScroll = true;
+  session.pending.scrollUserPaused = false;
+  session.pending.scrollLengthPaused = false;
+  session.pending.scrollUserOverride = false;
+  session.pending.inToolPhase = false;
+  session.pending.currentTextSegment = null;
   const container = getMessageContainer(session);
   if (!container) return;
+  bindAutoScrollTracker(container, session);
 
   const doc = container.ownerDocument;
   if (!doc) return;
@@ -72,11 +79,13 @@ export function onLLMStreamStartV2(session: Session) {
     const contentEl = doc.createElement('div');
     contentEl.classList.add('chat-message-content');
     chatMessage.appendChild(contentEl);
+    // Non-agent path: the single content element is the active text segment.
+    session.pending.currentTextSegment = contentEl;
   }
 
   container.appendChild(pop);
   session.pending.messagePop = pop;
-  scrollToBottom(container as HTMLElement);
+  maybeAutoScroll(session);
 }
 
 export async function onLLMStreamUpdateV2(data: { session: Session; fullText: string; force?: boolean }) {
@@ -93,28 +102,180 @@ export async function onLLMStreamUpdateV2(data: { session: Session; fullText: st
   chatMessage.innerHTML = await renderMarkdown(data.fullText);
   (pop as HTMLElement).dataset.markdown = data.fullText;
   data.session.pending.lastRenderedLength = newLen;
+  // Non-agent path: keep the active text segment ref in sync (innerHTML rewrite
+  // doesn't replace the element, but be safe).
+  data.session.pending.currentTextSegment = chatMessage as HTMLElement;
 
-  const container = pop.parentElement;
-  if (container) {
-    if (!data.session.pending.shouldAutoScroll) {
-      return;
-    }
-    if (shouldStopAutoScroll(data.session, pop as HTMLElement, container as HTMLElement)) {
-      return;
-    }
-    scrollToBottom(container as HTMLElement);
-  }
+  maybeAutoScroll(data.session);
 }
 
-function shouldStopAutoScroll(session: Session, pop: HTMLElement, container: HTMLElement): boolean {
-  if (!session.pending.shouldAutoScroll) return true;
-  const stopOffset = 24;
-  const containerTop = container.getBoundingClientRect().top;
-  if (pop.getBoundingClientRect().top <= containerTop + stopOffset) {
-    session.pending.shouldAutoScroll = false;
-    return true;
+/**
+ * Geometric stop condition: when the AI bubble's top scrolls out of the
+ * container's top, stop auto-scroll (so a very long AI reply doesn't push
+ * itself off-screen while the user reads the start). Two escape hatches keep
+ * this from re-disabling auto-scroll between agent tool calls:
+ *  1. During programmatic smooth-scroll animation the position is transient —
+ *     skip the check (the mark is set by followToBottom).
+ *  2. If the user is parked at the bottom, respect the explicit "follow"
+ *     intent and keep scrolling.
+ */
+/**
+ * Programmatic scrollToBottom wrapper. Marks a short window during which the
+ * scroll listener ignores position changes — otherwise the smooth-scroll
+ * animation (scrollTop lagging behind the newly-grown scrollHeight) would
+ * transiently look "not near bottom" and flip the user-pause flags.
+ */
+function followToBottom(container: HTMLElement) {
+  const host = container as HTMLElement & { __markProgrammaticScroll?: () => void };
+  host.__markProgrammaticScroll?.();
+  scrollToBottom(container);
+}
+
+/**
+ * Unified auto-scroll decision. Rules (highest priority first):
+ *  1. User scrolled up (scrollUserPaused) → never scroll.
+ *  2. Tool phase (inToolPhase) → always follow to bottom.
+ *  3. Final-answer text phase:
+ *     - If the active text segment, when scrolled to bottom, would have its
+ *       top at ≤6px from the viewport top (i.e. content from seg-top to
+ *       scroll-bottom ≥ viewport height − 6), AND the user hasn't explicitly
+ *       overridden by scrolling to bottom → set scrollLengthPaused, stop.
+ *     - Otherwise → follow to bottom.
+ * `shouldAutoScroll` is the user-intent master flag (set on stream start,
+ * cleared on user-scroll-up, re-set on user-scroll-to-bottom).
+ */
+function maybeAutoScroll(session: Session) {
+  const pop = session.pending.messagePop as HTMLElement | undefined;
+  const container = pop?.parentElement as HTMLElement | undefined;
+  if (!pop || !container) return;
+  // Rule 1: user paused (highest priority).
+  if (session.pending.scrollUserPaused) return;
+  if (!session.pending.shouldAutoScroll) return;
+  // Rule 2: tool phase always follows.
+  if (session.pending.inToolPhase) {
+    followToBottom(container);
+    return;
   }
-  return false;
+  // Rule 3: final-answer text phase.
+  const seg = session.pending.currentTextSegment;
+  if (seg && !session.pending.scrollUserOverride) {
+    // Projected seg-top distance from viewport top when scrolled to bottom:
+    //   clientHeight - (scrollHeight - segTopAbsolute)
+    // If ≤ 6 → the segment fills the viewport → stop.
+    const containerTop = container.getBoundingClientRect().top;
+    const segTopAbsolute = seg.getBoundingClientRect().top - containerTop + container.scrollTop;
+    const contentFromSegTopToBottom = container.scrollHeight - segTopAbsolute;
+    if (contentFromSegTopToBottom >= container.clientHeight - 6) {
+      session.pending.scrollLengthPaused = true;
+      return;
+    }
+  }
+  // User overrode (scrollUserOverride) → always follow, bypass 6px.
+  session.pending.scrollLengthPaused = false;
+  followToBottom(container);
+}
+
+/**
+ * Track user scroll intent. Binds once per container; re-binds just refresh
+ * the active session id (window mode reuses one container across items).
+ *  - user scrolls up (wheel/touch/scrollbar) → scrollUserPaused=true (stop)
+ *  - user scrolls back to bottom → clear pauses, set override (follow)
+ * Programmatic scrollToBottom is suppressed via __markProgrammaticScroll.
+ */
+function bindAutoScrollTracker(container: HTMLElement, session: Session) {
+  const host = container as HTMLElement & {
+    __autoScrollBound?: boolean;
+    __autoScrollSessionId?: string;
+    __programmaticScrollUntil?: number;
+    __markProgrammaticScroll?: () => void;
+  };
+  host.__autoScrollSessionId = session.id;
+  if (host.__autoScrollBound) return;
+  host.__autoScrollBound = true;
+
+  const BOTTOM_THRESHOLD = 16;
+  const PROGRAMMATIC_GRACE_MS = 600;
+  const getSession = (): Session | undefined => {
+    const id = host.__autoScrollSessionId;
+    return id ? addon.chatManager.sessionsMap.get(id) : undefined;
+  };
+  const isNearBottom = () => {
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    return scrollHeight - scrollTop - clientHeight <= BOTTOM_THRESHOLD;
+  };
+  const isProgrammatic = () => (host.__programmaticScrollUntil ?? 0) > Date.now();
+  host.__markProgrammaticScroll = () => {
+    host.__programmaticScrollUntil = Date.now() + PROGRAMMATIC_GRACE_MS;
+  };
+
+  // User scrolled up — highest priority pause.
+  const userScrollUp = (s: Session) => {
+    s.pending.scrollUserPaused = true;
+    s.pending.scrollUserOverride = false;
+    s.pending.shouldAutoScroll = false;
+  };
+  // User scrolled to bottom. Two cases:
+  //  - If currently length-paused (final answer exceeded viewport): set
+  //    scrollUserOverride so this segment keeps following to the bottom,
+  //    bypassing the 6px rule until the user scrolls up again or a new
+  //    final-answer segment starts.
+  //  - Otherwise (still within viewport / tool phase): just clear the
+  //    user-pause and let the normal rules apply. Setting override here
+  //    would wrongly disable the 6px stop for the rest of the reply.
+  const userScrollToBottom = (s: Session) => {
+    s.pending.scrollUserPaused = false;
+    s.pending.shouldAutoScroll = true;
+    if (s.pending.scrollLengthPaused) {
+      s.pending.scrollLengthPaused = false;
+      s.pending.scrollUserOverride = true;
+    }
+    maybeAutoScroll(s);
+  };
+
+  // Scroll listener catches scrollbar drag and keyboard paging. Suppressed
+  // during programmatic smooth-scroll animation.
+  const onScroll = () => {
+    if (isProgrammatic()) return;
+    const s = getSession();
+    if (!s) return;
+    if (isNearBottom()) userScrollToBottom(s);
+    else userScrollUp(s);
+  };
+
+  const onWheel = (e: WheelEvent) => {
+    const s = getSession();
+    if (!s) return;
+    if (e.deltaY < 0) {
+      userScrollUp(s);
+    } else if (e.deltaY > 0 && isNearBottom()) {
+      userScrollToBottom(s);
+    }
+  };
+
+  let lastTouchY: number | null = null;
+  const onTouchMove = (e: TouchEvent) => {
+    const s = getSession();
+    if (!s) return;
+    const t = e.touches[0];
+    if (!t) return;
+    const prev = lastTouchY;
+    lastTouchY = t.clientY;
+    if (prev == null) return;
+    const delta = t.clientY - prev; // finger down (positive) → content scrolls up → away from bottom
+    if (delta > 0) {
+      userScrollUp(s);
+    } else if (delta < 0 && isNearBottom()) {
+      userScrollToBottom(s);
+    }
+  };
+  const onTouchEnd = () => {
+    lastTouchY = null;
+  };
+
+  container.addEventListener('scroll', onScroll, { passive: true });
+  container.addEventListener('wheel', onWheel, { passive: true });
+  container.addEventListener('touchmove', onTouchMove, { passive: true });
+  container.addEventListener('touchend', onTouchEnd, { passive: true });
 }
 
 export function onLLMStreamEndV2(session: Session, usage?: TokenUsage) {
@@ -124,10 +285,7 @@ export function onLLMStreamEndV2(session: Session, usage?: TokenUsage) {
     if (actions) {
       actions.classList.remove('hidden');
       appendUsageBadge(actions as HTMLElement, usage);
-      const container = pop.parentElement;
-      if (container && session.pending.shouldAutoScroll) {
-        scrollToBottom(container as HTMLElement);
-      }
+      maybeAutoScroll(session);
     }
 
     // Auto-copy to clipboard if flag is set
@@ -286,10 +444,6 @@ export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
     const actions = pop.querySelector('.chat-actions');
     if (actions) {
       actions.classList.remove('hidden');
-      const actionsContainer = pop.parentElement;
-      if (actionsContainer && data.session.pending.shouldAutoScroll) {
-        scrollToBottom(actionsContainer as HTMLElement);
-      }
     }
     const chatMessage = pop.querySelector('.chat-message-content');
     if (chatMessage) {
@@ -300,10 +454,7 @@ export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
         chatMsg.innerHTML = `<div class="ai-bar-error-text">${escapeHtml(data.error)}</div>`;
       }
     }
-    const container = pop.parentElement;
-    if (container && data.session.pending.shouldAutoScroll) {
-      scrollToBottom(container as HTMLElement);
-    }
+    maybeAutoScroll(data.session);
   }
   // Clear streaming state
   updateSectionInputArea(data.session.id, false);
@@ -385,10 +536,7 @@ export function onToolCallStartV2(session: Session, toolCall: any) {
   session.pending.toolCallBoxes = session.pending.toolCallBoxes || new Map();
   session.pending.toolCallBoxes.set(toolCall.toolCallId, box);
 
-  const container = chatMessage.parentElement;
-  if (container && session.pending.shouldAutoScroll) {
-    scrollToBottom(container as HTMLElement);
-  }
+  maybeAutoScroll(session);
 }
 
 export function onToolCallEndV2(session: Session, toolResult: any) {
@@ -694,10 +842,7 @@ export function onReasoningDeltaV2(session: Session, text: string) {
       detailsPanel.scrollTop = detailsPanel.scrollHeight;
     }
   }
-  const container = (session.pending.messagePop as HTMLElement | undefined)?.parentElement;
-  if (container && session.pending.shouldAutoScroll) {
-    scrollToBottom(container as HTMLElement);
-  }
+  maybeAutoScroll(session);
 }
 
 export function onReasoningEndV2(session: Session) {
@@ -754,7 +899,15 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
       currentTextSegment = doc.createElement('div');
       currentTextSegment.classList.add('chat-message-content');
       chatMessage!.appendChild(currentTextSegment);
+      // New final-answer segment: reset override and length-pause so the
+      // 6px rule applies fresh (a previous override was scoped to the
+      // prior segment that had exceeded the viewport).
+      session.pending.scrollUserOverride = false;
+      session.pending.scrollLengthPaused = false;
     }
+    // Entering text mode: clear tool-phase flag so the 6px rule evaluates.
+    session.pending.inToolPhase = false;
+    session.pending.currentTextSegment = currentTextSegment;
     return currentTextSegment;
   }
 
@@ -772,6 +925,13 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
     currentTextSegment = null;
     textBuffer = '';
     textChunkCount = 0;
+    session.pending.currentTextSegment = null;
+  }
+
+  /** Mark tool phase active: always-follow scroll, bypass 6px rule. */
+  function enterToolPhase(): void {
+    session.pending.inToolPhase = true;
+    session.pending.scrollLengthPaused = false;
   }
 
   try {
@@ -790,6 +950,9 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
             currentTextSegment.remove();
             currentTextSegment = null;
           }
+          // Reasoning is interim content, not the final answer — treat like
+          // tool phase (always follow) so the reasoning card stays in view.
+          enterToolPhase();
           onReasoningStartV2(session);
           break;
         }
@@ -802,10 +965,18 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
           break;
         }
         case 'text-delta': {
+          // Text deltas mean we've left the tool phase. Ensure the active
+          // segment ref is synced even on non-flush chunks so maybeAutoScroll
+          // can run the 6px check against the right element.
+          if (session.pending.inToolPhase) {
+            session.pending.inToolPhase = false;
+            session.pending.scrollLengthPaused = false;
+          }
           if (firstText) {
             firstText = false;
             if (currentTextSegment) currentTextSegment.innerHTML = '';
           }
+          if (!currentTextSegment) ensureTextSegment();
           textBuffer += part.text; // AI SDK v6: field is `text`, not `textDelta`
           fullMarkdownBuffer += part.text;
           textChunkCount++;
@@ -818,12 +989,14 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
         case 'tool-call':
           await flushTextBuffer();
           startNewTextSegment();
+          enterToolPhase();
           // ask_user renders its own question cards; translate renders its own card on result
           if (part.toolName !== 'ask_user' && part.toolName !== 'translate') {
             onToolCallStartV2(session, part);
           }
           break;
         case 'tool-result':
+          enterToolPhase();
           if (part.toolName === 'translate') {
             await flushTextBuffer();
             startNewTextSegment();
@@ -841,6 +1014,7 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
           break;
         case 'tool-error': {
           ztoolkit.log('[chatUI] agent stream tool error part:', part);
+          enterToolPhase();
           const errMsg = part.error || 'Tool execution failed';
           const errEl = doc.createElement('span');
           errEl.classList.add('text-red-600', 'dark:text-red-400');
@@ -870,12 +1044,7 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
       }
 
       if (session.pending.shouldAutoScroll) {
-        const container = (pop as HTMLElement).parentElement as HTMLElement | null;
-        if (container) {
-          if (!shouldStopAutoScroll(session, pop as HTMLElement, container)) {
-            scrollToBottom(container);
-          }
-        }
+        maybeAutoScroll(session);
       }
     }
   } catch (e: any) {
@@ -1190,8 +1359,5 @@ export function onAgentAskUser(session: Session, payload: any) {
     abortSignal.addEventListener('abort', onAbort);
   }
 
-  const container = chatMessage.parentElement;
-  if (container && session.pending.shouldAutoScroll) {
-    scrollToBottom(container as HTMLElement);
-  }
+  maybeAutoScroll(session);
 }

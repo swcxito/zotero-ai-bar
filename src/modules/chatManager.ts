@@ -66,6 +66,17 @@ export class Session {
     reasoningTextEl?: HTMLElement;
     /** Per-request override of session.thinkingEffort. */
     thinkingEffortOverride?: Session['thinkingEffort'];
+    // --- auto-scroll state ---
+    /** User paused (scrolled up). Highest priority — disables all auto-scroll. */
+    scrollUserPaused?: boolean;
+    /** Length-based auto-pause: final-answer segment top would reach viewport top. */
+    scrollLengthPaused?: boolean;
+    /** User explicitly scrolled to bottom — override length-pause until they scroll up. */
+    scrollUserOverride?: boolean;
+    /** True during tool-call/tool-result (and interim text is treated as tool phase). */
+    inToolPhase?: boolean;
+    /** The active text segment element, used for the 6px geometric check. */
+    currentTextSegment?: HTMLElement | null;
   } = {};
   constructor(id: string) {
     this.id = id;
