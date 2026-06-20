@@ -293,6 +293,21 @@ export function checkModelSupportsImage(): boolean {
 }
 
 /**
+ * Context window (in tokens) of the currently active model, if known.
+ * Used by the chat manager to do token-aware history narrowing.
+ */
+export function getActiveModelContextLimit(): number | undefined {
+  const v2 = addon.data.userProviderConfigV2;
+  const active = v2?.active;
+  if (!active) return undefined;
+  const model =
+    addon.data.commonProviders?.[active.providerId]?.models[active.modelId] ??
+    v2?.addedModels.find((m) => m.providerId === active.providerId && m.id === active.modelId);
+  const limit = (model as any)?.limit?.context;
+  return typeof limit === 'number' && limit > 0 ? limit : undefined;
+}
+
+/**
  * Show a confirm dialog when the current model does not support image input.
  * Returns true if the user chose "send text only", false if cancelled.
  */

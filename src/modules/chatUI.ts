@@ -29,6 +29,7 @@ import { getString } from '../utils/locale';
 import { createImageViewer } from '../components/imagePreview';
 import { getReaderByTabId } from './tabObserver';
 import { buildErrorMessage } from './llm';
+import { getActiveModelContextLimit } from '../utils/providers';
 
 Zotero.debug('[zaibar-chatUI] module loaded');
 
@@ -258,17 +259,6 @@ function updateContextTokenIndicator(sessionId: string, usage: TokenUsage): void
   indicator.title = contextLimit
     ? `${getString('token-usage-context-window')}: ${contextLimit.toLocaleString()}`
     : getString('token-usage-context-window-unknown');
-}
-
-function getActiveModelContextLimit(): number | undefined {
-  const v2 = addon.data.userProviderConfigV2;
-  const active = v2?.active;
-  if (!active) return undefined;
-  const model =
-    addon.data.commonProviders?.[active.providerId]?.models[active.modelId] ??
-    v2?.addedModels.find((m) => m.providerId === active.providerId && m.id === active.modelId);
-  const limit = (model as any)?.limit?.context;
-  return typeof limit === 'number' && limit > 0 ? limit : undefined;
 }
 
 export function onLLMStreamErrorV2(data: { session: Session; error: string }) {

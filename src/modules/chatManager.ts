@@ -22,7 +22,7 @@
 import { getItemFullText, getItemMetadata } from '../utils/itemContext';
 import { getPref } from '../utils/prefs';
 import { SYSTEM_PROMPT_PREFIX, getAutoImagePrompt } from '../utils/prompts';
-import { checkModelSupportsImage } from '../utils/providers';
+import { checkModelSupportsImage, getActiveModelContextLimit } from '../utils/providers';
 import { ensureChatWindowReady, focusChatWindow } from '../utils/window';
 import { streamLLMV2 } from './llm';
 import type { ModelMessage, SystemModelMessage, UserModelMessage } from 'ai';
@@ -94,6 +94,79 @@ export type AgentUserAnswer = {
   selectedOptions: string[];
   customInput?: string;
 };
+
+/**
+ * A "round" starts at a `user` message and includes every following
+ * assistant/tool message up to (but not including) the next `user` message.
+ * Cutting only at round boundaries guarantees we never split an
+ * `assistant.tool_calls` from its `tool` results — which is what triggers
+ * DeepSeek's "Messages with role 'tool' must be a response to a preceding
+ * message with 'tool_calls'" error.
+ *
+ * conversationHistory never contains a `system` message (it's appended
+ * separately in sendChatRequest), so we only deal with user/assistant/tool.
+ */
+function findRoundStartIndices(messages: ModelMessage[]): number[] {
+  const starts: number[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    if (messages[i].role === 'user') starts.push(i);
+  }
+  return starts;
+}
+
+/**
+ * Trim history to at most `maxMessages`, never breaking a round.
+ * If the most recent round alone exceeds the cap, we keep only that round
+ * rather than splitting it.
+ */
+function trimHistoryToRounds(messages: ModelMessage[], maxMessages: number): ModelMessage[] {
+  if (messages.length <= maxMessages) return messages;
+  const starts = findRoundStartIndices(messages);
+  if (starts.length === 0) return messages.slice(-maxMessages);
+  // Walk from the last round backward, accumulating until we exceed the cap.
+  let keepFrom = starts[starts.length - 1];
+  let count = messages.length - keepFrom;
+  for (let i = starts.length - 2; i >= 0; i--) {
+    const roundLen = starts[i + 1] - starts[i];
+    if (count + roundLen > maxMessages) break;
+    keepFrom = starts[i];
+    count += roundLen;
+  }
+  return messages.slice(keepFrom);
+}
+
+/**
+ * Token-aware narrowing: if the last request's prompt tokens approach the
+ * active model's context window, drop oldest rounds until we estimate we're
+ * back under ~70% of the limit. Falls back gracefully when usage or limit is
+ * unknown. Always cuts on round boundaries (pair-safe).
+ */
+function narrowHistoryByTokenBudget(
+  messages: ModelMessage[],
+  lastPromptTokens: number | undefined,
+  contextLimit: number | undefined
+): ModelMessage[] {
+  if (!lastPromptTokens || !contextLimit || contextLimit <= 0) return messages;
+  if (lastPromptTokens / contextLimit < 0.85) return messages;
+  const target = contextLimit * 0.7;
+  const starts = findRoundStartIndices(messages);
+  if (starts.length <= 1) return messages;
+  // Drop rounds from the front. Estimate new token usage proportionally to
+  // message count (coarse but cheap; the next request's real usage will
+  // re-calibrate).
+  let keepFrom = starts[0];
+  for (let i = 1; i < starts.length; i++) {
+    const keptFraction = (messages.length - starts[i]) / messages.length;
+    const estimated = lastPromptTokens * keptFraction;
+    if (estimated <= target) {
+      keepFrom = starts[i];
+      break;
+    }
+    keepFrom = starts[i];
+    if (i === starts.length - 1) break;
+  }
+  return messages.slice(keepFrom);
+}
 
 export interface TokenUsage {
   promptTokens?: number;
@@ -267,13 +340,20 @@ Separate what is visibly readable in the image from what is supplied by document
 
     session.pending.isNewSource = !!params.sourceLabel && session.sourceLabel !== params.sourceLabel;
 
-    // cleanup history
+    // cleanup history — pair-safe trimming.
+    // `contextRounds` caps how many rounds we keep; the token-aware pass
+    // below can drop more if the last request approached the context window.
     const contextRounds = getPref('chat.contextRounds') ?? 8;
     const maxHistoryMessages = contextRounds * 2;
     if (params.isFromPopup || session.pending.isNewSource) {
       session.conversationHistory = [];
-    } else if (session.conversationHistory.length > maxHistoryMessages) {
-      session.conversationHistory = session.conversationHistory.slice(-maxHistoryMessages);
+    } else {
+      session.conversationHistory = trimHistoryToRounds(session.conversationHistory, maxHistoryMessages);
+      session.conversationHistory = narrowHistoryByTokenBudget(
+        session.conversationHistory,
+        session.lastUsage?.promptTokens,
+        getActiveModelContextLimit()
+      );
     }
     if (session.pending.abortController) {
       session.pending.abortController.abort();
