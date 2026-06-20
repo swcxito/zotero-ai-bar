@@ -567,7 +567,9 @@ function buildTranslateDetails(doc: Document, output: any): HTMLElement {
       const meaningEl = doc.createElement('div');
       meaningEl.classList.add('text-lg', 'text-slate-700', 'dark:text-zinc-200');
       const posSpan = doc.createElement('span');
-      posSpan.classList.add('italic', 'mr-1');
+      posSpan.classList.add('mr-1');
+      posSpan.style.fontFamily = `ui-serif, Georgia, 'Times New Roman', Cambria, 'Songti SC', 'SimSun', 'Noto Serif CJK SC', serif`;
+      posSpan.style.fontStyle = 'italic';
       posSpan.textContent = output.meaning.pos;
       meaningEl.appendChild(posSpan);
       const meaningText = doc.createElement('span');
@@ -586,7 +588,9 @@ function buildTranslateDetails(doc: Document, output: any): HTMLElement {
         const otherEl = doc.createElement('div');
         otherEl.classList.add('text-base', 'text-slate-500', 'dark:text-zinc-400');
         const posSpan = doc.createElement('span');
-        posSpan.classList.add('italic', 'mr-1');
+        posSpan.classList.add('mr-1');
+        posSpan.style.fontFamily = `ui-serif, Georgia, 'Times New Roman', Cambria, 'Songti SC', 'SimSun', 'Noto Serif CJK SC', serif`;
+        posSpan.style.fontStyle = 'italic';
         posSpan.textContent = m.pos;
         otherEl.appendChild(posSpan);
         otherEl.appendChild(doc.createTextNode(m.meaning));
