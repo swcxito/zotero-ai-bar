@@ -30,8 +30,240 @@ import { createImageViewer } from '../components/imagePreview';
 import { getReaderByTabId } from './tabObserver';
 import { buildErrorMessage } from './llm';
 import { getActiveModelContextLimit } from '../utils/providers';
+import { openCitation } from './citationAction';
 
 Zotero.debug('[zaibar-chatUI] module loaded');
+
+/**
+ * Wire click handlers to any `.zaibar-cite` spans inside `root`.
+ * Safe to call repeatedly on the same root — already-bound spans are
+ * skipped via a `data-bound` flag.
+ */
+export function attachCitationHandlers(root: HTMLElement): void {
+  const spans = root.querySelectorAll<HTMLElement>('.zaibar-cite:not([data-bound])');
+  for (const span of spans) {
+    span.setAttribute('data-bound', '1');
+    span.addEventListener('click', () => {
+      const itemId = parseInt(span.getAttribute('data-item-id') || '', 10);
+      const pageStr = span.getAttribute('data-page');
+      const page = pageStr ? parseInt(pageStr, 10) : undefined;
+      if (!Number.isFinite(itemId)) return;
+      void openCitation(itemId, page);
+    });
+    attachCitationTooltip(span);
+  }
+}
+
+/**
+ * Lazily render a fade-in metadata tooltip on hover. The tooltip is built
+ * on first mouseenter (so we don't pay the cost for every citation when
+ * streaming) and removed on mouseleave. Position is fixed-viewport
+ * anchored above/below the pill with horizontal flip if it would overflow.
+ *
+ * Styles are applied inline (not via class) because the sidebar chat lives
+ * inside a Shadow DOM whose CSS does not leak to `doc.body`, where the
+ * tooltip is appended to escape overflow clipping.
+ */
+function attachCitationTooltip(span: HTMLElement): void {
+  const doc = span.ownerDocument!;
+  let tooltip: HTMLElement | null = null;
+  let showTimer: number | undefined;
+  let hideTimer: number | undefined;
+
+  const applyBaseStyles = (tip: HTMLElement) => {
+    tip.style.position = 'fixed';
+    tip.style.zIndex = '2147483647';
+    tip.style.maxWidth = '360px';
+    tip.style.minWidth = '200px';
+    tip.style.padding = '8px 10px';
+    tip.style.borderRadius = '8px';
+    tip.style.boxShadow = '0 4px 16px rgba(0,0,0,0.18)';
+    tip.style.border = '1px solid #e5e7eb';
+    tip.style.backgroundColor = '#ffffff';
+    tip.style.color = '#1f2937';
+    tip.style.fontFamily = 'inherit';
+    tip.style.fontSize = '12px';
+    tip.style.lineHeight = '1.45';
+    tip.style.fontWeight = '400';
+    tip.style.fontStyle = 'normal';
+    tip.style.whiteSpace = 'normal';
+    tip.style.wordBreak = 'break-word';
+    tip.style.pointerEvents = 'none';
+    tip.style.opacity = '0';
+    tip.style.transition = 'opacity 160ms ease-out';
+  };
+
+  const buildTooltip = (): HTMLElement | null => {
+    const itemId = parseInt(span.getAttribute('data-item-id') || '', 10);
+    const page = span.getAttribute('data-page');
+    const info = buildCitationMetadata(itemId);
+
+    const tip = doc.createElement('div');
+    applyBaseStyles(tip);
+
+    // Header cards already display the full title prominently — skip the
+    // title row in the tooltip so it shows only the supplementary info
+    // (journal, authors, page) the user doesn't already see.
+    const isHeader = span.classList.contains('zaibar-cite-header');
+
+    if (info.title && !isHeader) {
+      const titleEl = doc.createElement('div');
+      titleEl.textContent = info.title;
+      titleEl.style.fontWeight = '600';
+      titleEl.style.marginBottom = '4px';
+      tip.appendChild(titleEl);
+    }
+    if (info.journal) {
+      const journalEl = doc.createElement('div');
+      journalEl.textContent = info.journal;
+      journalEl.style.fontStyle = 'italic';
+      journalEl.style.color = '#6b7280';
+      journalEl.style.marginBottom = '4px';
+      tip.appendChild(journalEl);
+    }
+    if (info.authors) {
+      const authorsEl = doc.createElement('div');
+      authorsEl.textContent = info.authors;
+      authorsEl.style.color = '#4b5563';
+      tip.appendChild(authorsEl);
+    }
+    if (page) {
+      const pageEl = doc.createElement('div');
+      pageEl.textContent = `p.${page}`;
+      pageEl.style.marginTop = '4px';
+      pageEl.style.color = '#9ca3af';
+      pageEl.style.fontSize = '11px';
+      tip.appendChild(pageEl);
+    }
+
+    // Nothing meaningful to show — caller will skip rendering.
+    if (!tip.children.length) return null;
+
+    return tip;
+  };
+
+  const positionTooltip = (tip: HTMLElement) => {
+    const spanRect = span.getBoundingClientRect();
+    const view = doc.defaultView;
+    const vw = view?.innerWidth ?? spanRect.right + 200;
+    const vh = view?.innerHeight ?? 800;
+    const GAP = 6;
+    const isHeader = span.classList.contains('zaibar-cite-header');
+
+    // Header cards prefer below (so the tooltip extends section-info
+    // downward, not over the previous paragraph). Inline pills prefer above
+    // (so the tooltip doesn't cover the next line of text the user is
+    // reading). Either preference flips when near the corresponding edge.
+    let placeBelow = isHeader;
+    if (placeBelow && spanRect.bottom > vh - 160) placeBelow = false;
+    else if (!placeBelow && spanRect.top < 120) placeBelow = true;
+
+    // Anchor: centered horizontally on the span.
+    tip.style.left = `${spanRect.left + spanRect.width / 2}px`;
+    if (placeBelow) {
+      tip.style.top = `${spanRect.bottom + GAP}px`;
+      tip.style.transform = 'translateX(-50%) translateY(0)';
+    } else {
+      tip.style.top = `${spanRect.top - GAP}px`;
+      tip.style.transform = 'translateX(-50%) translateY(-100%)';
+    }
+
+    // Horizontal flip / clamp if the centered tooltip would overflow.
+    const tipRect = tip.getBoundingClientRect();
+    const verticalOnly = placeBelow ? 'translateY(0)' : 'translateY(-100%)';
+    if (tipRect.left < 8) {
+      tip.style.left = `${Math.max(8, spanRect.left)}px`;
+      tip.style.transform = verticalOnly;
+    } else if (tipRect.right > vw - 8) {
+      tip.style.left = `${Math.min(vw - 8, spanRect.right)}px`;
+      tip.style.transform = `${verticalOnly} translateX(-100%)`;
+    }
+  };
+
+  const show = () => {
+    if (hideTimer !== undefined) {
+      doc.defaultView?.clearTimeout(hideTimer);
+      hideTimer = undefined;
+    }
+    if (showTimer !== undefined) return;
+    showTimer = doc.defaultView?.setTimeout(() => {
+      showTimer = undefined;
+      if (tooltip) return;
+      const built = buildTooltip();
+      if (!built) return;
+      tooltip = built;
+      // Mount on the pill itself. position:fixed takes the tooltip out of
+      // flow, so the pill's inline-flex layout and overflow:hidden
+      // (text-ellipsis) are unaffected, and the tooltip is not clipped by
+      // them. This also keeps the tooltip in the same document context as
+      // the span, avoiding the XUL-document (no <body>) problem.
+      span.appendChild(tooltip);
+      positionTooltip(tooltip);
+      // Trigger fade-in on the next frame.
+      doc.defaultView?.requestAnimationFrame(() => {
+        if (!tooltip) return;
+        tooltip.style.opacity = '1';
+      });
+    }, 180);
+  };
+
+  const hide = () => {
+    if (showTimer !== undefined) {
+      doc.defaultView?.clearTimeout(showTimer);
+      showTimer = undefined;
+    }
+    if (!tooltip) return;
+    const el = tooltip;
+    tooltip = null;
+    el.style.opacity = '0';
+    hideTimer = doc.defaultView?.setTimeout(() => {
+      el.remove();
+    }, 180);
+  };
+
+  span.addEventListener('mouseenter', show);
+  span.addEventListener('mouseleave', hide);
+  // Hide when the user clicks (the reader will open, the pill may scroll away).
+  span.addEventListener('click', hide);
+}
+
+interface CitationMetadata {
+  title: string;
+  journal: string;
+  authors: string;
+}
+
+function buildCitationMetadata(itemId: number): CitationMetadata {
+  const empty = { title: '', journal: '', authors: '' };
+  try {
+    const item = Zotero.Items.get(itemId);
+    if (!item) return empty;
+    // If the AI cited an attachment ID, pull metadata from the parent item.
+    let meta: Zotero.Item = item;
+    if (item.isAttachment?.()) {
+      const parentID = (item as any).parentItemID ?? (item as any).parentID;
+      if (parentID) {
+        const parent = Zotero.Items.get(parentID);
+        if (parent) meta = parent;
+      }
+    }
+    const title = (meta.getField?.('title') as string | undefined)?.trim() ?? '';
+    const journal = (meta.getField?.('publicationTitle') as string | undefined)?.trim() ?? '';
+    let authors = '';
+    try {
+      const creators = (meta.getCreators?.() as Array<{ lastName?: string; firstName?: string; name?: string }>) ?? [];
+      authors = creators
+        .map((c) => (c.name?.trim() || [c.lastName, c.firstName].filter(Boolean).join(' ').trim() || '').trim())
+        .filter((n) => n.length > 0)
+        .join(', ');
+    } catch {
+      // ignore
+    }
+    return { title, journal, authors };
+  } catch {
+    return empty;
+  }
+}
 
 export function onLLMStreamStartV2(session: Session) {
   ztoolkit.log('LLM stream started:', session.id);
@@ -100,6 +332,7 @@ export async function onLLMStreamUpdateV2(data: { session: Session; fullText: st
   if (!data.force && newLen - prevLen < 20 && prevLen > 0) return;
 
   chatMessage.innerHTML = await renderMarkdown(data.fullText);
+  attachCitationHandlers(chatMessage as HTMLElement);
   (pop as HTMLElement).dataset.markdown = data.fullText;
   data.session.pending.lastRenderedLength = newLen;
   // Non-agent path: keep the active text segment ref in sync (innerHTML rewrite
@@ -918,6 +1151,7 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
     if (!textBuffer) return;
     const seg = ensureTextSegment();
     seg.innerHTML = await renderMarkdown(textBuffer);
+    attachCitationHandlers(seg);
     textChunkCount = 0;
   }
 

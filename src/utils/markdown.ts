@@ -147,6 +147,13 @@ export async function renderMarkdown(markdown: string): Promise<string> {
       text = optimizeFormulas(text);
     }
 
+    // Strip any markdown emphasis/link wrappers around citation markers.
+    // The cite pill / header has its own styling, so wrappers like
+    // **[cite:..]**, *[cite:..]*, _[cite:..]_, [text](cite-url) that the LLM
+    // sometimes adds are unwanted noise. We unwrap them BEFORE marked.parse
+    // so the emphasis HTML is never generated.
+    text = stripCitationWrappers(text);
+
     const { text: protectedText, tokenMap } = protectAllowedHtmlPairs(text, ALLOWED_RAW_HTML_TAGS);
 
     let html = await marked.parse(protectedText);
@@ -158,11 +165,119 @@ export async function renderMarkdown(markdown: string): Promise<string> {
     // 针对 Zotero 的 innerHTML 安全检查，补全 math 和 svg 的命名空间
     // 避免 "Removed unsafe attribute. Element: svg. Attribute: xmlns." 警告
     // 同时也确保在 XHTML 环境下这些标签能被正确识别
-    return html
+    html = html
       .replace(/<math(?![^>]*xmlns)/g, '<math xmlns="http://www.w3.org/1998/Math/MathML"')
       .replace(/<svg(?![^>]*xmlns)/g, '<svg xmlns="http://www.w3.org/2000/svg"');
+
+    // Render citation markers [cite:itemId[:page][|title]].
+    // The title segment (after |) is accepted but IGNORED at render time —
+    // the UI always resolves the title from the Zotero item cache so it stays
+    // authoritative and never drifts from what the model wrote. We accept it
+    // purely as a "slot" so the model can satisfy its urge to include the
+    // title inside the marker rather than repeating it in the prose.
+    //
+    // Two passes:
+    //  1. A marker that is the sole content of a <p> (i.e. on its own line in
+    //     the source markdown) becomes a block-level "citation header". Title
+    //     is shown full (not truncated) and wraps.
+    //  2. Inline markers become pill spans (truncated).
+    // Both element types carry the same `zaibar-cite` class + data attributes
+    // so the click + tooltip handlers in chatUI.ts treat them uniformly.
+    const citeRe = /\[cite:(\d+)(?::(\d+))?(?:\|[^\]]*)?\]/g;
+    html = html.replace(/<p>\s*\[cite:(\d+)(?::(\d+))?(?:\|[^\]]*)?\]\s*<\/p>/g, (_m, idStr, pageStr) => {
+      const itemId = parseInt(idStr, 10);
+      const page = pageStr ? parseInt(pageStr, 10) : NaN;
+      const label = buildCitationLabel(itemId, Number.isFinite(page) ? page : undefined, false);
+      const pageAttr = Number.isFinite(page) ? ` data-page="${page}"` : '';
+      return `<div class="zaibar-cite zaibar-cite-header" data-item-id="${itemId}"${pageAttr}>${escapeHtml(label)}</div>`;
+    });
+    html = html.replace(citeRe, (_match, idStr, pageStr) => {
+      const itemId = parseInt(idStr, 10);
+      const page = pageStr ? parseInt(pageStr, 10) : NaN;
+      const label = buildCitationLabel(itemId, Number.isFinite(page) ? page : undefined);
+      const pageAttr = Number.isFinite(page) ? ` data-page="${page}"` : '';
+      return `<span class="zaibar-cite" data-item-id="${itemId}"${pageAttr}>${escapeHtml(label)}</span>`;
+    });
+
+    return html;
   } catch (error) {
     console.error('Markdown 解析失败:', error);
     return `<p class="error">内容解析错误</p>`;
   }
+}
+
+const CITE_TITLE_MAX = 40;
+
+function resolveCitationItem(itemId: number): Zotero.Item | null {
+  try {
+    return Zotero.Items.get(itemId) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * If `item` is a file attachment, return its parent (the regular item that
+ * carries title / creators / publication metadata). Otherwise return `item`
+ * itself. Falls back to `item` if the parent is missing.
+ */
+function resolveMetadataItem(item: Zotero.Item): Zotero.Item {
+  try {
+    if (item.isAttachment?.()) {
+      const parentID = (item as any).parentItemID ?? (item as any).parentID;
+      if (parentID) {
+        const parent = Zotero.Items.get(parentID);
+        if (parent) return parent;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return item;
+}
+
+function truncateTitle(title: string): string {
+  const trimmed = title.replace(/\s+/g, ' ').trim();
+  if (trimmed.length <= CITE_TITLE_MAX) return trimmed;
+  return trimmed.slice(0, CITE_TITLE_MAX - 1).trimEnd() + '…';
+}
+
+/**
+ * Remove markdown emphasis or link wrappers that surround a citation marker.
+ * Run before `marked.parse` so the wrapper HTML is never produced.
+ *
+ * Handles:
+ *  - **[cite:..]**   ->  [cite:..]   (bold)
+ *  - __[cite:..]__   ->  [cite:..]   (bold alt)
+ *  - *[cite:..]*     ->  [cite:..]   (italic)
+ *  - _[cite:..]_     ->  [cite:..]   (italic alt)
+ *  - ~~[cite:..]~~   ->  [cite:..]   (strikethrough)
+ *  - `[cite:..]`     ->  [cite:..]   (inline code — defeats the marker)
+ *  - [[cite:..]](url)->  [cite:..]   (markdown link wrapping the marker)
+ */
+function stripCitationWrappers(text: string): string {
+  let prev: string;
+  let cur = text;
+  cur = cur.replace(/\[(\[cite:\d+(?::\d+)?(?:\|[^\]]*)?\])\]\([^)]*\)/g, '$1');
+  cur = cur.replace(/`(\[cite:\d+(?::\d+)?(?:\|[^\]]*)?\])`/g, '$1');
+  do {
+    prev = cur;
+    cur = cur
+      .replace(/\*\*\s*(\[cite:\d+(?::\d+)?(?:\|[^\]]*)?\])\s*\*\*/g, '$1')
+      .replace(/__\s*(\[cite:\d+(?::\d+)?(?:\|[^\]]*)?\])\s*__/g, '$1')
+      .replace(/~~\s*(\[cite:\d+(?::\d+)?(?:\|[^\]]*)?\])\s*~~/g, '$1')
+      .replace(/(?<![*_])\*\s*(\[cite:\d+(?::\d+)?(?:\|[^\]]*)?\])\s*\*(?![*_])/g, '$1')
+      .replace(/(?<![*_])_\s*(\[cite:\d+(?::\d+)?(?:\|[^\]]*)?\])\s*_(?![*_])/g, '$1');
+  } while (cur !== prev);
+  return cur;
+}
+
+function buildCitationLabel(itemId: number, page?: number, truncate = true): string {
+  const item = resolveCitationItem(itemId);
+  if (!item) return `#${itemId}`;
+  const meta = resolveMetadataItem(item);
+  const title = (meta.getField?.('title') as string | undefined)?.trim();
+  let label = title ? (truncate ? truncateTitle(title) : title) : `#${itemId}`;
+  if (page && page > 0) label += ` · p.${page}`;
+  return label;
 }

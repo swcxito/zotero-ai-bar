@@ -1,6 +1,7 @@
 import { InputArea } from '../components/inputArea';
 import { renderMarkdown } from '../utils/markdown';
 import { getReaderSourceLabel } from './readerBarPopup';
+import { attachCitationHandlers } from './chatUI';
 
 export const CHAT_WINDOW_MESSAGE_CONTAINER_ID = 'ai-bar-window-message-container';
 
@@ -36,6 +37,7 @@ export function ensureChatWindowUI(doc: Document) {
         const msgEl = bubble.querySelector('.chat-message') as HTMLElement | null;
         if (msgEl) {
           msgEl.innerHTML = await renderMarkdown(text);
+          attachCitationHandlers(msgEl as HTMLElement);
           (msgEl as any).dataset.markdown = text;
         }
       }

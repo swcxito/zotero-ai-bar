@@ -168,6 +168,41 @@
     @apply bg-transparent p-0 text-inherit;
   }
 
+  /* Citation jump buttons — rendered from [cite:itemId[:page]] markers */
+  .chat-message .zaibar-cite {
+    @apply inline-flex max-w-full items-center gap-1 rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 align-baseline text-[0.85em] font-medium text-rose-700 transition-colors hover:bg-rose-100 hover:text-rose-900 dark:border-rose-700/60 dark:bg-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-800/50 dark:hover:text-rose-100;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Standalone citation used as a section header (marker alone on its line).
+   * Minimal bracket style: rounded rectangle with only bottom + right borders,
+   * no background. The L-shaped bracket frames the title without a heavy
+   * card feel. */
+  .chat-message .zaibar-cite-header {
+    @apply my-3 flex w-full items-center justify-between gap-3 rounded-lg border-b border-r-2 border-rose-300 bg-rose-50/30 py-2 pl-2 pr-4 text-[0.95em] font-semibold text-slate-800 transition-colors hover:border-rose-500 hover:bg-rose-50/60 hover:text-rose-700 dark:border-rose-700 dark:bg-rose-900/10 dark:text-zinc-100 dark:hover:border-rose-400 dark:hover:bg-rose-900/20 dark:hover:text-rose-300;
+    border-top: none;
+    border-left: none;
+    white-space: normal;
+    word-break: break-word;
+    overflow: visible;
+    text-overflow: clip;
+    cursor: pointer;
+  }
+
+  /* Right-side chevron hinting "click to open" */
+  .chat-message .zaibar-cite-header::after {
+    content: '›';
+    @apply ml-2 flex-shrink-0 text-lg font-normal leading-none text-rose-400 transition-transform dark:text-rose-400;
+  }
+
+  .chat-message .zaibar-cite-header:hover::after {
+    transform: translateX(2px);
+    @apply text-rose-500 dark:text-rose-300;
+  }
+
   /* Expand Button Dropdown Styles */
   .expand-menu {
     transform: translateY(-4px) scale(0.98);
