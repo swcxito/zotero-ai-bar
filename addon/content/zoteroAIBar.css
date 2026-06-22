@@ -127,6 +127,10 @@
   gap: 0;
 }
 
+.ai-bar-container.has-input .input-group {
+  margin-left: 6px;
+}
+
 .ai-bar-container.has-input .ai-btn {
   max-width: 0;
   padding: 0;
