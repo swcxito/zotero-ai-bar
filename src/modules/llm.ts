@@ -30,7 +30,7 @@ import {
   onReasoningEndV2,
 } from './chatUI';
 import { ensureWebStreamsGlobals } from '../utils/webStreamsGlobals';
-import { resolveApiUrl, type Model } from '../utils/providers';
+import { PROVIDER_ENV_KEY_MAP, resolveApiUrl, type Model } from '../utils/providers';
 import { buildTools } from './agentTools';
 // import { JSONObject } from "@ai-sdk/provider";
 
@@ -398,6 +398,20 @@ async function createProvider(
   }
 }
 
+/**
+ * Resolve the API key for a provider. Prefer the canonical env name from
+ * PROVIDER_ENV_KEY_MAP; fall back to the first non-empty value so legacy
+ * keys (e.g. GOOGLE_GENERATIVE_AI_API_KEY) still work after rename.
+ */
+function resolveProviderApiKey(providerId: string, providerEnv: Record<string, string>): string {
+  const canonical = PROVIDER_ENV_KEY_MAP[providerId];
+  if (canonical && providerEnv[canonical]) return providerEnv[canonical];
+  for (const v of Object.values(providerEnv)) {
+    if (v) return v;
+  }
+  return '';
+}
+
 /** Unified factory for openai, anthropic, xai, openrouter, google, openai-compatible */
 async function createGenericProvider(
   npm: string | undefined,
@@ -405,7 +419,7 @@ async function createGenericProvider(
 ) {
   const { providerId, modelId, providerEnv, baseUrl } = opts;
 
-  const apiKey = Object.values(providerEnv)[0];
+  const apiKey = resolveProviderApiKey(providerId, providerEnv);
   if (!apiKey) throw new Error(`API key not configured for ${providerId}`);
 
   const cfg: Record<string, unknown> = { name: providerId, apiKey };

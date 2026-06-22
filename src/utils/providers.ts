@@ -499,6 +499,20 @@ export function filterGoogleEnvKeys(providerId: string, envKeys: string[]): stri
   return envKeys.filter((k) => k !== 'GOOGLE_GENERATIVE_AI_API_KEY');
 }
 
+/**
+ * For Google, fold a stored GOOGLE_GENERATIVE_AI_API_KEY value into
+ * GEMINI_API_KEY when the latter is empty, so the UI input shows the
+ * existing key and saving does not silently clear it.
+ */
+export function migrateGoogleEnvValues(providerId: string, env: Record<string, string>): Record<string, string> {
+  if (providerId !== 'google') return env;
+  const legacy = env['GOOGLE_GENERATIVE_AI_API_KEY'];
+  if (legacy && !env['GEMINI_API_KEY']) {
+    return { ...env, GEMINI_API_KEY: legacy };
+  }
+  return env;
+}
+
 /** Replace `${VAR}` placeholders in a URL template with values from env */
 export function resolveApiUrl(template: string, env: Record<string, string>): string {
   return template.replace(/\$\{(\w+)\}/g, (_, key: string) => {

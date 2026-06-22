@@ -29,6 +29,7 @@ import {
   fetchLiveProviders,
   saveV2Config,
   filterGoogleEnvKeys,
+  migrateGoogleEnvValues,
 } from '../utils/providers';
 import { getModelIconPath } from '../utils/modelAnalyzer';
 import { cardDataMap, ModelIcons } from '../components/common';
@@ -162,7 +163,7 @@ class ModelDialogV2 {
     const commonProvider = cp?.[providerId];
     const addedProvider = v2.addedProviders[providerId];
     const envKeys = filterGoogleEnvKeys(providerId, addedProvider?.env ?? commonProvider?.env ?? []);
-    const envValues = v2.env[providerId] ?? {};
+    const envValues = migrateGoogleEnvValues(providerId, v2.env[providerId] ?? {});
     const isCustom = !commonProvider;
 
     ztoolkit.log('[ModelDialogV2] createAndAppendCard:', {
