@@ -22,7 +22,7 @@ import { getString } from '../utils/locale';
 import { getPref, setPref } from '../utils/prefs';
 import { aiBarCommands } from '../utils/prompts';
 import { ActionButton } from '../components/buttons/actionButton';
-import { ModelInfo } from '../components/modelInfo';
+import { ModelInfo, registerModelInfoAnchor } from '../components/modelInfo';
 import { ExpandButton, ExpandMenuItem } from '../components/buttons/expandButton';
 import { Icons } from '../components/common';
 
@@ -381,6 +381,8 @@ function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 
     ],
   });
   const container = fragment.querySelector('.ai-bar-container') as HTMLElement;
+  const modelInfoEl = fragment.querySelector('#ai-bar-model-info') as HTMLElement | null;
+  if (modelInfoEl) registerModelInfoAnchor(modelInfoEl);
   function hideContainerOnTimeout(delay: number = 500) {
     setTimeout(() => {
       container.style.display = 'none';

@@ -19,6 +19,7 @@
 import { Icons } from './common';
 import { IconView } from './iconView';
 import { ImagePreview, createImageViewer } from './imagePreview';
+import { ModelInfo, registerModelInfoAnchor } from './modelInfo';
 import { getString } from '../utils/locale';
 import { getPref } from '../utils/prefs';
 import { Session } from '../modules/chatManager';
@@ -42,7 +43,8 @@ export function InputArea(
 ): HTMLElement {
   // ── outer wrapper (contains input-row + disclaimer) ──────────────────────
   const wrapper = doc.createElement('div');
-  wrapper.classList.add('input-area-wrapper', 'max-w-3xl', 'w-full', 'mx-auto', 'my-2', 'flex', 'flex-col', 'gap-1');
+  wrapper.classList.add('input-area-wrapper', 'max-w-3xl', 'w-full', 'mx-auto', 'my-2', 'flex', 'flex-col', 'gap-1', 'relative');
+  wrapper.dataset.modelDropdownContainer = 'true';
 
   // ── image preview strip ─────────────────────────────────────────────────
   const preview = ImagePreview(doc, sectionId, () => {
@@ -135,6 +137,14 @@ export function InputArea(
   const session = addon.chatManager.sessionsMap.get(sectionId) ?? new Session(sectionId);
   addon.chatManager.sessionsMap.set(sectionId, session);
 
+  // ── model selector button (right of thinking effort) ──────────────────────
+  // Reuses the same ModelInfo component as the reader popup. The dropdown
+  // anchors to `wrapper` via the [data-model-dropdown-container] attribute and
+  // pops upward (away from the input area).
+  const modelInfoSpec = ModelInfo({ dropUp: true });
+  const modelInfoBtn = ztoolkit.UI.createElement(doc, modelInfoSpec.tag, modelInfoSpec) as HTMLElement;
+  registerModelInfoAnchor(modelInfoBtn);
+
   const effortOrder: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh'> = ['none', 'low', 'medium', 'high', 'xhigh'];
   const effortLabelMap: Record<string, string> = {
     none: getString('thinking-effort-none'),
@@ -216,6 +226,7 @@ export function InputArea(
   inputRow.appendChild(screenshotBtn);
   inputRow.appendChild(textarea);
   inputRow.appendChild(thinkingBtn);
+  inputRow.appendChild(modelInfoBtn);
   inputRow.appendChild(sendBtn);
 
   container.appendChild(inputRow);

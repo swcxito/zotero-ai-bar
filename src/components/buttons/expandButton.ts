@@ -74,7 +74,7 @@ export function ExpandButton({ label, icon = Icons.Chevron, classList = [], menu
 
   const closeMenu = (container: HTMLElement) => {
     clearCloseTimer(container);
-    closeDropdownMenu(container.ownerDocument, menuId);
+    closeDropdownMenu(container.getRootNode() as Document | ShadowRoot, menuId);
   };
 
   const scheduleCloseMenu = (container: HTMLElement) => {

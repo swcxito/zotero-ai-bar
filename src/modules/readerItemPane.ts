@@ -102,6 +102,10 @@ flex-direction: column; min-height: 400px;max-height: 100vh; overflow: hidden;ga
       injectCSS(shadowRoot, 'katex.min.css');
       injectCSS(shadowRoot, 'atom-one.css');
       injectCSS(shadowRoot, `../app.css`);
+      // Model selector button + dropdown styles live in zoteroAIBar.css (shared
+      // with the reader popup). Inject so the reused ModelInfo component
+      // renders correctly inside the sidebar's Shadow DOM.
+      injectCSS(shadowRoot, `../zoteroAIBar.css`);
 
       const messageContainer = doc.createElement('div');
       messageContainer.classList.add('message-container', 'flex', 'flex-col', 'flex-1', 'overflow-y-auto', 'overflow-x-auto', 'min-w-0');

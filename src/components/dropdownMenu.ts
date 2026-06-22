@@ -39,34 +39,75 @@ export interface OpenDropdownMenuOptions {
   groups: DropdownMenuGroup[];
   emptyText?: string;
   closeOnOutsideClick?: boolean;
+  dropUp?: boolean;
 }
 
-const dropdownCloseHandlers = new Map<string, (e: Event) => void>();
+const dropdownCloseHandlers = new Map<string, { handler: (e: Event) => void; doc: Document }>();
 
-export function closeDropdownMenu(doc: Document, menuId: string) {
-  const menu = doc.getElementById(menuId);
+type DropdownRoot = Document | ShadowRoot;
+
+function getRoot(anchor: HTMLElement): DropdownRoot {
+  const root = anchor.getRootNode();
+  return root.nodeType === 11 /* DocumentFragment */ ? (root as ShadowRoot) : (root as Document);
+}
+
+export function closeDropdownMenu(root: DropdownRoot, menuId: string) {
+  const menu = root.getElementById(menuId);
   if (menu) {
     menu.remove();
   }
 
-  const closeHandler = dropdownCloseHandlers.get(menuId);
-  if (closeHandler) {
-    doc.removeEventListener('click', closeHandler, true);
+  const entry = dropdownCloseHandlers.get(menuId);
+  if (entry) {
+    entry.doc.removeEventListener('click', entry.handler, true);
     dropdownCloseHandlers.delete(menuId);
   }
 }
 
-export function openDropdownMenu({ menuId, anchor, container, groups, emptyText, closeOnOutsideClick = true }: OpenDropdownMenuOptions): HTMLElement {
+/**
+ * Fade the dropdown out (opacity transition) then remove it and clean up the
+ * outside-click handler. Used for hover-to-close behavior on the sidebar
+ * model selector.
+ */
+export function fadeCloseDropdownMenu(root: DropdownRoot, menuId: string, fadeMs = 150) {
+  const menu = root.getElementById(menuId) as HTMLElement | null;
+  if (!menu) return;
+  const view = menu.ownerDocument.defaultView;
+  menu.style.transition = `opacity ${fadeMs}ms ease-out`;
+  menu.style.opacity = '0';
+  const cleanup = () => {
+    if (menu.isConnected) menu.remove();
+    const entry = dropdownCloseHandlers.get(menuId);
+    if (entry) {
+      entry.doc.removeEventListener('click', entry.handler, true);
+      dropdownCloseHandlers.delete(menuId);
+    }
+  };
+  menu.addEventListener('transitionend', cleanup, { once: true });
+  if (view) view.setTimeout(cleanup, fadeMs + 30);
+  else cleanup();
+}
+
+export function openDropdownMenu({
+  menuId,
+  anchor,
+  container,
+  groups,
+  emptyText,
+  closeOnOutsideClick = true,
+  dropUp = false,
+}: OpenDropdownMenuOptions): HTMLElement {
   const doc = anchor.ownerDocument;
+  const root = getRoot(anchor);
 
   // Close any open dropdowns in the same popup to avoid overlap.
   const menuIds = Array.from(dropdownCloseHandlers.keys());
   menuIds.forEach((id) => {
-    closeDropdownMenu(doc, id);
+    closeDropdownMenu(root, id);
   });
 
   // Keep one menu instance per anchor menu id.
-  closeDropdownMenu(doc, menuId);
+  closeDropdownMenu(root, menuId);
 
   const dropdown = doc.createElement('div');
   dropdown.id = menuId;
@@ -121,7 +162,7 @@ export function openDropdownMenu({ menuId, anchor, container, groups, emptyText,
         itemEl.addEventListener('click', (e: Event) => {
           e.stopPropagation();
           item.onClick?.();
-          closeDropdownMenu(doc, menuId);
+          closeDropdownMenu(root, menuId);
         });
 
         groupList.appendChild(itemEl);
@@ -136,21 +177,34 @@ export function openDropdownMenu({ menuId, anchor, container, groups, emptyText,
   const containerRect = container.getBoundingClientRect();
   const anchorRect = anchor.getBoundingClientRect();
   dropdown.style.position = 'absolute';
-  dropdown.style.top = `${anchorRect.bottom - containerRect.top + 2}px`;
-  dropdown.style.left = `${anchorRect.left - containerRect.left}px`;
+  if (dropUp) {
+    // Pop above the button, right-aligned with it (sidebar model selector).
+    dropdown.style.bottom = `${containerRect.bottom - anchorRect.top + 2}px`;
+    dropdown.style.top = 'auto';
+    dropdown.style.right = `${containerRect.right - anchorRect.right}px`;
+    dropdown.style.left = 'auto';
+  } else {
+    dropdown.style.top = `${anchorRect.bottom - containerRect.top + 2}px`;
+    dropdown.style.bottom = 'auto';
+    dropdown.style.left = `${anchorRect.left - containerRect.left}px`;
+    dropdown.style.right = 'auto';
+  }
   dropdown.style.zIndex = '10001';
 
   if (closeOnOutsideClick) {
     const closeHandler = (e: Event) => {
-      const target = e.target as Node;
-      if (dropdown.contains(target) || anchor.contains(target)) {
+      const path = e.composedPath();
+      if (path.includes(dropdown) || path.includes(anchor)) {
         return;
       }
-      closeDropdownMenu(doc, menuId);
+      closeDropdownMenu(root, menuId);
     };
 
-    dropdownCloseHandlers.set(menuId, closeHandler);
+    dropdownCloseHandlers.set(menuId, { handler: closeHandler, doc });
     setTimeout(() => {
+      // Register on the owner document so clicks outside the Shadow DOM
+      // (e.g., on the PDF reader) still close the dropdown. composedPath()
+      // is used in the handler so it works across shadow boundaries.
       doc.addEventListener('click', closeHandler, true);
     }, 0);
   }
@@ -158,13 +212,13 @@ export function openDropdownMenu({ menuId, anchor, container, groups, emptyText,
   return dropdown;
 }
 
-export function toggleDropdownMenu(options: OpenDropdownMenuOptions) {
+export function toggleDropdownMenu(options: OpenDropdownMenuOptions): HTMLElement | undefined {
   const { menuId, anchor } = options;
-  const doc = anchor.ownerDocument;
-  const existing = doc.getElementById(menuId);
+  const root = getRoot(anchor);
+  const existing = root.getElementById(menuId);
   if (existing) {
-    closeDropdownMenu(doc, menuId);
-    return;
+    closeDropdownMenu(root, menuId);
+    return undefined;
   }
-  openDropdownMenu(options);
+  return openDropdownMenu(options);
 }

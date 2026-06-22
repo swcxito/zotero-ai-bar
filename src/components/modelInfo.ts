@@ -22,7 +22,7 @@ import { saveV2Config } from '../utils/providers';
 import { analyzeModelName, getModelIconPath } from '../utils/modelAnalyzer';
 import { getString } from '../utils/locale';
 import { IconView } from './iconView';
-import { DropdownMenuGroup, toggleDropdownMenu } from './dropdownMenu';
+import { DropdownMenuGroup, fadeCloseDropdownMenu, toggleDropdownMenu } from './dropdownMenu';
 import type { AddedModel, ProviderId } from '../utils/providers';
 
 function resolveModelDisplayName(): string {
@@ -76,8 +76,45 @@ function updateModelInfoDisplay(container: HTMLElement) {
   }
 }
 
-export function ModelInfo(): TagElementProps {
+/**
+ * Track every ModelInfo anchor across windows (sidebar, reader popup) so we
+ * can refresh them all when the active model changes elsewhere (settings
+ * dialog, model dialog, reader popup, etc.).
+ */
+export function registerModelInfoAnchor(el: HTMLElement) {
+  ensureRefreshHookWired();
+  addon.data.modelInfoAnchors.add(el);
+}
+
+export function refreshAllModelInfoAnchors() {
+  const set = addon.data.modelInfoAnchors;
+  for (const el of set) {
+    if (el.isConnected) {
+      updateModelInfoDisplay(el);
+    } else {
+      set.delete(el);
+    }
+  }
+}
+
+/**
+ * Wire the global refresh hook. Called lazily from registerModelInfoAnchor
+ * (which only runs after `addon` exists) rather than at module load —
+ * referencing `addon` at import time fails because the bundle is loaded
+ * before `addon` is assigned in src/index.ts.
+ */
+let _refreshHookWired = false;
+function ensureRefreshHookWired() {
+  if (_refreshHookWired) return;
+  _refreshHookWired = true;
+  if (addon?.data && !addon.data.refreshModelInfoAnchors) {
+    addon.data.refreshModelInfoAnchors = refreshAllModelInfoAnchors;
+  }
+}
+
+export function ModelInfo(opts?: { dropUp?: boolean }): TagElementProps {
   const children = buildCurrentModelInfoChildren();
+  const dropUp = opts?.dropUp ?? false;
 
   return {
     tag: 'div',
@@ -89,15 +126,15 @@ export function ModelInfo(): TagElementProps {
         type: 'click',
         listener: (e: Event) => {
           e.stopPropagation();
-          toggleModelDropdown(e.currentTarget as HTMLElement);
+          toggleModelDropdown(e.currentTarget as HTMLElement, dropUp);
         },
       },
     ],
   };
 }
 
-function toggleModelDropdown(anchor: HTMLElement) {
-  const container = anchor.closest('.ai-bar-container') as HTMLElement;
+function toggleModelDropdown(anchor: HTMLElement, dropUp = false) {
+  const container = (anchor.closest('.ai-bar-container') || anchor.closest('[data-model-dropdown-container]')) as HTMLElement | null;
   if (!container) return;
 
   const active = addon.data.userProviderConfigV2?.active;
@@ -144,11 +181,62 @@ function toggleModelDropdown(anchor: HTMLElement) {
     groups.push({ title: provider?.name ?? providerId, items });
   }
 
-  toggleDropdownMenu({
+  const dropdown = toggleDropdownMenu({
     menuId: 'ai-bar-model-dropdown',
     anchor,
     container,
     groups,
     emptyText: getString('no-models-available' as any) || 'No models available',
+    dropUp,
   });
+
+  // Sidebar (dropUp) uses hover-to-close with fade-out, mirroring the thinking
+  // effort dropdown. Opening is click-only (no hover-open).
+  if (dropUp && dropdown) {
+    wireHoverFadeClose(anchor, dropdown);
+  }
+}
+
+interface HoverCloseState {
+  timer: number | undefined;
+  dropdown: HTMLElement | undefined;
+  wired: boolean;
+}
+
+function wireHoverFadeClose(anchor: HTMLElement, dropdown: HTMLElement) {
+  const view = anchor.ownerDocument.defaultView;
+  if (!view) return;
+  const win: Window = view;
+  const state =
+    ((anchor as any)._modelHover as HoverCloseState | undefined) ??
+    ((anchor as any)._modelHover = { timer: undefined, dropdown: undefined, wired: false });
+  state.dropdown = dropdown;
+
+  function schedule() {
+    const dd = state.dropdown;
+    if (!dd || !dd.isConnected) return;
+    if (state.timer !== undefined) win.clearTimeout(state.timer);
+    state.timer = win.setTimeout(() => {
+      const root = dd.getRootNode() as Document | ShadowRoot;
+      fadeCloseDropdownMenu(root, 'ai-bar-model-dropdown');
+      state.timer = undefined;
+    }, 250);
+  }
+  function cancel() {
+    if (state.timer !== undefined) {
+      win.clearTimeout(state.timer);
+      state.timer = undefined;
+    }
+  }
+
+  // Attach to the dropdown each open (it is recreated every time).
+  dropdown.addEventListener('mouseleave', schedule);
+  dropdown.addEventListener('mouseenter', cancel);
+
+  // Attach to the anchor once — handlers read state.dropdown dynamically.
+  if (!state.wired) {
+    state.wired = true;
+    anchor.addEventListener('mouseleave', schedule);
+    anchor.addEventListener('mouseenter', cancel);
+  }
 }

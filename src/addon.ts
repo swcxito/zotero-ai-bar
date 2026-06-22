@@ -46,6 +46,10 @@ class Addon {
     inputImages: Map<string, string[]>;
     _tabObserverID?: string;
     _readerPopupHandler?: (event: any) => void;
+    // ModelInfo anchor elements across windows (sidebar, reader popup).
+    // Refreshed when the active model changes anywhere.
+    modelInfoAnchors: Set<HTMLElement>;
+    refreshModelInfoAnchors?: () => void;
   };
   // Chat state and logic
   public chatManager: ChatManager;
@@ -64,6 +68,7 @@ class Addon {
         ztoolkit: createZToolkit(),
         selection: {},
         inputImages: new Map<string, string[]>(),
+        modelInfoAnchors: new Set<HTMLElement>(),
       };
       Services.console.logStringMessage('[zaibar-addon] data initialized');
       this.chatManager = new ChatManager(resolveInitialTabID());

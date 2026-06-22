@@ -611,6 +611,9 @@ export async function saveV2Config(v2: UserProviderConfigV2): Promise<void> {
   setPref(V2_CONFIG_PREF_KEY as keyof _ZoteroTypes.Prefs['PluginPrefsMap'], JSON.stringify(lightweight));
   await saveV2Models(v2.addedModels);
   addon.data.userProviderConfigV2 = v2;
+  // Refresh all ModelInfo buttons (sidebar + reader popup) so icon/version
+  // reflect the new active model or model metadata.
+  addon.data.refreshModelInfoAnchors?.();
   ztoolkit.log('[saveV2Config] Persisted (prefs + models file)');
 }
 
