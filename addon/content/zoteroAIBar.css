@@ -359,12 +359,16 @@
 }
 
 .model-dropdown-group-title {
-  padding: 8px 12px;
+  padding: 3px 12px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   opacity: 0.8;
+}
+
+.model-dropdown-group-title:first-child {
+  padding-top: 4px;
 }
 
 .model-dropdown-group-list {
@@ -396,6 +400,16 @@
   height: 6px;
   border-radius: 50%;
   margin-left: auto;
+}
+
+/* The renderLeading holder wraps the icon in a <span>; make it a flex item
+ * so it vertically centers with the label text (inline spans default to
+ * baseline alignment, which left icons sitting slightly below the text). */
+.model-dropdown-icon-holder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .model-dropdown-icon {
@@ -445,7 +459,7 @@
       0 0 0 1px rgba(0, 0, 0, 0.05);
   }
   .model-dropdown-group-title {
-    color: #6b7280;
+    color: #4b5563;
     background-color: #f9fafb;
     border-top: 1px solid #e5e7eb;
     border-bottom: 1px solid #e5e7eb;
@@ -481,7 +495,7 @@
       0 0 0 1px rgba(255, 255, 255, 0.05);
   }
   .model-dropdown-group-title {
-    color: #9ca3af;
+    color: #cbd5e1;
     background-color: rgba(0, 0, 0, 0.2);
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);

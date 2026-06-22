@@ -158,6 +158,7 @@ function toggleModelDropdown(anchor: HTMLElement, dropUp = false) {
       selected: active?.providerId === providerId && active?.modelId === m.id,
       renderLeading: (doc: Document) => {
         const holder = doc.createElement('span');
+        holder.className = 'model-dropdown-icon-holder';
         ztoolkit.UI.appendElement(
           IconView({
             iconMarkup: getModelIconPath(m.family),
@@ -190,9 +191,9 @@ function toggleModelDropdown(anchor: HTMLElement, dropUp = false) {
     dropUp,
   });
 
-  // Sidebar (dropUp) uses hover-to-close with fade-out, mirroring the thinking
-  // effort dropdown. Opening is click-only (no hover-open).
-  if (dropUp && dropdown) {
+  // Hover-to-close with fade-out for both sidebar (dropUp) and reader popup.
+  // Opening stays click-only.
+  if (dropdown) {
     wireHoverFadeClose(anchor, dropdown);
   }
 }
