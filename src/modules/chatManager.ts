@@ -262,73 +262,40 @@ export class ChatManager {
       systemPrompt += '\n\n' + metadataLines.join('\n');
     }
 
-    // Append full text if enabled (stable → cacheable)
-    // In agent mode, avoid stuffing the entire document into the system prompt
-    // because the agent can read it on-demand via the read tool. Instead,
-    // just note that the full text is available.
-    if (fullTextEnabled && itemId !== undefined) {
-      if (agentEnabled) {
-        systemPrompt +=
-          '\n\n# Full Document Text\nThe full text of the current document is available. Use the `read` tool to read it in chunks if needed.';
-      } else {
-        const fullText = await getItemFullText(itemId);
-        if (fullText) {
-          systemPrompt += '\n\n# Full Document Text\n<fulldoc>\n' + fullText + '\n</fulldoc>';
-        }
+    // Append full text if enabled (stable → cacheable).
+    // Agent mode skips this — the agent discovers content on demand via
+    // grep/read (see Tool Orchestration), so we don't bloat the prompt.
+    if (fullTextEnabled && itemId !== undefined && !agentEnabled) {
+      const fullText = await getItemFullText(itemId);
+      if (fullText) {
+        systemPrompt += '\n\n# Full Document Text\n<fulldoc>\n' + fullText + '\n</fulldoc>';
       }
     }
 
-    // Agent instructions: ask user when intent is unclear, plus tool usage guide
+    // Agent instructions: ask user when intent is unclear, plus tool orchestration
     if (agentEnabled) {
       systemPrompt += `
 
 # Agent Instructions
 You have access to tools. Before taking any action, make sure you understand the user's request.
-If the user's goal, question, or required output format is ambiguous, incomplete, or could reasonably be interpreted in more than one way, do NOT guess. Use the \`ask_user\` tool to ask 1–3 concise clarifying questions.
-Each question should:
-- Offer 2–5 concrete options when possible.
-- Include an "Other (please specify)" or custom input option when the answer is open-ended.
-- Be brief and written in the same language as the user's message.
-Only proceed with tool calls or answers once the intent is clear. If the user provides a vague follow-up (e.g., "explain this", "analyze", "help"), ask what aspect they care about, what depth they want, or what output format they prefer.
+If the user's goal, question, or required output format is ambiguous, incomplete, or could reasonably be interpreted in more than one way, do NOT guess — use the \`ask_user\` tool to ask 1–3 concise clarifying questions. Each question should offer 2–5 concrete options when possible and include an "Other" option when open-ended. Ask in the user's language. Clarification questions go through \`ask_user\` only — never as prose preamble.
 
-## Tool Usage Guide
-- **Current document questions**: If the answer is not in the provided context, use \`grep\` to search the full text first to find matching line numbers. Then use \`read\` with startLine/endLine to read the relevant lines with surrounding context (default 2 context lines). For PDFs, you can also use \`read\` with pageNumber to read an entire page. Both \`grep\` and \`read\` accept an optional itemId to target a specific document; omit to use the current document.
-- **Image questions**: If the user asks about an uploaded/captured image from the current PDF and the visible image alone may be ambiguous, explore nearby document text before giving the final explanation. Use any readable figure/table number, panel label, title, axis label, legend term, or keyword from the image as a \`grep\` query, then \`read\` the matching lines with surrounding context. If the image was captured from a known PDF page, also \`read\` that page or adjacent lines/pages to find the figure caption and in-text references. Base the answer on both visual evidence and retrieved nearby text, and explicitly mark uncertain visual readings as uncertain.
-- **Library-wide questions**: Use \`glob\` to find relevant items, then use \`read\` to inspect their content. Do not guess based on titles alone.
-- **Unclear user intent**: Use \`ask_user\` with 2–5 concrete options before proceeding.
-- **Translation**: Use the \`translate\` tool ONLY for single words and abbreviations. For sentences or paragraphs, output the translation directly in your response text. When calling \`translate\` for a word, provide top-level \`pos\` (part of speech only, e.g. "adj.") and \`definition\` (meaning text only, no POS prefix) — do NOT combine them into one string.
-- **Page capture**: Use the \`capture_page\` tool to render a specific PDF page as an image when the user wants to see a figure, table, or visual content. After capturing, use \`read\`/\`grep\` to look for the page's caption or nearby explanatory text when that would improve accuracy, then explain the image.
+## Tool Orchestration
+- **Current document** (itemId is the Item ID in Item Metadata above): when the answer isn't in the provided context, \`grep\` first to locate matching line numbers, then \`read\` with startLine/endLine (default 2 context lines) or \`pageNumber\` for full PDF pages. \`grep\`/\`read\` default to this document when itemId is omitted.
+- **Cross-document**: \`glob\` to find items by query, then \`read\` to inspect. Don't guess from titles alone.
+- **Images**: use visible figure/table numbers, panel labels, axis labels, or keywords as \`grep\` queries, then \`read\` matching lines/pages for captions. For images captured from a known PDF page, also \`read\` that page or adjacent ones.
+- **Page capture**: \`capture_page\` renders a PDF page as an image when visual content matters; pair with \`read\`/\`grep\` for captions.
+- **Translation**: \`translate\` is for single words and abbreviations only — provide \`pos\` and \`definition\` as separate top-level fields. Sentences/paragraphs go directly in your response.
 
 ## Citation Markers
-Reference library items using citation markers. The marker format includes an optional title slot:
-
-\`[cite:<itemId>[:<page>][|<title>]]\`
-
-- \`itemId\`: use exactly as it appeared in tool output (\`glob\`, \`tree\`, \`read\`, \`grep\`). If a tool returned an attachment ID, cite that attachment ID directly — the UI resolves it to the parent item's metadata.
-- \`page\`: optional, 1-based.
-- \`title\`: optional, goes after \`|\`. **You SHOULD include the paper's title here** — the UI displays it as the clickable label. This is the ONLY place titles should appear; the UI uses your provided title (falling back to its own lookup if you omit it).
-
-Examples:
-- \`[cite:4291|A Novel Approach to X]\` — inline citation with title
-- \`[cite:4291:7|A Novel Approach to X]\` — inline citation to page 7
-- \`[cite:4291]\` — inline citation, title resolved by UI
-
-**Standalone citation as a heading**: when a marker is the ONLY content on its own line, the UI renders it as a prominent section header for that paper (full title, prominent styling). Use this when summarizing or discussing a single paper — put the marker alone on its own line as the first line of that section, then write the discussion below it.
-
-Example (correct):
-\`\`\`
-[cite:4291|A Novel Approach to X]
-
-Smith et al. (2023) propose a method that...
-\`\`\`
-
-Rules:
-- **Never** write a paper's title in the prose/body text. Titles belong ONLY inside the \`|title\` slot of a citation marker. If you feel the urge to write "This paper, titled X, ...", instead put the title in the marker: \`[cite:4291|X]\` and start the prose with "The authors propose...".
-- **Never** apply markdown formatting to a citation marker. The marker has its own styling. Do NOT wrap it in \`**...**\`, \`*...*\`, \`_..._\`, \`~~...~~\`, backticks, or markdown link syntax \`[text](url)\`. Emit the marker as raw text exactly as specified — e.g. write \`[cite:4291|Title]\`, not \`**[cite:4291|Title]**\` or \`[\\[cite:4291\\]](something)\`.
-- **Never** refer to literature by raw IDs in prose (e.g. "Item 4291", "item #4291", "document 4291"). Always use a \`[cite:...]\` marker.
-- Place inline markers at the point of reference, e.g. "The method achieves 95% accuracy [cite:4291:7|A Novel Approach to X]."
-- Author names, years, and other non-title context are fine in prose.
-- Only emit markers for item IDs that were returned by tools in this conversation — never invent IDs.`;
+Format: \`[cite:<itemId>[:<page>][|<title>]]\`
+- Use the itemId exactly as returned by tools (attachment IDs are fine — the UI resolves them).
+- Page is 1-based, optional.
+- **Include the paper's title in the \`|title\` slot** — the UI displays it as the clickable label. Titles appear ONLY here, never in prose.
+- Never apply markdown formatting (bold/italic/backticks/links) to a marker — emit as raw text.
+- Never refer to literature by raw IDs in prose ("Item 4291"); always use a marker.
+- A marker alone on its own line renders as a section header for that paper.
+- Only cite IDs returned by tools in this conversation — never invent IDs.`;
     }
 
     if (hasImages) {
@@ -337,21 +304,23 @@ Rules:
 # Image Analysis Instructions
 The current user message includes one or more images. For this turn, analyze the uploaded images directly and use selected text or surrounding document text only as context.
 When the general instructions mention <selected>, do not treat them as limiting the task to text only. Prioritize visible image evidence, then captions or nearby document context, then clearly marked inference.
-Separate what is visibly readable in the image from what is supplied by document context. Mark unclear OCR, small labels, approximate values, and inferred experimental conditions as uncertain.`;
+Separate what is visibly readable in the image from what is supplied by document context. Mark unclear OCR, small labels, approximate values, and inferred experimental conditions as uncertain.
+If you are unsure about content depicted in the image (e.g., unclear labels, unfamiliar symbols, ambiguous figures), search the document before answering: use any readable figure/table number, panel label, title, axis label, legend term, or keyword as a \`grep\` query, then \`read\` the matching lines/pages for captions or in-text references. In agent mode, prefer this search-then-answer flow over guessing.`;
     }
 
-    // Append volatile context at the end to improve prompt cache hits
+    // Append volatile context at the end to improve prompt cache hits.
+    // Scope instructions live here (not in SYSTEM_PROMPT_PREFIX) so they
+    // match the actual presence/absence of a selection.
     if (selectedText) {
-      systemPrompt += '\n\nContent:' + `${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`;
+      systemPrompt +=
+        '\n\n# Current Selection\n' +
+        'Answer based on the text inside <selected>...</selected>. Text outside the tags is surrounding context only — use it for disambiguation, not as the answer source. Refer to it as "the selected text", not as <selected> tags.' +
+        `\n\nContent:\n${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`;
     } else {
-      // No text is selected by the user. Provide the surrounding context only
-      // as reading reference and explicitly state that nothing is selected,
-      // so the model does not treat context text as a "selection".
       const ctx = `${contextLeft}\n${contextRight}`.trim();
       systemPrompt +=
         '\n\n# Current Context\n' +
-        'The user has NOT selected any text in the document. Do NOT claim or imply that the user selected something. ' +
-        'The text below is surrounding document context for reference only, not a selection.' +
+        'No text selected. Content below is surrounding context only, not a selection.' +
         (ctx ? `\n\nContent:\n${ctx}` : '');
     }
 
