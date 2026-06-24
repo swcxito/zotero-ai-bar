@@ -137,7 +137,26 @@ export function registerReaderInitializer() {
     addon.data.selection.currentAnnotation = params.annotation;
     addon.data.selection.currentReader = reader;
     if (reader._internalReader._type === 'pdf') {
-      append(renderAIBar(doc, reader));
+      const fragment = renderAIBar(doc, reader);
+      append(fragment);
+      // When the popup closes (user clicks away / cancels selection), Zotero
+      // removes the injected container. Clear the cached selection so a
+      // follow-up sidebar question doesn't see a stale `selection.text` and
+      // mistakenly emit a <selection> block for text the user no longer has
+      // highlighted.
+      const container = fragment.querySelector('.ai-bar-container') as HTMLElement | null;
+      if (container) {
+        const ownerDoc = doc;
+        const observer = new (ownerDoc.defaultView || ownerDoc).MutationObserver(() => {
+          if (!container.isConnected) {
+            addon.data.selection.text = undefined;
+            addon.data.selection.contextPromise = undefined;
+            addon.data.selection.currentAnnotation = undefined;
+            observer.disconnect();
+          }
+        });
+        observer.observe(container.parentElement || container, { childList: true });
+      }
       smartAutoTranslate(reader, params);
     }
   };

@@ -42,6 +42,13 @@ export class Session {
   thinkingEffort: 'none' | 'low' | 'medium' | 'high' | 'xhigh' = 'none';
   itemId?: number;
   capturedPageImages?: string[];
+  /**
+   * The selection text sent to the model in the previous turn (or undefined
+   * if none was sent). Used to suppress redundant selection blocks across
+   * consecutive turns with the same selection, and to emit a `<no-selection>`
+   * notice only on the transition from "has selection" → "no selection".
+   */
+  lastSentSelectionText?: string;
   /** Token usage returned by the most recent request (persists across pending resets). */
   lastUsage?: TokenUsage;
   pending: {
@@ -336,6 +343,11 @@ Separate what is visibly readable in the image from what is supplied by document
     const maxHistoryMessages = contextRounds * 2;
     if (params.isFromPopup || session.pending.isNewSource) {
       session.conversationHistory = [];
+      // History reset means the model has no memory of prior turns, so the
+      // "last sent selection" tracking must also reset — otherwise a popup
+      // action that fires with the same selection as before would suppress
+      // the block and leave the new conversation without any selection context.
+      session.lastSentSelectionText = undefined;
     } else {
       session.conversationHistory = trimHistoryToRounds(session.conversationHistory, maxHistoryMessages);
       session.conversationHistory = narrowHistoryByTokenBudget(
@@ -403,15 +415,29 @@ Separate what is visibly readable in the image from what is supplied by document
       const contextLeft = selectionContext?.[0] || '';
       const contextRight = selectionContext?.[2] || '';
       let selectionBlock = '';
+      // Only emit selection tags when the state changed since the last turn:
+      //  - first turn with a selection → emit <selection> + <context>
+      //  - same selection as last turn → omit (avoid redundant tokens,
+      //    and keep multi-round history from repeating the same block)
+      //  - transition from "had selection" → "no selection" → emit
+      //    <no-selection> only (no <context>), so the model knows the user
+      //    cleared the selection and doesn't carry the prior context forward
+      //  - no selection now and none was sent last turn → emit nothing
       if (selectedText) {
-        const parts: string[] = [];
-        if (contextLeft) parts.push(`<context>${contextLeft}</context>`);
-        parts.push(`<selection>\n${selectedText}\n</selection>`);
-        if (contextRight) parts.push(`<context>${contextRight}</context>`);
-        selectionBlock = parts.join('\n') + '\n\n';
-      } else if (contextLeft || contextRight) {
-        const ctx = [contextLeft, contextRight].filter(Boolean).join('\n');
-        selectionBlock = `<context>${ctx}</context>\n\n`;
+        if (session.lastSentSelectionText !== selectedText) {
+          const parts: string[] = [];
+          if (contextLeft) parts.push(`<context>${contextLeft}</context>`);
+          parts.push(`<selection>\n${selectedText}\n</selection>`);
+          if (contextRight) parts.push(`<context>${contextRight}</context>`);
+          selectionBlock = parts.join('\n') + '\n\n';
+        }
+        session.lastSentSelectionText = selectedText;
+      } else {
+        const hadSelectionLastTurn = session.lastSentSelectionText !== undefined;
+        if (hadSelectionLastTurn) {
+          selectionBlock = '<no-selection>The user has cleared the selection.</no-selection>\n\n';
+        }
+        session.lastSentSelectionText = undefined;
       }
 
       let userContent: UserModelMessage['content'];
