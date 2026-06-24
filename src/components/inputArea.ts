@@ -462,19 +462,18 @@ export function InputArea(
   function buildThinkingDropdown(): HTMLElement {
     removeThinkingDropdown();
     const dropdown = doc.createElement('div');
-    dropdown.classList.add('thinking-effort-dropdown');
-    dropdown.style.position = 'absolute';
-    dropdown.style.bottom = '100%';
-    dropdown.style.left = '50%';
-    dropdown.style.marginBottom = '4px';
-    dropdown.style.minWidth = '104px';
-    dropdown.style.borderRadius = '8px';
-    dropdown.style.padding = '3px 0';
-    dropdown.style.fontSize = '12px';
-    dropdown.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-    dropdown.style.zIndex = '100';
-    dropdown.style.backgroundColor = '#fff';
-    dropdown.style.border = '1px solid #e5e7eb';
+    dropdown.classList.add(
+      'thinking-effort-dropdown',
+      'absolute',
+      'bottom-full',
+      'left-1/2',
+      'mb-1',
+      'min-w-[104px]',
+      'rounded-lg',
+      'py-[3px]',
+      'text-xs',
+      'z-[100]'
+    );
     dropdown.style.opacity = '0';
     dropdown.style.transform = 'translateX(-50%) scale(0.95)';
     dropdown.style.transformOrigin = 'bottom center';
@@ -496,37 +495,40 @@ export function InputArea(
     // Title row
     const title = doc.createElement('div');
     title.textContent = getString('thinking-effort-title');
-    title.style.padding = '2px 10px 3px';
-    title.style.fontSize = '10px';
-    title.style.lineHeight = '1.2';
-    title.style.color = '#9ca3af';
-    title.style.fontWeight = '600';
-    title.style.letterSpacing = '0.04em';
-    title.style.textTransform = 'uppercase';
-    title.style.userSelect = 'none';
+    title.classList.add(
+      'thinking-effort-dropdown-title',
+      'pt-[2px]',
+      'px-2.5',
+      'pb-[3px]',
+      'text-[10px]',
+      'leading-[1.2]',
+      'font-semibold',
+      'tracking-[0.04em]',
+      'uppercase',
+      'select-none'
+    );
     dropdown.appendChild(title);
 
     for (const effort of effortOrder) {
       const item = doc.createElement('div');
       item.textContent = effortLabelMap[effort];
-      item.style.padding = '3px 10px';
-      item.style.cursor = 'pointer';
-      item.style.whiteSpace = 'nowrap';
-      item.style.lineHeight = '1.4';
-      item.style.textAlign = 'left';
+      item.classList.add('thinking-effort-dropdown-item', 'py-[3px]', 'px-2.5', 'cursor-pointer', 'whitespace-nowrap', 'leading-[1.4]', 'text-left');
       const isSelected = session.thinkingEffort === effort;
-      item.style.color = isSelected ? '#f43f5e' : '#374151';
-      item.style.fontWeight = isSelected ? '600' : '400';
+      if (isSelected) {
+        item.classList.add('is-selected', 'font-semibold');
+      } else {
+        item.classList.add('font-normal');
+      }
       item.addEventListener('click', () => {
         session.thinkingEffort = effort;
         updateThinkingBtnAppearance();
         removeThinkingDropdown();
       });
       item.addEventListener('mouseenter', () => {
-        item.style.backgroundColor = '#f3f4f6';
+        item.classList.add('is-hover');
       });
       item.addEventListener('mouseleave', () => {
-        item.style.backgroundColor = 'transparent';
+        item.classList.remove('is-hover');
       });
       dropdown.appendChild(item);
     }
