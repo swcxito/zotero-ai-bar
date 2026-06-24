@@ -55,8 +55,12 @@ export function getItemMetadata(itemId: number): ItemMetadata | undefined {
     }
 
     // Extract metadata
+    // Keep the original itemId (the attachment ID in reader context) so the
+    // value injected into the prompt matches what agent tools (grep/read)
+    // use as their default. Parent-item fields below are still sourced from
+    // the resolved regular item.
     const metadata: ItemMetadata = {};
-    metadata.itemId = targetItem.id;
+    metadata.itemId = itemId;
 
     // Title
     const title = targetItem.getField('title') as string;
