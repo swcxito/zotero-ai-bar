@@ -206,7 +206,7 @@ function handleMouseDown(e: MouseEvent): void {
   selectionEl.style.cssText = `
     position: fixed;
     border: 2px solid #3b82f6;
-    background: rgba(59, 130, 246, 0.1);
+    background: transparent;
     pointer-events: none;
     z-index: 1000001;
   `;

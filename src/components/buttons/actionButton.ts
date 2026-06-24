@@ -58,12 +58,18 @@ export function ActionButton({ label, icon, onClick, title, classList = [], enab
       return next(e, btn);
     };
 
+  // When `ai-btn` is in classList, the button renders in the reader text-
+  // selection popup, which only loads zoteroAIBar.css (plain CSS, no Tailwind).
+  // The BUTTON_VARIANTS.action utilities would be dead code there and only
+  // create confusion — skip them so .ai-btn is the single source of styling.
+  const useTailwindVariants = !classList.includes('ai-btn');
+
   return ButtonBase({
     label,
     iconMarkup: icon,
     onClick,
     title: title || '',
-    classList: [...BUTTON_VARIANTS.action, ...classList],
+    classList: [...(useTailwindVariants ? BUTTON_VARIANTS.action : []), ...classList],
     enabled,
     labelClassList: ['btn-label'],
     clickDecorators: [withRipple],

@@ -70,17 +70,17 @@ function attachCitationTooltip(span: HTMLElement): void {
   let showTimer: number | undefined;
   let hideTimer: number | undefined;
 
-  const applyBaseStyles = (tip: HTMLElement) => {
+  const applyBaseStyles = (tip: HTMLElement, dark: boolean) => {
     tip.style.position = 'fixed';
     tip.style.zIndex = '2147483647';
     tip.style.maxWidth = '360px';
     tip.style.minWidth = '200px';
     tip.style.padding = '8px 10px';
     tip.style.borderRadius = '8px';
-    tip.style.boxShadow = '0 4px 16px rgba(0,0,0,0.18)';
-    tip.style.border = '1px solid #e5e7eb';
-    tip.style.backgroundColor = '#ffffff';
-    tip.style.color = '#1f2937';
+    tip.style.boxShadow = dark ? '0 4px 16px rgba(0,0,0,0.5)' : '0 4px 16px rgba(0,0,0,0.18)';
+    tip.style.border = dark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e5e7eb';
+    tip.style.backgroundColor = dark ? 'rgba(45,45,48,0.98)' : '#ffffff';
+    tip.style.color = dark ? '#f3f4f6' : '#1f2937';
     tip.style.fontFamily = 'inherit';
     tip.style.fontSize = '12px';
     tip.style.lineHeight = '1.45';
@@ -97,9 +97,12 @@ function attachCitationTooltip(span: HTMLElement): void {
     const itemId = parseInt(span.getAttribute('data-item-id') || '', 10);
     const page = span.getAttribute('data-page');
     const info = buildCitationMetadata(itemId);
+    const dark = doc.defaultView?.matchMedia('(prefers-color-scheme: dark)')?.matches ?? false;
+    const secondary = dark ? '#cbd5e1' : '#6b7280';
+    const tertiary = dark ? '#9ca3af' : '#4b5563';
 
     const tip = doc.createElement('div');
-    applyBaseStyles(tip);
+    applyBaseStyles(tip, dark);
 
     // Header cards already display the full title prominently — skip the
     // title row in the tooltip so it shows only the supplementary info
@@ -117,21 +120,21 @@ function attachCitationTooltip(span: HTMLElement): void {
       const journalEl = doc.createElement('div');
       journalEl.textContent = info.journal;
       journalEl.style.fontStyle = 'italic';
-      journalEl.style.color = '#6b7280';
+      journalEl.style.color = secondary;
       journalEl.style.marginBottom = '4px';
       tip.appendChild(journalEl);
     }
     if (info.authors) {
       const authorsEl = doc.createElement('div');
       authorsEl.textContent = info.authors;
-      authorsEl.style.color = '#4b5563';
+      authorsEl.style.color = tertiary;
       tip.appendChild(authorsEl);
     }
     if (page) {
       const pageEl = doc.createElement('div');
       pageEl.textContent = `p.${page}`;
       pageEl.style.marginTop = '4px';
-      pageEl.style.color = '#9ca3af';
+      pageEl.style.color = secondary;
       pageEl.style.fontSize = '11px';
       tip.appendChild(pageEl);
     }

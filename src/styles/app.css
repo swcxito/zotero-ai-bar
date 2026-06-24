@@ -33,10 +33,11 @@
   }
 }
 
-/* Thinking effort dropdown — colors aligned with .model-dropdown-menu */
+/* Thinking effort dropdown — colors aligned with .model-dropdown-menu.
+ * box-shadow uses plain CSS (multi-layer shadow with no clean Tailwind
+ * equivalent; matches .model-dropdown-menu format in zoteroAIBar.css). */
 .thinking-effort-dropdown {
-  @apply border border-gray-200 bg-white text-gray-800 dark:border-white/10 dark:bg-[rgba(45,45,48,0.98)] dark:text-gray-100;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  @apply border border-gray-200 bg-white font-sans text-gray-800 dark:border-white/10 dark:bg-[rgba(45,45,48,0.98)] dark:text-gray-100;
   box-shadow:
     0 4px 6px -1px rgba(0, 0, 0, 0.1),
     0 2px 4px -1px rgba(0, 0, 0, 0.06),
@@ -53,7 +54,7 @@
 }
 
 .thinking-effort-dropdown-title {
-  @apply border-b border-t border-gray-200 bg-gray-50 text-gray-600 dark:border-white/10 dark:bg-black/20 dark:text-slate-300;
+  @apply border-b border-gray-200 bg-gray-50 text-gray-600 dark:border-white/10 dark:bg-black/20 dark:text-slate-300;
 }
 
 .thinking-effort-dropdown-item {
@@ -72,29 +73,7 @@
   @apply text-rose-500 dark:text-red-400;
 }
 
-@keyframes ripple {
-  to {
-    transform: scale(4);
-    opacity: 0;
-  }
-}
-
 @layer components {
-  .ripple {
-    position: absolute;
-    border-radius: 9999px;
-    transform: scale(0);
-    animation: ripple 0.6s linear;
-    pointer-events: none;
-    background: rgba(244, 63, 94, 0.3);
-  }
-
-  @media (prefers-color-scheme: dark) {
-    .ripple {
-      background: rgba(255, 255, 255, 0.3);
-    }
-  }
-
   body::-webkit-scrollbar {
     display: none;
   }
@@ -129,9 +108,7 @@
   }
 
   .chat-message a {
-    color: #f43f5e;
-    text-decoration: underline;
-    text-underline-offset: 2px;
+    @apply text-rose-500 underline underline-offset-2 dark:text-rose-400;
   }
 
   .chat-message h1 {
@@ -240,15 +217,6 @@
   .chat-message .zaibar-cite-header:hover::after {
     transform: translateX(2px);
     @apply text-rose-500 dark:text-rose-300;
-  }
-
-  /* Expand Button Dropdown Styles */
-  .expand-menu {
-    transform: translateY(-4px) scale(0.98);
-  }
-
-  .expand-menu.opacity-100 {
-    transform: translateY(0) scale(1);
   }
 
   .ai-bar-error-text {

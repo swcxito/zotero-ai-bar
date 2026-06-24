@@ -430,15 +430,14 @@
   color: #6b7280;
 }
 
-.expand-container {
-  position: relative;
+@media (prefers-color-scheme: dark) {
+  .model-dropdown-empty {
+    color: #9ca3af;
+  }
 }
 
-/* Error text for failed AI responses */
-.ai-bar-error-text {
-  color: #e11d48;
-  white-space: pre-wrap;
-  word-break: break-word;
+.expand-container {
+  position: relative;
 }
 
 .dropdown-item-icon-text {

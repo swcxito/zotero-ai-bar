@@ -470,7 +470,7 @@ export function InputArea(
       'mb-1',
       'min-w-[104px]',
       'rounded-lg',
-      'py-[3px]',
+      'pb-[3px]',
       'text-xs',
       'z-[100]'
     );
