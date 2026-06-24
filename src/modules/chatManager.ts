@@ -227,17 +227,13 @@ export class ChatManager {
   // ────────────────────────────────────────────────────────────────────────
 
   async buildSystemContent(params: {
-    selectedText?: string;
-    selectionContext?: string[];
     metadata?: ItemMetadata;
     itemId?: number;
     fullTextEnabled?: boolean;
     agentEnabled?: boolean;
-    hasImages?: boolean;
+    imageCapableModel?: boolean;
   }): Promise<string> {
-    const { selectedText, selectionContext, metadata, itemId, fullTextEnabled, agentEnabled, hasImages } = params;
-    const contextLeft = selectionContext?.[0] || '';
-    const contextRight = selectionContext?.[2] || '';
+    const { metadata, itemId, fullTextEnabled, agentEnabled, imageCapableModel } = params;
     let systemPrompt = SYSTEM_PROMPT_PREFIX;
 
     // Append item metadata if enabled (stable → cacheable)
@@ -298,30 +294,15 @@ Format: \`[cite:<itemId>[:<page>][|<title>]]\`
 - Only cite IDs returned by tools in this conversation — never invent IDs.`;
     }
 
-    if (hasImages) {
+    if (imageCapableModel) {
       systemPrompt += `
 
 # Image Analysis Instructions
-The current user message includes one or more images. For this turn, analyze the uploaded images directly and use selected text or surrounding document text only as context.
-When the general instructions mention <selected>, do not treat them as limiting the task to text only. Prioritize visible image evidence, then captions or nearby document context, then clearly marked inference.
-Separate what is visibly readable in the image from what is supplied by document context. Mark unclear OCR, small labels, approximate values, and inferred experimental conditions as uncertain.
-If you are unsure about content depicted in the image (e.g., unclear labels, unfamiliar symbols, ambiguous figures), search the document before answering: use any readable figure/table number, panel label, title, axis label, legend term, or keyword as a \`grep\` query, then \`read\` the matching lines/pages for captions or in-text references. In agent mode, prefer this search-then-answer flow over guessing.`;
-    }
-
-    // Append volatile context at the end to improve prompt cache hits.
-    // Scope instructions live here (not in SYSTEM_PROMPT_PREFIX) so they
-    // match the actual presence/absence of a selection.
-    if (selectedText) {
-      systemPrompt +=
-        '\n\n# Current Selection\n' +
-        'Answer based on the text inside <selected>...</selected>. Text outside the tags is surrounding context only — use it for disambiguation, not as the answer source. Refer to it as "the selected text", not as <selected> tags.' +
-        `\n\nContent:\n${contextLeft}\n<selected>\n${selectedText}\n</selected>\n${contextRight}`;
-    } else {
-      const ctx = `${contextLeft}\n${contextRight}`.trim();
-      systemPrompt +=
-        '\n\n# Current Context\n' +
-        'No text selected. Content below is surrounding context only, not a selection.' +
-        (ctx ? `\n\nContent:\n${ctx}` : '');
+When the user message includes images, analyze them directly. The user message may also carry \`<selection>\` and \`<context>\` blocks — treat them as supporting evidence, not as a limit on the task. Prioritize visible image evidence, then captions or nearby document context, then clearly marked inference.
+Separate what is visibly readable in the image from what is supplied by document context. Mark unclear OCR, small labels, approximate values, and inferred experimental conditions as uncertain.`;
+      if (agentEnabled) {
+        systemPrompt += `\nIf you are unsure about content depicted in an image (e.g., unclear labels, unfamiliar symbols, ambiguous figures), search the document before answering: use any readable figure/table number, panel label, title, axis label, legend term, or keyword as a \`grep\` query, then \`read\` the matching lines/pages for captions or in-text references. Prefer this search-then-answer flow over guessing.`;
+      }
     }
 
     return systemPrompt;
@@ -394,23 +375,47 @@ If you are unsure about content depicted in the image (e.g., unclear labels, unf
       const images = [...capturedImages, ...inputImages];
       const hasImages = images.length > 0;
       const modelSupportsImage = hasImages && checkModelSupportsImage();
+      // Model capability is stable per active model — drives the (cacheable)
+      // image-instructions section in the system prompt, independent of
+      // whether images are attached this turn.
+      const imageCapableModel = checkModelSupportsImage();
 
       const systemContent = await this.buildSystemContent({
-        selectedText,
-        selectionContext,
         metadata,
         itemId: itemId,
         fullTextEnabled: session.fullTextEnabled,
         agentEnabled: session.agentEnabled,
-        hasImages: modelSupportsImage,
+        imageCapableModel,
       });
       const systemMsg: SystemModelMessage = {
         role: 'system',
         content: systemContent,
       };
 
-      if (hasImages && !modelSupportsImage) {
+      if (hasImages && !imageCapableModel) {
         ztoolkit.log('[chat] Model does not support image input, sending text only');
+      }
+
+      // Build the per-turn document-context block that travels inside the
+      // user message (not the system prompt). Keeping it here — instead of in
+      // the system prompt — means switching selections no longer invalidates
+      // the cacheable system prefix, and each historical turn carries its own
+      // selection so multi-round context stays aligned.
+      // Note: the displayed user bubble is built from the raw prompt text
+      // (see inputArea.ts / userBubble.ts), so this block never reaches the
+      // UI or the copy button.
+      const contextLeft = selectionContext?.[0] || '';
+      const contextRight = selectionContext?.[2] || '';
+      let selectionBlock = '';
+      if (selectedText) {
+        const parts: string[] = [];
+        if (contextLeft) parts.push(`<context>${contextLeft}</context>`);
+        parts.push(`<selection>\n${selectedText}\n</selection>`);
+        if (contextRight) parts.push(`<context>${contextRight}</context>`);
+        selectionBlock = parts.join('\n') + '\n\n';
+      } else if (contextLeft || contextRight) {
+        const ctx = [contextLeft, contextRight].filter(Boolean).join('\n');
+        selectionBlock = `<context>${ctx}</context>\n\n`;
       }
 
       let userContent: UserModelMessage['content'];
@@ -422,10 +427,10 @@ If you are unsure about content depicted in the image (e.g., unclear labels, unf
           promptText = getAutoImagePrompt(outputLang);
           ztoolkit.log('[chat] Auto-supplementing image prompt');
         }
-        userContent = [{ type: 'text', text: promptText }, ...images.map((dataUrl) => ({ type: 'image' as const, image: dataUrl }))];
+        userContent = [{ type: 'text', text: selectionBlock + promptText }, ...images.map((dataUrl) => ({ type: 'image' as const, image: dataUrl }))];
         ztoolkit.log(`[chat] Sending with ${images.length} image(s)`);
       } else {
-        userContent = params.userPrompt;
+        userContent = selectionBlock + params.userPrompt;
       }
 
       const userMsg: UserModelMessage = {

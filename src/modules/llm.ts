@@ -84,7 +84,6 @@ export async function streamLLMV2(
     );
 
     const modelSettings = buildModelSettings();
-    const maxTokens = getPref('llm.maxTokens') || 2000;
     const messages = await messagesOrPromise;
     Zotero.debug('[zaibar-llm] messages count=' + messages.length);
 
@@ -102,6 +101,38 @@ export async function streamLLMV2(
         ...thinkingOpts,
       };
     }
+
+    // Thinking models consume part of maxOutputTokens for reasoning tokens.
+    // If the budget equals or exceeds maxOutputTokens, the API returns only
+    // reasoning with no text output (Anthropic enforces budget_tokens <
+    // max_tokens; OpenAI o-series counts reasoning against
+    // max_completion_tokens; Google counts against maxOutputTokens).
+    // Bump maxOutputTokens to leave room for actual output when thinking is on.
+    let maxOutputTokens = getPref('llm.maxTokens') || 2000;
+    const anthropicBudget = (thinkingOpts as any)?.thinking?.budgetTokens;
+    const googleBudget = (providerOptions.google as any)?.thinkingBudget;
+    const thinkingBudget = (typeof anthropicBudget === 'number' ? anthropicBudget : 0) + (typeof googleBudget === 'number' ? googleBudget : 0);
+    const hasThinking = effectiveEffort !== 'none';
+    if (hasThinking && maxOutputTokens <= thinkingBudget) {
+      maxOutputTokens = thinkingBudget + 2000;
+    }
+    // For OpenAI o-series and Alibaba, which don't expose an explicit budget
+    // but still consume maxOutputTokens for reasoning, ensure a minimum headroom
+    // when thinking is enabled at medium or higher effort.
+    if (hasThinking && effectiveEffort !== 'low' && (activeProviderId === 'openai' || activeProviderId === 'openrouter')) {
+      const minHeadroom = effectiveEffort === 'xhigh' ? 16000 : effectiveEffort === 'high' ? 10000 : 6000;
+      if (maxOutputTokens < minHeadroom) maxOutputTokens = minHeadroom;
+    }
+    Zotero.debug(
+      '[zaibar-llm] maxOutputTokens=' +
+        maxOutputTokens +
+        ', thinkingBudget=' +
+        thinkingBudget +
+        ', effort=' +
+        effectiveEffort +
+        ', provider=' +
+        activeProviderId
+    );
 
     const agentEnabled = getPref('agent.enabled');
     const tools = agentEnabled ? buildTools() : undefined;
@@ -124,7 +155,7 @@ export async function streamLLMV2(
         stopWhen: stepCountIs(MAX_AGENT_ITERATIONS),
         experimental_context: session,
         providerOptions,
-        maxOutputTokens: maxTokens,
+        maxOutputTokens: maxOutputTokens,
         maxRetries: 2,
       });
 
@@ -137,12 +168,18 @@ export async function streamLLMV2(
       await consumeAgentStream(session, result, refreshRate);
     } else {
       Zotero.debug('[zaibar-llm] consuming full stream');
+      // The system message is built by us from item metadata + stable
+      // instructions (no user input), so the prompt-injection risk the SDK
+      // warns about doesn't apply here. Keep it in `messages` and explicitly
+      // allow it — some openai-compatible providers don't handle the separate
+      // `system` option consistently, which produced empty replies.
       const result = streamTextFn!({
         model: model,
         messages: messages,
+        allowSystemInMessages: true,
         abortSignal: session.pending.abortController?.signal,
         ...modelSettings,
-        maxOutputTokens: maxTokens,
+        maxOutputTokens: maxOutputTokens,
         providerOptions,
         onError: ({ error }: { error: unknown }) => {
           streamErrorHandled = true;
@@ -153,6 +190,7 @@ export async function streamLLMV2(
 
       let fullText = '';
       let count = 0;
+      let streamPartError: string | undefined;
 
       for await (const part of result.fullStream) {
         switch (part.type) {
@@ -172,7 +210,24 @@ export async function streamLLMV2(
               await onLLMStreamUpdateV2({ session, fullText });
             }
             break;
+          case 'error': {
+            // AI SDK v6 emits terminal stream errors as an `error` part rather
+            // than via onError. Without this case the error is silently
+            // dropped and the user sees reasoning with no final output.
+            const errObj = (part as any)?.error ?? part;
+            streamPartError = buildErrorMessage(errObj);
+            Zotero.debug('[zaibar-llm] streamText error part: ' + streamPartError);
+            break;
+          }
+          default:
+            Zotero.debug('[zaibar-llm] unhandled stream part type: ' + part.type);
+            break;
         }
+      }
+
+      if (streamPartError && !streamErrorHandled) {
+        streamErrorHandled = true;
+        handleStreamError(session, streamPartError);
       }
 
       if (!streamErrorHandled) {

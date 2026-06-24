@@ -327,8 +327,22 @@ export async function onLLMStreamUpdateV2(data: { session: Session; fullText: st
   const pop = data.session.pending.messagePop;
   if (!pop) return;
 
-  const chatMessage = pop.querySelector('.chat-message-content');
-  if (!chatMessage) return;
+  let chatMessage = pop.querySelector('.chat-message-content') as HTMLElement | null;
+  // onReasoningStartV2 removes empty .chat-message-content placeholders to
+  // keep the reasoning card in stream order. After reasoning ends, the first
+  // text-delta arrives but the content div is gone — recreate it so the final
+  // answer actually renders instead of being silently dropped.
+  if (!chatMessage) {
+    const messageEl = pop.querySelector('.chat-message') as HTMLElement | null;
+    if (!messageEl) return;
+    chatMessage = data.session.pending.currentTextSegment as HTMLElement | null;
+    if (!chatMessage || !chatMessage.isConnected) {
+      chatMessage = messageEl.ownerDocument!.createElement('div');
+      chatMessage.classList.add('chat-message-content');
+      messageEl.appendChild(chatMessage);
+    }
+    data.session.pending.currentTextSegment = chatMessage;
+  }
 
   const newLen = data.fullText.length;
   const prevLen = data.session.pending.lastRenderedLength ?? 0;

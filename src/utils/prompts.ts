@@ -38,7 +38,10 @@ You are an intelligent and professional research assistant embedded in Zotero. Y
     E=mc^2
     $$
 
-    (empty lines before/after).`;
+    (empty lines before/after).
+5. **Document Context Tags:** User messages may include:
+  - \`<selection>...</selection>\`: text the user selected in the document. This is the primary subject when present. Refer to it as "the selected text", not as the tags.
+  - \`<context>...</context>\`: surrounding document text for reference/disambiguation only, not the answer source.`;
 
 export interface AIBarCommand {
   id: string;
