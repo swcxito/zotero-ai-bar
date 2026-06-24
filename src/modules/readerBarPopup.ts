@@ -383,6 +383,14 @@ function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 
   const container = fragment.querySelector('.ai-bar-container') as HTMLElement;
   const modelInfoEl = fragment.querySelector('#ai-bar-model-info') as HTMLElement | null;
   if (modelInfoEl) registerModelInfoAnchor(modelInfoEl);
+  // Mark the textarea as contenteditable so Zotero reader's isTextBox() check
+  // (reader/src/common/lib/utilities.js) recognises it as a text field and skips
+  // single-key shortcuts (R/L start Read Aloud, H hand tool, S pointer tool).
+  // isTextBox only matches <input type="text"> or [contenteditable="true"]; it
+  // does not match <textarea> natively. The attribute has no effect on the
+  // textarea's native editing behavior (form controls take precedence).
+  const popupTextarea = fragment.querySelector('textarea') as HTMLTextAreaElement | null;
+  popupTextarea?.setAttribute('contenteditable', 'true');
   function hideContainerOnTimeout(delay: number = 500) {
     setTimeout(() => {
       container.style.display = 'none';
