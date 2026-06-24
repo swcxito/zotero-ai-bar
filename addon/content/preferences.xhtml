@@ -52,8 +52,13 @@
         <html:input type="number" min="256" max="8192" step="256" value="2048" style="text-align: left" preference="llm.maxTokens" />
       </vbox>
     </hbox>
-    <hbox align="start" style="margin-top: 6px">
-      <checkbox id="__addonRef__-agent-enabled" preference="agent.enabled" data-l10n-id="pref-agent-enabled" style="flex: 1" />
+    <hbox align="center" style="margin-top: 6px">
+      <html:label data-l10n-id="pref-default-chat-mode" flex="1" />
+      <html:select class="select" id="__addonRef__-default-chat-mode" preference="chat.defaultMode">
+        <html:option value="normal" data-l10n-id="chat-mode-normal" />
+        <html:option value="full-text" data-l10n-id="chat-mode-full-text" />
+        <html:option value="agent" data-l10n-id="chat-mode-agent" />
+      </html:select>
     </hbox>
     <hbox align="center" style="margin-top: 6px">
       <html:label data-l10n-id="pref-default-thinking-effort" flex="1" />
@@ -92,10 +97,6 @@
       </label>
     </hbox>
     <hbox align="start" style="margin-top: 6px; gap: 12px">
-      <vbox flex="1">
-        <checkbox id="__addonRef__-auto-attach-fulltext" preference="chat.autoAttachFullText" data-l10n-id="pref-auto-attach-fulltext" />
-        <html:small data-l10n-id="pref-auto-attach-fulltext-desc" style="margin-left: 22px" class="pref-warning-text" />
-      </vbox>
       <vbox flex="1">
         <checkbox id="__addonRef__-auto-attach-item-data" preference="chat.autoAttachItemData" data-l10n-id="pref-auto-attach-item-data" />
       </vbox>

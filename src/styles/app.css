@@ -73,6 +73,45 @@
   @apply text-rose-500 dark:text-red-400;
 }
 
+/* Chat mode dropdown — mirrors .thinking-effort-dropdown styling.
+ * Kept as a parallel class (not shared) so the two can diverge if needed. */
+.chat-mode-dropdown {
+  @apply border border-gray-200 bg-white font-sans text-gray-800 dark:border-white/10 dark:bg-[rgba(45,45,48,0.98)] dark:text-gray-100;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  .chat-mode-dropdown {
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.5),
+      0 2px 4px -1px rgba(0, 0, 0, 0.3),
+      0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+}
+
+.chat-mode-dropdown-title {
+  @apply border-b border-gray-200 bg-gray-50 text-gray-600 dark:border-white/10 dark:bg-black/20 dark:text-slate-300;
+}
+
+.chat-mode-dropdown-item {
+  @apply text-gray-800 dark:text-gray-100;
+}
+
+.chat-mode-dropdown-item.is-hover {
+  @apply bg-gray-100 text-rose-500 dark:bg-gray-700 dark:text-red-400;
+}
+
+.chat-mode-dropdown-item.is-selected {
+  @apply bg-rose-500/10 text-inherit dark:bg-rose-500/15;
+}
+
+.chat-mode-dropdown-item.is-selected.is-hover {
+  @apply text-rose-500 dark:text-red-400;
+}
+
 @layer components {
   body::-webkit-scrollbar {
     display: none;

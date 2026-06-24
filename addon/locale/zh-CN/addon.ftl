@@ -58,6 +58,12 @@ thinking-effort-low = 低
 thinking-effort-medium = 中
 thinking-effort-high = 高
 thinking-effort-xhigh = 极高
+
+input-chat-mode-tooltip = 对话模式
+chat-mode-title = 对话模式
+chat-mode-normal = 普通
+chat-mode-full-text = 全文
+chat-mode-agent = Agent
 thinking-card-title = 思考中
 thinking-card-done = 已思考
 

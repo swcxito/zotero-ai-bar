@@ -32,7 +32,7 @@ function getTargetLanguage(): string {
 }
 
 function getTranslatePrompt(targetLanguage: string): string {
-  if (getPref('agent.enabled')) {
+  if (getPref('chat.defaultMode') === 'agent') {
     return `Translate the selected text into ${targetLanguage}.`;
   }
   return aiBarCommands.translate.getPrompt(targetLanguage);

@@ -72,28 +72,53 @@ export function InputArea(
     'duration-300'
   );
 
-  // ── full-text toggle button (left) ────────────────────────────────────────
-  const fullTextBtn = doc.createElement('button');
-  fullTextBtn.title = getString('input-full-text-tooltip');
-  fullTextBtn.classList.add(
-    'input-fulltext-btn',
+  // ── chat mode selector button (left) ──────────────────────────────────────
+  // Replaces the old full-text toggle. Three modes: normal / full-text / agent.
+  // UI mirrors the thinking-effort button (hover-open dropdown) but the popup
+  // is left-aligned and each item shows an icon + label.
+  const session = addon.chatManager.sessionsMap.get(sectionId) ?? new Session(sectionId);
+  addon.chatManager.sessionsMap.set(sectionId, session);
+
+  const chatModeOrder: Array<'normal' | 'full-text' | 'agent'> = ['normal', 'full-text', 'agent'];
+  const chatModeIconMap: Record<string, string> = {
+    normal: Icons.MessageSquare,
+    'full-text': Icons.FileText,
+    agent: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6V2H8"/><path d="M15 11v2"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M20 16a2 2 0 0 1-2 2H8.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 4 20.286V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/><path d="M9 11v2"/></svg>`,
+  };
+  const chatModeLabel = (mode: string) => getString(`chat-mode-${mode}` as any);
+
+  const chatModeBtn = doc.createElement('button');
+  chatModeBtn.title = getString('input-chat-mode-tooltip');
+  chatModeBtn.classList.add(
+    'input-chat-mode-btn',
     'flex',
+    'items-center',
     'justify-center',
     'p-2.5',
     'rounded-xl',
+    'transition-all',
+    'bg-slate-200',
+    'dark:bg-neutral-800',
     'text-slate-400',
-    'dark:text-neutral-500',
-    'hover:text-rose-500',
-    'transition-colors',
+    'dark:text-neutral-600',
     'flex-shrink-0'
   );
-  fullTextBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.FileText, sizeRem: 1 })));
-  const fullTextEnabled = addon.chatManager.sessionsMap.get(sectionId)?.fullTextEnabled ?? getPref('chat.autoAttachFullText');
-  if (fullTextEnabled) {
-    fullTextBtn.classList.remove('text-slate-400', 'dark:text-neutral-500', 'hover:text-rose-500');
-    fullTextBtn.classList.add('text-rose-500', 'dark:text-rose-400');
-    fullTextBtn.title = getString('input-full-text-tooltip');
+  chatModeBtn.style.position = 'relative';
+
+  function updateChatModeBtnAppearance() {
+    const mode = session.chatMode;
+    chatModeBtn.innerHTML = '';
+    chatModeBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: chatModeIconMap[mode], sizeRem: 1 })));
+
+    if (mode !== 'normal') {
+      chatModeBtn.classList.remove('text-slate-400', 'dark:text-neutral-600');
+      chatModeBtn.classList.add('text-rose-500', 'dark:text-rose-400');
+    } else {
+      chatModeBtn.classList.remove('text-rose-500', 'dark:text-rose-400');
+      chatModeBtn.classList.add('text-slate-400', 'dark:text-neutral-600');
+    }
   }
+  updateChatModeBtnAppearance();
 
   // ── screenshot button (left) ──────────────────────────────────────────
   const screenshotBtn = doc.createElement('button');
@@ -134,8 +159,6 @@ export function InputArea(
   textarea.style.maxHeight = '7rem';
 
   // ── thinking effort button (right of textarea) ────────────────────────────
-  const session = addon.chatManager.sessionsMap.get(sectionId) ?? new Session(sectionId);
-  addon.chatManager.sessionsMap.set(sectionId, session);
 
   // ── model selector button (right of thinking effort) ──────────────────────
   // Reuses the same ModelInfo component as the reader popup. The dropdown
@@ -221,8 +244,8 @@ export function InputArea(
   container.appendChild(preview.container);
 
   const inputRow = doc.createElement('div');
-  inputRow.classList.add('flex', 'items-center', 'justify-center', 'gap-2');
-  inputRow.appendChild(fullTextBtn);
+  inputRow.classList.add('flex', 'items-center', 'justify-center', 'gap-1');
+  inputRow.appendChild(chatModeBtn);
   inputRow.appendChild(screenshotBtn);
   inputRow.appendChild(textarea);
   inputRow.appendChild(thinkingBtn);
@@ -602,21 +625,167 @@ export function InputArea(
   };
   doc.addEventListener('click', outsideClickHandler, true);
 
-  // Full-text toggle button
-  fullTextBtn.addEventListener('click', () => {
-    const session = addon.chatManager.sessionsMap.get(sectionId) ?? new Session(sectionId);
-    addon.chatManager.sessionsMap.set(sectionId, session);
-    session.fullTextEnabled = !session.fullTextEnabled;
-    if (session.fullTextEnabled) {
-      fullTextBtn.classList.remove('text-slate-400', 'dark:text-neutral-500', 'hover:text-rose-500');
-      fullTextBtn.classList.add('text-rose-500', 'dark:text-rose-400');
-      fullTextBtn.title = getString('input-full-text-tooltip');
-    } else {
-      fullTextBtn.classList.remove('text-rose-500', 'dark:text-rose-400');
-      fullTextBtn.classList.add('text-slate-400', 'dark:text-neutral-500', 'hover:text-rose-500');
-      fullTextBtn.title = getString('input-full-text-tooltip');
+  // Chat mode dropdown — hover-open, left-aligned, mirrors thinking-effort
+  // dropdown pattern but with icon+label items and left-anchored positioning.
+  function removeChatModeDropdown() {
+    const existing = chatModeBtn.querySelector('.chat-mode-dropdown') as HTMLElement | null;
+    if (!existing) return;
+    existing.style.opacity = '0';
+    existing.style.transform = 'scale(0.95)';
+    const view = doc.defaultView;
+    if (!view) {
+      existing.remove();
+      return;
     }
-  });
+    existing.addEventListener('transitionend', () => existing.remove(), { once: true });
+    view.setTimeout(() => existing.remove(), 160);
+  }
+
+  function buildChatModeDropdown(): HTMLElement {
+    removeChatModeDropdown();
+    const dropdown = doc.createElement('div');
+    dropdown.classList.add(
+      'chat-mode-dropdown',
+      'absolute',
+      'bottom-full',
+      'left-0',
+      'mb-1',
+      'min-w-[96px]',
+      'rounded-lg',
+      'pb-[3px]',
+      'text-xs',
+      'z-[100]'
+    );
+    dropdown.style.opacity = '0';
+    dropdown.style.transform = 'scale(0.95)';
+    dropdown.style.transformOrigin = 'bottom left';
+    const view = doc.defaultView;
+    if (view) {
+      view.requestAnimationFrame(() => {
+        dropdown.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
+        dropdown.style.opacity = '1';
+        dropdown.style.transform = 'scale(1)';
+      });
+    } else {
+      dropdown.style.opacity = '1';
+      dropdown.style.transform = 'scale(1)';
+    }
+
+    const title = doc.createElement('div');
+    title.textContent = getString('chat-mode-title');
+    title.classList.add(
+      'chat-mode-dropdown-title',
+      'pt-2',
+      'px-2.5',
+      'pb-2',
+      'text-[10px]',
+      'leading-[1.2]',
+      'font-semibold',
+      'tracking-[0.04em]',
+      'uppercase',
+      'select-none'
+    );
+    dropdown.appendChild(title);
+
+    for (const mode of chatModeOrder) {
+      const item = doc.createElement('div');
+      item.classList.add(
+        'chat-mode-dropdown-item',
+        'flex',
+        'items-center',
+        'gap-2',
+        'py-2',
+        'px-2.5',
+        'cursor-pointer',
+        'whitespace-nowrap',
+        'leading-relaxed'
+      );
+      const iconHolder = doc.createElement('span');
+      iconHolder.classList.add('inline-flex', 'items-center');
+      iconHolder.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: chatModeIconMap[mode], sizeRem: 0.875 })));
+      item.appendChild(iconHolder);
+      const labelEl = doc.createElement('span');
+      labelEl.textContent = chatModeLabel(mode);
+      item.appendChild(labelEl);
+      const isSelected = session.chatMode === mode;
+      if (isSelected) {
+        item.classList.add('is-selected', 'font-semibold');
+      } else {
+        item.classList.add('font-normal');
+      }
+      item.addEventListener('click', () => {
+        session.chatMode = mode;
+        updateChatModeBtnAppearance();
+        removeChatModeDropdown();
+      });
+      item.addEventListener('mouseenter', () => {
+        item.classList.add('is-hover');
+      });
+      item.addEventListener('mouseleave', () => {
+        item.classList.remove('is-hover');
+      });
+      dropdown.appendChild(item);
+    }
+    dropdown.addEventListener('mouseenter', cancelChatModeHoverClose);
+    dropdown.addEventListener('mouseleave', scheduleChatModeHoverClose);
+    return dropdown;
+  }
+
+  let chatModeHoverCloseTimer: number | undefined;
+
+  function cancelChatModeHoverClose() {
+    if (chatModeHoverCloseTimer !== undefined) {
+      doc.defaultView?.clearTimeout(chatModeHoverCloseTimer);
+      chatModeHoverCloseTimer = undefined;
+    }
+  }
+  function scheduleChatModeHoverClose() {
+    cancelChatModeHoverClose();
+    chatModeHoverCloseTimer = doc.defaultView?.setTimeout(() => {
+      removeChatModeDropdown();
+      chatModeHoverCloseTimer = undefined;
+    }, 250);
+  }
+
+  function openChatModeDropdown() {
+    cancelChatModeHoverClose();
+    if (!chatModeBtn.querySelector('.chat-mode-dropdown')) {
+      const dropdown = buildChatModeDropdown();
+      chatModeBtn.appendChild(dropdown);
+    }
+  }
+
+  function isOverChatModeRegion(e: MouseEvent): boolean {
+    const dd = chatModeBtn.querySelector('.chat-mode-dropdown');
+    const path = e.composedPath();
+    return path.includes(chatModeBtn) || (!!dd && path.includes(dd as EventTarget));
+  }
+
+  chatModeBtn.addEventListener('mouseenter', openChatModeDropdown);
+  chatModeBtn.addEventListener('mouseleave', scheduleChatModeHoverClose);
+
+  doc.addEventListener(
+    'mousemove',
+    (e: MouseEvent) => {
+      const dd = chatModeBtn.querySelector('.chat-mode-dropdown');
+      if (!dd) return;
+      if (isOverChatModeRegion(e)) {
+        cancelChatModeHoverClose();
+      } else {
+        scheduleChatModeHoverClose();
+      }
+    },
+    true
+  );
+
+  const chatModeOutsideClickHandler = (e: Event) => {
+    if (chatModeBtn.contains(e.target as Node)) return;
+    const dd = chatModeBtn.querySelector('.chat-mode-dropdown');
+    if (dd && !dd.contains(e.target as Node)) {
+      removeChatModeDropdown();
+    }
+  };
+  doc.addEventListener('click', chatModeOutsideClickHandler, true);
 
   screenshotBtn.addEventListener('click', () => {
     if (preview.isFull()) return;

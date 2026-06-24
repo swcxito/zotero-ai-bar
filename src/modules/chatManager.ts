@@ -38,8 +38,7 @@ export class Session {
   id: string;
   conversationHistory: ModelMessage[] = [];
   sourceLabel?: string;
-  fullTextEnabled: boolean = false;
-  agentEnabled: boolean = false;
+  chatMode: 'normal' | 'full-text' | 'agent' = 'normal';
   thinkingEffort: 'none' | 'low' | 'medium' | 'high' | 'xhigh' = 'none';
   itemId?: number;
   capturedPageImages?: string[];
@@ -80,11 +79,10 @@ export class Session {
   } = {};
   constructor(id: string) {
     this.id = id;
-    this.fullTextEnabled = getPref('chat.autoAttachFullText') ?? false;
-    this.agentEnabled = getPref('agent.enabled') ?? false;
+    this.chatMode = (getPref('chat.defaultMode') as Session['chatMode'] | undefined) ?? 'normal';
     const savedEffort = getPref('chat.thinkingEffort') as Session['thinkingEffort'] | undefined;
     this.thinkingEffort = savedEffort ?? 'none';
-    ztoolkit.log('[chat] new Session', id, 'agentEnabled=', this.agentEnabled, 'thinkingEffort=', this.thinkingEffort);
+    ztoolkit.log('[chat] new Session', id, 'chatMode=', this.chatMode, 'thinkingEffort=', this.thinkingEffort);
   }
 }
 
@@ -229,11 +227,10 @@ export class ChatManager {
   async buildSystemContent(params: {
     metadata?: ItemMetadata;
     itemId?: number;
-    fullTextEnabled?: boolean;
-    agentEnabled?: boolean;
+    chatMode?: 'normal' | 'full-text' | 'agent';
     imageCapableModel?: boolean;
   }): Promise<string> {
-    const { metadata, itemId, fullTextEnabled, agentEnabled, imageCapableModel } = params;
+    const { metadata, itemId, chatMode, imageCapableModel } = params;
     let systemPrompt = SYSTEM_PROMPT_PREFIX;
 
     // Append item metadata if enabled (stable → cacheable)
@@ -261,7 +258,7 @@ export class ChatManager {
     // Append full text if enabled (stable → cacheable).
     // Agent mode skips this — the agent discovers content on demand via
     // grep/read (see Tool Orchestration), so we don't bloat the prompt.
-    if (fullTextEnabled && itemId !== undefined && !agentEnabled) {
+    if (chatMode === 'full-text' && itemId !== undefined) {
       const fullText = await getItemFullText(itemId);
       if (fullText) {
         systemPrompt += '\n\n# Full Document Text\n<fulldoc>\n' + fullText + '\n</fulldoc>';
@@ -269,7 +266,7 @@ export class ChatManager {
     }
 
     // Agent instructions: ask user when intent is unclear, plus tool orchestration
-    if (agentEnabled) {
+    if (chatMode === 'agent') {
       systemPrompt += `
 
 # Agent Instructions
@@ -300,7 +297,7 @@ Format: \`[cite:<itemId>[:<page>][|<title>]]\`
 # Image Analysis Instructions
 When the user message includes images, analyze them directly. The user message may also carry \`<selection>\` and \`<context>\` blocks — treat them as supporting evidence, not as a limit on the task. Prioritize visible image evidence, then captions or nearby document context, then clearly marked inference.
 Separate what is visibly readable in the image from what is supplied by document context. Mark unclear OCR, small labels, approximate values, and inferred experimental conditions as uncertain.`;
-      if (agentEnabled) {
+      if (chatMode === 'agent') {
         systemPrompt += `\nIf you are unsure about content depicted in an image (e.g., unclear labels, unfamiliar symbols, ambiguous figures), search the document before answering: use any readable figure/table number, panel label, title, axis label, legend term, or keyword as a \`grep\` query, then \`read\` the matching lines/pages for captions or in-text references. Prefer this search-then-answer flow over guessing.`;
       }
     }
@@ -325,7 +322,7 @@ Separate what is visibly readable in the image from what is supplied by document
     this.sessionsMap.set(tabId, session);
     session.itemId = itemId;
 
-    ztoolkit.log('[chat] sendChatRequest', { tabId, itemId, agentEnabled: session.agentEnabled, sourceLabel: params.sourceLabel });
+    ztoolkit.log('[chat] sendChatRequest', { tabId, itemId, chatMode: session.chatMode, sourceLabel: params.sourceLabel });
 
     const route = this.getCurrentHostMode();
     const metadata = itemId !== undefined && getPref('chat.autoAttachItemData') ? getItemMetadata(itemId) : undefined;
@@ -383,8 +380,7 @@ Separate what is visibly readable in the image from what is supplied by document
       const systemContent = await this.buildSystemContent({
         metadata,
         itemId: itemId,
-        fullTextEnabled: session.fullTextEnabled,
-        agentEnabled: session.agentEnabled,
+        chatMode: session.chatMode,
         imageCapableModel,
       });
       const systemMsg: SystemModelMessage = {

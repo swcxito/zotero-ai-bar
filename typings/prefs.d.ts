@@ -23,11 +23,10 @@ declare namespace _ZoteroTypes {
       "llm.modelId": string;
       "chat.formulaOptimization": boolean;
       "chat.contextRounds": number;
-      "chat.autoAttachFullText": boolean;
+      "chat.defaultMode": string;
       "chat.autoAttachItemData": boolean;
       "chat.openOnStartup": boolean;
       "chat.autoImagePrompt": boolean;
-      "agent.enabled": boolean;
       "chat.thinkingEffort": string;
       "translate.enableAuto": boolean;
       "translate.extendContext": string;

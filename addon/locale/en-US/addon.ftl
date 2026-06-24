@@ -58,6 +58,12 @@ thinking-effort-low = L
 thinking-effort-medium = M
 thinking-effort-high = H
 thinking-effort-xhigh = X
+
+input-chat-mode-tooltip = Chat mode
+chat-mode-title = Chat mode
+chat-mode-normal = Normal
+chat-mode-full-text = Full Text
+chat-mode-agent = Agent
 thinking-card-title = Thinking
 thinking-card-done = Thought
 

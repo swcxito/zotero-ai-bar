@@ -16,11 +16,10 @@ pref('llm.modelId', '');
 
 pref('chat.formulaOptimization', true);
 pref('chat.contextRounds', 8);
-pref('chat.autoAttachFullText', false);
+pref('chat.defaultMode', 'normal');
 pref('chat.autoAttachItemData', false);
 pref('chat.openOnStartup', false);
 pref('chat.autoImagePrompt', true);
-pref('agent.enabled', true);
 pref('chat.thinkingEffort', 'none');
 pref('translate.enableAuto', false);
 pref('translate.extendContext', 'follow');

@@ -134,7 +134,7 @@ export async function streamLLMV2(
         activeProviderId
     );
 
-    const agentEnabled = getPref('agent.enabled');
+    const agentEnabled = session.chatMode === 'agent';
     const tools = agentEnabled ? buildTools() : undefined;
     ztoolkit.log('[llm] agentEnabled:', agentEnabled, 'tools:', Object.keys(tools ?? {}));
     Zotero.debug('[zaibar-llm] agentEnabled=' + agentEnabled + ', toolCount=' + Object.keys(tools ?? {}).length);

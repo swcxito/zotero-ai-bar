@@ -107,6 +107,22 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
       setPref('llm.modelId', `${addon.data.userProviderConfigV2.active.providerId}::${addon.data.userProviderConfigV2.active.modelId}`);
     }
 
+    // Migrate chat.autoAttachFullText → chat.defaultMode (one-way).
+    // agent.enabled is NOT migrated — the new default is 'normal' for everyone
+    // who hadn't explicitly opted into full-text before.
+    const legacyFullText = Zotero.Prefs.get(`${addon.data.config.prefsPrefix}.chat.autoAttachFullText`, true) as boolean | undefined;
+    const legacyAgent = Zotero.Prefs.get(`${addon.data.config.prefsPrefix}.agent.enabled`, true) as boolean | undefined;
+    if (legacyFullText !== undefined) {
+      if (legacyFullText) {
+        setPref('chat.defaultMode', 'full-text');
+        ztoolkit.log('[hooks] Migrated chat.autoAttachFullText=true → chat.defaultMode=full-text');
+      }
+      Zotero.Prefs.clear(`${addon.data.config.prefsPrefix}.chat.autoAttachFullText`, true);
+    }
+    if (legacyAgent !== undefined) {
+      Zotero.Prefs.clear(`${addon.data.config.prefsPrefix}.agent.enabled`, true);
+    }
+
     // Load icon cache from file (with migration from legacy pref)
     await initIconCache();
 
