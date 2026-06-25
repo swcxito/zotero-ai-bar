@@ -259,6 +259,11 @@ export async function streamLLMV2(
 }
 
 function buildModelSettings() {
+  const temperatureEnabled = getPref('llm.temperatureEnabled');
+  if (!temperatureEnabled) {
+    Zotero.debug('[zaibar-llm] temperature disabled by user setting');
+    return {};
+  }
   const temp100 = getPref('llm.temperature100');
   const modelMetadata = getActiveModelMetadata();
   if (modelMetadata?.temperature === false) {
@@ -549,12 +554,13 @@ function getRefreshRateFromPref() {
   switch (speed) {
     case 'realtime':
       return 1;
-    case 'fast':
+    case 'default':
       return 2;
+    case 'slow':
+      return 4;
     case 'performance':
       return 8;
-    case 'default':
     default:
-      return 4;
+      return 2;
   }
 }

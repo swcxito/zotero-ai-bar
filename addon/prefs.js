@@ -2,6 +2,7 @@ pref('llm.baseURL', 'https://api.openai.com/v1');
 pref('llm.apiKey', '');
 pref('llm.modelName', 'gpt-4o');
 pref('llm.temperature100', 50);
+pref('llm.temperatureEnabled', false);
 pref('llm.maxTokens', 3000);
 pref('llm.streamUpdateSpeed', 'default');
 pref('chat.location', 'sidebar');

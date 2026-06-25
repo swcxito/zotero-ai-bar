@@ -118,6 +118,18 @@ async function updatePrefsUI() {
     bindInputToLabel(temperatureInput, temperatureLabel, getPref('llm.temperature100'), 0.01);
   }
 
+  const temperatureCheckbox = doc.querySelector(makeId('temperature-enabled')) as HTMLInputElement;
+  if (temperatureCheckbox && temperatureInput) {
+    const syncTemperatureDisabled = () => {
+      temperatureInput.disabled = !temperatureCheckbox.checked;
+      if (temperatureLabel) {
+        temperatureLabel.style.opacity = temperatureCheckbox.checked ? '1' : '0.5';
+      }
+    };
+    temperatureCheckbox.addEventListener('change', syncTemperatureDisabled);
+    syncTemperatureDisabled();
+  }
+
   const translateModelSelector = doc.querySelector(makeId('translate-model-selector')) as HTMLSelectElement;
   if (translateModelSelector) {
     populateSelectorFromV2(translateModelSelector, doc, true);
