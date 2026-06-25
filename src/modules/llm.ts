@@ -21,7 +21,7 @@ import { Session } from './chatManager';
 import { ModelMessage } from 'ai';
 import { onLLMStreamEndV2, onLLMStreamErrorV2, onLLMStreamStartV2, onLLMStreamUpdateV2 } from './chatUI';
 import { ensureWebStreamsGlobals } from '../utils/webStreamsGlobals';
-import { PROVIDER_ENV_KEY_MAP, resolveApiUrl } from '../utils/providers';
+import { PROVIDER_ENV_KEY_MAP, resolveApiUrl, type Model } from '../utils/providers';
 // import { JSONObject } from "@ai-sdk/provider";
 
 const SDK_CACHE: Record<string, any> = {};
@@ -57,8 +57,7 @@ export async function streamLLMV2(
     onLLMStreamStartV2(session);
     const model = await createModel();
 
-    const temp100 = getPref('llm.temperature100');
-    const temp = temp100 / 100;
+    const modelSettings = buildModelSettings();
     const maxTokens = getPref('llm.maxTokens') || 2000;
     const messages = await messagesOrPromise;
 
@@ -71,7 +70,7 @@ export async function streamLLMV2(
       model: model,
       messages: messages,
       abortSignal: session.pending.abortController?.signal,
-      temperature: temp,
+      ...modelSettings,
       maxOutputTokens: maxTokens,
       providerOptions,
       onError: ({ error }: { error: unknown }) => {
@@ -106,6 +105,32 @@ export async function streamLLMV2(
   } finally {
     // session.abortController = undefined;
   }
+}
+
+function buildModelSettings() {
+  const temperatureEnabled = getPref('llm.temperatureEnabled');
+  if (!temperatureEnabled) {
+    Zotero.debug('[zaibar-llm] temperature disabled by user setting');
+    return {};
+  }
+  const temp100 = getPref('llm.temperature100');
+  const modelMetadata = getActiveModelMetadata();
+  if (modelMetadata?.temperature === false) {
+    Zotero.debug('[zaibar-llm] temperature disabled for active model');
+    return {};
+  }
+  return { temperature: temp100 / 100 };
+}
+
+function getActiveModelMetadata(): Model | undefined {
+  const v2 = addon.data.userProviderConfigV2;
+  const active = v2?.active;
+  if (!active) return undefined;
+
+  return (
+    addon.data.commonProviders?.[active.providerId]?.models[active.modelId] ??
+    v2?.addedModels.find((model) => model.providerId === active.providerId && model.id === active.modelId)
+  );
 }
 
 function buildErrorMessage(error: unknown): string {
@@ -322,12 +347,13 @@ function getRefreshRateFromPref() {
   switch (speed) {
     case 'realtime':
       return 1;
-    case 'fast':
+    case 'default':
       return 2;
+    case 'slow':
+      return 4;
     case 'performance':
       return 8;
-    case 'default':
     default:
-      return 4;
+      return 2;
   }
 }

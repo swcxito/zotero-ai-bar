@@ -11,7 +11,7 @@
   <hbox align="center" style="margin-bottom: 12px">
     <html:a
       id="__addonRef__-docs-link"
-      href="https://zotero.fukeke.com/reference/model-settings"
+      href="https://zotero.fukeke.com/reference/ui"
       style="color: rgb(244, 63, 94); text-decoration: underline; font-size: 1.1em; cursor: pointer"
       data-l10n-id="pref-docs-link"
       onclick="
@@ -41,7 +41,10 @@
     <hbox align="center" style="margin: 15px 10px; gap: 10px">
       <vbox flex="1">
         <div class="range-header" style="display: flex; justify-content: space-between; align-items: center; margin-right: 12px">
-          <html:label data-l10n-id="pref-temperature" />
+          <html:label style="display: flex; align-items: center; gap: 6px; cursor: pointer">
+            <html:input type="checkbox" id="__addonRef__-temperature-enabled" preference="llm.temperatureEnabled" />
+            <html:span data-l10n-id="pref-temperature" />
+          </html:label>
           <html:span id="__addonRef__-temperature-value">0-2</html:span>
         </div>
         <html:input type="range" min="0" max="200" step="5" preference="llm.temperature100" id="__addonRef__-temperature-input" />
@@ -149,8 +152,8 @@
       <html:label data-l10n-id="pref-stream-update-speed" flex="1" />
       <html:select class="select" id="__addonRef__-stream-update-speed-selector" preference="llm.streamUpdateSpeed">
         <html:option value="realtime" data-l10n-id="pref-stream-speed-realtime" />
-        <html:option value="fast" data-l10n-id="pref-stream-speed-fast" />
         <html:option value="default" data-l10n-id="pref-stream-speed-default" />
+        <html:option value="slow" data-l10n-id="pref-stream-speed-slow" />
         <html:option value="performance" data-l10n-id="pref-stream-speed-performance" />
       </html:select>
     </hbox>
