@@ -10,6 +10,12 @@ import { getItemFullText, getItemMetadata } from './itemContext';
 export type PageTextResult = {
   pageTexts: string[];
   fullText: string;
+  /** fullText.split('\n'), precomputed so callers never re-split. */
+  lines: string[];
+  /** 0-based line number -> 1-based page number, built in one pass at extraction. */
+  lineToPage: Map<number, number>;
+  /** Line count per page; pageLineCounts[i] = number of '\n'-lines in pageTexts[i]. */
+  pageLineCounts: number[];
 };
 
 export type ReadItemResult = {
@@ -43,9 +49,42 @@ export function getZoteroItem(itemId: number): any | undefined {
 }
 
 /**
- * Get per-page full text for a PDF attachment using PDFWorker.
- * PDFWorker.getFullText returns a single string with pages separated by `\f` (form feed).
- * We split on `\f` to get per-page text and replace `\f` with `\n` in the searchable full text.
+ * Build a PageTextResult (pageTexts, fullText, and all precomputed line
+ * structures) from raw PDF text where pages are separated by `\f` (form feed).
+ *
+ * All derived structures are computed once here so grep/read never re-split.
+ */
+function buildPageTextResult(rawText: string): PageTextResult {
+  const pageTexts = rawText.split('\f');
+  const fullText = rawText.replace(/\f/g, '\n');
+  const lines = fullText.split('\n');
+
+  // Per-page line count and 0-based line -> 1-based page map, one pass.
+  // pageTexts[p].split('\n').length equals the number of '\n'-separated lines
+  // that page contributes to fullText (the `\f` becomes one of those newlines).
+  const pageLineCounts: number[] = new Array(pageTexts.length);
+  const lineToPage = new Map<number, number>();
+  let lineIdx = 0;
+  for (let p = 0; p < pageTexts.length && lineIdx < lines.length; p++) {
+    const pageLineCount = pageTexts[p].split('\n').length;
+    pageLineCounts[p] = pageLineCount;
+    for (let j = 0; j < pageLineCount && lineIdx < lines.length; j++) {
+      lineToPage.set(lineIdx, p + 1);
+      lineIdx++;
+    }
+  }
+
+  return { pageTexts, fullText, lines, lineToPage, pageLineCounts };
+}
+
+/**
+ * Get per-page full text for a PDF attachment.
+ *
+ * Pages in the source text are separated by `\f` (form feed). We prefer the
+ * `.zotero-ft-cache` file Zotero writes after indexing - it is byte-identical
+ * to `PDFWorker.getFullText` output (verified) but avoids re-parsing the PDF
+ * on every call, which is the dominant cost for long documents. Falls back to
+ * `PDFWorker.getFullText` when no cache file exists (e.g. un-indexed item).
  */
 export async function getItemFullTextByPage(itemId: number): Promise<PageTextResult | undefined> {
   try {
@@ -66,14 +105,27 @@ export async function getItemFullTextByPage(itemId: number): Promise<PageTextRes
     const attachment = Zotero.Items.get(attachmentId) as any;
     if (!attachment || attachment.attachmentContentType !== 'application/pdf') return undefined;
 
-    if (typeof Zotero.PDFWorker?.getFullText !== 'function') return undefined;
+    // 1) Prefer the indexed full-text cache file (instant, no PDF parse).
+    const FT: any = (Zotero as any).FullText ?? (Zotero as any).Fulltext;
+    if (FT && typeof FT.getItemCacheFile === 'function') {
+      try {
+        const cacheFile = FT.getItemCacheFile(attachment);
+        if (cacheFile?.exists?.()) {
+          const cacheText = await (Zotero as any).File.getContentsAsync(cacheFile);
+          if (typeof cacheText === 'string' && cacheText.length > 0) {
+            return buildPageTextResult(cacheText);
+          }
+        }
+      } catch (cacheErr) {
+        ztoolkit.log('getItemFullTextByPage cache read failed, falling back to PDFWorker:', cacheErr);
+      }
+    }
 
+    // 2) Fallback: extract on demand (today's behavior).
+    if (typeof Zotero.PDFWorker?.getFullText !== 'function') return undefined;
     const result = await Zotero.PDFWorker.getFullText(attachmentId);
     if (!result?.text || typeof result.text !== 'string') return undefined;
-
-    const pageTexts = result.text.split('\f');
-    const fullText = result.text.replace(/\f/g, '\n');
-    return { pageTexts, fullText };
+    return buildPageTextResult(result.text);
   } catch (e) {
     ztoolkit.log('getItemFullTextByPage failed:', e);
     return undefined;
@@ -163,9 +215,11 @@ export async function readItemText(
       const pageText = pageResult.pageTexts[pageNumber - 1];
       const lines = pageText.split('\n');
 
+      // Global line offset of this page's first line, via precomputed
+      // per-page line counts (avoids re-splitting every preceding page).
       let lineOffset = 0;
       for (let p = 0; p < pageNumber - 1; p++) {
-        lineOffset += pageResult.pageTexts[p].split('\n').length;
+        lineOffset += pageResult.pageLineCounts[p] ?? pageResult.pageTexts[p].split('\n').length;
       }
 
       result.text = formatLines(lines, 0, lines.length, undefined, undefined, lineOffset);
@@ -175,8 +229,8 @@ export async function readItemText(
       return result;
     }
 
-    // Line-based reading
-    const allLines = pageResult.fullText.split('\n');
+    // Line-based reading (uses precomputed lines - no re-split).
+    const allLines = pageResult.lines;
     const targetStart = Math.max(0, (startLine ?? 1) - 1);
     const targetEnd = endLine !== undefined ? Math.min(allLines.length, endLine) : targetStart + 1;
     if (targetStart >= allLines.length) {

@@ -90,7 +90,10 @@ export const grepTool = tool({
       throw new Error('Full text not available for this item.');
     }
 
-    const results = grepInText(fullText, input.pattern, input.useRegex ?? true, input.maxResults ?? 20, pageTexts);
+    const results = grepInText(fullText, input.pattern, input.useRegex ?? true, input.maxResults ?? 20, pageTexts, {
+      lines: pageResult?.lines,
+      lineToPage: pageResult?.lineToPage,
+    });
     return { matches: results.length, excerpts: results };
   },
 });
