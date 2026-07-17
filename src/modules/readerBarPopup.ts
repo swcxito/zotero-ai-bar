@@ -422,9 +422,20 @@ function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 
     const docWidth = doc.documentElement.clientWidth;
     const margin = 10;
 
+    // The left boundary must account for the reader's left sidebar
+    // (thumbnails / annotations / outline). When open it sits at the left edge
+    // of the reader iframe, so the popup must not extend past its right edge -
+    // otherwise a selection near the left page column lets the (max-content)
+    // AI bar slide left and overlap the sidebar. #sidebarContainer is only in
+    // the DOM while the sidebar is open, so a null result means the sidebar is
+    // closed and the left boundary is just `margin`.
+    const sidebar = doc.getElementById('sidebarContainer');
+    const sidebarRight = sidebar ? sidebar.getBoundingClientRect().right : 0;
+    const leftBound = Math.max(margin, sidebarRight + margin);
+
     let shiftX = 0;
-    if (rect.left < margin) {
-      shiftX = margin - rect.left;
+    if (rect.left < leftBound) {
+      shiftX = leftBound - rect.left;
     } else if (rect.right > docWidth - margin) {
       shiftX = docWidth - margin - rect.right;
     }
