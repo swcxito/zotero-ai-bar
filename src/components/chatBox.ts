@@ -26,6 +26,20 @@ export interface ChatBoxProps {
   onRegenerate?: () => void;
 }
 
+/**
+ * Return a chat message's answer text for copying, excluding reasoning
+ * ("thinking") cards, tool-call boxes, and the "Source:" label. These live
+ * inside `.chat-message` but are not part of the final answer - copying
+ * `textContent` directly would leak the model's reasoning and the source
+ * label into the clipboard.
+ */
+function getAnswerText(messageEl: Element | null | undefined): string {
+  if (!messageEl) return '';
+  const clone = messageEl.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll('.tool-call-box, .chat-source-label').forEach((el) => el.remove());
+  return clone.textContent || '';
+}
+
 export function ChatBox({ doc, isUser = false, onRegenerate }: ChatBoxProps): Element {
   return ztoolkit.UI.createElement(doc, 'div', {
     tag: 'div',
@@ -93,8 +107,9 @@ export function ChatBox({ doc, isUser = false, onRegenerate }: ChatBoxProps): El
             onClick: (_e, btn) => {
               const container = btn.closest('.items-start') || btn.closest('.items-end');
               const messageEl = container?.querySelector('.chat-message');
-              if (messageEl && messageEl.textContent) {
-                new ztoolkit.Clipboard().addText(messageEl.textContent, 'text/plain').copy();
+              const text = getAnswerText(messageEl);
+              if (text) {
+                new ztoolkit.Clipboard().addText(text, 'text/plain').copy();
                 const span = btn.querySelector('.btn-label');
                 if (span) {
                   const originalText = span.textContent;
@@ -115,7 +130,7 @@ export function ChatBox({ doc, isUser = false, onRegenerate }: ChatBoxProps): El
               const messageEl = container?.querySelector('.chat-message');
               const markdown = (container as HTMLElement)?.dataset?.markdown || (messageEl as HTMLElement)?.dataset?.markdown;
 
-              const textToCopy = markdown || messageEl?.textContent;
+              const textToCopy = markdown || getAnswerText(messageEl);
 
               if (textToCopy) {
                 new ztoolkit.Clipboard().addText(textToCopy, 'text/plain').copy();

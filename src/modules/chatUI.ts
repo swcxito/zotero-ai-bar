@@ -305,7 +305,7 @@ export function onLLMStreamStartV2(session: Session) {
 
     if (shouldShowSourceLabel) {
       const sourceEl = doc.createElement('div');
-      sourceEl.classList.add('text-xs', 'tracking-wider', 'font-semibold', 'text-slate-400', 'dark:text-neutral-500', 'mb-1');
+      sourceEl.classList.add('chat-source-label', 'text-xs', 'tracking-wider', 'font-semibold', 'text-slate-400', 'dark:text-neutral-500', 'mb-1');
       sourceEl.textContent = `Source: ${sourceLabel}`;
       sourceEl.style.userSelect = 'none';
       chatMessage.appendChild(sourceEl);
