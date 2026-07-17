@@ -243,9 +243,10 @@ export async function streamLLMV2(
     }
   } catch (error: any) {
     Zotero.debug('[zaibar-llm] streamLLMV2 catch: ' + (error?.name || '') + ' ' + (error?.message || error));
-    // Skip abort errors from intentional stop — treat as normal end
+    // Abort from intentional stop: use the normal-end handler for UI cleanup
+    // but signal `aborted` so the partial turn isn't recorded in history.
     if (error?.name === 'AbortError') {
-      onLLMStreamEndV2(session);
+      onLLMStreamEndV2(session, undefined, true);
       return;
     }
     // If onError already handled this, skip duplicate handling

@@ -528,7 +528,7 @@ function bindAutoScrollTracker(container: HTMLElement, session: Session) {
   container.addEventListener('touchend', onTouchEnd, { passive: true });
 }
 
-export function onLLMStreamEndV2(session: Session, usage?: TokenUsage) {
+export function onLLMStreamEndV2(session: Session, usage?: TokenUsage, aborted?: boolean) {
   const pop = session.pending.messagePop;
   if (pop) {
     const actions = pop.querySelector('.chat-actions');
@@ -554,7 +554,9 @@ export function onLLMStreamEndV2(session: Session, usage?: TokenUsage) {
     // Append turn to conversation history (sidebar mode).
     // In agent mode the history is managed by consumeAgentStream using the
     // SDK's response.messages, so skip the simple text-only append here.
-    if (!session.pending.isAgentMode) {
+    // Aborted (stopped/superseded) non-agent turns are also skipped so a
+    // partial reply isn't recorded - consistent with the agent path's guard.
+    if (!session.pending.isAgentMode && !aborted) {
       const userMessage = session.pending.userMessage;
       const assistantContent = (pop as HTMLElement).dataset.markdown || '';
       if (userMessage) {
@@ -594,7 +596,8 @@ function formatTokenCount(n: number | undefined): string {
   if (n === undefined || Number.isNaN(n)) return '—';
   if (n < 1000) return String(n);
   if (n < 100000) return (n / 1000).toFixed(1) + 'K';
-  return Math.round(n / 1000) + 'K';
+  if (n < 1000000) return Math.round(n / 1000) + 'K';
+  return (n / 1000000).toFixed(1) + 'M';
 }
 
 function appendUsageBadge(actions: HTMLElement, usage: any): void {
@@ -650,15 +653,16 @@ function updateContextTokenIndicator(sessionId: string, usage: TokenUsage): void
     }
   }
   if (!indicator) return;
-  const promptTokens = usage.promptTokens;
+  // Total context = previous turn's input + output (what the next request would carry).
+  const contextTokens = usage.totalTokens ?? usage.promptTokens;
   const contextLimit = getActiveModelContextLimit();
-  const ctxStr = formatTokenCount(promptTokens);
+  const ctxStr = formatTokenCount(contextTokens);
   let text: string;
-  if (contextLimit && contextLimit > 0 && promptTokens !== undefined) {
-    const pct = Math.min(100, (promptTokens / contextLimit) * 100);
+  if (contextLimit && contextLimit > 0 && contextTokens !== undefined) {
+    const pct = Math.min(100, (contextTokens / contextLimit) * 100);
     const pctStr = pct < 1 ? pct.toFixed(1) : Math.round(pct).toString();
     text = `${getString('token-usage-context')}: ${ctxStr} / ${formatTokenCount(contextLimit)} · ${pctStr}%`;
-  } else if (promptTokens !== undefined) {
+  } else if (contextTokens !== undefined) {
     text = `${getString('token-usage-context')}: ${ctxStr}`;
   } else {
     text = `${getString('token-usage-context')}: —`;
