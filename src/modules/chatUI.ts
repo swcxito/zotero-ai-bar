@@ -286,11 +286,26 @@ export function onLLMStreamStartV2(session: Session) {
   const doc = container.ownerDocument;
   if (!doc) return;
 
+  // Disable the Retry button on the previous assistant bubble - once a new
+  // turn starts, prior replies are no longer retryable. Only the latest is.
+  const prevPop = session.lastAssistantPop;
+  if (prevPop && prevPop.isConnected) {
+    const prevRetry = prevPop.querySelector('.retry-action') as HTMLButtonElement | null;
+    if (prevRetry) {
+      prevRetry.disabled = true;
+      prevRetry.style.opacity = '0.4';
+      // HTML `disabled` only blocks clicks, not CSS :hover - so the
+      // hover:border/bg/text + transition-all from BUTTON_VARIANTS.action
+      // would still animate on mouseover. pointer-events:none stops the
+      // button from receiving hover at all, keeping the dimmed state static.
+      prevRetry.style.pointerEvents = 'none';
+    }
+  }
+
   const pop = ChatBox({
     doc,
     isUser: false,
-    //todo regenerate
-    // onRegenerate: () => regenerateResponse(),
+    onRegenerate: () => addon.chatManager.regenerateLastResponse(session),
   }) as HTMLElement;
   // pop.setAttribute("data-request-id", data.requestId);
 
@@ -320,6 +335,9 @@ export function onLLMStreamStartV2(session: Session) {
 
   container.appendChild(pop);
   session.pending.messagePop = pop;
+  // Track the latest assistant bubble for Retry (disable on next turn, locate
+  // for removal on retry).
+  session.lastAssistantPop = pop as HTMLElement;
   maybeAutoScroll(session);
 }
 

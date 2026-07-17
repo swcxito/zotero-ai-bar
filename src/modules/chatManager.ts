@@ -84,6 +84,26 @@ export class Session {
     /** The active text segment element, used for the 6px geometric check. */
     currentTextSegment?: HTMLElement | null;
   } = {};
+  /**
+   * Snapshot of the most recent turn, for the Retry button. Overwritten on
+   * each new turn so only the last reply is retryable. Lives on `session`
+   * (not `pending`) so it survives `cleanupRequestData`.
+   */
+  lastTurnSnapshot?: {
+    userMessage: UserModelMessage;
+    systemMessage: SystemModelMessage;
+    thinkingEffort?: Session['thinkingEffort'];
+    /** conversationHistory.length captured after the pre-turn trim, before
+     *  the turn's messages were appended. Retry truncates history back to
+     *  this (no-op if the turn errored/aborted and never appended). */
+    historyLengthBeforeTurn: number;
+  };
+  /**
+   * Most recent assistant bubble element. Used to disable its Retry button
+   * once a newer turn starts (so only the latest reply is retryable), and to
+   * locate/remove it when Retry is pressed.
+   */
+  lastAssistantPop?: HTMLElement;
   constructor(id: string) {
     this.id = id;
     this.chatMode = (getPref('chat.defaultMode') as Session['chatMode'] | undefined) ?? 'normal';
@@ -190,8 +210,23 @@ export interface TokenUsage {
   totalTokens?: number;
 }
 
-type ChatRequestParams = {
-  userPrompt: string;
+type ChatRequestParams = (
+  | {
+      /** Raw user text for a normal turn. */
+      userPrompt: string;
+      messagesOverride?: undefined;
+    }
+  | {
+      /**
+       * Internal retry path: re-stream with pre-built messages instead of
+       * re-resolving selection/context. Faithfully replays the original
+       * turn's user message (avoids re-running the stateful selectionBlock
+       * logic). Mutually exclusive with `userPrompt`.
+       */
+      messagesOverride: { userMessage: UserModelMessage; systemMessage: SystemModelMessage };
+      userPrompt?: undefined;
+    }
+) & {
   sourceLabel?: string;
   doesCopyResponse?: boolean;
   isFromPopup?: boolean;
@@ -220,7 +255,43 @@ export class ChatManager {
     const session = this.sessionsMap.get(sectionId);
     if (session) {
       session.conversationHistory = [];
+      // Drop Retry state too: the UI bubbles are gone, so the snapshot and
+      // last-bubble ref are stale and must not survive the clear.
+      session.lastTurnSnapshot = undefined;
+      session.lastAssistantPop = undefined;
     }
+  }
+
+  /**
+   * Retry the last turn: remove the last assistant reply (UI + history) and
+   * re-stream the original user message verbatim. Only the most recent reply
+   * is retryable - older Retry buttons are disabled when a newer turn starts.
+   */
+  async regenerateLastResponse(session: Session) {
+    const snap = session.lastTurnSnapshot;
+    const pop = session.lastAssistantPop;
+    if (!snap || !pop || !pop.isConnected) return;
+    // Defensive: shouldn't be reachable while streaming (the actions row is
+    // hidden until the stream ends), but abort an in-flight stream first.
+    if (session.pending.abortController) {
+      session.pending.abortController.abort();
+      session.pending.abortController = undefined;
+    }
+    // Remove the assistant reply bubble; keep the user's question bubble so
+    // the retried question stays visible (standard "regenerate" UX).
+    pop.remove();
+    // Drop the last turn's messages from history. If the turn never recorded
+    // (error/abort), history is already at this length -> no-op. Guard the
+    // length assignment so a concurrent history clear can't pad with undefined.
+    if (session.conversationHistory.length >= snap.historyLengthBeforeTurn) {
+      session.conversationHistory.length = snap.historyLengthBeforeTurn;
+    }
+    session.lastAssistantPop = undefined;
+    await this.sendChatRequest({
+      tabId: session.id,
+      messagesOverride: { userMessage: snap.userMessage, systemMessage: snap.systemMessage },
+      thinkingEffort: snap.thinkingEffort,
+    });
   }
 
   getCurrentHostMode(): ChatHostMode {
@@ -361,6 +432,22 @@ Separate what is visibly readable in the image from what is supplied by document
       session.pending.abortController = undefined;
     }
     const messagesPromise: Promise<ModelMessage[]> = (async () => {
+      // Retry path: replay the snapshotted messages verbatim. Skip context
+      // resolution / selectionBlock / lastSentSelectionText so the retried
+      // turn is a faithful replay of the original user message.
+      if (params.messagesOverride) {
+        const userMsg = params.messagesOverride.userMessage;
+        const systemMsg = params.messagesOverride.systemMessage;
+        session.pending.userMessage = userMsg;
+        session.pending.systemMessage = systemMsg;
+        session.lastTurnSnapshot = {
+          userMessage: userMsg,
+          systemMessage: systemMsg,
+          thinkingEffort: params.thinkingEffort,
+          historyLengthBeforeTurn: session.conversationHistory.length,
+        };
+        return session.conversationHistory.length > 0 ? [systemMsg, ...session.conversationHistory, userMsg] : [systemMsg, userMsg];
+      }
       // get selection context
       let selectionContext: Array<string> | undefined;
       try {
@@ -462,6 +549,15 @@ Separate what is visibly readable in the image from what is supplied by document
 
       session.pending.userMessage = userMsg;
       session.pending.systemMessage = systemMsg;
+      // Snapshot this turn for the Retry button. historyLengthBeforeTurn is
+      // captured after the pre-turn trim above, before the turn's messages
+      // get appended at stream end - so Retry can truncate back to here.
+      session.lastTurnSnapshot = {
+        userMessage: userMsg,
+        systemMessage: systemMsg,
+        thinkingEffort: params.thinkingEffort,
+        historyLengthBeforeTurn: session.conversationHistory.length,
+      };
 
       // Clear images for this tab after building the message
       if (inputImages.length > 0) {

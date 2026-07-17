@@ -164,6 +164,7 @@ export function ChatBox({ doc, isUser = false, onRegenerate }: ChatBoxProps): El
                   label: 'Retry',
                   icon: Icons.Redo,
                   title: getString('chat-regenerate-response'),
+                  classList: ['retry-action'],
                   onClick: (_e, _btn) => {
                     if (onRegenerate) onRegenerate();
                   },
