@@ -96,6 +96,7 @@ function attachCitationTooltip(span: HTMLElement): void {
   const buildTooltip = (): HTMLElement | null => {
     const itemId = parseInt(span.getAttribute('data-item-id') || '', 10);
     const page = span.getAttribute('data-page');
+    const rangeText = span.getAttribute('data-page-range');
     const info = buildCitationMetadata(itemId);
     const dark = doc.defaultView?.matchMedia('(prefers-color-scheme: dark)')?.matches ?? false;
     const secondary = dark ? '#cbd5e1' : '#6b7280';
@@ -132,7 +133,9 @@ function attachCitationTooltip(span: HTMLElement): void {
     }
     if (page) {
       const pageEl = doc.createElement('div');
-      pageEl.textContent = `p.${page}`;
+      // Range (e.g. "5-12") shows "p.5-12"; single page shows "p.<page>".
+      // Single `p.` prefix for both - the range conveys multipage on its own.
+      pageEl.textContent = rangeText ? `p.${rangeText}` : `p.${page}`;
       pageEl.style.marginTop = '4px';
       pageEl.style.color = secondary;
       pageEl.style.fontSize = '11px';
@@ -366,7 +369,7 @@ export async function onLLMStreamUpdateV2(data: { session: Session; fullText: st
   const prevLen = data.session.pending.lastRenderedLength ?? 0;
   if (!data.force && newLen - prevLen < 20 && prevLen > 0) return;
 
-  chatMessage.innerHTML = await renderMarkdown(data.fullText);
+  chatMessage.innerHTML = await renderMarkdown(data.fullText, data.session.itemId);
   attachCitationHandlers(chatMessage as HTMLElement);
   (pop as HTMLElement).dataset.markdown = data.fullText;
   data.session.pending.lastRenderedLength = newLen;
@@ -1193,7 +1196,7 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
   async function flushTextBuffer(): Promise<void> {
     if (!textBuffer) return;
     const seg = ensureTextSegment();
-    seg.innerHTML = await renderMarkdown(textBuffer);
+    seg.innerHTML = await renderMarkdown(textBuffer, session.itemId);
     attachCitationHandlers(seg);
     textChunkCount = 0;
   }

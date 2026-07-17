@@ -138,7 +138,7 @@ function optimizeFormulas(text: string): string {
  * @param markdown 源文本
  * @returns 渲染后的 HTML 字符串
  */
-export async function renderMarkdown(markdown: string): Promise<string> {
+export async function renderMarkdown(markdown: string, currentItemId?: number): Promise<string> {
   try {
     let text = markdown;
 
@@ -181,8 +181,32 @@ export async function renderMarkdown(markdown: string): Promise<string> {
     //     the source markdown) becomes a block-level "citation header". Title
     //     is shown full (not truncated) and wraps.
     //  2. Inline markers become pill spans (truncated).
+    //     is shown full (not truncated) and wraps.
+    //  2. Inline markers become pill spans (truncated).
     // Both element types carry the same `zaibar-cite` class + data attributes
     // so the click + tooltip handlers in chatUI.ts treat them uniformly.
+    //
+    // Page-only marker `[cite:p<page>]` references the CURRENT document's page
+    // (no itemId/title needed). `<page>` is a 1-based page number or a range
+    // `p5-12` / `p5–12` / `p5~12`; both render with a single `p.` prefix
+    // ("p.5", "p.5-12") - the range itself signals multipage, so `pp.` is
+    // redundant. `data-page` holds the FIRST page so clicking jumps to the range
+    // start; `data-page-range` (ranges only) holds the raw range text for the
+    // tooltip. Without `currentItemId` the pill is non-clickable but still
+    // shows the page label. The `p` prefix keeps it distinct from the numeric
+    // itemId form below.
+    const pageCiteRe = /\[cite:p(\d+)\s*(?:(?:-|–|—|~)\s*(\d+))?\]/g;
+    html = html.replace(pageCiteRe, (_m, startStr, endStr) => {
+      const start = parseInt(startStr, 10);
+      const idAttr = Number.isFinite(currentItemId) ? ` data-item-id="${currentItemId}"` : '';
+      const end = endStr ? parseInt(endStr, 10) : NaN;
+      const isRange = Number.isFinite(end) && end >= start;
+      // Range text normalizes the agent's dash variant (-/–/—/~) to a hyphen.
+      const rangeText = isRange ? `${start}-${end}` : '';
+      const rangeAttr = isRange ? ` data-page-range="${rangeText}"` : '';
+      const label = isRange ? `p.${start}-${end}` : `p.${start}`;
+      return `<span class="zaibar-cite"${idAttr} data-page="${start}"${rangeAttr}>${label}</span>`;
+    });
     const citeRe = /\[cite:(\d+)(?::(\d+))?(?:\|[^\]]*)?\]/g;
     html = html.replace(/<p>\s*\[cite:(\d+)(?::(\d+))?(?:\|[^\]]*)?\]\s*<\/p>/g, (_m, idStr, pageStr) => {
       const itemId = parseInt(idStr, 10);
@@ -258,16 +282,16 @@ function truncateTitle(title: string): string {
 function stripCitationWrappers(text: string): string {
   let prev: string;
   let cur = text;
-  cur = cur.replace(/\[(\[cite:\d+(?::\d+)?(?:\|[^\]]*)?\])\]\([^)]*\)/g, '$1');
-  cur = cur.replace(/`(\[cite:\d+(?::\d+)?(?:\|[^\]]*)?\])`/g, '$1');
+  cur = cur.replace(/\[(\[cite:(?:\d+(?::\d+)?(?:\|[^\]]*)?|p\d+(?:(?:-|–|—|~)\s*\d+)?)\])\]\([^)]*\)/g, '$1');
+  cur = cur.replace(/`(\[cite:(?:\d+(?::\d+)?(?:\|[^\]]*)?|p\d+(?:(?:-|–|—|~)\s*\d+)?)\])`/g, '$1');
   do {
     prev = cur;
     cur = cur
-      .replace(/\*\*\s*(\[cite:\d+(?::\d+)?(?:\|[^\]]*)?\])\s*\*\*/g, '$1')
-      .replace(/__\s*(\[cite:\d+(?::\d+)?(?:\|[^\]]*)?\])\s*__/g, '$1')
-      .replace(/~~\s*(\[cite:\d+(?::\d+)?(?:\|[^\]]*)?\])\s*~~/g, '$1')
-      .replace(/(?<![*_])\*\s*(\[cite:\d+(?::\d+)?(?:\|[^\]]*)?\])\s*\*(?![*_])/g, '$1')
-      .replace(/(?<![*_])_\s*(\[cite:\d+(?::\d+)?(?:\|[^\]]*)?\])\s*_(?![*_])/g, '$1');
+      .replace(/\*\*\s*(\[cite:(?:\d+(?::\d+)?(?:\|[^\]]*)?|p\d+(?:(?:-|–|—|~)\s*\d+)?)\])\s*\*\*/g, '$1')
+      .replace(/__\s*(\[cite:(?:\d+(?::\d+)?(?:\|[^\]]*)?|p\d+(?:(?:-|–|—|~)\s*\d+)?)\])\s*__/g, '$1')
+      .replace(/~~\s*(\[cite:(?:\d+(?::\d+)?(?:\|[^\]]*)?|p\d+(?:(?:-|–|—|~)\s*\d+)?)\])\s*~~/g, '$1')
+      .replace(/(?<![*_])\*\s*(\[cite:(?:\d+(?::\d+)?(?:\|[^\]]*)?|p\d+(?:(?:-|–|—|~)\s*\d+)?)\])\s*\*(?![*_])/g, '$1')
+      .replace(/(?<![*_])_\s*(\[cite:(?:\d+(?::\d+)?(?:\|[^\]]*)?|p\d+(?:(?:-|–|—|~)\s*\d+)?)\])\s*_(?![*_])/g, '$1');
   } while (cur !== prev);
   return cur;
 }

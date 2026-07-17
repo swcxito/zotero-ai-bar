@@ -366,7 +366,8 @@ Format: \`[cite:<itemId>[:<page>][|<title>]]\`
 - Never apply markdown formatting (bold/italic/backticks/links) to a marker — emit as raw text.
 - Never refer to literature by raw IDs in prose ("Item 4291"); always use a marker.
 - A marker alone on its own line renders as a section header for that paper.
-- Only cite IDs returned by tools in this conversation — never invent IDs.`;
+- Only cite IDs returned by tools in this conversation — never invent IDs.
+- For the **current document only**, you may omit the itemId and title and write \`[cite:p<page>]\` (e.g. \`[cite:p5]\`). It renders as a compact "p.5" pill that opens this document at that page. For a page range, write \`[cite:p5-12]\` - it renders as "p.5-12" and jumps to the first page on click. Prefer this for inline page references within the current document - no need to repeat the itemId.`;
     }
 
     if (imageCapableModel) {

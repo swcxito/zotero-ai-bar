@@ -36,7 +36,7 @@ export function ensureChatWindowUI(doc: Document) {
       if (text) {
         const msgEl = bubble.querySelector('.chat-message') as HTMLElement | null;
         if (msgEl) {
-          msgEl.innerHTML = await renderMarkdown(text);
+          msgEl.innerHTML = await renderMarkdown(text, addon.chatManager.sessionsMap.get(addon.chatManager.currentTabID!)?.itemId);
           attachCitationHandlers(msgEl as HTMLElement);
           (msgEl as any).dataset.markdown = text;
         }
