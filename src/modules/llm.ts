@@ -318,12 +318,7 @@ function handleStreamError(session: Session, error: unknown) {
  * The AI SDK auto-routes options to the matching provider by namespace key.
  * Namespaces match the `name` param passed to createOpenAICompatible (v2 providerId).
  */
-const V2_PROVIDER_OPTIONS: Record<string, any> = {
-  'alibaba-cn': { enable_search: true },
-  alibaba: { enable_search: true },
-  'alibaba-coding-plan': { enable_search: true },
-  'alibaba-coding-plan-cn': { enable_search: true },
-};
+const V2_PROVIDER_OPTIONS: Record<string, any> = {};
 
 function getThinkingProviderOptions(providerId: string, effort: 'none' | 'low' | 'medium' | 'high' | 'xhigh'): Record<string, any> | undefined {
   if (effort === 'none') {
