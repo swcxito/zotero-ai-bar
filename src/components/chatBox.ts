@@ -52,7 +52,7 @@ export function ChatBox({ doc, isUser = false, onRegenerate }: ChatBoxProps): El
       'slide-in-from-bottom-3',
       'duration-300',
       'flex-col',
-      ...(isUser ? ['items-end', 'min-w-[160px]', 'max-w-[85%]', 'sm:max-w-[75%]', 'justify-end', 'self-end'] : ['items-start', 'w-full']),
+      ...(isUser ? ['items-end', 'min-w-[160px]', 'w-full', 'justify-end', 'self-end'] : ['items-start', 'w-full']),
     ],
     children: [
       {
