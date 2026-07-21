@@ -107,10 +107,10 @@ export function ToolCallBox({ doc, toolName, icon, summary, details, isExpanded 
   function applyState() {
     if (expanded) {
       detailsPanel.classList.remove('max-h-0', 'overflow-hidden');
-      detailsPanel.classList.add('max-h-[32rem]', 'overflow-y-auto');
+      detailsPanel.classList.add('max-h-[32rem]', 'overflow-y-auto', 'overflow-x-hidden');
       chevron?.classList.add('rotate-180');
     } else {
-      detailsPanel.classList.remove('max-h-[32rem]', 'overflow-y-auto');
+      detailsPanel.classList.remove('max-h-[32rem]', 'overflow-y-auto', 'overflow-x-hidden');
       detailsPanel.classList.add('max-h-0', 'overflow-hidden');
       chevron?.classList.remove('rotate-180');
     }
