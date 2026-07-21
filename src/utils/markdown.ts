@@ -22,12 +22,30 @@ import markedKatex from 'marked-katex-extension';
 import hljs from 'highlight.js';
 import { markedXhtml } from 'marked-xhtml';
 import { getPref } from './prefs';
+import { getItemFullTextByPage } from './zoteroItemAccess';
 
 export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 const ALLOWED_RAW_HTML_TAGS = ['sub'] as const;
+
+/**
+ * Cite marker body alternatives (the part after `[cite:` and before `]`):
+ *  - `<itemId>[:<page>|L<line>[-<end>]][|<title>]`  item cite (cross-doc;
+ *    line form resolves line->page at render time)
+ *  - `p<page>[-<end>]`              page cite (current doc only)
+ *  - `L<line>[-<end>]`              line cite (current doc only; resolves
+ *    line->page at render time, renders like a page cite)
+ *
+ * The dash in ranges accepts `-`, `\u2013` (en-dash), `\u2014` (em-dash), or `~`.
+ * Kept as a raw string so it can be embedded in larger regexes (e.g. the
+ * wrapper-stripping patterns and the main marker regex).
+ */
+const CITE_BODY = String.raw`(?:\d+(?::(?:\d+|L\d+(?:(?:-|\u2013|\u2014|~)\s*\d+)?)?)?(?:\|[^\]]*)?|p\d+(?:(?:-|\u2013|\u2014|~)\s*\d+)?|L\d+(?:(?:-|\u2013|\u2014|~)\s*\d+)?)`;
+const CITE_MARKER_RE = new RegExp(`\\[cite:(${CITE_BODY})\\]`, 'g');
+/** Placeholder prefix used by `extractCiteMarkers` / `restoreCiteMarkers`. */
+const CITE_PLACEHOLDER_PREFIX = 'ZAIBARCITE';
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -154,7 +172,12 @@ export async function renderMarkdown(markdown: string, currentItemId?: number): 
     // so the emphasis HTML is never generated.
     text = stripCitationWrappers(text);
 
-    const { text: protectedText, tokenMap } = protectAllowedHtmlPairs(text, ALLOWED_RAW_HTML_TAGS);
+    // Extract cite markers into alphanumeric placeholders BEFORE marked.parse.
+    // This prevents the `|` in [cite:id|title] from being interpreted as a GFM
+    // table cell separator (which splits the marker and breaks rendering).
+    const { text: textWithPlaceholders, citeTokens } = extractCiteMarkers(text);
+
+    const { text: protectedText, tokenMap } = protectAllowedHtmlPairs(textWithPlaceholders, ALLOWED_RAW_HTML_TAGS);
 
     let html = await marked.parse(protectedText);
 
@@ -169,59 +192,15 @@ export async function renderMarkdown(markdown: string, currentItemId?: number): 
       .replace(/<math(?![^>]*xmlns)/g, '<math xmlns="http://www.w3.org/1998/Math/MathML"')
       .replace(/<svg(?![^>]*xmlns)/g, '<svg xmlns="http://www.w3.org/2000/svg"');
 
-    // Render citation markers [cite:itemId[:page][|title]].
-    // The title segment (after |) is accepted but IGNORED at render time —
-    // the UI always resolves the title from the Zotero item cache so it stays
-    // authoritative and never drifts from what the model wrote. We accept it
-    // purely as a "slot" so the model can satisfy its urge to include the
-    // title inside the marker rather than repeating it in the prose.
-    //
+    // Restore cite markers from placeholders and render as HTML.
     // Two passes:
-    //  1. A marker that is the sole content of a <p> (i.e. on its own line in
-    //     the source markdown) becomes a block-level "citation header". Title
-    //     is shown full (not truncated) and wraps.
-    //  2. Inline markers become pill spans (truncated).
-    //     is shown full (not truncated) and wraps.
-    //  2. Inline markers become pill spans (truncated).
+    //  1. A placeholder that is the sole content of a <p> (i.e. the marker was
+    //     on its own line in the source markdown) becomes a block-level
+    //     "citation header". Only item cites (not page/line cites) get this.
+    //  2. Remaining placeholders become inline pill spans.
     // Both element types carry the same `zaibar-cite` class + data attributes
     // so the click + tooltip handlers in chatUI.ts treat them uniformly.
-    //
-    // Page-only marker `[cite:p<page>]` references the CURRENT document's page
-    // (no itemId/title needed). `<page>` is a 1-based page number or a range
-    // `p5-12` / `p5–12` / `p5~12`; both render with a single `p.` prefix
-    // ("p.5", "p.5-12") - the range itself signals multipage, so `pp.` is
-    // redundant. `data-page` holds the FIRST page so clicking jumps to the range
-    // start; `data-page-range` (ranges only) holds the raw range text for the
-    // tooltip. Without `currentItemId` the pill is non-clickable but still
-    // shows the page label. The `p` prefix keeps it distinct from the numeric
-    // itemId form below.
-    const pageCiteRe = /\[cite:p(\d+)\s*(?:(?:-|–|—|~)\s*(\d+))?\]/g;
-    html = html.replace(pageCiteRe, (_m, startStr, endStr) => {
-      const start = parseInt(startStr, 10);
-      const idAttr = Number.isFinite(currentItemId) ? ` data-item-id="${currentItemId}"` : '';
-      const end = endStr ? parseInt(endStr, 10) : NaN;
-      const isRange = Number.isFinite(end) && end >= start;
-      // Range text normalizes the agent's dash variant (-/–/—/~) to a hyphen.
-      const rangeText = isRange ? `${start}-${end}` : '';
-      const rangeAttr = isRange ? ` data-page-range="${rangeText}"` : '';
-      const label = isRange ? `p.${start}-${end}` : `p.${start}`;
-      return `<span class="zaibar-cite"${idAttr} data-page="${start}"${rangeAttr}>${label}</span>`;
-    });
-    const citeRe = /\[cite:(\d+)(?::(\d+))?(?:\|[^\]]*)?\]/g;
-    html = html.replace(/<p>\s*\[cite:(\d+)(?::(\d+))?(?:\|[^\]]*)?\]\s*<\/p>/g, (_m, idStr, pageStr) => {
-      const itemId = parseInt(idStr, 10);
-      const page = pageStr ? parseInt(pageStr, 10) : NaN;
-      const label = buildCitationLabel(itemId, Number.isFinite(page) ? page : undefined, false);
-      const pageAttr = Number.isFinite(page) ? ` data-page="${page}"` : '';
-      return `<div class="zaibar-cite zaibar-cite-header" data-item-id="${itemId}"${pageAttr}>${escapeHtml(label)}</div>`;
-    });
-    html = html.replace(citeRe, (_match, idStr, pageStr) => {
-      const itemId = parseInt(idStr, 10);
-      const page = pageStr ? parseInt(pageStr, 10) : NaN;
-      const label = buildCitationLabel(itemId, Number.isFinite(page) ? page : undefined);
-      const pageAttr = Number.isFinite(page) ? ` data-page="${page}"` : '';
-      return `<span class="zaibar-cite" data-item-id="${itemId}"${pageAttr}>${escapeHtml(label)}</span>`;
-    });
+    html = await restoreCiteMarkers(html, citeTokens, currentItemId);
 
     return html;
   } catch (error) {
@@ -282,16 +261,16 @@ function truncateTitle(title: string): string {
 function stripCitationWrappers(text: string): string {
   let prev: string;
   let cur = text;
-  cur = cur.replace(/\[(\[cite:(?:\d+(?::\d+)?(?:\|[^\]]*)?|p\d+(?:(?:-|–|—|~)\s*\d+)?)\])\]\([^)]*\)/g, '$1');
-  cur = cur.replace(/`(\[cite:(?:\d+(?::\d+)?(?:\|[^\]]*)?|p\d+(?:(?:-|–|—|~)\s*\d+)?)\])`/g, '$1');
+  cur = cur.replace(new RegExp(String.raw`\[(\[cite:${CITE_BODY}\])\]\([^)]*\)`, 'g'), '$1');
+  cur = cur.replace(new RegExp('`' + String.raw`(\[cite:${CITE_BODY}\])` + '`', 'g'), '$1');
   do {
     prev = cur;
     cur = cur
-      .replace(/\*\*\s*(\[cite:(?:\d+(?::\d+)?(?:\|[^\]]*)?|p\d+(?:(?:-|–|—|~)\s*\d+)?)\])\s*\*\*/g, '$1')
-      .replace(/__\s*(\[cite:(?:\d+(?::\d+)?(?:\|[^\]]*)?|p\d+(?:(?:-|–|—|~)\s*\d+)?)\])\s*__/g, '$1')
-      .replace(/~~\s*(\[cite:(?:\d+(?::\d+)?(?:\|[^\]]*)?|p\d+(?:(?:-|–|—|~)\s*\d+)?)\])\s*~~/g, '$1')
-      .replace(/(?<![*_])\*\s*(\[cite:(?:\d+(?::\d+)?(?:\|[^\]]*)?|p\d+(?:(?:-|–|—|~)\s*\d+)?)\])\s*\*(?![*_])/g, '$1')
-      .replace(/(?<![*_])_\s*(\[cite:(?:\d+(?::\d+)?(?:\|[^\]]*)?|p\d+(?:(?:-|–|—|~)\s*\d+)?)\])\s*_(?![*_])/g, '$1');
+      .replace(new RegExp(String.raw`\*\*\s*(\[cite:${CITE_BODY}\])\s*\*\*`, 'g'), '$1')
+      .replace(new RegExp(String.raw`__\s*(\[cite:${CITE_BODY}\])\s*__`, 'g'), '$1')
+      .replace(new RegExp(String.raw`~~\s*(\[cite:${CITE_BODY}\])\s*~~`, 'g'), '$1')
+      .replace(new RegExp(String.raw`(?<![*_])\*\s*(\[cite:${CITE_BODY}\])\s*\*(?![*_])`, 'g'), '$1')
+      .replace(new RegExp(String.raw`(?<![*_])_\s*(\[cite:${CITE_BODY}\])\s*_(?![*_])`, 'g'), '$1');
   } while (cur !== prev);
   return cur;
 }
@@ -304,4 +283,222 @@ function buildCitationLabel(itemId: number, page?: number, truncate = true): str
   let label = title ? (truncate ? truncateTitle(title) : title) : `#${itemId}`;
   if (page && page > 0) label += ` · p.${page}`;
   return label;
+}
+
+/**
+ * Replace every `[cite:...]` marker in `text` with an alphanumeric placeholder
+ * (`ZAIBARCITE000000`, zero-padded 6-digit index). The placeholders survive
+ * `marked.parse` untouched and - crucially - contain no `|`, so they no longer
+ * split GFM table cells the way the raw `[cite:id|title]` marker did.
+ *
+ * The original marker bodies are returned in `citeTokens` (indexed by the
+ * placeholder number) so `restoreCiteMarkers` can render them to HTML after
+ * the markdown parse.
+ */
+function extractCiteMarkers(text: string): { text: string; citeTokens: string[] } {
+  const citeTokens: string[] = [];
+  const replaced = text.replace(CITE_MARKER_RE, (_m, body: string) => {
+    const idx = citeTokens.length;
+    citeTokens.push(body);
+    return `${CITE_PLACEHOLDER_PREFIX}${String(idx).padStart(6, '0')}`;
+  });
+  return { text: replaced, citeTokens };
+}
+
+/**
+ * Render a single cite marker body (the part between `[cite:` and `]`) to its
+ * final HTML string. Returns `null` if the body matches no known form.
+ *
+ * `asHeader=true` produces the block-level `<div class="zaibar-cite-header">`
+ * used when the marker sat alone on its own line; only item cites use this -
+ * page cites always render as inline pills regardless of `asHeader`.
+ *
+ * `linePageMap` maps `"${itemId}:${line}"` -> resolved 1-based page number for
+ * cross-document line cites (`[cite:<itemId>:L<line>]`). When a page is
+ * resolved, the cite renders identically to a normal item+page cite (label
+ * shows "Title · p.X", `data-page` is set for click/tooltip). When resolution
+ * fails, `data-line` is set as a fallback so the click handler can try again
+ * on click, and the tooltip shows "L.<line>".
+ */
+function renderCiteBody(
+  body: string,
+  currentItemId: number | undefined,
+  asHeader: boolean,
+  linePageMap?: Map<string, number | undefined>
+): string | null {
+  // Item cite: <itemId>[:<page>|L<line>[-<end>]][|<title>]
+  const itemMatch = body.match(/^(\d+)(?::([^|]+))?(?:\|.*)?$/);
+  if (itemMatch) {
+    const itemId = parseInt(itemMatch[1], 10);
+    const slot = itemMatch[2]; // "5", "L42", "L42-58", or undefined
+
+    let page: number | undefined;
+    let line: number | undefined;
+    let lineRange: string | undefined;
+
+    if (slot && slot.startsWith('L')) {
+      // Cross-document line cite: resolve line -> page at render time.
+      const lineMatch = slot.match(/^L(\d+)\s*(?:(?:-|\u2013|\u2014|~)\s*(\d+))?$/);
+      if (lineMatch) {
+        line = parseInt(lineMatch[1], 10);
+        const endStr = lineMatch[2];
+        if (endStr) {
+          const end = parseInt(endStr, 10);
+          if (Number.isFinite(end) && end >= line) lineRange = `${line}-${end}`;
+        }
+        page = linePageMap?.get(`${itemId}:${line}`);
+      }
+    } else if (slot) {
+      page = parseInt(slot, 10);
+      if (!Number.isFinite(page)) page = undefined;
+    }
+
+    // When page is resolved, emit data-page (click/tooltip use it directly).
+    // When only line is known (resolution failed), emit data-line as fallback.
+    const pageAttr = page !== undefined ? ` data-page="${page}"` : '';
+    const lineAttr = line !== undefined && page === undefined ? ` data-line="${line}"` : '';
+    const lineRangeAttr = lineRange && page === undefined ? ` data-line-range="${lineRange}"` : '';
+
+    if (asHeader) {
+      const label = buildCitationLabel(itemId, page, false);
+      return `<div class="zaibar-cite zaibar-cite-header" data-item-id="${itemId}"${pageAttr}${lineAttr}${lineRangeAttr}>${escapeHtml(label)}</div>`;
+    }
+    const label = buildCitationLabel(itemId, page);
+    return `<span class="zaibar-cite" data-item-id="${itemId}"${pageAttr}${lineAttr}${lineRangeAttr}>${escapeHtml(label)}</span>`;
+  }
+
+  // Page cite: p<page>[-<end>]  (current document only)
+  const pageMatch = body.match(/^p(\d+)\s*(?:(?:-|\u2013|\u2014|~)\s*(\d+))?$/);
+  if (pageMatch) {
+    const start = parseInt(pageMatch[1], 10);
+    const endStr = pageMatch[2];
+    const end = endStr ? parseInt(endStr, 10) : NaN;
+    const isRange = Number.isFinite(end) && end >= start;
+    const rangeText = isRange ? `${start}-${end}` : '';
+    const idAttr = Number.isFinite(currentItemId) ? ` data-item-id="${currentItemId}"` : '';
+    const rangeAttr = isRange ? ` data-page-range="${rangeText}"` : '';
+    const label = isRange ? `p.${start}-${end}` : `p.${start}`;
+    return `<span class="zaibar-cite"${idAttr} data-page="${start}"${rangeAttr}>${label}</span>`;
+  }
+
+  // Line cite (current document only): L<line>[-<end>].
+  // Resolve line -> page at render time and render like a page cite ("p.X").
+  // Only the first line's page is resolved (consistent with cross-doc line
+  // cites); the end line is dropped from the resolved label. Falls back to
+  // "L.X" with data-line (click handler resolves on click) when the
+  // lineToPage map is unavailable.
+  const lineMatch = body.match(/^L(\d+)\s*(?:(?:-|\u2013|\u2014|~)\s*(\d+))?$/);
+  if (lineMatch) {
+    const start = parseInt(lineMatch[1], 10);
+    const endStr = lineMatch[2];
+    const end = endStr ? parseInt(endStr, 10) : NaN;
+    const isRange = Number.isFinite(end) && end >= start;
+    const lineRangeText = isRange ? `${start}-${end}` : '';
+    const idAttr = Number.isFinite(currentItemId) ? ` data-item-id="${currentItemId}"` : '';
+    const page = Number.isFinite(currentItemId) ? linePageMap?.get(`${currentItemId}:${start}`) : undefined;
+    if (page !== undefined) {
+      // Resolved: render as a page pill (consistent with [cite:p<page>]).
+      const label = `p.${page}`;
+      return `<span class="zaibar-cite"${idAttr} data-page="${page}">${label}</span>`;
+    }
+    // Unresolved: show line label, click handler resolves on click.
+    const lineRangeAttr = isRange ? ` data-line-range="${lineRangeText}"` : '';
+    const label = isRange ? `L.${start}-${end}` : `L.${start}`;
+    return `<span class="zaibar-cite"${idAttr} data-line="${start}"${lineRangeAttr}>${label}</span>`;
+  }
+
+  return null;
+}
+
+/**
+ * Pre-resolve all line cites in `citeTokens` to their 1-based PDF page numbers.
+ *
+ * Two forms are supported:
+ *  - Cross-document: `<itemId>:L<line>` -> resolved via that item's lineToPage.
+ *  - Current document: `L<line>` -> resolved via `currentItemId`'s lineToPage.
+ *
+ * Items are batched so each distinct itemId's `lineToPage` map is fetched only
+ * once (via `getItemFullTextByPage`, which reads Zotero's indexed full-text
+ * cache file - fast, no PDF re-parse).
+ *
+ * Returns a `Map<string, number | undefined>` keyed by `"${itemId}:${line}"`.
+ */
+async function resolveLineCites(citeTokens: string[], currentItemId?: number): Promise<Map<string, number | undefined>> {
+  const result = new Map<string, number | undefined>();
+  // Collect unique (itemId, line) pairs from line cite bodies.
+  const itemLines = new Map<number, Set<number>>();
+  for (const body of citeTokens) {
+    let itemId: number | undefined;
+    let line: number | undefined;
+    // Cross-document: <itemId>:L<line>
+    const cross = body.match(/^(\d+):L(\d+)/);
+    if (cross) {
+      itemId = parseInt(cross[1], 10);
+      line = parseInt(cross[2], 10);
+    } else {
+      // Current document: L<line> (needs currentItemId)
+      const cur = body.match(/^L(\d+)/);
+      if (cur && Number.isFinite(currentItemId)) {
+        itemId = currentItemId;
+        line = parseInt(cur[1], 10);
+      }
+    }
+    if (itemId !== undefined && line !== undefined) {
+      if (!itemLines.has(itemId)) itemLines.set(itemId, new Set());
+      itemLines.get(itemId)!.add(line);
+    }
+  }
+  // Fetch each item's lineToPage map once, resolve all its lines.
+  for (const [itemId, lines] of itemLines) {
+    let pageResult;
+    try {
+      pageResult = await getItemFullTextByPage(itemId);
+    } catch {
+      pageResult = undefined;
+    }
+    for (const line of lines) {
+      // lineToPage maps 0-based line index -> 1-based page number.
+      result.set(`${itemId}:${line}`, pageResult?.lineToPage.get(line - 1));
+    }
+  }
+  return result;
+}
+
+/**
+ * Replace `ZAIBARCITE000000` placeholders in the parsed HTML with their final
+ * cite HTML. Two passes:
+ *  1. A placeholder that is the sole content of a `<p>` (i.e. the marker was
+ *     on its own line) becomes a block-level "citation header" `<div>`. Only
+ *     item cites become headers; page cites are left for the inline pass
+ *     (their `<p>` wrapper is restored so they stay in normal paragraph flow).
+ *  2. All remaining placeholders become inline pill `<span>`s.
+ *
+ * Async because line cites (`[cite:L<line>]` current-doc and
+ * `[cite:<itemId>:L<line>]` cross-doc) require a `lineToPage` lookup to
+ * resolve the line to a page before rendering.
+ */
+async function restoreCiteMarkers(html: string, citeTokens: string[], currentItemId?: number): Promise<string> {
+  const linePageMap = await resolveLineCites(citeTokens, currentItemId);
+  const placeholderRe = new RegExp(`${CITE_PLACEHOLDER_PREFIX}(\\d{6})`, 'g');
+  const headerRe = new RegExp(`<p>\\s*(${CITE_PLACEHOLDER_PREFIX}\\d{6})\\s*</p>`, 'g');
+
+  // Pass 1: block-level header (item cites only).
+  html = html.replace(headerRe, (m, token: string) => {
+    const idx = parseInt(token.slice(CITE_PLACEHOLDER_PREFIX.length), 10);
+    const body = citeTokens[idx];
+    const rendered = renderCiteBody(body, currentItemId, true, linePageMap);
+    // Not an item cite - keep the placeholder (wrapped back in <p>) for the
+    // inline pass so page cites stay in paragraph flow.
+    return rendered ?? `<p>${token}</p>`;
+  });
+
+  // Pass 2: inline pill spans for everything else.
+  html = html.replace(placeholderRe, (m, numStr: string) => {
+    const idx = parseInt(numStr, 10);
+    const body = citeTokens[idx];
+    const rendered = renderCiteBody(body, currentItemId, false, linePageMap);
+    return rendered ?? m;
+  });
+
+  return html;
 }

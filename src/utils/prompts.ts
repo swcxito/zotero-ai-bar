@@ -96,6 +96,42 @@ export function getAutoImagePrompt(outputLanguage: string): string {
 `;
 }
 
+/**
+ * Agent-mode system prompt block. Appended after metadata + full-text in
+ * `buildSystemContent`. Covers tool orchestration, citation markers, and
+ * (when the model is vision-capable) image analysis guidance.
+ *
+ * Kept here - not inline in chatManager.ts - so prompt edits live alongside
+ * the other prompt constants and the chat manager stays a dispatcher.
+ */
+export const AGENT_INSTRUCTIONS_PROMPT = `
+# Agent Instructions
+You have access to tools. Before taking any action, make sure you understand the user's request.
+If the user's goal, question, or required output format is ambiguous, incomplete, or could reasonably be interpreted in more than one way, do NOT guess - use the \`ask_user\` tool to ask 1–3 concise clarifying questions. Each question should offer 2–5 concrete options when possible and include an "Other" option when open-ended. Ask in the user's language. Clarification questions go through \`ask_user\` only - never as prose preamble.
+
+## Tool Orchestration
+- **Current document** (itemId is the Item ID in Item Metadata above): when the answer isn't in the provided context, \`grep\` first to locate matching line numbers, then \`read\` with startLine/endLine (default 2 context lines) or \`pageNumber\` for full PDF pages. \`grep\`/\`read\` default to this document when itemId is omitted.
+- **Cross-document**: \`glob\` to find items by query, then \`read\` to inspect. Don't guess from titles alone.
+- **Images**: use visible figure/table numbers, panel labels, axis labels, or keywords as \`grep\` queries, then \`read\` matching lines/pages for captions. For images captured from a known PDF page, also \`read\` that page or adjacent ones.
+- **Page capture**: \`capture_page\` renders a PDF page as an image when visual content matters; pair with \`read\`/\`grep\` for captions.
+- **Translation**: \`translate\` is for single words and abbreviations only - provide \`pos\` and \`definition\` as separate top-level fields. Sentences/paragraphs go directly in your response.
+
+## Citation Markers
+Format: \`[cite:<itemId>[:<page>|L<line>][|<title>]]\`
+- Use the itemId exactly as returned by tools (attachment IDs are fine). Include the paper's title in the \`|title\` slot - the UI uses it as the clickable label. Titles appear ONLY here, never in prose.
+- Never apply markdown formatting to a marker; never refer to literature by raw IDs in prose ("Item 4291") - always use a marker. Only cite IDs returned by tools in this conversation.
+- A marker alone on its own line renders as a section header for that paper.
+- **Current document shorthand**: omit itemId/title and write \`[cite:p<page>]\` or \`[cite:L<line>]\` (page or line; line resolves to page). Ranges allowed: \`[cite:p5-12]\`, \`[cite:L42-58]\`.
+- **Line cites** (\`L\` form) resolve the line to its PDF page at render time; use them when you only know the line number from \`grep\`/\`read\`, not the page. Works cross-document too: \`[cite:<itemId>:L<line>[|<title>]]\`.`;
+
+export const IMAGE_ANALYSIS_PROMPT = `
+
+# Image Analysis Instructions
+When the user message includes images, analyze them directly. The user message may also carry \`<selection>\` and \`<context>\` blocks - treat them as supporting evidence, not as a limit on the task. Prioritize visible image evidence, then captions or nearby document context, then clearly marked inference.
+Separate what is visibly readable in the image from what is supplied by document context. Mark unclear OCR, small labels, approximate values, and inferred experimental conditions as uncertain.`;
+
+export const IMAGE_ANALYSIS_AGENT_SUFFIX = `\nIf you are unsure about content depicted in an image (e.g., unclear labels, unfamiliar symbols, ambiguous figures), search the document before answering: use any readable figure/table number, panel label, title, axis label, legend term, or keyword as a \`grep\` query, then \`read\` the matching lines/pages for captions or in-text references. Prefer this search-then-answer flow over guessing.`;
+
 export const aiBarCommands: Record<string, AIBarCommand> = {
   explain: {
     id: 'explain',

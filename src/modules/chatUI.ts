@@ -31,6 +31,7 @@ import { getReaderByTabId } from './tabObserver';
 import { buildErrorMessage } from './llm';
 import { getActiveModelContextLimit } from '../utils/providers';
 import { openCitation } from './citationAction';
+import { getItemFullTextByPage } from '../utils/zoteroItemAccess';
 
 Zotero.debug('[zaibar-chatUI] module loaded');
 
@@ -45,12 +46,36 @@ export function attachCitationHandlers(root: HTMLElement): void {
     span.setAttribute('data-bound', '1');
     span.addEventListener('click', () => {
       const itemId = parseInt(span.getAttribute('data-item-id') || '', 10);
-      const pageStr = span.getAttribute('data-page');
-      const page = pageStr ? parseInt(pageStr, 10) : undefined;
       if (!Number.isFinite(itemId)) return;
-      void openCitation(itemId, page);
+      const lineStr = span.getAttribute('data-line');
+      const pageStr = span.getAttribute('data-page');
+      if (lineStr) {
+        // Line cite: resolve 1-based line -> page via the item's lineToPage
+        // map, then open. Falls back to no page if resolution fails.
+        const line = parseInt(lineStr, 10);
+        void resolveLineToPage(itemId, line).then((page) => openCitation(itemId, page));
+      } else {
+        const page = pageStr ? parseInt(pageStr, 10) : undefined;
+        void openCitation(itemId, page);
+      }
     });
     attachCitationTooltip(span);
+  }
+}
+
+/**
+ * Resolve a 1-based document line number to its 1-based PDF page number using
+ * the item's precomputed `lineToPage` map. Returns `undefined` if the line is
+ * out of range or the full text is unavailable.
+ */
+async function resolveLineToPage(itemId: number, line: number): Promise<number | undefined> {
+  try {
+    const pageResult = await getItemFullTextByPage(itemId);
+    if (!pageResult) return undefined;
+    // lineToPage maps 0-based line index -> 1-based page number.
+    return pageResult.lineToPage.get(line - 1);
+  } catch {
+    return undefined;
   }
 }
 
@@ -97,6 +122,8 @@ function attachCitationTooltip(span: HTMLElement): void {
     const itemId = parseInt(span.getAttribute('data-item-id') || '', 10);
     const page = span.getAttribute('data-page');
     const rangeText = span.getAttribute('data-page-range');
+    const line = span.getAttribute('data-line');
+    const lineRangeText = span.getAttribute('data-line-range');
     const info = buildCitationMetadata(itemId);
     const dark = doc.defaultView?.matchMedia('(prefers-color-scheme: dark)')?.matches ?? false;
     const secondary = dark ? '#cbd5e1' : '#6b7280';
@@ -105,7 +132,7 @@ function attachCitationTooltip(span: HTMLElement): void {
     const tip = doc.createElement('div');
     applyBaseStyles(tip, dark);
 
-    // Header cards already display the full title prominently — skip the
+    // Header cards already display the full title prominently - skip the
     // title row in the tooltip so it shows only the supplementary info
     // (journal, authors, page) the user doesn't already see.
     const isHeader = span.classList.contains('zaibar-cite-header');
@@ -141,8 +168,16 @@ function attachCitationTooltip(span: HTMLElement): void {
       pageEl.style.fontSize = '11px';
       tip.appendChild(pageEl);
     }
+    if (line) {
+      const lineEl = doc.createElement('div');
+      lineEl.textContent = lineRangeText ? `L.${lineRangeText}` : `L.${line}`;
+      lineEl.style.marginTop = '4px';
+      lineEl.style.color = secondary;
+      lineEl.style.fontSize = '11px';
+      tip.appendChild(lineEl);
+    }
 
-    // Nothing meaningful to show — caller will skip rendering.
+    // Nothing meaningful to show - caller will skip rendering.
     if (!tip.children.length) return null;
 
     return tip;

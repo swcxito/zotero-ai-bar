@@ -21,7 +21,13 @@
 // todo !! 一个tab不止对应一个文件
 import { getItemFullText, getItemMetadata } from '../utils/itemContext';
 import { getPref } from '../utils/prefs';
-import { SYSTEM_PROMPT_PREFIX, getAutoImagePrompt } from '../utils/prompts';
+import {
+  SYSTEM_PROMPT_PREFIX,
+  getAutoImagePrompt,
+  AGENT_INSTRUCTIONS_PROMPT,
+  IMAGE_ANALYSIS_PROMPT,
+  IMAGE_ANALYSIS_AGENT_SUFFIX,
+} from '../utils/prompts';
 import { checkModelSupportsImage, getActiveModelContextLimit } from '../utils/providers';
 import { ensureChatWindowReady, focusChatWindow } from '../utils/window';
 import { streamLLMV2 } from './llm';
@@ -345,39 +351,13 @@ export class ChatManager {
 
     // Agent instructions: ask user when intent is unclear, plus tool orchestration
     if (chatMode === 'agent') {
-      systemPrompt += `
-
-# Agent Instructions
-You have access to tools. Before taking any action, make sure you understand the user's request.
-If the user's goal, question, or required output format is ambiguous, incomplete, or could reasonably be interpreted in more than one way, do NOT guess — use the \`ask_user\` tool to ask 1–3 concise clarifying questions. Each question should offer 2–5 concrete options when possible and include an "Other" option when open-ended. Ask in the user's language. Clarification questions go through \`ask_user\` only — never as prose preamble.
-
-## Tool Orchestration
-- **Current document** (itemId is the Item ID in Item Metadata above): when the answer isn't in the provided context, \`grep\` first to locate matching line numbers, then \`read\` with startLine/endLine (default 2 context lines) or \`pageNumber\` for full PDF pages. \`grep\`/\`read\` default to this document when itemId is omitted.
-- **Cross-document**: \`glob\` to find items by query, then \`read\` to inspect. Don't guess from titles alone.
-- **Images**: use visible figure/table numbers, panel labels, axis labels, or keywords as \`grep\` queries, then \`read\` matching lines/pages for captions. For images captured from a known PDF page, also \`read\` that page or adjacent ones.
-- **Page capture**: \`capture_page\` renders a PDF page as an image when visual content matters; pair with \`read\`/\`grep\` for captions.
-- **Translation**: \`translate\` is for single words and abbreviations only — provide \`pos\` and \`definition\` as separate top-level fields. Sentences/paragraphs go directly in your response.
-
-## Citation Markers
-Format: \`[cite:<itemId>[:<page>][|<title>]]\`
-- Use the itemId exactly as returned by tools (attachment IDs are fine — the UI resolves them).
-- Page is 1-based, optional.
-- **Include the paper's title in the \`|title\` slot** — the UI displays it as the clickable label. Titles appear ONLY here, never in prose.
-- Never apply markdown formatting (bold/italic/backticks/links) to a marker — emit as raw text.
-- Never refer to literature by raw IDs in prose ("Item 4291"); always use a marker.
-- A marker alone on its own line renders as a section header for that paper.
-- Only cite IDs returned by tools in this conversation — never invent IDs.
-- For the **current document only**, you may omit the itemId and title and write \`[cite:p<page>]\` (e.g. \`[cite:p5]\`). It renders as a compact "p.5" pill that opens this document at that page. For a page range, write \`[cite:p5-12]\` - it renders as "p.5-12" and jumps to the first page on click. Prefer this for inline page references within the current document - no need to repeat the itemId.`;
+      systemPrompt += AGENT_INSTRUCTIONS_PROMPT;
     }
 
     if (imageCapableModel) {
-      systemPrompt += `
-
-# Image Analysis Instructions
-When the user message includes images, analyze them directly. The user message may also carry \`<selection>\` and \`<context>\` blocks — treat them as supporting evidence, not as a limit on the task. Prioritize visible image evidence, then captions or nearby document context, then clearly marked inference.
-Separate what is visibly readable in the image from what is supplied by document context. Mark unclear OCR, small labels, approximate values, and inferred experimental conditions as uncertain.`;
+      systemPrompt += IMAGE_ANALYSIS_PROMPT;
       if (chatMode === 'agent') {
-        systemPrompt += `\nIf you are unsure about content depicted in an image (e.g., unclear labels, unfamiliar symbols, ambiguous figures), search the document before answering: use any readable figure/table number, panel label, title, axis label, legend term, or keyword as a \`grep\` query, then \`read\` the matching lines/pages for captions or in-text references. Prefer this search-then-answer flow over guessing.`;
+        systemPrompt += IMAGE_ANALYSIS_AGENT_SUFFIX;
       }
     }
 
