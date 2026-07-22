@@ -403,7 +403,8 @@ class ModelDialogV2 {
         const existing = v2.addedModels.find((m) => m.providerId === providerId && m.id === cm.id);
         if (existing) {
           const refreshed = findModelMetadata(cm.name, undefined, providerId as ProviderId, this.getActiveProviders());
-          newAddedModels.push({ ...existing, ...refreshed, enabled: cm.enabled });
+          const { id: _refreshedId, ...refreshedRest } = refreshed ?? {};
+          newAddedModels.push({ ...existing, ...refreshedRest, enabled: cm.enabled });
         } else {
           // New model — search commonProviders for metadata
           const metadata = findModelMetadata(cm.name, undefined, providerId as ProviderId, this.getActiveProviders());
@@ -423,7 +424,7 @@ class ModelDialogV2 {
               limit: { context: 0, output: 0 },
             }),
             id: metadata?.id ?? cm.name,
-            name: cm.name,
+            name: metadata?.name ?? cm.name,
             providerId: providerId as ProviderId,
             enabled: cm.enabled,
           });

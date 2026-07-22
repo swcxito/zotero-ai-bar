@@ -191,17 +191,12 @@ export function findModelMetadata(
   }
 
   // 1. Direct lookup in the provider's own models
-  // ztoolkit.log("searching model metadata for", {
-  //   modelName,
-  //   modelId,
-  //   providerId,
-  // });
   const ownProvider = commonProviders[providerId];
   if (ownProvider?.models) {
-    if (ownProvider.models[modelName]) return ownProvider.models[modelName];
-    if (modelId && ownProvider.models[modelId]) return ownProvider.models[modelId];
-    for (const m of Object.values(ownProvider.models)) {
-      if (m.name === modelName || (modelId && m.name === modelId)) return m;
+    if (ownProvider.models[modelName]) return { ...ownProvider.models[modelName], id: modelName };
+    if (modelId && ownProvider.models[modelId]) return { ...ownProvider.models[modelId], id: modelId };
+    for (const [key, m] of Object.entries(ownProvider.models)) {
+      if (m.name === modelName || (modelId && m.name === modelId)) return { ...m, id: key };
     }
   }
 
@@ -212,20 +207,20 @@ export function findModelMetadata(
     const bareName = modelName.slice(slashIdx + 1);
     const prefixProvider = commonProviders[prefix];
     if (prefixProvider?.models?.[bareName]) {
-      return prefixProvider.models[bareName];
+      return { ...prefixProvider.models[bareName], id: bareName };
     }
     if (prefixProvider?.models) {
-      for (const m of Object.values(prefixProvider.models)) {
-        if (m.name === bareName) return m;
+      for (const [key, m] of Object.entries(prefixProvider.models)) {
+        if (m.name === bareName) return { ...m, id: key };
       }
     }
   }
 
   // 3. Global search across all providers by name or id
   for (const p of Object.values(commonProviders)) {
-    for (const m of Object.values(p.models)) {
+    for (const [key, m] of Object.entries(p.models)) {
       if (m.name === modelName || m.id === modelName || (modelId && (m.name === modelId || m.id === modelId))) {
-        return m;
+        return { ...m, id: key };
       }
     }
   }
@@ -645,7 +640,10 @@ export async function loadV2Config(): Promise<UserProviderConfigV2 | null> {
       // 如果文件中没有元数据，或 modalities 可能陈旧（缺少 image 等），从 providers 补充
       if (!merged.family || (merged.modalities?.input && !merged.modalities.input.includes('image'))) {
         const fm = findModelMetadata(m.name, m.id, m.providerId, addon.data.liveProviders ?? addon.data.commonProviders);
-        if (fm) Object.assign(merged, fm);
+        if (fm) {
+          const { id: _fmId, ...fmRest } = fm;
+          Object.assign(merged, fmRest);
+        }
       }
       if (!merged.family) merged.family = 'unknown';
       return merged;
