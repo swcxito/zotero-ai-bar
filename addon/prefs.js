@@ -27,4 +27,5 @@ pref('translate.extendContext', 'follow');
 pref('translate.useAlternativeModel', false);
 pref('translate.modelId', '');
 pref('translate.targetLanguage', '');
+pref('translate.thinkingDepth', 'minimum');
 pref('imagePreview.location', 'reader');

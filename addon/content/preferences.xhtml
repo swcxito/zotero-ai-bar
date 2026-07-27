@@ -128,6 +128,13 @@
         <html:option value="" data-l10n-id="pref-translate-target-language-follow" />
       </html:select>
     </hbox>
+    <hbox align="center" style="margin-top: 10px">
+      <html:label data-l10n-id="pref-translate-thinking-depth" flex="1" />
+      <radiogroup preference="translate.thinkingDepth" orient="horizontal" style="gap: 10px">
+        <radio value="minimum" data-l10n-id="pref-translate-thinking-depth-minimum" />
+        <radio value="follow-chat" data-l10n-id="pref-translate-thinking-depth-follow-chat" />
+      </radiogroup>
+    </hbox>
     <hbox align="center" style="margin-top: 8px">
       <checkbox id="__addonRef__-auto-translate" preference="translate.enableAuto" data-l10n-id="pref-auto-translate" style="flex: 1" />
     </hbox>

@@ -34,6 +34,7 @@ declare namespace _ZoteroTypes {
       "translate.useAlternativeModel": boolean;
       "translate.modelId": string;
       "translate.targetLanguage": string;
+      "translate.thinkingDepth": string;
       "imagePreview.location": string;
     };
   }

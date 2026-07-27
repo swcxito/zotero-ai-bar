@@ -297,7 +297,9 @@ export async function streamTranslationV2(
     onLLMStreamStartV2(session);
     const model = await createModel();
     const messages = await messagesOrPromise;
-    const effectiveEffort = session.pending.thinkingEffortOverride ?? session.thinkingEffort;
+    const chatThinkingEffort = session.pending.thinkingEffortOverride ?? session.thinkingEffort;
+    const translationThinkingDepth = getPref('translate.thinkingDepth') === 'follow-chat' ? 'follow-chat' : 'minimum';
+    const effectiveEffort = resolveTranslationThinkingEffort(translationThinkingDepth, chatThinkingEffort);
     const providerOptions = buildProviderOptions(effectiveEffort);
     const maxOutputTokens = getMaxOutputTokensWithThinkingHeadroom(effectiveEffort, providerOptions);
     const declaredStructuredSupport = getActiveModelStructuredOutputSupport();
@@ -307,6 +309,7 @@ export async function streamTranslationV2(
       selectedTextLength: request.selectedText.length,
       targetLanguage: request.targetLanguage,
       chatMode: session.chatMode,
+      translationThinkingDepth,
       thinkingEffort: effectiveEffort,
     });
 
@@ -809,6 +812,27 @@ function buildProviderOptions(effort: Session['thinkingEffort']): Record<string,
     };
   }
   return providerOptions;
+}
+
+function resolveTranslationThinkingEffort(depth: 'minimum' | 'follow-chat', chatEffort: Session['thinkingEffort']): Session['thinkingEffort'] {
+  if (depth === 'follow-chat') return chatEffort;
+
+  // Non-reasoning models have nothing to disable. For reasoning models,
+  // explicitly disable thinking where supported; otherwise use the lowest
+  // reasoning level exposed by the provider.
+  if (getActiveModelMetadata()?.reasoning !== true) return 'none';
+  const providerId = addon.data.userProviderConfigV2?.active?.providerId ?? '';
+  return providerCanDisableThinking(providerId) ? 'none' : 'low';
+}
+
+function providerCanDisableThinking(providerId: string): boolean {
+  if (providerId === 'google' || providerId.startsWith('google-vertex')) {
+    const modelId = (addon.data.userProviderConfigV2?.active?.modelId ?? '').toLowerCase();
+    // Gemini 3 and Gemini 2.5 Pro expose a minimum thinking level rather
+    // than a true off state. Flash-family models accept thinkingBudget=0.
+    return !modelId.startsWith('gemini-3') && !modelId.includes('gemini-2.5-pro');
+  }
+  return getThinkingProviderOptions(providerId, 'none') !== undefined;
 }
 
 function getMaxOutputTokensWithThinkingHeadroom(effort: Session['thinkingEffort'], providerOptions: Record<string, any>): number {
