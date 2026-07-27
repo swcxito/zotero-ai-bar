@@ -41,9 +41,9 @@ export function InputArea(
   sectionId: string,
   opts?: { onRenderUserBubble?: (bubble: HTMLElement, text: string) => Promise<void> | void; sourceLabel?: string }
 ): HTMLElement {
-  // ── outer wrapper (contains input-row + disclaimer) ──────────────────────
+  // ── outer wrapper (contains hint bar + input-row + disclaimer) ───────────
   const wrapper = doc.createElement('div');
-  wrapper.classList.add('input-area-wrapper', 'max-w-3xl', 'w-full', 'mx-auto', 'my-2', 'flex', 'flex-col', 'gap-1', 'relative');
+  wrapper.classList.add('input-area-wrapper', 'max-w-3xl', 'w-full', 'mx-auto', 'my-2', 'flex', 'flex-col', 'relative');
   wrapper.dataset.modelDropdownContainer = 'true';
 
   // ── image preview strip ─────────────────────────────────────────────────
@@ -71,6 +71,83 @@ export function InputArea(
     'transition-all',
     'duration-300'
   );
+
+  // ── selection hint bar ────────────────────────────────────────────────────
+  // A light strip that merges with the top of the input box into one rounded
+  // shape: it expands when text is selected in the reader (driven by
+  // refreshSelectionHints) and collapses when the selection is cleared.
+  // While expanded, the strip provides the shape's top rounded corners and
+  // the input box drops its own top edge/corners (restored on collapse).
+  const hintBar = doc.createElement('div');
+  hintBar.classList.add(
+    'selection-hint-bar',
+    'w-full',
+    'flex',
+    'items-center',
+    'gap-1.5',
+    'flex-shrink-0',
+    'px-2.5',
+    'rounded-t-2xl',
+    'bg-slate-100',
+    'dark:bg-neutral-800',
+    'border-2',
+    'border-slate-200',
+    'dark:border-neutral-800',
+    'text-xs',
+    'text-slate-500',
+    'dark:text-neutral-400',
+    'select-none',
+    'transition-all',
+    'duration-300',
+    'ease-in-out'
+  );
+  // Collapsed: zero out every geometry property so the bar leaves no trace.
+  hintBar.style.height = '0';
+  hintBar.style.minHeight = '0';
+  hintBar.style.opacity = '0';
+  hintBar.style.overflow = 'hidden';
+  hintBar.style.borderWidth = '0';
+
+  const hintIcon = ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Quote, sizeRem: 0.75 })) as HTMLElement;
+  hintIcon.classList.add('flex-shrink-0', 'opacity-70');
+  hintBar.appendChild(hintIcon);
+
+  const hintText = doc.createElement('span');
+  hintText.classList.add('selection-hint-text', 'flex-1', 'min-w-0', 'truncate');
+  hintBar.appendChild(hintText);
+
+  function showSelectionHint(text: string) {
+    const oneLine = text.replace(/\s+/g, ' ').trim();
+    if (!oneLine) return;
+    hintText.textContent = `“${oneLine}”`;
+    hintBar.title = oneLine;
+    hintBar.style.height = '28px';
+    hintBar.style.opacity = '1';
+    // Borders only on top/left/right — the open bottom edge extends into the
+    // input box, whose top edge/corners are removed to form one shape.
+    hintBar.style.borderWidth = '2px 2px 0 2px';
+    container.style.borderTopWidth = '0';
+    container.style.borderTopLeftRadius = '0';
+    container.style.borderTopRightRadius = '0';
+  }
+
+  function hideSelectionHint() {
+    hintBar.style.height = '0';
+    hintBar.style.opacity = '0';
+    hintBar.style.borderWidth = '0';
+    // Restore the input box's own top edge and rounded corners.
+    container.style.borderTopWidth = '';
+    container.style.borderTopLeftRadius = '';
+    container.style.borderTopRightRadius = '';
+  }
+
+  function updateSelectionHint(text?: string, selectedTabId?: string) {
+    if (text && selectedTabId === sectionId) {
+      showSelectionHint(text);
+    } else {
+      hideSelectionHint();
+    }
+  }
 
   // ── chat mode selector button (left) ──────────────────────────────────────
   // Replaces the old full-text toggle. Three modes: normal / full-text / agent.
@@ -256,7 +333,7 @@ export function InputArea(
 
   // ── disclaimer + context token usage row ──────────────────────────────────
   const footerRow = doc.createElement('div');
-  footerRow.classList.add('flex', 'items-center', 'justify-center', 'gap-2', 'px-2', 'pb-1', 'flex-wrap');
+  footerRow.classList.add('flex', 'items-center', 'justify-center', 'gap-2', 'mt-1', 'px-2', 'pb-1', 'flex-wrap');
 
   const disclaimer = doc.createElement('div');
   disclaimer.classList.add('text-xs', 'text-center', 'text-slate-400', 'dark:text-neutral-500');
@@ -268,6 +345,7 @@ export function InputArea(
   contextTokens.textContent = '';
   footerRow.appendChild(contextTokens);
 
+  wrapper.appendChild(hintBar);
   wrapper.appendChild(container);
   wrapper.appendChild(footerRow);
 
@@ -808,6 +886,11 @@ export function InputArea(
   updateScreenshotBtnState();
 
   (wrapper as any)._imagePreviewAPI = preview;
+  (wrapper as any)._selectionHintAPI = { update: updateSelectionHint };
+
+  // Sync with a selection that already exists for this tab (e.g. the user
+  // selected text before this sidebar section was rendered).
+  updateSelectionHint(addon.data.selection.text, (addon.data.selection.currentReader as any)?.tabID);
 
   return wrapper;
 }

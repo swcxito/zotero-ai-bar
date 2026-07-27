@@ -25,6 +25,7 @@ import { ActionButton } from '../components/buttons/actionButton';
 import { ModelInfo, registerModelInfoAnchor } from '../components/modelInfo';
 import { ExpandButton, ExpandMenuItem } from '../components/buttons/expandButton';
 import { Icons } from '../components/common';
+import { refreshSelectionHints } from './selectionHint';
 
 function getTargetLanguage(): string {
   const prefLang = getPref('translate.targetLanguage');
@@ -138,24 +139,86 @@ export function registerReaderInitializer() {
     addon.data.selection.currentReader = reader;
     if (reader._internalReader._type === 'pdf') {
       const fragment = renderAIBar(doc, reader);
-      append(fragment);
-      // When the popup closes (user clicks away / cancels selection), Zotero
-      // removes the injected container. Clear the cached selection so a
-      // follow-up sidebar question doesn't see a stale `selection.text` and
-      // mistakenly emit a <selection> block for text the user no longer has
-      // highlighted.
+      // Grab the container BEFORE `append(fragment)` — appending a
+      // DocumentFragment moves its children and leaves the fragment empty,
+      // so querying the fragment afterwards would find nothing. The element
+      // reference itself stays valid once moved into the live DOM.
       const container = fragment.querySelector('.ai-bar-container') as HTMLElement | null;
+      append(fragment);
+      // Expand the selection hint bar above the input area for this tab.
+      refreshSelectionHints();
+      // When the popup closes (user clicks away / cancels selection), clear
+      // the cached selection so a follow-up sidebar question doesn't see a
+      // stale `selection.text` and mistakenly emit a <selection> block for
+      // text the user no longer has highlighted. This also collapses the
+      // selection hint bar.
+      //
+      // Two complementary signals, whichever fires first:
+      // 1. Polling the reader's own popup state via getSelectionPosition()
+      //    (reliable — does not depend on how Zotero closes the popup DOM).
+      // 2. MutationObserver on the injected container (instant when the
+      //    popup is unmounted).
       if (container) {
         const ownerDoc = doc;
-        const observer = new (ownerDoc.defaultView || ownerDoc).MutationObserver(() => {
-          if (!container.isConnected) {
-            addon.data.selection.text = undefined;
-            addon.data.selection.contextPromise = undefined;
-            addon.data.selection.currentAnnotation = undefined;
-            observer.disconnect();
+        const view = ownerDoc.defaultView;
+        const annotation = params.annotation;
+        const internal: any = reader._internalReader;
+        const isSelectionStillOpen = (): boolean => {
+          try {
+            const fn = internal?.getSelectionPosition;
+            // Unknown internals — assume open and rely on the DOM observer.
+            if (typeof fn !== 'function') return true;
+            return !!fn.call(internal);
+          } catch {
+            // Call failed — assume open and rely on the DOM observer (the
+            // interval dies with the reader window anyway).
+            return true;
           }
-        });
-        observer.observe(container.parentElement || container, { childList: true });
+        };
+        let observer: MutationObserver | undefined;
+        let timer: number | undefined;
+        let stopped = false;
+        const stop = () => {
+          if (stopped) return;
+          stopped = true;
+          observer?.disconnect();
+          if (timer !== undefined && view) view.clearInterval(timer);
+        };
+        const onPopupGone = () => {
+          stop();
+          // Selecting new text re-renders the popup: a newer selection has
+          // already overwritten the cached state — leave it alone.
+          if (addon.data.selection.currentAnnotation !== annotation) return;
+          addon.data.selection.text = undefined;
+          addon.data.selection.contextPromise = undefined;
+          addon.data.selection.currentAnnotation = undefined;
+          // Collapse the selection hint bar in every input area.
+          refreshSelectionHints();
+        };
+        try {
+          observer = new ((ownerDoc.defaultView || ownerDoc) as any).MutationObserver(() => {
+            if (container.isConnected) return;
+            // The popup re-renders on scroll/reposition, which replaces the
+            // injected node while the selection is still active — only treat
+            // it as closed when the reader itself says the popup is gone.
+            if (isSelectionStillOpen()) {
+              stop();
+              return;
+            }
+            onPopupGone();
+          });
+          // Watch the whole document subtree: Zotero removes an ancestor of
+          // the container, not necessarily the container itself.
+          observer?.observe(ownerDoc.documentElement || ownerDoc.body, { childList: true, subtree: true });
+        } catch (e) {
+          ztoolkit.log('[ZAIBar] Failed to observe selection popup:', e);
+          observer = undefined;
+        }
+        if (view) {
+          timer = view.setInterval(() => {
+            if (!isSelectionStillOpen()) onPopupGone();
+          }, 400);
+        }
       }
       smartAutoTranslate(reader, params);
     }

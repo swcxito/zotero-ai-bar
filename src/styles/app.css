@@ -33,6 +33,12 @@
   }
 }
 
+/* Keep the selection hint bar's border color in sync with the input box's
+ * focus-within highlight while the two are merged into one rounded shape. */
+.input-area-wrapper:focus-within .selection-hint-bar {
+  @apply border-rose-300 dark:border-rose-900;
+}
+
 /* Thinking effort dropdown — colors aligned with .model-dropdown-menu.
  * box-shadow uses plain CSS (multi-layer shadow with no clean Tailwind
  * equivalent; matches .model-dropdown-menu format in zoteroAIBar.css). */
