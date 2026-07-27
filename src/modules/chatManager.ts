@@ -30,10 +30,11 @@ import {
 } from '../utils/prompts';
 import { checkModelSupportsImage, getActiveModelContextLimit } from '../utils/providers';
 import { ensureChatWindowReady, focusChatWindow } from '../utils/window';
-import { streamLLMV2 } from './llm';
+import { streamLLMV2, streamTranslationV2 } from './llm';
 import type { ModelMessage, SystemModelMessage, UserModelMessage } from 'ai';
 import { getItemIdFromTab } from './tabObserver';
 import type { ItemMetadata } from '../utils/itemContext';
+import { buildStructuredTranslationPrompt, TRANSLATION_SYSTEM_PROMPT, type TranslationRequestMeta } from '../utils/translation';
 
 Zotero.debug('[zaibar-chatManager] module loaded');
 
@@ -78,6 +79,8 @@ export class Session {
     reasoningTextEl?: HTMLElement;
     /** Per-request override of session.thinkingEffort. */
     thinkingEffortOverride?: Session['thinkingEffort'];
+    /** Dedicated structured translation request; independent of chatMode. */
+    translationRequest?: TranslationRequestMeta;
     // --- auto-scroll state ---
     /** User paused (scrolled up). Highest priority — disables all auto-scroll. */
     scrollUserPaused?: boolean;
@@ -99,6 +102,7 @@ export class Session {
     userMessage: UserModelMessage;
     systemMessage: SystemModelMessage;
     thinkingEffort?: Session['thinkingEffort'];
+    translationRequest?: TranslationRequestMeta;
     /** conversationHistory.length captured after the pre-turn trim, before
      *  the turn's messages were appended. Retry truncates history back to
      *  this (no-op if the turn errored/aborted and never appended). */
@@ -240,6 +244,16 @@ type ChatRequestParams = (
   images?: string[];
   /** Override the session's thinkingEffort for this single request. */
   thinkingEffort?: Session['thinkingEffort'];
+  /** Internal marker for the dedicated structured translation path. */
+  translationRequest?: TranslationRequestMeta;
+} & ({ itemId: number; tabId?: string } | { itemId?: number; tabId: string });
+
+export type TranslationRequestParams = {
+  targetLanguage: string;
+  selectedText?: string;
+  sourceLabel?: string;
+  isFromPopup?: boolean;
+  contextPromise?: Promise<string[] | undefined>;
 } & ({ itemId: number; tabId?: string } | { itemId?: number; tabId: string });
 
 export class ChatManager {
@@ -297,6 +311,25 @@ export class ChatManager {
       tabId: session.id,
       messagesOverride: { userMessage: snap.userMessage, systemMessage: snap.systemMessage },
       thinkingEffort: snap.thinkingEffort,
+      translationRequest: snap.translationRequest,
+    });
+  }
+
+  /**
+   * Translate the current selection through a mode-independent structured
+   * output path. The normal/full-text/agent session mode is intentionally
+   * ignored for this request.
+   */
+  async sendTranslationRequest(params: TranslationRequestParams) {
+    const selectedText = params.selectedText ?? addon.data.selection.text;
+    if (!selectedText?.trim()) throw new Error('No selected text available for translation.');
+    return this.sendChatRequest({
+      ...params,
+      userPrompt: buildStructuredTranslationPrompt(params.targetLanguage),
+      translationRequest: {
+        selectedText,
+        targetLanguage: params.targetLanguage,
+      },
     });
   }
 
@@ -365,7 +398,9 @@ export class ChatManager {
   }
 
   async sendChatRequest(params: ChatRequestParams) {
-    const selectedText = addon.data.selection.text;
+    // Translation requests carry their own immutable selection snapshot. Do
+    // not read the mutable global selection after the button was clicked.
+    const selectedText = params.translationRequest?.selectedText ?? addon.data.selection.text;
     const tabId = params.tabId ?? addon.chatManager.currentTabID;
     const itemId = params.itemId ?? getItemIdFromTab(params.tabId);
 
@@ -425,8 +460,10 @@ export class ChatManager {
           userMessage: userMsg,
           systemMessage: systemMsg,
           thinkingEffort: params.thinkingEffort,
+          translationRequest: params.translationRequest,
           historyLengthBeforeTurn: session.conversationHistory.length,
         };
+        if (params.translationRequest) return [systemMsg, userMsg];
         return session.conversationHistory.length > 0 ? [systemMsg, ...session.conversationHistory, userMsg] : [systemMsg, userMsg];
       }
       // get selection context
@@ -447,8 +484,8 @@ export class ChatManager {
       });
 
       // Build user message content — include images if model supports them
-      const inputImages = params.images ?? addon.data.inputImages.get(tabId) ?? [];
-      const capturedImages = session.capturedPageImages ?? [];
+      const inputImages = params.translationRequest ? [] : (params.images ?? addon.data.inputImages.get(tabId) ?? []);
+      const capturedImages = params.translationRequest ? [] : (session.capturedPageImages ?? []);
       const images = [...capturedImages, ...inputImages];
       const hasImages = images.length > 0;
       const modelSupportsImage = hasImages && checkModelSupportsImage();
@@ -457,12 +494,14 @@ export class ChatManager {
       // whether images are attached this turn.
       const imageCapableModel = checkModelSupportsImage();
 
-      const systemContent = await this.buildSystemContent({
-        metadata,
-        itemId: itemId,
-        chatMode: session.chatMode,
-        imageCapableModel,
-      });
+      const systemContent = params.translationRequest
+        ? TRANSLATION_SYSTEM_PROMPT
+        : await this.buildSystemContent({
+            metadata,
+            itemId: itemId,
+            chatMode: session.chatMode,
+            imageCapableModel,
+          });
       const systemMsg: SystemModelMessage = {
         role: 'system',
         content: systemContent,
@@ -492,7 +531,9 @@ export class ChatManager {
       //    cleared the selection and doesn't carry the prior context forward
       //  - no selection now and none was sent last turn → emit nothing
       if (selectedText) {
-        if (session.lastSentSelectionText !== selectedText) {
+        // Every translation is a standalone request, so the selected text
+        // must be included even when it is identical to the prior turn.
+        if (params.translationRequest || session.lastSentSelectionText !== selectedText) {
           const parts: string[] = [];
           if (contextLeft) parts.push(`<context>${contextLeft}</context>`);
           parts.push(`<selection>\n${selectedText}\n</selection>`);
@@ -537,6 +578,7 @@ export class ChatManager {
         userMessage: userMsg,
         systemMessage: systemMsg,
         thinkingEffort: params.thinkingEffort,
+        translationRequest: params.translationRequest,
         historyLengthBeforeTurn: session.conversationHistory.length,
       };
 
@@ -549,7 +591,7 @@ export class ChatManager {
       }
 
       // Build history slice for sidebar multi-turn
-      if (session.conversationHistory.length > 0) {
+      if (!params.translationRequest && session.conversationHistory.length > 0) {
         return [systemMsg, ...session.conversationHistory, userMsg];
       }
       return [systemMsg, userMsg];
@@ -557,6 +599,7 @@ export class ChatManager {
 
     session.sourceLabel = params.sourceLabel ?? session.sourceLabel;
     session.pending.thinkingEffortOverride = params.thinkingEffort;
+    session.pending.translationRequest = params.translationRequest;
 
     if (route === 'window') {
       await ensureChatWindowReady();
@@ -568,6 +611,10 @@ export class ChatManager {
     ztoolkit.log('[chat] sendChatRequest:stream-start', {
       sectionId: tabId,
     });
-    await streamLLMV2(messagesPromise, session);
+    if (params.translationRequest) {
+      await streamTranslationV2(messagesPromise, session, params.translationRequest);
+    } else {
+      await streamLLMV2(messagesPromise, session);
+    }
   }
 }

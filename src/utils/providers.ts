@@ -288,6 +288,27 @@ export function checkModelSupportsImage(): boolean {
 }
 
 /**
+ * Return the active model's declared structured-output capability.
+ * `undefined` means the metadata source does not advertise the capability,
+ * so callers may still probe it and cache the result for the session.
+ */
+export function getActiveModelStructuredOutputSupport(): boolean | undefined {
+  const v2 = addon.data.userProviderConfigV2;
+  const active = v2?.active;
+  if (!active) return undefined;
+
+  const addedModel = v2.addedModels?.find((model) => model.providerId === active.providerId && model.id === active.modelId);
+  const modelName = addedModel?.name ?? active.modelId;
+  const commonMeta = findModelMetadata(modelName, active.modelId, active.providerId, addon.data.commonProviders);
+  const liveMeta = findModelMetadata(modelName, active.modelId, active.providerId, addon.data.liveProviders);
+
+  for (const model of [addedModel, commonMeta, liveMeta]) {
+    if (typeof model?.structured_output === 'boolean') return model.structured_output;
+  }
+  return undefined;
+}
+
+/**
  * Context window (in tokens) of the currently active model, if known.
  * Used by the chat manager to do token-aware history narrowing.
  */
@@ -672,7 +693,7 @@ const LIVE_FILTER_PATTERNS = [
   /:exacto$|v\d+:\d+$/, // 特定后缀: :exacto, v1:0
 ];
 
-const LIVE_FIELDS_TO_REMOVE = ['attachment', 'structured_output', 'knowledge', 'release_date', 'last_updated', 'open_weights'];
+const LIVE_FIELDS_TO_REMOVE = ['attachment', 'knowledge', 'release_date', 'last_updated', 'open_weights'];
 
 /** 生成 models.dev 的 logo URL */
 export function getModelsDevLogoUrl(providerId: string): string {

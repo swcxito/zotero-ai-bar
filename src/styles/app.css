@@ -152,6 +152,21 @@
     margin-bottom: 0.25rem;
   }
 
+  /* Translation lists should read like the surrounding translated prose,
+     without the looser spacing used by general chat Markdown. */
+  .translate-result .translation-markdown ul,
+  .translate-result .translation-markdown ol {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .translate-result .translation-markdown li,
+  .translate-result .translation-markdown li > p {
+    margin-top: 0;
+    margin-bottom: 0;
+    line-height: inherit;
+  }
+
   .chat-message a {
     @apply text-rose-500 underline underline-offset-2 dark:text-rose-400;
   }

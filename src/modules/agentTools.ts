@@ -153,16 +153,16 @@ export const treeTool = tool({
 export const translateTool = tool({
   description: [
     'Present a translation result to the user in a structured, visually formatted card. Use this tool ONLY for single words and abbreviations.',
-    'For `word`: top-level `pos` (e.g. "adj.") and `definition` (the meaning text only, no POS prefix) are REQUIRED. `otherMeanings` is an array of {pos, definition} objects.',
+    'For `word`: top-level `pos` (e.g. "adj.") and `explanation` (the translated meaning only, no POS prefix) are REQUIRED. `otherMeanings` is an array of {pos, translatedText} objects.',
     'For `abbreviation`: `fullForm` is REQUIRED.',
     'After calling this tool, continue your response with one concise sentence that places the translation back into the original context (e.g., how the word is used in this sentence).',
   ].join(' '),
   inputSchema: asSchema(translateSchema),
   execute: async (input: TranslatePayload) => {
     if (input.textType === 'word') {
-      if (!input.pos?.trim() || !input.definition?.trim()) {
+      if (!input.pos?.trim() || !input.explanation?.trim()) {
         throw new Error(
-          'translate: for textType="word", top-level `pos` and `definition` are required and must be non-empty. `pos` is the part of speech only (e.g. "adj."); `definition` is the meaning text only (no POS prefix). Re-call the tool with both fields.'
+          'translate: for textType="word", top-level `pos` and `explanation` are required and must be non-empty. `pos` is the part of speech only (e.g. "adj."); `explanation` is the translated meaning only (no POS prefix). Re-call the tool with both fields.'
         );
       }
     } else if (input.textType === 'abbreviation') {

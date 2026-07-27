@@ -32,6 +32,7 @@ import { buildErrorMessage } from './llm';
 import { getActiveModelContextLimit } from '../utils/providers';
 import { openCitation } from './citationAction';
 import { getItemFullTextByPage } from '../utils/zoteroItemAccess';
+import { normalizePartOfSpeech, type TranslationResult } from '../utils/translation';
 
 Zotero.debug('[zaibar-chatUI] module loaded');
 
@@ -987,7 +988,7 @@ function buildGrepDetails(doc: Document, input: any, output: any): HTMLElement {
   return container;
 }
 
-function buildTranslateDetails(doc: Document, output: any): HTMLElement {
+export function buildTranslateDetails(doc: Document, output: TranslationResult | any): HTMLElement {
   const t = output.textType as string;
   const container = doc.createElement('div');
   container.classList.add(
@@ -1009,6 +1010,7 @@ function buildTranslateDetails(doc: Document, output: any): HTMLElement {
   );
 
   if (t === 'word') {
+    const normalizedPos = normalizePartOfSpeech(output.pos);
     const wordEl = doc.createElement('div');
     wordEl.classList.add('text-2xl', 'font-bold', 'text-slate-800', 'dark:text-zinc-100');
     wordEl.textContent = output.originalText;
@@ -1021,32 +1023,46 @@ function buildTranslateDetails(doc: Document, output: any): HTMLElement {
       container.appendChild(pronEl);
     }
 
-    if (output.pos || output.definition) {
+    if (normalizedPos || output.translatedText) {
       const meaningEl = doc.createElement('div');
       meaningEl.classList.add('text-lg', 'text-slate-700', 'dark:text-zinc-200');
-      if (output.pos) {
+      if (normalizedPos) {
         const posSpan = doc.createElement('span');
         posSpan.classList.add('mr-1');
         posSpan.style.fontFamily = `ui-serif, Georgia, 'Times New Roman', Cambria, 'Songti SC', 'SimSun', 'Noto Serif CJK SC', serif`;
         posSpan.style.fontStyle = 'italic';
-        posSpan.textContent = output.pos;
+        posSpan.textContent = normalizedPos;
         meaningEl.appendChild(posSpan);
       }
-      if (output.definition) {
+      if (output.translatedText) {
         const meaningText = doc.createElement('span');
         meaningText.classList.add('font-bold');
-        meaningText.textContent = output.definition;
+        meaningText.textContent = output.translatedText;
         meaningEl.appendChild(meaningText);
       }
       container.appendChild(meaningEl);
     }
 
-    if (output.otherMeanings && output.otherMeanings.length > 0) {
+    if (output.explanation) {
+      const explanationEl = doc.createElement('div');
+      explanationEl.classList.add('text-sm', 'leading-relaxed', 'text-slate-500', 'dark:text-zinc-400');
+      explanationEl.textContent = output.explanation;
+      container.appendChild(explanationEl);
+    }
+
+    const validOtherMeanings: Array<{ pos: string; translatedText: string }> = Array.isArray(output.otherMeanings)
+      ? output.otherMeanings
+          .map((meaning: any) => ({ pos: normalizePartOfSpeech(meaning?.pos), translatedText: meaning?.translatedText }))
+          .filter((meaning: any): meaning is { pos: string; translatedText: string } =>
+            Boolean(meaning.pos && typeof meaning.translatedText === 'string' && meaning.translatedText.trim())
+          )
+      : [];
+    if (validOtherMeanings.length > 0) {
       const divider = doc.createElement('div');
       divider.classList.add('border-t', 'border-slate-200', 'dark:border-zinc-600', 'my-1');
       container.appendChild(divider);
 
-      for (const m of output.otherMeanings as Array<{ pos: string; definition: string }>) {
+      for (const m of validOtherMeanings) {
         const otherEl = doc.createElement('div');
         otherEl.classList.add('text-base', 'text-slate-500', 'dark:text-zinc-400');
         const posSpan = doc.createElement('span');
@@ -1055,7 +1071,7 @@ function buildTranslateDetails(doc: Document, output: any): HTMLElement {
         posSpan.style.fontStyle = 'italic';
         posSpan.textContent = m.pos;
         otherEl.appendChild(posSpan);
-        otherEl.appendChild(doc.createTextNode(m.definition));
+        otherEl.appendChild(doc.createTextNode(m.translatedText));
         container.appendChild(otherEl);
       }
     }
@@ -1105,9 +1121,55 @@ function buildTranslateDetails(doc: Document, output: any): HTMLElement {
       explEl.textContent = output.explanation;
       container.appendChild(explEl);
     }
+  } else if (t === 'text') {
+    const translationEl = doc.createElement('div');
+    translationEl.classList.add('translation-markdown', 'whitespace-pre-wrap', 'text-lg', 'leading-relaxed', 'text-slate-700', 'dark:text-zinc-200');
+    translationEl.textContent = output.translatedText || '';
+    container.appendChild(translationEl);
   }
 
   return container;
+}
+
+/** Replace the empty streaming placeholder with a validated translation card. */
+export function onTranslationResultV2(session: Session, output: TranslationResult): void {
+  onTranslationPartialV2(session, output);
+  const pop = session.pending.messagePop as HTMLElement | undefined;
+  if (!pop) return;
+  pop.dataset.markdown = output.translatedText;
+  if (output.textType === 'text') {
+    const markdownEl = pop.querySelector('.translate-result .translation-markdown') as HTMLElement | null;
+    if (markdownEl) {
+      void renderMarkdown(output.translatedText, session.itemId).then((html) => {
+        if (!markdownEl.isConnected) return;
+        markdownEl.classList.remove('whitespace-pre-wrap');
+        markdownEl.innerHTML = html;
+        attachCitationHandlers(markdownEl);
+        maybeAutoScroll(session);
+      });
+    }
+  }
+}
+
+/** Render a partial structured object without ever exposing its JSON text. */
+export function onTranslationPartialV2(session: Session, output: Partial<TranslationResult> & Record<string, any>): void {
+  const pop = session.pending.messagePop as HTMLElement | undefined;
+  const chatMessage = pop?.querySelector('.chat-message') as HTMLElement | null;
+  if (!pop || !chatMessage) return;
+  if (!output.textType && !output.translatedText) return;
+
+  for (const content of chatMessage.querySelectorAll('.chat-message-content')) content.remove();
+  for (const card of chatMessage.querySelectorAll('.translate-result')) card.remove();
+  chatMessage.appendChild(buildTranslateDetails(chatMessage.ownerDocument!, output));
+  session.pending.currentTextSegment = null;
+  maybeAutoScroll(session);
+}
+
+export function clearTranslationPreviewV2(session: Session): void {
+  const pop = session.pending.messagePop as HTMLElement | undefined;
+  const chatMessage = pop?.querySelector('.chat-message') as HTMLElement | null;
+  if (!chatMessage) return;
+  for (const card of chatMessage.querySelectorAll('.translate-result')) card.remove();
 }
 
 export function onReasoningStartV2(session: Session) {

@@ -18,7 +18,7 @@
 
 import { getPref } from '../utils/prefs';
 import type { Session } from './chatManager';
-import { ToolLoopAgent, stepCountIs, type ModelMessage } from 'ai';
+import { Output, ToolLoopAgent, parsePartialJson, stepCountIs, type ModelMessage } from 'ai';
 import {
   onLLMStreamEndV2,
   onLLMStreamErrorV2,
@@ -28,15 +28,29 @@ import {
   onReasoningStartV2,
   onReasoningDeltaV2,
   onReasoningEndV2,
+  onTranslationResultV2,
+  onTranslationPartialV2,
+  clearTranslationPreviewV2,
 } from './chatUI';
 import { ensureWebStreamsGlobals } from '../utils/webStreamsGlobals';
-import { PROVIDER_ENV_KEY_MAP, resolveApiUrl, type Model } from '../utils/providers';
+import { getActiveModelStructuredOutputSupport, PROVIDER_ENV_KEY_MAP, resolveApiUrl, type Model } from '../utils/providers';
 import { buildTools } from './agentTools';
+import {
+  extractTranslationFallback,
+  normalizeTranslationResultCandidate,
+  repairTranslationResult,
+  translationResultSchema,
+  type TranslationRequestMeta,
+  type TranslationResult,
+} from '../utils/translation';
 // import { JSONObject } from "@ai-sdk/provider";
 
 const SDK_CACHE: Record<string, any> = {};
 
 const MAX_AGENT_ITERATIONS = 30;
+
+/** Models/providers that rejected response_format=json_object this session. */
+const STRUCTURED_OUTPUT_UNSUPPORTED_MODELS = new Set<string>();
 
 let streamTextFn: typeof import('ai').streamText | undefined;
 let preloadLLMRuntimePromise: Promise<void> | undefined;
@@ -259,6 +273,559 @@ export async function streamLLMV2(
   }
 }
 
+type TranslationAttempt = {
+  output?: TranslationResult;
+  rawText: string;
+  partialTranslatedText?: string;
+  partialOutput?: Record<string, any>;
+  usage?: any;
+};
+
+/**
+ * Dedicated structured translation stream. It deliberately bypasses
+ * session.chatMode, so agent tools and full-text behavior cannot affect the
+ * reader's Translate action.
+ */
+export async function streamTranslationV2(
+  messagesOrPromise: ModelMessage[] | Promise<ModelMessage[]>,
+  session: Session,
+  request: TranslationRequestMeta
+) {
+  Zotero.debug('[zaibar-llm] streamTranslationV2 started, session=' + session.id);
+  try {
+    await preloadLLMRuntime();
+    onLLMStreamStartV2(session);
+    const model = await createModel();
+    const messages = await messagesOrPromise;
+    const effectiveEffort = session.pending.thinkingEffortOverride ?? session.thinkingEffort;
+    const providerOptions = buildProviderOptions(effectiveEffort);
+    const maxOutputTokens = getMaxOutputTokensWithThinkingHeadroom(effectiveEffort, providerOptions);
+    const declaredStructuredSupport = getActiveModelStructuredOutputSupport();
+    logTranslationDebug('request-start', {
+      model: getActiveModelKey(),
+      declaredStructuredSupport,
+      selectedTextLength: request.selectedText.length,
+      targetLanguage: request.targetLanguage,
+      chatMode: session.chatMode,
+      thinkingEffort: effectiveEffort,
+    });
+
+    const first = await runTranslationAttempt({
+      model,
+      messages,
+      session,
+      providerOptions,
+      maxOutputTokens,
+      strict: false,
+      selectedText: request.selectedText,
+    });
+    if (finishAbortedTranslation(session)) return;
+    const firstOutput = first.output ?? repairTranslationResult(first.rawText);
+    logTranslationAttempt('first-attempt-finished', first, firstOutput);
+    if (firstOutput) {
+      onTranslationResultV2(session, normalizeTranslationOriginal(firstOutput, request.selectedText));
+      onLLMStreamEndV2(session, first.usage);
+      return;
+    }
+
+    Zotero.debug('[zaibar-llm] structured translation invalid; retrying once');
+    const second = await runTranslationAttempt({
+      model,
+      messages,
+      session,
+      providerOptions,
+      maxOutputTokens,
+      strict: true,
+      selectedText: request.selectedText,
+    });
+    if (finishAbortedTranslation(session)) return;
+    const secondOutput = second.output ?? repairTranslationResult(second.rawText);
+    logTranslationAttempt('second-attempt-finished', second, secondOutput);
+    if (secondOutput) {
+      onTranslationResultV2(session, normalizeTranslationOriginal(secondOutput, request.selectedText));
+      onLLMStreamEndV2(session, second.usage);
+      return;
+    }
+
+    const partialOutput = pickBestPartialTranslation(first.partialOutput, second.partialOutput, request.selectedText);
+    if (partialOutput) {
+      logTranslationDebug('using-best-partial-output', {
+        textType: partialOutput.textType,
+        translatedTextLength: partialOutput.translatedText.length,
+      });
+      onTranslationResultV2(session, partialOutput);
+      onLLMStreamEndV2(session, second.usage ?? first.usage);
+      return;
+    }
+
+    const fallback =
+      first.partialTranslatedText ??
+      second.partialTranslatedText ??
+      extractTranslationFallback(first.rawText) ??
+      extractTranslationFallback(second.rawText);
+    if (!fallback) {
+      logTranslationDebug('no-usable-translation', {
+        first: describeTranslationAttempt(first),
+        second: describeTranslationAttempt(second),
+      });
+      throw new Error('The model did not return a usable translation.');
+    }
+    logTranslationDebug('using-plain-text-fallback', { fallbackLength: fallback.length });
+    clearTranslationPreviewV2(session);
+    await onLLMStreamUpdateV2({ session, fullText: fallback, force: true });
+    onLLMStreamEndV2(session, second.usage ?? first.usage);
+  } catch (error: any) {
+    if (isTranslationAbort(session, error)) {
+      logTranslationDebug('request-aborted');
+      onLLMStreamEndV2(session, undefined, true);
+      return;
+    }
+    logTranslationDebug('request-error', { error: buildErrorMessage(error) });
+    Zotero.debug('[zaibar-llm] streamTranslationV2 catch: ' + (error?.name || '') + ' ' + (error?.message || error));
+    handleStreamError(session, error);
+  }
+}
+
+function finishAbortedTranslation(session: Session): boolean {
+  if (!session.pending.abortController?.signal.aborted) return false;
+  logTranslationDebug('request-aborted');
+  onLLMStreamEndV2(session, undefined, true);
+  return true;
+}
+
+function isTranslationAbort(session: Session, error: unknown): boolean {
+  if (session.pending.abortController?.signal.aborted) return true;
+  const name = String((error as any)?.name ?? '');
+  return name === 'AbortError' || name === 'AI_AbortError';
+}
+
+async function runTranslationAttempt(params: {
+  model: any;
+  messages: ModelMessage[];
+  session: Session;
+  providerOptions: Record<string, any>;
+  maxOutputTokens: number;
+  strict: boolean;
+  selectedText: string;
+}): Promise<TranslationAttempt> {
+  const modelKey = getActiveModelKey();
+  if (STRUCTURED_OUTPUT_UNSUPPORTED_MODELS.has(modelKey)) {
+    logTranslationDebug('preflight-selected-json-text-path', { model: modelKey, strict: params.strict });
+    return runJsonTextTranslationAttempt(params);
+  }
+
+  try {
+    logTranslationDebug('starting-response-format-path', { model: modelKey, strict: params.strict });
+    return await runSchemaTranslationAttempt(params);
+  } catch (error) {
+    const compatibilityError = isJsonResponseFormatCompatibilityError(error);
+    logTranslationDebug('response-format-path-error', {
+      model: modelKey,
+      strict: params.strict,
+      compatibilityError,
+      error: buildErrorMessage(error),
+    });
+    if (!compatibilityError) throw error;
+    STRUCTURED_OUTPUT_UNSUPPORTED_MODELS.add(modelKey);
+    Zotero.debug('[zaibar-llm] response_format JSON unsupported; falling back to streamed JSON text for ' + modelKey);
+    return runJsonTextTranslationAttempt(params);
+  }
+}
+
+async function runSchemaTranslationAttempt(params: {
+  model: any;
+  messages: ModelMessage[];
+  session: Session;
+  providerOptions: Record<string, any>;
+  maxOutputTokens: number;
+  strict: boolean;
+  selectedText: string;
+}): Promise<TranslationAttempt> {
+  let streamError: unknown;
+  let partialUpdateCount = 0;
+  const prompt = buildDedicatedTranslationPrompt(params.messages, params.strict, false);
+  const result = streamTextFn!({
+    model: params.model,
+    system: prompt.system,
+    messages: prompt.messages,
+    abortSignal: params.session.pending.abortController?.signal,
+    ...buildModelSettings(),
+    maxOutputTokens: params.maxOutputTokens,
+    providerOptions: params.providerOptions,
+    maxRetries: 2,
+    output: Output.object({
+      schema: translationResultSchema,
+      name: 'translation_result',
+      description: 'A validated translation result classified as word, abbreviation, or text.',
+    }),
+    onError: ({ error }: { error: unknown }) => {
+      streamError = error;
+    },
+  });
+
+  let rawText = '';
+  let partialTranslatedText: string | undefined;
+  let partialOutput: Record<string, any> | undefined;
+  let reasoningActive = false;
+  for await (const part of result.fullStream) {
+    switch (part.type) {
+      case 'reasoning-start':
+        if (!reasoningActive) {
+          reasoningActive = true;
+          onReasoningStartV2(params.session);
+          logTranslationDebug('reasoning-start', { strict: params.strict });
+        }
+        break;
+      case 'reasoning-delta':
+        // Some compatible providers emit deltas without explicit boundaries.
+        if (!reasoningActive) {
+          reasoningActive = true;
+          onReasoningStartV2(params.session);
+          logTranslationDebug('reasoning-start-from-delta', { strict: params.strict });
+        }
+        onReasoningDeltaV2(params.session, part.text);
+        break;
+      case 'reasoning-end':
+        if (reasoningActive) {
+          reasoningActive = false;
+          onReasoningEndV2(params.session);
+          logTranslationDebug('reasoning-end', { strict: params.strict });
+        }
+        break;
+      case 'text-delta': {
+        rawText += part.text;
+        const objectStart = rawText.indexOf('{');
+        const partialSource = objectStart >= 0 ? rawText.slice(objectStart) : rawText;
+        const partial = await parsePartialJson(partialSource);
+        if (partial.value && typeof partial.value === 'object' && !Array.isArray(partial.value)) {
+          partialUpdateCount++;
+          partialOutput = partial.value as Record<string, any>;
+          if (partialUpdateCount === 1) {
+            logTranslationDebug('response-format-first-partial', {
+              strict: params.strict,
+              keys: Object.keys(partialOutput),
+            });
+          }
+          if (typeof (partial.value as any).translatedText === 'string' && (partial.value as any).translatedText.trim()) {
+            partialTranslatedText = (partial.value as any).translatedText;
+          }
+          onTranslationPartialV2(params.session, {
+            ...(partial.value as Record<string, any>),
+            originalText: params.selectedText,
+          });
+        }
+        break;
+      }
+      case 'error':
+        streamError = (part as any).error ?? part;
+        break;
+    }
+  }
+  if (reasoningActive) onReasoningEndV2(params.session);
+  if (streamError) throw streamError;
+
+  let output: TranslationResult | undefined;
+  try {
+    output = (await result.output) as TranslationResult;
+  } catch (error) {
+    Zotero.debug('[zaibar-llm] translation output validation failed: ' + buildErrorMessage(error));
+    logTranslationDebug('response-format-validation-failed', {
+      strict: params.strict,
+      error: buildErrorMessage(error),
+      rawTextLength: rawText.length,
+      rawTextPreview: previewTranslationRawText(rawText),
+      partialUpdateCount,
+      partialKeys: partialOutput ? Object.keys(partialOutput) : [],
+    });
+  }
+
+  let usage: any;
+  try {
+    usage = await result.usage;
+  } catch {
+    // Usage is optional and must not turn a valid translation into an error.
+  }
+  let warnings: unknown;
+  try {
+    warnings = await result.warnings;
+  } catch {
+    // Warnings are advisory only.
+  }
+  if (warnings) {
+    logTranslationDebug('response-format-warnings', {
+      strict: params.strict,
+      warnings: previewTranslationRawText(safeStringify(warnings)),
+    });
+  }
+  const attempt = { output, rawText, partialTranslatedText, partialOutput, usage };
+  logTranslationDebug('response-format-attempt-complete', {
+    strict: params.strict,
+    partialUpdateCount,
+    ...describeTranslationAttempt(attempt),
+  });
+  return attempt;
+}
+
+/**
+ * Compatibility path for models that reject response_format=json_object.
+ * JSON is streamed as ordinary text, repaired incrementally by the AI SDK,
+ * and never rendered directly.
+ */
+async function runJsonTextTranslationAttempt(params: {
+  model: any;
+  messages: ModelMessage[];
+  session: Session;
+  providerOptions: Record<string, any>;
+  maxOutputTokens: number;
+  strict: boolean;
+  selectedText: string;
+}): Promise<TranslationAttempt> {
+  let streamError: unknown;
+  let textDeltaCount = 0;
+  let partialParseCount = 0;
+  let failedPartialParseCount = 0;
+  let reasoningActive = false;
+  const prompt = buildDedicatedTranslationPrompt(params.messages, params.strict, true);
+  const result = streamTextFn!({
+    model: params.model,
+    system: prompt.system,
+    messages: prompt.messages,
+    abortSignal: params.session.pending.abortController?.signal,
+    ...buildModelSettings(),
+    maxOutputTokens: params.maxOutputTokens,
+    providerOptions: params.providerOptions,
+    maxRetries: 2,
+    onError: ({ error }: { error: unknown }) => {
+      streamError = error;
+    },
+  });
+
+  let rawText = '';
+  let partialTranslatedText: string | undefined;
+  let partialOutput: Record<string, any> | undefined;
+  for await (const part of result.fullStream) {
+    switch (part.type) {
+      case 'reasoning-start':
+        if (!reasoningActive) {
+          reasoningActive = true;
+          onReasoningStartV2(params.session);
+          logTranslationDebug('reasoning-start', { strict: params.strict, path: 'json-text' });
+        }
+        continue;
+      case 'reasoning-delta':
+        if (!reasoningActive) {
+          reasoningActive = true;
+          onReasoningStartV2(params.session);
+          logTranslationDebug('reasoning-start-from-delta', { strict: params.strict, path: 'json-text' });
+        }
+        onReasoningDeltaV2(params.session, part.text);
+        continue;
+      case 'reasoning-end':
+        if (reasoningActive) {
+          reasoningActive = false;
+          onReasoningEndV2(params.session);
+          logTranslationDebug('reasoning-end', { strict: params.strict, path: 'json-text' });
+        }
+        continue;
+      case 'error':
+        streamError = (part as any).error ?? part;
+        continue;
+    }
+    if (part.type !== 'text-delta') continue;
+    textDeltaCount++;
+    if (textDeltaCount === 1) {
+      logTranslationDebug('json-text-first-delta', { strict: params.strict, deltaLength: part.text.length });
+    }
+    rawText += part.text;
+    const objectStart = rawText.indexOf('{');
+    const partialSource = objectStart >= 0 ? rawText.slice(objectStart) : rawText;
+    const partial = await parsePartialJson(partialSource);
+    if (partial.state === 'failed-parse') failedPartialParseCount++;
+    if (partial.value && typeof partial.value === 'object' && !Array.isArray(partial.value)) {
+      partialParseCount++;
+      partialOutput = partial.value as Record<string, any>;
+      if (typeof (partial.value as any).translatedText === 'string' && (partial.value as any).translatedText.trim()) {
+        partialTranslatedText = (partial.value as any).translatedText;
+      }
+      onTranslationPartialV2(params.session, {
+        ...(partial.value as Record<string, any>),
+        originalText: params.selectedText,
+      });
+    }
+  }
+  if (reasoningActive) onReasoningEndV2(params.session);
+  if (streamError) throw streamError;
+
+  let usage: any;
+  try {
+    usage = await result.usage;
+  } catch {
+    // Usage is optional.
+  }
+  const attempt = { output: repairTranslationResult(rawText), rawText, partialTranslatedText, partialOutput, usage };
+  logTranslationDebug('json-text-attempt-complete', {
+    strict: params.strict,
+    textDeltaCount,
+    partialParseCount,
+    failedPartialParseCount,
+    ...describeTranslationAttempt(attempt),
+  });
+  return attempt;
+}
+
+function logTranslationAttempt(event: string, attempt: TranslationAttempt, resolvedOutput?: TranslationResult): void {
+  logTranslationDebug(event, {
+    ...describeTranslationAttempt(attempt),
+    resolvedOutput: resolvedOutput
+      ? {
+          textType: resolvedOutput.textType,
+          translatedTextLength: resolvedOutput.translatedText.length,
+          keys: Object.keys(resolvedOutput),
+        }
+      : undefined,
+  });
+}
+
+function describeTranslationAttempt(attempt: TranslationAttempt): Record<string, unknown> {
+  return {
+    hasValidatedOutput: Boolean(attempt.output),
+    rawTextLength: attempt.rawText.length,
+    rawTextPreview: previewTranslationRawText(attempt.rawText),
+    partialTranslatedTextLength: attempt.partialTranslatedText?.length ?? 0,
+    partialKeys: attempt.partialOutput ? Object.keys(attempt.partialOutput) : [],
+  };
+}
+
+function previewTranslationRawText(rawText: string): string {
+  const normalized = rawText.replace(/\s+/g, ' ').trim();
+  return normalized.length > 1500 ? normalized.slice(0, 1500) + '…' : normalized;
+}
+
+function logTranslationDebug(event: string, details?: Record<string, unknown>): void {
+  let suffix = '';
+  if (details) {
+    try {
+      suffix = ' ' + JSON.stringify(details);
+    } catch {
+      suffix = ' [unserializable details]';
+    }
+  }
+  const message = `[zaibar-translation] ${event}${suffix}`;
+  Zotero.debug(message);
+  // This logger is visible beside the generic stream errors in installed
+  // builds, so partial-output failures can be diagnosed without a debug build.
+  ztoolkit.log(message);
+}
+
+function pickBestPartialTranslation(
+  first: Record<string, any> | undefined,
+  second: Record<string, any> | undefined,
+  selectedText: string
+): TranslationResult | undefined {
+  const candidates = [first, second]
+    .filter((value): value is Record<string, any> => Boolean(value))
+    .sort((a, b) => String(b.translatedText ?? '').length - String(a.translatedText ?? '').length);
+  for (const candidate of candidates) {
+    const parsed = normalizeTranslationResultCandidate(candidate, selectedText);
+    if (parsed) return parsed;
+  }
+  return undefined;
+}
+
+function buildDedicatedTranslationPrompt(messages: ModelMessage[], strict: boolean, jsonTextFallback: boolean) {
+  const sourceSystem = messages.find((message) => message.role === 'system');
+  const baseSystem = sourceSystem && typeof sourceSystem.content === 'string' ? sourceSystem.content : 'You are a dedicated translation engine.';
+  const contract = [
+    baseSystem,
+    '',
+    '# JSON output contract',
+    'Return exactly one JSON object and nothing else. Do not use Markdown fences, commentary, or surrounding prose.',
+    'Required fields: "textType" and "translatedText". "originalText" and "targetLanguage" are optional.',
+    '"textType" must be "word", "abbreviation", or "text".',
+    'Write all translatable natural-language fields in the requested target language, including "translatedText", "explanation", and every "otherMeanings[].translatedText". Keep only "originalText", source-language "pronunciation", source-language "fullForm", and English POS abbreviations untranslated.',
+    'For "word", "translatedText" must be a concise dictionary-style equivalent in the target language, never the original word or an explanatory sentence.',
+    'For "word", include the source-language "pronunciation" and English-abbreviated "pos" when available.',
+    'For "word", include "explanation" only when the meaning is specialized, technical, domain-specific, idiomatic, non-literal, or cannot be adequately conveyed by "translatedText" alone. Omit "explanation" for ordinary dictionary meanings and avoid boilerplate such as "in this context".',
+    'Every "pos" must use a conventional English abbreviation such as "n.", "v.", "vt.", "vi.", "adj.", "adv.", "prep.", "pron.", or "conj."; never use a full word or a translated label.',
+    'If present, "otherMeanings" must be an array of objects shaped exactly as {"pos":"...","translatedText":"..."}; never return a string or an array of strings.',
+    'For "abbreviation", both "fullForm" and "explanation" are required. Keep "fullForm" in its source language and write "translatedText" and "explanation" in the requested target language.',
+    'For "text", return a fluent, accurate, academic translation and omit dictionary-only fields.',
+    'If the source is or may be a list (for example, it contains bullets such as •, ◦, □, ■, , or ; numbering; repeated short items; or a heading followed by items), preserve it as Markdown in "translatedText" instead of merging it into prose.',
+    'Use "- " for unordered Markdown list items, preserve the heading separately, and use nested Markdown indentation when different bullet symbols or source indentation imply subitems.',
+    jsonTextFallback ? 'Produce the JSON object as ordinary streamed text while obeying this contract.' : '',
+    strict ? 'This is a retry: ensure the JSON object is complete, valid, and contains a non-empty "translatedText".' : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  // The AI SDK recommends the dedicated `system` option. Translation also
+  // deliberately excludes prior assistant and history turns.
+  const userMessages = messages.filter((message) => message.role === 'user');
+  const latestUserMessage = userMessages[userMessages.length - 1];
+  return {
+    system: contract,
+    messages: latestUserMessage ? [latestUserMessage] : [],
+  };
+}
+
+function getActiveModelKey(): string {
+  const active = addon.data.userProviderConfigV2?.active;
+  return active ? `${active.providerId}::${active.modelId}` : 'unknown';
+}
+
+function isJsonResponseFormatCompatibilityError(error: unknown): boolean {
+  const message = buildErrorMessage(error).toLowerCase();
+  const mentionsJsonMode = message.includes('response_format') || message.includes('json_object');
+  const incompatible =
+    message.includes('not supported') ||
+    message.includes('unsupported') ||
+    message.includes('not valid') ||
+    message.includes('invalidparameter') ||
+    message.includes("must contain the word 'json'");
+  return mentionsJsonMode && incompatible;
+}
+
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function normalizeTranslationOriginal(output: TranslationResult, selectedText: string): TranslationResult {
+  return normalizeTranslationResultCandidate(output, selectedText) ?? ({ ...output, originalText: selectedText } as TranslationResult);
+}
+
+function buildProviderOptions(effort: Session['thinkingEffort']): Record<string, any> {
+  const activeProviderId = addon.data.userProviderConfigV2?.active?.providerId ?? '';
+  const providerOptions: Record<string, any> = { ...V2_PROVIDER_OPTIONS };
+  providerOptions.google = getGoogleThinkingConfig(addon.data.userProviderConfigV2?.active?.modelId ?? '', effort);
+  const thinkingOpts = getThinkingProviderOptions(activeProviderId, effort);
+  if (thinkingOpts && activeProviderId) {
+    providerOptions[activeProviderId] = {
+      ...providerOptions[activeProviderId],
+      ...thinkingOpts,
+    };
+  }
+  return providerOptions;
+}
+
+function getMaxOutputTokensWithThinkingHeadroom(effort: Session['thinkingEffort'], providerOptions: Record<string, any>): number {
+  let maxOutputTokens = getPref('llm.maxTokens') || 2000;
+  const activeProviderId = addon.data.userProviderConfigV2?.active?.providerId ?? '';
+  const providerThinking = activeProviderId ? providerOptions[activeProviderId] : undefined;
+  const anthropicBudget = providerThinking?.thinking?.budgetTokens;
+  const googleBudget = providerOptions.google?.thinkingBudget;
+  const thinkingBudget = (typeof anthropicBudget === 'number' ? anthropicBudget : 0) + (typeof googleBudget === 'number' ? googleBudget : 0);
+  if (effort !== 'none' && maxOutputTokens <= thinkingBudget) maxOutputTokens = thinkingBudget + 2000;
+  if (effort !== 'none' && effort !== 'low' && (activeProviderId === 'openai' || activeProviderId === 'openrouter')) {
+    const minHeadroom = effort === 'xhigh' ? 16000 : effort === 'high' ? 10000 : 6000;
+    if (maxOutputTokens < minHeadroom) maxOutputTokens = minHeadroom;
+  }
+  return maxOutputTokens;
+}
+
 function buildModelSettings() {
   const temperatureEnabled = getPref('llm.temperatureEnabled');
   if (!temperatureEnabled) {
@@ -398,6 +965,7 @@ async function createProvider(
     modelId: string;
     providerEnv: Record<string, string>;
     baseUrl?: string;
+    supportsStructuredOutputs?: boolean;
   }
 ) {
   const { providerId, modelId, providerEnv } = opts;
@@ -444,6 +1012,7 @@ async function createProvider(
       return createOpenAICompatible({
         name: providerId,
         includeUsage: true,
+        supportsStructuredOutputs: opts.supportsStructuredOutputs,
         apiKey: providerEnv['CLOUDFLARE_API_TOKEN'],
         baseURL: `https://gateway.ai.cloudflare.com/v1/${providerEnv['CLOUDFLARE_ACCOUNT_ID']}/${providerEnv['CLOUDFLARE_GATEWAY_ID']}`,
       })(modelId as any);
@@ -471,7 +1040,7 @@ function resolveProviderApiKey(providerId: string, providerEnv: Record<string, s
 /** Unified factory for openai, anthropic, xai, openrouter, google, openai-compatible */
 async function createGenericProvider(
   npm: string | undefined,
-  opts: { providerId: string; modelId: string; providerEnv: Record<string, string>; baseUrl?: string }
+  opts: { providerId: string; modelId: string; providerEnv: Record<string, string>; baseUrl?: string; supportsStructuredOutputs?: boolean }
 ) {
   const { providerId, modelId, providerEnv, baseUrl } = opts;
 
@@ -480,6 +1049,7 @@ async function createGenericProvider(
 
   const cfg: Record<string, unknown> = { name: providerId, apiKey };
   if (npm === '@ai-sdk/openai-compatible' || !npm) cfg.includeUsage = true;
+  if (npm === '@ai-sdk/openai-compatible' || !npm) cfg.supportsStructuredOutputs = opts.supportsStructuredOutputs === true;
   if (baseUrl) cfg.baseURL = resolveApiUrl(baseUrl, providerEnv);
 
   const sdk = await loadSDK(npm || '@ai-sdk/openai-compatible');
@@ -540,7 +1110,14 @@ export async function createModel() {
   }
 
   Zotero.debug('[zaibar-llm] createModel provider npm=' + npm + ', baseUrl=' + (baseUrl ? 'yes' : 'no'));
-  const model = await createProvider(npm, { providerId, modelId: resolvedModelId, providerEnv, baseUrl });
+  const supportsStructuredOutputs = getActiveModelStructuredOutputSupport() === true;
+  const model = await createProvider(npm, {
+    providerId,
+    modelId: resolvedModelId,
+    providerEnv,
+    baseUrl,
+    supportsStructuredOutputs,
+  });
   Zotero.debug('[zaibar-llm] createModel done');
   return model;
 }

@@ -32,13 +32,6 @@ function getTargetLanguage(): string {
   return prefLang || Zotero.locale;
 }
 
-function getTranslatePrompt(targetLanguage: string): string {
-  if (getPref('chat.defaultMode') === 'agent') {
-    return `Translate the selected text into ${targetLanguage}.`;
-  }
-  return aiBarCommands.translate.getPrompt(targetLanguage);
-}
-
 // TODO 支持其它格式
 
 export function getReaderSourceLabel(reader?: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>) {
@@ -249,27 +242,32 @@ function smartAutoTranslate(
       : autoTranslateContext === 'always'
         ? getSelectionContext(reader, params)
         : Promise.resolve(undefined);
-    const useTranslateModel = getPref('translate.useAlternativeModel');
-    const translateModelId = getPref('translate.modelId');
-    const originalModelId = getPref('llm.modelId');
-    if (useTranslateModel && translateModelId) {
-      setPref('llm.modelId', translateModelId);
-    }
-    addon.chatManager
-      .sendChatRequest({
-        userPrompt: aiBarCommands.translate.getPrompt(getTargetLanguage()),
-        sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
-        isFromPopup: true,
-        contextPromise: selectionContextPromise,
-        itemId: reader.itemID!,
-        thinkingEffort: 'none',
-      })
-      // todo remove this temp resolution after chatManager is reconstructed.
-      .finally(() => {
-        if (useTranslateModel && translateModelId) {
-          setPref('llm.modelId', originalModelId);
-        }
-      });
+    void sendStructuredTranslation(reader, selectionContextPromise);
+  }
+}
+
+async function sendStructuredTranslation(
+  reader: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>,
+  contextPromise?: Promise<string[] | undefined>
+) {
+  const selectedText = addon.data.selection.text;
+  if (!selectedText) return;
+
+  const useTranslateModel = getPref('translate.useAlternativeModel');
+  const translateModelId = getPref('translate.modelId');
+  const originalModelId = getPref('llm.modelId');
+  if (useTranslateModel && translateModelId) setPref('llm.modelId', translateModelId);
+  try {
+    await addon.chatManager.sendTranslationRequest({
+      targetLanguage: getTargetLanguage(),
+      selectedText,
+      sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
+      isFromPopup: true,
+      contextPromise,
+      itemId: reader.itemID!,
+    });
+  } finally {
+    if (useTranslateModel && translateModelId) setPref('llm.modelId', originalModelId);
   }
 }
 
@@ -286,7 +284,7 @@ function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 
     doc.head?.appendChild(styles);
   }
 
-  function handleAction(input: string) {
+  async function handleAction(input: string) {
     if (!input) return;
     ztoolkit.log('Action:', input);
     const command = aiBarCommands[input];
@@ -296,15 +294,18 @@ function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 
     hideContainerOnTimeout();
     disableAll();
 
-    addon.chatManager.sendChatRequest({
+    if (input === 'translate') {
+      await sendStructuredTranslation(reader);
+      return;
+    }
+
+    await addon.chatManager.sendChatRequest({
       // If input matches a command, use the command's prompt; otherwise treat input as a custom prompt
-      userPrompt: input === 'translate' ? getTranslatePrompt(getTargetLanguage()) : (command?.getPrompt(getTargetLanguage()) ?? input),
+      userPrompt: command?.getPrompt(getTargetLanguage()) ?? input,
       sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
       isFromPopup: true,
       // Enable auto-copy for smartCopy command only
       doesCopyResponse: input === 'smartCopy',
-      // Disable thinking for translate — it's a direct, deterministic task.
-      thinkingEffort: input === 'translate' ? 'none' : undefined,
       itemId: reader.itemID!,
     });
   }

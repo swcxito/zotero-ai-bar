@@ -74,7 +74,7 @@ export type TreePayload = z.infer<typeof treeSchema>;
 
 const otherMeaningSchema = z.object({
   pos: z.string().describe('Part of speech ONLY, e.g. "adj.", "n.", "v.". No definition text here.'),
-  definition: z.string().describe('The meaning text ONLY, no part-of-speech prefix.'),
+  translatedText: z.string().describe('The translated meaning ONLY, no part-of-speech prefix.'),
 });
 
 export const translateSchema = z.object({
@@ -90,16 +90,19 @@ export const translateSchema = z.object({
     .optional()
     .describe('IPA pronunciation of the original word (for words only). Always the source-language pronunciation, never of the translation.'),
   pos: z.string().optional().describe('Primary part of speech (for words only), e.g. "adj.", "n.", "v.". REQUIRED for textType="word".'),
-  definition: z
+  explanation: z
     .string()
     .optional()
-    .describe('Primary meaning in the current context (for words only), without any POS prefix. REQUIRED for textType="word".'),
+    .describe(
+      'For words, the primary translated meaning in context without any POS prefix; for abbreviations, a brief explanation. REQUIRED for textType="word".'
+    ),
   otherMeanings: z
     .array(otherMeaningSchema)
     .optional()
-    .describe('Other common meanings (for words only). Array of {pos, definition} objects. Example: [{"pos":"v.","definition":"制造；捏造"}].'),
+    .describe(
+      'Other common meanings (for words only). Array of {pos, translatedText} objects. Example: [{"pos":"v.","translatedText":"制造；捏造"}].'
+    ),
   fullForm: z.string().optional().describe('Full form in English (for abbreviations only).'),
-  explanation: z.string().optional().describe('Brief explanation (for abbreviations only).'),
   targetLanguage: z.string().optional().describe('Target language name.'),
 });
 
