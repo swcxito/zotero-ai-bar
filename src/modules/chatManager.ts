@@ -80,6 +80,9 @@ export class Session {
   thinkingEffort: 'none' | 'low' | 'medium' | 'high' | 'xhigh' = 'none';
   itemId?: number;
   capturedPageImages?: string[];
+  /** The currently executing stream, kept outside pending so superseding
+   * popup actions can wait for the old stream's cleanup to finish. */
+  activeRequestPromise?: Promise<void>;
   /**
    * The selection text sent to the model in the previous turn (or undefined
    * if none was sent). Used to suppress redundant selection blocks across
@@ -826,17 +829,26 @@ export class ChatManager {
       sourceTabId,
       itemId,
     });
-    // With translate.separateTab disabled, structured translations are
-    // routed into the article session. They are additional turns in the
-    // visible transcript, not popup actions that should start a fresh chat.
-    const isInlineArticleTranslation = params.sessionKind === 'article' && !!params.translationRequest;
 
-    if (params.isFromPopup && !params.messagesOverride && params.sessionKind === 'article' && !isInlineArticleTranslation) {
-      if (session.pending.abortController) {
-        session.pending.abortController.abort();
-        session.pending.abortController = undefined;
-      }
-      this.startNewConversation(session);
+    // Popup actions may be triggered while the previous answer is still
+    // streaming. Abort first and wait for that stream's end/error handler to
+    // finish before touching the shared pending state for the next request.
+    if (params.isFromPopup) {
+      const supersededSessions = Array.from(this.sessionsMap.values()).filter(
+        (candidate) => !!candidate.activeRequestPromise && (candidate === session || (!!sourceTabId && candidate.sourceTabId === sourceTabId))
+      );
+      for (const candidate of supersededSessions) candidate.pending.abortController?.abort();
+      await Promise.all(
+        supersededSessions.map(async (candidate) => {
+          try {
+            await candidate.activeRequestPromise;
+          } catch (e) {
+            // Stream functions normally consume their own errors. A
+            // defensive catch still allows the newly selected action to run.
+            ztoolkit.log('[chat] superseded popup request cleanup failed:', e);
+          }
+        })
+      );
     }
 
     ztoolkit.log('[chat] sendChatRequest', {
@@ -857,7 +869,10 @@ export class ChatManager {
     // below can drop more if the last request approached the context window.
     const contextRounds = getPref('chat.contextRounds') ?? 8;
     const maxHistoryMessages = contextRounds * 2;
-    if (!isInlineArticleTranslation && (params.isFromPopup || session.pending.isNewSource)) {
+    // Reader popup shortcuts append to the current article conversation.
+    // Only an actual source change resets model context; starting a new
+    // conversation remains an explicit action in the chat header.
+    if (session.pending.isNewSource) {
       session.conversationHistory = [];
       session.persistedContextMessages = [];
       // History reset means the model has no memory of prior turns, so the
@@ -1092,10 +1107,16 @@ export class ChatManager {
     ztoolkit.log('[chat] sendChatRequest:stream-start', {
       sectionId: sessionId,
     });
-    if (params.translationRequest) {
-      await streamTranslationV2(messagesPromise, session, params.translationRequest);
-    } else {
-      await streamLLMV2(messagesPromise, session);
+    const requestPromise = params.translationRequest
+      ? streamTranslationV2(messagesPromise, session, params.translationRequest)
+      : streamLLMV2(messagesPromise, session);
+    session.activeRequestPromise = requestPromise;
+    try {
+      await requestPromise;
+    } finally {
+      if (session.activeRequestPromise === requestPromise) {
+        session.activeRequestPromise = undefined;
+      }
     }
   }
 }
