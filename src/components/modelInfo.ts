@@ -22,7 +22,8 @@ import { saveV2Config } from '../utils/providers';
 import { analyzeModelName, getModelIconPath } from '../utils/modelAnalyzer';
 import { getString } from '../utils/locale';
 import { IconView } from './iconView';
-import { DropdownMenuGroup, fadeCloseDropdownMenu, toggleDropdownMenu } from './dropdownMenu';
+import { DropdownMenuGroup, closeDropdownMenu, fadeCloseDropdownMenu, toggleDropdownMenu } from './dropdownMenu';
+import { openDialog } from '../modules/modelDialog';
 import type { AddedModel, ProviderId } from '../utils/providers';
 
 function resolveModelDisplayName(): string {
@@ -194,8 +195,42 @@ function toggleModelDropdown(anchor: HTMLElement, dropUp = false) {
   // Hover-to-close with fade-out for both sidebar (dropUp) and reader popup.
   // Opening stays click-only.
   if (dropdown) {
+    appendAddModelButton(dropdown);
     wireHoverFadeClose(anchor, dropdown);
   }
+}
+
+/** Footer button at the bottom of the model dropdown that opens the model settings dialog. */
+function appendAddModelButton(dropdown: HTMLElement) {
+  const doc = dropdown.ownerDocument;
+
+  const footer = doc.createElement('div');
+  footer.className = 'model-dropdown-add-footer';
+
+  const btn = doc.createElement('div');
+  btn.className = 'model-dropdown-item model-dropdown-add-button';
+
+  const icon = doc.createElement('span');
+  icon.className = 'dropdown-item-icon-text';
+  icon.textContent = '+';
+  btn.appendChild(icon);
+
+  const text = doc.createElement('span');
+  text.textContent = getString('model-dialog-add-model');
+  btn.appendChild(text);
+
+  btn.addEventListener('click', (e: Event) => {
+    e.stopPropagation();
+    closeDropdownMenu(dropdown.getRootNode() as Document | ShadowRoot, 'ai-bar-model-dropdown');
+    openDialog(() => {
+      // The dialog already updated addon.data.userProviderConfigV2 in memory;
+      // refresh every ModelInfo anchor to reflect added/removed models.
+      refreshAllModelInfoAnchors();
+    });
+  });
+
+  footer.appendChild(btn);
+  dropdown.appendChild(footer);
 }
 
 interface HoverCloseState {

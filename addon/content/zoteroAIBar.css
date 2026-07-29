@@ -430,6 +430,22 @@
   color: #6b7280;
 }
 
+/* "Add model" footer pinned at the bottom of the model dropdown. The button
+ * itself reuses .model-dropdown-item for layout/hover; the wrapper only adds
+ * the top separator (theme colors below). */
+.model-dropdown-add-footer {
+  flex-shrink: 0;
+}
+
+.model-dropdown-add-button {
+  justify-content: center;
+}
+
+.model-dropdown-add-button .dropdown-item-icon-text {
+  font-size: 18px;
+  font-weight: 700;
+}
+
 @media (prefers-color-scheme: dark) {
   .model-dropdown-empty {
     color: #9ca3af;
@@ -484,6 +500,9 @@
   .model-dropdown-item.selected::after {
     background-color: #f43f5e;
   }
+  .model-dropdown-add-footer {
+    border-top: 1px solid #e5e7eb;
+  }
 }
 
 /* Dark Mode Styles */
@@ -519,5 +538,8 @@
   }
   .model-dropdown-item.selected::after {
     background-color: #f87171;
+  }
+  .model-dropdown-add-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
   }
 }

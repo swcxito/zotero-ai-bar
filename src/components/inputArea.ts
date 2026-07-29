@@ -348,7 +348,7 @@ export function InputArea(
   const sendBtn = doc.createElement('button') as HTMLButtonElement;
   sendBtn.disabled = true;
   sendBtn.dataset.mode = 'send';
-  sendBtn.style.marginLeft = '1px';
+  sendBtn.style.marginLeft = '2px';
   sendBtn.classList.add(
     'input-send-btn',
     'flex',
