@@ -82,7 +82,7 @@ export function InputArea(
   const draftId = opts?.draftId ?? sectionId;
   // ── outer wrapper (contains hint bar + input-row + disclaimer) ───────────
   const wrapper = doc.createElement('div');
-  wrapper.classList.add('input-area-wrapper', 'max-w-3xl', 'w-full', 'mx-auto', 'my-2', 'flex', 'flex-col', 'relative');
+  wrapper.classList.add('input-area-wrapper', 'max-w-3xl', 'w-full', 'mx-auto', 'mt-2', 'flex', 'flex-col', 'relative');
   wrapper.dataset.modelDropdownContainer = 'true';
   wrapper.dataset.sessionId = activeSectionId;
 
@@ -386,7 +386,7 @@ export function InputArea(
 
   // ── disclaimer + context token usage row ──────────────────────────────────
   const footerRow = doc.createElement('div');
-  footerRow.classList.add('flex', 'items-center', 'justify-center', 'gap-2', 'mt-1', 'px-2', 'pb-1', 'flex-wrap');
+  footerRow.classList.add('flex', 'items-center', 'justify-center', 'gap-2', 'mt-1', 'px-2', 'flex-wrap');
 
   const disclaimer = doc.createElement('div');
   disclaimer.classList.add('text-xs', 'text-center', 'text-slate-400', 'dark:text-neutral-500');
