@@ -16,6 +16,8 @@ declare namespace _ZoteroTypes {
       "llm.streamUpdateSpeed": string;
       "chat.location": string;
       "chat.windowAlwaysOnTop": boolean;
+      "sidepane.width": number;
+      "sidepane.collapsed": boolean;
       "extend-selection-context": boolean;
       "extend-selection-size": number;
       "llm.providerConfigs": string;

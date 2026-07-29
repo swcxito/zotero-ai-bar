@@ -7,6 +7,8 @@ pref('llm.maxTokens', 3000);
 pref('llm.streamUpdateSpeed', 'default');
 pref('chat.location', 'sidebar');
 pref('chat.windowAlwaysOnTop', false);
+pref('sidepane.width', 340);
+pref('sidepane.collapsed', false);
 pref('extend-selection-context', true);
 pref('extend-selection-size', 70);
 

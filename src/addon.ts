@@ -43,6 +43,9 @@ class Addon {
     userPrompts?: UserPrompt[];
     // map tab IDs to their side pane root elements
     sidePaneBodyMap?: Map<string, HTMLElement>;
+    // Injected main-window side pane elements (splitter + pane + deck).
+    // Set by mainWindowSidePane.registerMainWindowSidePane, cleared on unregister.
+    sidePaneElements?: { splitter: XULElement; pane: XULElement; deck: XULElement };
     inputImages: Map<string, string[]>;
     _tabObserverID?: string;
     _readerPopupHandler?: (event: any) => void;

@@ -23,6 +23,11 @@ input-screenshot-full-tooltip = Image limit reached (9)
 input-thinking-tooltip = Thinking effort
 thinking-effort-title = Thinking depth
 
+sidepane-title = AI-Bar Answer
+sidepane-clear-tooltip = Clear conversation
+sidepane-collapse-tooltip = Collapse panel
+sidepane-toggle-tooltip = Toggle AI-Bar panel
+
 model-dialog-title = Model Providers
 model-dialog-add-provider = Add Provider
 model-dialog-search-providers = Search providers...

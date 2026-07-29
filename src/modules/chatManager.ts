@@ -33,6 +33,7 @@ import { ensureChatWindowReady, focusChatWindow } from '../utils/window';
 import { streamLLMV2, streamTranslationV2 } from './llm';
 import type { ModelMessage, SystemModelMessage, UserModelMessage } from 'ai';
 import { getItemIdFromTab } from './tabObserver';
+import { openSidePane } from './mainWindowSidePane';
 import type { ItemMetadata } from '../utils/itemContext';
 import { buildStructuredTranslationPrompt, TRANSLATION_SYSTEM_PROMPT, type TranslationRequestMeta } from '../utils/translation';
 
@@ -604,6 +605,10 @@ export class ChatManager {
     if (route === 'window') {
       await ensureChatWindowReady();
       focusChatWindow();
+    } else {
+      // Sidebar mode: reveal the independent side pane (mirrors focusing the
+      // chat window) so popup actions land in a visible panel.
+      openSidePane(tabId);
     }
 
     const AC = (typeof AbortController !== 'undefined' ? AbortController : (Zotero.getMainWindow() as any).AbortController) as typeof AbortController;

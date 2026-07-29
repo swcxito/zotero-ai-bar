@@ -6,7 +6,7 @@ import { onModelDialogLoad } from './modules/modelDialog';
 import { onPromptEditorLoad } from './modules/promptEditor';
 import { getPref, setPref, registerPrefs } from './utils/prefs';
 import { ensureChatWindowReady } from './utils/window';
-import { registerReaderItemPaneSection } from './modules/readerItemPane';
+import { registerMainWindowSidePane, unregisterMainWindowSidePane } from './modules/mainWindowSidePane';
 import { clearDeadChatWindowRef, isWindowAlive } from './utils/window';
 import { registerTabObserver } from './modules/tabObserver';
 import { preloadLLMRuntime } from './modules/llm';
@@ -133,7 +133,7 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
     }
 
     if (addon.chatManager.getCurrentHostMode() === 'sidebar') {
-      await registerReaderItemPaneSection();
+      registerMainWindowSidePane(win);
     }
     ztoolkit.log('stream', typeof TransformStream); // 应该是 "function"
     Zotero.debug(`${label} completed`);
@@ -147,6 +147,7 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
 
 async function onMainWindowUnload(win: Window): Promise<void> {
   ztoolkit.unregisterAll();
+  unregisterMainWindowSidePane();
   addon.data.dialog?.window?.close();
   clearDeadChatWindowRef();
 }
@@ -157,6 +158,7 @@ function onShutdown(): void {
     Zotero.Notifier.unregisterObserver(addon.data._tabObserverID);
   }
   unregisterReaderInitializer();
+  unregisterMainWindowSidePane();
   addon.data.dialog?.window?.close();
   if (isWindowAlive(addon.chatManager.chatWindow)) {
     addon.chatManager.chatWindow?.close();

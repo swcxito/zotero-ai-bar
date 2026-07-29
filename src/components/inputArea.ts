@@ -26,14 +26,14 @@ import { Session } from '../modules/chatManager';
 
 import { startCaptureMode } from '../modules/capture';
 import { getReaderByTabId } from '../modules/tabObserver';
-import { scrollToBottom as doScrollToBottom, setSendBtnEnabled } from '../modules/readerItemPane';
+import { scrollToBottom as doScrollToBottom, setSendBtnEnabled } from '../modules/mainWindowSidePane';
 import { checkModelSupportsImage, promptModelImageUnsupported } from '../utils/providers';
 import { createUserMessageBubble } from './userBubble';
 
 /**
  * Build the InputArea widget and wire up all interactive logic.
- * @param doc   The owner Document (from the Zotero item-pane body).
- * @param sectionId  The Zotero item ID that identifies this sidebar section.
+ * @param doc   The owner Document (main window document for the side pane, or the chat window document).
+ * @param sectionId  The Zotero tab ID that identifies this chat session (also used as the side pane page key).
  * @param opts
  */
 export function InputArea(

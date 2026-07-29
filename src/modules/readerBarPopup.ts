@@ -75,7 +75,7 @@ export function getReaderSourceLabel(reader?: _ZoteroTypes.ReaderInstance<'pdf' 
     const fileName = getFileName(item);
     if (fileName) return fileName;
   }
-  return getString('item-section-head-text');
+  return getString('sidepane-title');
 }
 
 /**

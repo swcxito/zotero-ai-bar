@@ -23,6 +23,11 @@ input-screenshot-full-tooltip = 已达到 9 张图片上限
 input-thinking-tooltip = 思考强度
 thinking-effort-title = 思考深度
 
+sidepane-title = AI-Bar 速答
+sidepane-clear-tooltip = 清空对话
+sidepane-collapse-tooltip = 收起面板
+sidepane-toggle-tooltip = 展开 / 收起 AI-Bar 面板
+
 model-dialog-title = 模型提供商
 model-dialog-add-provider = 添加提供商
 model-dialog-search-providers = 搜索提供商...

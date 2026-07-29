@@ -16,6 +16,8 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { removeSidePaneTab, selectSidePaneTab } from './mainWindowSidePane';
+
 export function registerTabObserver() {
   const observerID = Zotero.Notifier.registerObserver(
     {
@@ -24,6 +26,10 @@ export function registerTabObserver() {
           // 选项卡切换时触发
           ztoolkit.log('Tab switched to:', ids[0]);
           addon.chatManager.currentTabID = ids[0].toString();
+          selectSidePaneTab(addon.chatManager.currentTabID);
+        } else if (event === 'close' && type === 'tab') {
+          // 选项卡关闭时移除对应的侧边栏页面 DOM（会话历史保留）
+          removeSidePaneTab(ids[0].toString());
         }
       },
     },

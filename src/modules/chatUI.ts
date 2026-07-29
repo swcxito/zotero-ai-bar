@@ -21,7 +21,7 @@ import { ToolCallBox, updateToolCallBox } from '../components/toolCallBox';
 import { escapeHtml, renderMarkdown } from '../utils/markdown';
 import { ensureChatWindow } from '../utils/window';
 import { CHAT_WINDOW_MESSAGE_CONTAINER_ID, ensureChatWindowUI } from './chatWindowHost';
-import { resizeReaderItemPaneHeight, scrollToBottom, setSendBtnEnabled } from './readerItemPane';
+import { scrollToBottom, setSendBtnEnabled } from './mainWindowSidePane';
 import type { Session, TokenUsage } from './chatManager';
 import { IconView } from '../components/iconView';
 import { Icons } from '../components/common';
@@ -791,7 +791,6 @@ function getMessageContainer(session: Session): HTMLElement | null {
   const root = body.querySelector('#ai-bar-chat-root');
   if (!root?.shadowRoot) return null;
 
-  resizeReaderItemPaneHeight(body, 'maximize');
   return root.shadowRoot.querySelector('.message-container') as HTMLElement;
 }
 
