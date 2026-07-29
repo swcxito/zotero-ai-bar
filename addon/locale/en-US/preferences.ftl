@@ -64,6 +64,12 @@ pref-prompteditor-empty-state = No custom prompts yet.
 
 pref-context-rounds = Context History Rounds
 pref-context-rounds-desc = Max conversation rounds to keep per document (sidebar mode)
+pref-chat-start-conversation-mode = When opening chat
+pref-chat-start-conversation-mode-desc = Applies when an article or Global Agent chat is first opened; it does not replace the current conversation
+pref-chat-start-conversation-new =
+    .label = New Conversation
+pref-chat-start-conversation-restore =
+    .label = Restore Most Recent
 pref-auto-attach-item-data =
     .label = Attach Item Data
 pref-auto-image-prompt =

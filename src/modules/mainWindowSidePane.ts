@@ -50,10 +50,13 @@
 
 import { config } from '../../package.json';
 import { InputArea, type InputAreaAPI } from '../components/inputArea';
+import { ChatHistoryPanel } from '../components/chatHistoryPanel';
 import { getString } from '../utils/locale';
 import { getPref, setPref } from '../utils/prefs';
 import { Icons } from '../components/common';
 import { getReaderSourceLabel } from './readerBarPopup';
+import { renderPersistedTranscript } from './chatUI';
+import type { Session } from './chatManager';
 import {
   GLOBAL_AGENT_SESSION_ID,
   getSessionId,
@@ -75,12 +78,21 @@ const TOOLBAR_STYLE_ID = 'zaibar-tb-sidepane-toggle-style';
 const CHAT_ROOT_ID = 'ai-bar-chat-root';
 const SHARED_INPUT_HOST_ID = 'zaibar-sidepane-shared-input';
 const SESSION_ID_ATTR = 'data-session-id';
+const HISTORY_HOST_ID = 'zaibar-sidepane-history';
+const HISTORY_BUTTON_ID = 'zaibar-sidepane-history-button';
+const NEW_CHAT_BUTTON_ID = 'zaibar-sidepane-new-chat-button';
 const DEFAULT_WIDTH = 340;
 const MIN_WIDTH = 240;
+const PANE_ANIMATION_DURATION = 180;
 
 let unsubscribeWorkspace: (() => void) | undefined;
 let readerReadyTimer: number | undefined;
 let pendingReaderTabId: string | undefined;
+let sidePaneHistoryVisible = false;
+let sidePaneUserWidth = DEFAULT_WIDTH;
+let sidePaneHistoryTransition = 0;
+let sidePaneHistoryAnimating = false;
+let sidePaneCollapseAnimating = false;
 
 export function injectCSS(doc: Document | ShadowRoot, filename: string) {
   // 获取插件内资源的 URL
@@ -108,6 +120,31 @@ export function injectCSS(doc: Document | ShadowRoot, filename: string) {
 
 function getElements() {
   return addon.data.sidePaneElements;
+}
+
+function setSidePaneButtonIcon(button: HTMLButtonElement, url: string): void {
+  button.replaceChildren();
+  button.style.backgroundImage = `url("${url}")`;
+}
+
+function lockSidePaneWidth(pane: XULElement, width: number): void {
+  const pixelWidth = `${Math.max(MIN_WIDTH, Math.round(width))}px`;
+  pane.setAttribute('width', String(Math.max(MIN_WIDTH, Math.round(width))));
+  pane.style.setProperty('width', pixelWidth, 'important');
+  pane.style.setProperty('min-width', pixelWidth, 'important');
+  pane.style.setProperty('max-width', pixelWidth, 'important');
+  pane.style.setProperty('flex', '0 0 auto', 'important');
+}
+
+function unlockSidePaneWidth(pane: XULElement): void {
+  pane.style.removeProperty('width');
+  pane.style.removeProperty('min-width');
+  pane.style.removeProperty('max-width');
+  pane.style.removeProperty('flex');
+  pane.setAttribute('width', String(sidePaneUserWidth));
+  pane.style.minWidth = `${MIN_WIDTH}px`;
+  pane.style.maxWidth = 'none';
+  pane.style.flex = '0 0 auto';
 }
 
 /** Register the main toolbar entry for both host modes. */
@@ -188,7 +225,9 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
   const styleEl = doc.createElement('style');
   styleEl.textContent = `
 #${PANE_ID} toolbarbutton,
+#${PANE_ID} .zaibar-sidepane-btn,
 #${TOOLBAR_BTN_ID} {
+  -moz-context-properties: fill, stroke;
   fill: currentColor;
   stroke: currentColor;
 }
@@ -199,15 +238,36 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
   background: url("chrome://${config.addonRef}/content/icons/favicon.svg") no-repeat center / contain;
 }
 #${PANE_ID} .zaibar-sidepane-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
   width: 22px;
   height: 22px;
   padding: 3px;
+  border: 0;
+  border-radius: 5px;
+  box-sizing: border-box;
+  background-color: transparent;
+  color: var(--fill-secondary, currentColor);
+  cursor: pointer;
   background-repeat: no-repeat;
   background-position: center;
   background-size: 16px;
 }
+#${PANE_ID} button.zaibar-sidepane-btn:hover {
+  background-color: var(--material-button-hover, rgba(127, 127, 127, .14));
+}
+#${PANE_ID} button.zaibar-sidepane-btn:disabled {
+  cursor: default;
+  opacity: .45;
+}
 #${PANE_ID} .zaibar-sidepane-btn-clear {
   background-image: url("chrome://zotero/skin/16/universal/empty-trash.svg");
+}
+#${PANE_ID} .zaibar-sidepane-btn svg {
+  width: 16px;
+  height: 16px;
 }
 #${PANE_ID} .zaibar-sidepane-btn-collapse {
   background-image: url("chrome://zotero/skin/20/universal/sidebar.svg");
@@ -271,12 +331,13 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
   const pane = createXUL('vbox');
   pane.id = PANE_ID;
   const savedWidth = getPref('sidepane.width');
-  pane.setAttribute('width', String(savedWidth && savedWidth >= MIN_WIDTH ? savedWidth : DEFAULT_WIDTH));
-  pane.style.minWidth = `${MIN_WIDTH}px`;
+  sidePaneUserWidth = savedWidth && savedWidth >= MIN_WIDTH ? savedWidth : DEFAULT_WIDTH;
+  lockSidePaneWidth(pane, sidePaneUserWidth);
   pane.style.paddingLeft = '6px';
   pane.style.boxSizing = 'border-box';
+  pane.style.overflow = 'hidden';
 
-  // Header: workspace tabs + clear-history + collapse
+  // Header: workspace tabs + history/new-chat + collapse
   const header = createXUL('hbox');
   header.setAttribute('align', 'center');
   header.style.padding = '4px 6px 4px 0';
@@ -286,27 +347,48 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
   const tabs = doc.createElement('div');
   tabs.classList.add('zaibar-workspace-tabs');
 
-  const clearBtn = createXUL('toolbarbutton');
-  clearBtn.classList.add('zaibar-sidepane-btn', 'zaibar-sidepane-btn-clear');
-  clearBtn.setAttribute('tooltiptext', getString('sidepane-clear-tooltip'));
-  clearBtn.style.marginInlineEnd = '2px';
-  clearBtn.addEventListener('command', () => clearCurrentTabHistory());
+  const historyBtn = doc.createElement('button');
+  historyBtn.type = 'button';
+  historyBtn.id = HISTORY_BUTTON_ID;
+  historyBtn.classList.add('zaibar-sidepane-btn');
+  historyBtn.title = getString('history-title' as any);
+  historyBtn.setAttribute('aria-label', historyBtn.title);
+  setSidePaneButtonIcon(historyBtn, `chrome://${config.addonRef}/content/icons/chat-history.svg`);
+  historyBtn.addEventListener('click', () => toggleSidePaneHistory());
+
+  const newChatBtn = doc.createElement('button');
+  newChatBtn.type = 'button';
+  newChatBtn.id = NEW_CHAT_BUTTON_ID;
+  newChatBtn.classList.add('zaibar-sidepane-btn');
+  newChatBtn.title = getString('history-new-chat' as any);
+  newChatBtn.setAttribute('aria-label', newChatBtn.title);
+  newChatBtn.style.marginInlineEnd = '2px';
+  setSidePaneButtonIcon(newChatBtn, `chrome://${config.addonRef}/content/icons/chat-new.svg`);
+  newChatBtn.addEventListener('click', () => startNewSidePaneConversation());
 
   const collapseBtn = createXUL('toolbarbutton');
   collapseBtn.classList.add('zaibar-sidepane-btn', 'zaibar-sidepane-btn-collapse');
   collapseBtn.setAttribute('tooltiptext', getString('sidepane-collapse-tooltip'));
   collapseBtn.addEventListener('command', () => setSidePaneCollapsed(true));
 
-  header.append(tabs, clearBtn, collapseBtn);
+  header.append(tabs, historyBtn, newChatBtn, collapseBtn);
 
   // Per-tab pages
   const deck = createXUL('deck');
   deck.id = DECK_ID;
   deck.setAttribute('flex', '1');
+  deck.style.minWidth = '0';
+  deck.style.width = '100%';
+  deck.style.maxWidth = '100%';
+  deck.style.boxSizing = 'border-box';
+
+  const historyHost = doc.createElement('div');
+  historyHost.id = HISTORY_HOST_ID;
+  historyHost.style.cssText = 'display:none;flex:1 1 auto;min-width:0;width:100%;max-width:100%;min-height:0;box-sizing:border-box;overflow:hidden;';
 
   const inputHost = doc.createElement('div');
   inputHost.id = SHARED_INPUT_HOST_ID;
-  inputHost.style.cssText = 'display:block; flex:0 0 auto; min-width:0; overflow:visible;';
+  inputHost.style.cssText = 'display:block;flex:0 0 auto;min-width:0;width:100%;max-width:100%;box-sizing:border-box;overflow:visible;';
   const inputShadow = inputHost.attachShadow({ mode: 'open' });
   injectCSS(inputShadow, 'katex.min.css');
   injectCSS(inputShadow, 'atom-one.css');
@@ -323,7 +405,7 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
   inputShadow.appendChild(sharedInput);
   addon.data.sharedInputAreas.add(sharedInput);
 
-  pane.append(styleEl, header, deck, inputHost);
+  pane.append(styleEl, header, deck, historyHost, inputHost);
 
   // #zotero-context-pane is the hbox's last child, so appending puts the
   // pane at the window's right edge.
@@ -343,15 +425,23 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
   // handlers settle first.
   const deferredSync = () => {
     doc.defaultView?.setTimeout(() => {
-      saveSidePaneState();
+      saveSidePaneState(true);
       syncToggleButtonState();
     }, 0);
   };
+  splitter.addEventListener('mousedown', () => {
+    if (!sidePaneCollapseAnimating && pane.getAttribute('collapsed') !== 'true') unlockSidePaneWidth(pane);
+  });
   splitter.addEventListener('mouseup', deferredSync);
   splitter.addEventListener('command', deferredSync);
 
   unsubscribeWorkspace?.();
-  unsubscribeWorkspace = subscribeChatWorkspace(refreshSidePaneWorkspace);
+  const unsubscribeChatWorkspace = subscribeChatWorkspace(refreshSidePaneWorkspace);
+  const unsubscribeHistory = addon.chatManager.subscribeHistory(refreshSidePaneWorkspace);
+  unsubscribeWorkspace = () => {
+    unsubscribeChatWorkspace();
+    unsubscribeHistory();
+  };
   selectSidePaneTab(addon.chatManager.currentTabID);
   syncToggleButtonState();
 }
@@ -373,10 +463,16 @@ export function unregisterMainWindowSidePane(win?: Window): void {
   }
   const sharedInput = els.pane.querySelector(`#${SHARED_INPUT_HOST_ID}`)?.shadowRoot?.querySelector('.input-area-wrapper') as HTMLElement | null;
   if (sharedInput) addon.data.sharedInputAreas.delete(sharedInput);
+  (els.pane.querySelector(`#${HISTORY_HOST_ID}`)?.firstElementChild as any)?._disposeHistory?.();
   els.splitter.remove();
   els.pane.remove();
   addon.data.sidePaneElements = undefined;
   addon.data.sidePaneBodyMap?.clear();
+  sidePaneHistoryVisible = false;
+  sidePaneHistoryTransition = 0;
+  sidePaneHistoryAnimating = false;
+  sidePaneCollapseAnimating = false;
+  sidePaneUserWidth = DEFAULT_WIDTH;
   unsubscribeWorkspace?.();
   unsubscribeWorkspace = undefined;
 }
@@ -457,20 +553,60 @@ export function setSidePaneCollapsed(collapsed: boolean): void {
   const els = getElements();
   if (!els) return;
   const { pane, splitter } = els;
-  if (collapsed) {
-    pane.setAttribute('collapsed', 'true');
-    splitter.setAttribute('state', 'collapsed');
-    splitter.setAttribute('substate', 'after');
-  } else {
+  const view = pane.ownerDocument?.defaultView;
+  const currentlyCollapsed = pane.getAttribute('collapsed') === 'true';
+  if (currentlyCollapsed === collapsed || sidePaneCollapseAnimating) return;
+
+  const finish = () => {
+    if (collapsed) {
+      pane.setAttribute('collapsed', 'true');
+      splitter.setAttribute('state', 'collapsed');
+      splitter.setAttribute('substate', 'after');
+    } else {
+      pane.removeAttribute('collapsed');
+      splitter.setAttribute('state', '');
+      splitter.removeAttribute('substate');
+    }
+    pane.style.opacity = '';
+    pane.style.pointerEvents = '';
+    lockSidePaneWidth(pane, sidePaneUserWidth);
+    sidePaneCollapseAnimating = false;
+    if (view) view.dispatchEvent(new (view as any).Event('resize'));
+    saveSidePaneState();
+    syncToggleButtonState();
+  };
+
+  const reducedMotion = view?.matchMedia('(prefers-reduced-motion: reduce)')?.matches ?? false;
+  if (reducedMotion || !view || typeof (pane as any).animate !== 'function') {
+    finish();
+    return;
+  }
+
+  sidePaneCollapseAnimating = true;
+  pane.style.pointerEvents = 'none';
+  unlockSidePaneWidth(pane);
+  pane.style.width = `${sidePaneUserWidth}px`;
+  pane.style.minWidth = '0';
+  pane.style.maxWidth = `${sidePaneUserWidth}px`;
+
+  if (!collapsed) {
     pane.removeAttribute('collapsed');
     splitter.setAttribute('state', '');
+    splitter.removeAttribute('substate');
   }
-  const view = pane.ownerDocument?.defaultView;
-  if (view) {
-    view.dispatchEvent(new (view as any).Event('resize'));
-  }
-  saveSidePaneState();
-  syncToggleButtonState();
+  const animation = (pane as unknown as HTMLElement).animate(
+    collapsed
+      ? [
+          { width: `${sidePaneUserWidth}px`, opacity: 1 },
+          { width: '0px', opacity: 0 },
+        ]
+      : [
+          { width: '0px', opacity: 0 },
+          { width: `${sidePaneUserWidth}px`, opacity: 1 },
+        ],
+    { duration: PANE_ANIMATION_DURATION, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+  );
+  void animation.finished.then(finish).catch(finish);
 }
 
 /**
@@ -499,24 +635,44 @@ export function openSidePane(): void {
   refreshSidePaneWorkspace();
 }
 
-function saveSidePaneState(): void {
+function applySidePaneUserWidth(): void {
+  const els = getElements();
+  if (!els || els.pane.getAttribute('collapsed') === 'true' || sidePaneCollapseAnimating) return;
+  lockSidePaneWidth(els.pane, sidePaneUserWidth);
+}
+
+function saveSidePaneState(captureUserWidth = false): void {
   const els = getElements();
   if (!els) return;
   const collapsed = els.pane.getAttribute('collapsed') === 'true';
   setPref('sidepane.collapsed', collapsed);
   if (!collapsed) {
-    const attrWidth = parseInt(els.pane.getAttribute('width') || '', 10);
-    const width = Number.isFinite(attrWidth) ? attrWidth : Math.round(els.pane.getBoundingClientRect().width);
-    if (width >= MIN_WIDTH) {
-      setPref('sidepane.width', width);
+    if (captureUserWidth) {
+      const measuredWidth = Math.round(els.pane.getBoundingClientRect().width);
+      if (measuredWidth >= MIN_WIDTH) sidePaneUserWidth = measuredWidth;
     }
+    applySidePaneUserWidth();
+    setPref('sidepane.width', sidePaneUserWidth);
   }
 }
 
-function clearCurrentTabHistory(): void {
+function getCurrentSidePaneSession(): Session | undefined {
   const snapshot = getWorkspaceSnapshot('sidebar');
   const sessionId = getSessionId(snapshot.activeKind, snapshot.sourceTabId);
-  if (!sessionId) return;
+  if (!sessionId) return undefined;
+  const reader = snapshot.sourceTabId ? Zotero.Reader.getByTabID(snapshot.sourceTabId) : undefined;
+  return addon.chatManager.getOrCreateSession({
+    sessionId,
+    kind: snapshot.activeKind,
+    sourceTabId: snapshot.activeKind === 'global-agent' ? undefined : snapshot.sourceTabId,
+    itemId: snapshot.activeKind === 'global-agent' ? undefined : reader?.itemID,
+  });
+}
+
+function clearCurrentTabHistory(): void {
+  const session = getCurrentSidePaneSession();
+  if (!session) return;
+  const sessionId = session.id;
   const body = addon.data.sidePaneBodyMap?.get(sessionId);
   const root = body?.querySelector(`#${CHAT_ROOT_ID}`) as HTMLElement | null;
   const messageContainer = root?.shadowRoot?.querySelector('.message-container') ?? body?.querySelector('.message-container');
@@ -524,6 +680,150 @@ function clearCurrentTabHistory(): void {
     (messageContainer as HTMLElement).innerHTML = '';
   }
   addon.chatManager.clearSectionHistory(sessionId);
+}
+
+function startNewSidePaneConversation(): void {
+  if (sidePaneHistoryAnimating) return;
+  const snapshot = getWorkspaceSnapshot('sidebar');
+  if (snapshot.activeKind === 'translation') {
+    clearCurrentTabHistory();
+    return;
+  }
+  const session = getCurrentSidePaneSession();
+  if (!session || !addon.chatManager.startNewConversation(session)) return;
+  sidePaneHistoryVisible = false;
+  refreshSidePaneWorkspace();
+}
+
+function toggleSidePaneHistory(): void {
+  const session = getCurrentSidePaneSession();
+  if (!session || session.kind === 'translation' || session.pending.abortController || sidePaneHistoryAnimating) return;
+  sidePaneHistoryVisible = !sidePaneHistoryVisible;
+  refreshSidePaneWorkspace();
+}
+
+function animateSidePaneHistoryView(deck: XULElement, inputHost: HTMLElement | null, historyHost: HTMLElement, visible: boolean): void {
+  const els = getElements();
+  if (!els) return;
+  const renderedVisible = historyHost.dataset.visible;
+  const setDisplay = () => {
+    deck.style.display = visible ? 'none' : '';
+    if (inputHost) inputHost.style.display = visible ? 'none' : 'block';
+    historyHost.style.display = visible ? 'flex' : 'none';
+  };
+  applySidePaneUserWidth();
+  if (renderedVisible === undefined || renderedVisible === String(visible)) {
+    historyHost.dataset.visible = String(visible);
+    setDisplay();
+    return;
+  }
+
+  historyHost.dataset.visible = String(visible);
+  const sequence = ++sidePaneHistoryTransition;
+  const view = historyHost.ownerDocument.defaultView;
+  const reducedMotion = view?.matchMedia('(prefers-reduced-motion: reduce)')?.matches ?? false;
+  if (reducedMotion || !view) {
+    setDisplay();
+    sidePaneHistoryAnimating = false;
+    if (!visible) {
+      (historyHost.firstElementChild as any)?._disposeHistory?.();
+      historyHost.replaceChildren();
+      delete historyHost.dataset.sessionId;
+    }
+    return;
+  }
+
+  sidePaneHistoryAnimating = true;
+  const outgoing = visible ? [deck as unknown as HTMLElement, inputHost].filter((element): element is HTMLElement => !!element) : [historyHost];
+  for (const element of outgoing) element.style.pointerEvents = 'none';
+  const exitAnimations = outgoing.map((element) =>
+    element.animate(
+      [
+        { opacity: 1, transform: 'translateX(0)' },
+        { opacity: 0, transform: `translateX(${visible ? '-6px' : '6px'})` },
+      ],
+      { duration: 70, easing: 'ease-in' }
+    )
+  );
+  void Promise.all(exitAnimations.map((animation) => animation.finished.catch(() => undefined))).then(() => {
+    if (sequence !== sidePaneHistoryTransition || historyHost.dataset.visible !== String(visible)) return;
+    setDisplay();
+    applySidePaneUserWidth();
+    const incoming = visible ? [historyHost] : [deck as unknown as HTMLElement, inputHost].filter((element): element is HTMLElement => !!element);
+    const enterAnimations = incoming.map((element) => {
+      element.style.pointerEvents = 'none';
+      return element.animate(
+        [
+          { opacity: 0, transform: `translateX(${visible ? '6px' : '-6px'})` },
+          { opacity: 1, transform: 'translateX(0)' },
+        ],
+        { duration: 110, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+      );
+    });
+    void Promise.all(enterAnimations.map((animation) => animation.finished.catch(() => undefined))).then(() => {
+      if (sequence !== sidePaneHistoryTransition) return;
+      for (const element of incoming) element.style.pointerEvents = '';
+      sidePaneHistoryAnimating = false;
+      if (!visible) {
+        (historyHost.firstElementChild as any)?._disposeHistory?.();
+        historyHost.replaceChildren();
+        delete historyHost.dataset.sessionId;
+      }
+      applySidePaneUserWidth();
+    });
+  });
+}
+
+function updateSidePaneHistoryView(session: Session, page: HTMLElement): void {
+  const els = getElements();
+  if (!els) return;
+  const historyHost = els.pane.querySelector(`#${HISTORY_HOST_ID}`) as HTMLElement | null;
+  const inputHost = els.pane.querySelector(`#${SHARED_INPUT_HOST_ID}`) as HTMLElement | null;
+  const historyBtn = els.pane.querySelector(`#${HISTORY_BUTTON_ID}`) as HTMLButtonElement | null;
+  const newChatBtn = els.pane.querySelector(`#${NEW_CHAT_BUTTON_ID}`) as HTMLButtonElement | null;
+  const supportsHistory = session.kind !== 'translation';
+  if (!supportsHistory) sidePaneHistoryVisible = false;
+  const busy = !!session.pending.abortController;
+  if (historyBtn) {
+    historyBtn.style.display = supportsHistory ? '' : 'none';
+    historyBtn.disabled = busy || sidePaneHistoryAnimating;
+  }
+  if (newChatBtn) {
+    newChatBtn.title = getString((supportsHistory ? 'history-new-chat' : 'sidepane-clear-tooltip') as any);
+    newChatBtn.setAttribute('aria-label', newChatBtn.title);
+    newChatBtn.disabled = busy || sidePaneHistoryAnimating;
+    setSidePaneButtonIcon(
+      newChatBtn,
+      supportsHistory ? `chrome://${config.addonRef}/content/icons/chat-new.svg` : 'chrome://zotero/skin/16/universal/empty-trash.svg'
+    );
+  }
+  if (!historyHost) return;
+  if (sidePaneHistoryVisible && (historyHost.dataset.sessionId !== session.id || !historyHost.firstElementChild)) {
+    (historyHost.firstElementChild as any)?._disposeHistory?.();
+    historyHost.replaceChildren();
+    historyHost.dataset.sessionId = session.id;
+    historyHost.appendChild(
+      ChatHistoryPanel(historyHost.ownerDocument, session, {
+        onActivate: async () => {
+          const container = getSessionMessageContainer(session.id);
+          if (container) await renderPersistedTranscript(session, container, true);
+          sidePaneHistoryVisible = false;
+          refreshSidePaneWorkspace();
+        },
+        onCurrentDeleted: async () => {
+          const container = getSessionMessageContainer(session.id);
+          if (container) await renderPersistedTranscript(session, container, true);
+        },
+        onClose: () => {
+          if (sidePaneHistoryAnimating) return;
+          sidePaneHistoryVisible = false;
+          refreshSidePaneWorkspace();
+        },
+      })
+    );
+  }
+  animateSidePaneHistoryView(els.deck, inputHost, historyHost, sidePaneHistoryVisible);
+  if (!sidePaneHistoryVisible) page.style.display = 'flex';
 }
 
 function refreshSidePaneWorkspace(): void {
@@ -552,6 +852,15 @@ function refreshSidePaneWorkspace(): void {
     | null;
   const requestSourceTabId = snapshot.activeKind === 'global-agent' ? undefined : sourceTabId;
   const reader = sourceTabId ? Zotero.Reader.getByTabID(sourceTabId) : undefined;
+  const session = addon.chatManager.getOrCreateSession({
+    sessionId,
+    kind: snapshot.activeKind,
+    sourceTabId: snapshot.activeKind === 'global-agent' ? undefined : sourceTabId,
+    itemId: snapshot.activeKind === 'global-agent' ? undefined : reader?.itemID,
+  });
+  const messageContainer = getSessionMessageContainer(sessionId);
+  if (messageContainer) void renderPersistedTranscript(session, messageContainer);
+  updateSidePaneHistoryView(session, page);
   sharedInput?._inputAreaAPI?.setContext({
     sessionId,
     sessionKind: snapshot.activeKind,
@@ -687,7 +996,10 @@ function ensureSidePanePage(sessionId: string): HTMLElement {
   const page = (doc as any).createXULElement('vbox') as HTMLElement;
   page.setAttribute(SESSION_ID_ATTR, sessionId);
   page.style.position = 'absolute';
+  page.style.minWidth = '0';
   page.style.width = '100%';
+  page.style.maxWidth = '100%';
+  page.style.boxSizing = 'border-box';
   page.style.height = '100%';
   page.style.display = 'flex';
   page.style.flexDirection = 'column';

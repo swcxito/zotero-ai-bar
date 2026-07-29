@@ -34,6 +34,9 @@ async function onStartup() {
     Zotero.debug(`${label} locale initialized`);
     zaibarDump('locale initialized');
 
+    await addon.chatManager.initializeHistory();
+    Zotero.debug(`${label} chat history initialized`);
+
     await preloadLLMRuntime();
     Zotero.debug(`${label} LLM runtime preloaded`);
     zaibarDump('LLM runtime preloaded');
@@ -158,7 +161,8 @@ async function onMainWindowUnload(win: Window): Promise<void> {
   clearDeadChatWindowRef();
 }
 
-function onShutdown(): void {
+async function onShutdown(): Promise<void> {
+  await addon.chatManager.flushHistory();
   ztoolkit.unregisterAll();
   if (addon.data._tabObserverID) {
     Zotero.Notifier.unregisterObserver(addon.data._tabObserverID);

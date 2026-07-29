@@ -64,6 +64,12 @@ pref-prompteditor-empty-state = 暂无自定义提示词。
 
 pref-context-rounds = 上下文保留轮数
 pref-context-rounds-desc = 侧边栏模式下每个文档保留的最近对话轮数
+pref-chat-start-conversation-mode = 打开聊天时
+pref-chat-start-conversation-mode-desc = 在文章或全局 Agent 首次打开时生效，不会替换当前对话
+pref-chat-start-conversation-new =
+    .label = 新建对话
+pref-chat-start-conversation-restore =
+    .label = 恢复最近对话
 pref-auto-attach-item-data =
     .label = 自动附加条目数据
 pref-auto-image-prompt =

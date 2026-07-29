@@ -30,6 +30,7 @@ import {
 } from '../utils/prompts';
 import { checkModelSupportsImage, getActiveModelContextLimit } from '../utils/providers';
 import { ensureChatWindowReady, focusChatWindow } from '../utils/window';
+import { getString } from '../utils/locale';
 import { streamLLMV2, streamTranslationV2 } from './llm';
 import type { ModelMessage, SystemModelMessage, UserModelMessage } from 'ai';
 import { getItemIdFromTab } from './tabObserver';
@@ -44,6 +45,16 @@ import {
   showTranslationWorkspace,
   type ChatSessionKind,
 } from './chatWorkspace';
+import {
+  ChatHistoryStore,
+  getConversationScope,
+  makeConversationTitle,
+  normalizeTextContext,
+  type ConversationScope,
+  type PersistedConversation,
+  type PersistedTextMessage,
+  type PersistedTurn,
+} from './chatHistoryStore';
 
 Zotero.debug('[zaibar-chatManager] module loaded');
 
@@ -56,6 +67,13 @@ export class Session {
   sourceTabId?: string;
   lockedChatMode?: 'normal' | 'agent';
   conversationHistory: ModelMessage[] = [];
+  conversationId?: string;
+  conversationTitle?: string;
+  favorite = false;
+  conversationCreatedAt?: number;
+  conversationLastMessageAt?: number;
+  persistedTurns: PersistedTurn[] = [];
+  persistedContextMessages: PersistedTextMessage[] = [];
   sourceLabel?: string;
   chatMode: 'normal' | 'full-text' | 'agent' = 'normal';
   thinkingEffort: 'none' | 'low' | 'medium' | 'high' | 'xhigh' = 'none';
@@ -93,6 +111,9 @@ export class Session {
     thinkingEffortOverride?: Session['thinkingEffort'];
     /** Dedicated structured translation request; independent of chatMode. */
     translationRequest?: TranslationRequestMeta;
+    /** Visible user text for local transcript persistence. Popup actions intentionally omit it. */
+    displayUserText?: string;
+    displaySourceLabel?: string;
     // --- auto-scroll state ---
     /** User paused (scrolled up). Highest priority — disables all auto-scroll. */
     scrollUserPaused?: boolean;
@@ -119,6 +140,9 @@ export class Session {
      *  the turn's messages were appended. Retry truncates history back to
      *  this (no-op if the turn errored/aborted and never appended). */
     historyLengthBeforeTurn: number;
+    displayUserText?: string;
+    displaySourceLabel?: string;
+    persistedTurnId?: string;
   };
   /**
    * Most recent assistant bubble element. Used to disable its Retry button
@@ -270,6 +294,9 @@ type ChatRequestParams = (
   /** Internal marker for the dedicated structured translation path. */
   translationRequest?: TranslationRequestMeta;
   itemId?: number;
+  /** Internal transcript metadata retained by Retry. */
+  displayUserText?: string;
+  displaySourceLabel?: string;
 };
 
 export type TranslationRequestParams = {
@@ -286,6 +313,9 @@ export class ChatManager {
   public chatHostMode?: ChatHostMode;
   public chatWindow?: Window;
   public currentTabID: string;
+  public readonly historyStore = new ChatHistoryStore();
+  private historyListeners = new Set<() => void>();
+  private initializedScopeConversations = new Map<ConversationScope, string>();
   /** Per-section sidebar state (keyed by item.id / sectionId) */
 
   public sessionsMap: Map<string, Session> = new Map();
@@ -297,6 +327,287 @@ export class ChatManager {
     this.currentTabID = currentTabID;
   }
 
+  async initializeHistory(): Promise<void> {
+    await this.historyStore.initialize();
+  }
+
+  async flushHistory(): Promise<void> {
+    await this.historyStore.flush();
+  }
+
+  subscribeHistory(listener: () => void): () => void {
+    this.historyListeners.add(listener);
+    return () => this.historyListeners.delete(listener);
+  }
+
+  notifyHistoryStateChanged(): void {
+    this.notifyHistoryChanged();
+  }
+
+  private notifyHistoryChanged(): void {
+    for (const listener of Array.from(this.historyListeners)) {
+      try {
+        listener();
+      } catch (error) {
+        ztoolkit.log('[chatHistory] listener failed:', error);
+      }
+    }
+  }
+
+  private synchronizePrunedSessions(): void {
+    const draftIds = new Map<ConversationScope, string>();
+    for (const session of this.sessionsMap.values()) {
+      if (!session.conversationId || !session.persistedTurns.length || this.historyStore.get(session.conversationId)) continue;
+      const scope = this.getSessionScope(session);
+      if (!scope) continue;
+      this.hydrateSession(session);
+      const draftId = draftIds.get(scope) ?? this.createConversationId();
+      draftIds.set(scope, draftId);
+      this.initializedScopeConversations.set(scope, draftId);
+      session.conversationId = draftId;
+      const container = this.getSessionMessageContainer(session.id);
+      if (container) container.dataset.conversationId = '';
+    }
+  }
+
+  private createConversationId(): string {
+    return `${Date.now().toString(36)}-${Zotero.Utilities.randomString(10)}`;
+  }
+
+  private getSessionScope(session: Session): ConversationScope | undefined {
+    if (session.kind === 'translation') return undefined;
+    return getConversationScope(session.kind, session.itemId);
+  }
+
+  private hydrateSession(session: Session, conversation?: PersistedConversation): void {
+    if (!conversation) {
+      session.conversationId = this.createConversationId();
+      session.conversationTitle = undefined;
+      session.favorite = false;
+      session.conversationCreatedAt = Date.now();
+      session.conversationLastMessageAt = undefined;
+      session.persistedTurns = [];
+      session.persistedContextMessages = [];
+      session.conversationHistory = [];
+      session.sourceLabel = undefined;
+      session.lastSentSelectionText = undefined;
+      session.lastTurnSnapshot = undefined;
+      session.lastAssistantPop = undefined;
+      return;
+    }
+    session.conversationId = conversation.id;
+    session.conversationTitle = conversation.title;
+    session.favorite = conversation.favorite;
+    session.conversationCreatedAt = conversation.createdAt;
+    session.conversationLastMessageAt = conversation.lastMessageAt;
+    session.persistedTurns = conversation.turns.map((turn) => ({ ...turn }));
+    session.persistedContextMessages = conversation.contextMessages.map((message) => ({ ...message }));
+    session.conversationHistory = session.persistedContextMessages.map((message) => ({ ...message })) as ModelMessage[];
+    session.sourceLabel = conversation.turns
+      .slice()
+      .reverse()
+      .find((turn) => !!turn.sourceLabel)?.sourceLabel;
+    session.lastSentSelectionText = undefined;
+    session.lastTurnSnapshot = undefined;
+    session.lastAssistantPop = undefined;
+  }
+
+  private ensureSessionConversation(session: Session): void {
+    if (session.kind === 'translation' || session.conversationId) return;
+    const scope = this.getSessionScope(session);
+    if (!scope) return;
+    const initializedConversationId = this.initializedScopeConversations.get(scope);
+    if (initializedConversationId) {
+      this.hydrateSession(session, this.historyStore.get(initializedConversationId));
+      session.conversationId = initializedConversationId;
+      return;
+    }
+    const startMode = getPref('chat.startConversationMode');
+    const conversation = startMode === 'restore-latest' ? this.historyStore.list(scope)[0] : undefined;
+    this.hydrateSession(session, conversation);
+    this.initializedScopeConversations.set(scope, session.conversationId!);
+  }
+
+  listConversations(session: Session): PersistedConversation[] {
+    const scope = this.getSessionScope(session);
+    return scope ? this.historyStore.list(scope) : [];
+  }
+
+  startNewConversation(session: Session): boolean {
+    if (session.pending.abortController || session.kind === 'translation') return false;
+    const scope = this.getSessionScope(session);
+    if (!scope) return false;
+    const draftId = this.createConversationId();
+    this.initializedScopeConversations.set(scope, draftId);
+    for (const candidate of this.sessionsMap.values()) {
+      if (this.getSessionScope(candidate) !== scope) continue;
+      this.hydrateSession(candidate);
+      candidate.conversationId = draftId;
+      const container = this.getSessionMessageContainer(candidate.id);
+      if (container) {
+        container.innerHTML = '';
+        container.dataset.conversationId = draftId;
+      }
+    }
+    this.notifyHistoryChanged();
+    return true;
+  }
+
+  activateConversation(session: Session, conversationId: string): boolean {
+    if (session.pending.abortController) return false;
+    const conversation = this.historyStore.get(conversationId);
+    const scope = this.getSessionScope(session);
+    if (!conversation || !scope || conversation.scope !== scope) return false;
+    for (const candidate of this.sessionsMap.values()) {
+      if (this.getSessionScope(candidate) !== scope) continue;
+      this.hydrateSession(candidate, conversation);
+      const container = this.getSessionMessageContainer(candidate.id);
+      if (container) container.dataset.conversationId = '';
+    }
+    this.initializedScopeConversations.set(scope, conversation.id);
+    this.historyStore.setActive(scope, conversation.id);
+    this.notifyHistoryChanged();
+    return true;
+  }
+
+  renameConversation(conversationId: string, title: string): boolean {
+    const trimmed = title.trim();
+    if (!trimmed) return false;
+    this.historyStore.rename(conversationId, trimmed);
+    for (const session of this.sessionsMap.values()) {
+      if (session.conversationId === conversationId) session.conversationTitle = trimmed;
+    }
+    this.notifyHistoryChanged();
+    return true;
+  }
+
+  toggleFavorite(conversationId: string): boolean {
+    const conversation = this.historyStore.get(conversationId);
+    if (!conversation) return false;
+    const favorite = !conversation.favorite;
+    this.historyStore.setFavorite(conversationId, favorite);
+    this.synchronizePrunedSessions();
+    const updated = this.historyStore.get(conversationId);
+    for (const session of this.sessionsMap.values()) {
+      if (session.conversationId === conversationId) {
+        session.favorite = favorite;
+        if (updated) session.persistedTurns = updated.turns.map((turn) => ({ ...turn }));
+      }
+    }
+    this.notifyHistoryChanged();
+    return favorite;
+  }
+
+  deleteConversation(session: Session, conversationId: string): boolean {
+    if (session.pending.abortController) return false;
+    const conversation = this.historyStore.get(conversationId);
+    const scope = this.getSessionScope(session);
+    if (!conversation || !scope || conversation.scope !== scope) return false;
+    this.historyStore.delete(conversationId);
+    const draftId = this.createConversationId();
+    if (this.initializedScopeConversations.get(scope) === conversationId) this.initializedScopeConversations.set(scope, draftId);
+    for (const candidate of this.sessionsMap.values()) {
+      if (candidate.conversationId === conversationId) {
+        this.hydrateSession(candidate);
+        candidate.conversationId = draftId;
+        const container = this.getSessionMessageContainer(candidate.id);
+        if (container) container.dataset.conversationId = '';
+      }
+    }
+    this.notifyHistoryChanged();
+    return true;
+  }
+
+  recordCompletedTurn(session: Session, assistantMarkdown: string, aborted?: boolean): void {
+    if (aborted || !assistantMarkdown.trim() || session.kind === 'translation') return;
+    const scope = this.getSessionScope(session);
+    if (!scope) return;
+    this.ensureSessionConversation(session);
+    const now = Date.now();
+    const turn: PersistedTurn = {
+      id: this.createConversationId(),
+      createdAt: now,
+      userText: session.pending.displayUserText?.trim() || undefined,
+      assistantMarkdown,
+      sourceLabel: session.pending.displaySourceLabel,
+    };
+    session.persistedTurns.push(turn);
+    session.conversationTitle ??= makeConversationTitle(turn.userText, assistantMarkdown, getString('history-default-title' as any));
+    session.conversationCreatedAt ??= now;
+    session.conversationLastMessageAt = now;
+    const contextRounds = getPref('chat.contextRounds') ?? 8;
+    const currentContext = session.pending.userMessage
+      ? normalizeTextContext([session.pending.userMessage, { role: 'assistant', content: assistantMarkdown } as ModelMessage], 1)
+      : [];
+    session.persistedContextMessages = normalizeTextContext(
+      [...(session.persistedContextMessages as ModelMessage[]), ...(currentContext as ModelMessage[])],
+      contextRounds
+    );
+    const persistedKind: PersistedConversation['kind'] = session.kind === 'global-agent' ? 'global-agent' : 'article';
+    const conversation: PersistedConversation = {
+      id: session.conversationId!,
+      scope,
+      kind: persistedKind,
+      itemId: session.kind === 'article' ? session.itemId : undefined,
+      title: session.conversationTitle,
+      favorite: session.favorite,
+      createdAt: session.conversationCreatedAt,
+      lastMessageAt: now,
+      turns: session.favorite ? session.persistedTurns : session.persistedTurns.slice(-100),
+      contextMessages: session.persistedContextMessages,
+    };
+    session.persistedTurns = conversation.turns.map((entry) => ({ ...entry }));
+    this.historyStore.upsert(conversation);
+    this.synchronizePrunedSessions();
+    const stored = this.historyStore.get(conversation.id);
+    if (stored) {
+      for (const candidate of this.sessionsMap.values()) {
+        if (candidate === session || this.getSessionScope(candidate) !== scope) continue;
+        this.hydrateSession(candidate, stored);
+        const container = this.getSessionMessageContainer(candidate.id);
+        if (container) container.dataset.conversationId = '';
+      }
+    }
+    if (session.lastTurnSnapshot) session.lastTurnSnapshot.persistedTurnId = turn.id;
+    this.notifyHistoryChanged();
+  }
+
+  removePersistedTurnForRetry(session: Session, turnId: string | undefined): void {
+    if (!turnId || session.kind === 'translation') return;
+    session.persistedTurns = session.persistedTurns.filter((turn) => turn.id !== turnId);
+    const lastUserIndex = session.persistedContextMessages.map((message) => message.role).lastIndexOf('user');
+    if (lastUserIndex >= 0) session.persistedContextMessages = session.persistedContextMessages.slice(0, lastUserIndex);
+    if (!session.persistedTurns.length) {
+      if (session.conversationId) this.historyStore.delete(session.conversationId);
+      session.conversationTitle = undefined;
+      session.conversationLastMessageAt = undefined;
+      return;
+    }
+    const scope = this.getSessionScope(session);
+    if (!scope || !session.conversationId || !session.conversationCreatedAt) return;
+    const lastMessageAt = session.persistedTurns.at(-1)!.createdAt;
+    session.conversationLastMessageAt = lastMessageAt;
+    const persistedKind: PersistedConversation['kind'] = session.kind === 'global-agent' ? 'global-agent' : 'article';
+    this.historyStore.upsert({
+      id: session.conversationId,
+      scope,
+      kind: persistedKind,
+      itemId: session.kind === 'article' ? session.itemId : undefined,
+      title: session.conversationTitle || getString('history-default-title' as any),
+      favorite: session.favorite,
+      createdAt: session.conversationCreatedAt,
+      lastMessageAt,
+      turns: session.persistedTurns,
+      contextMessages: session.persistedContextMessages,
+    });
+  }
+
+  private getSessionMessageContainer(sessionId: string): HTMLElement | null {
+    const body = addon.data.sidePaneBodyMap?.get(sessionId);
+    const root = body?.querySelector('#ai-bar-chat-root') as HTMLElement | null;
+    return (root?.shadowRoot?.querySelector('.message-container') ?? body?.querySelector('.message-container') ?? null) as HTMLElement | null;
+  }
+
   getOrCreateSession(params: { sessionId: string; kind: ChatSessionKind; sourceTabId?: string; itemId?: number }): Session {
     const existing = this.sessionsMap.get(params.sessionId);
     if (existing) {
@@ -305,6 +616,7 @@ export class ChatManager {
       existing.itemId = params.kind === 'global-agent' ? undefined : (params.itemId ?? existing.itemId);
       existing.lockedChatMode = params.kind === 'global-agent' ? 'agent' : params.kind === 'translation' ? 'normal' : undefined;
       if (existing.lockedChatMode) existing.chatMode = existing.lockedChatMode;
+      this.ensureSessionConversation(existing);
       return existing;
     }
 
@@ -334,6 +646,7 @@ export class ChatManager {
     });
     session.itemId = params.itemId;
     this.sessionsMap.set(params.sessionId, session);
+    this.ensureSessionConversation(session);
     return session;
   }
 
@@ -372,6 +685,7 @@ export class ChatManager {
     if (session.conversationHistory.length >= snap.historyLengthBeforeTurn) {
       session.conversationHistory.length = snap.historyLengthBeforeTurn;
     }
+    this.removePersistedTurnForRetry(session, snap.persistedTurnId);
     session.lastAssistantPop = undefined;
     await this.sendChatRequest({
       sessionId: session.id,
@@ -381,6 +695,8 @@ export class ChatManager {
       messagesOverride: { userMessage: snap.userMessage, systemMessage: snap.systemMessage },
       thinkingEffort: snap.thinkingEffort,
       translationRequest: snap.translationRequest,
+      displayUserText: snap.displayUserText,
+      displaySourceLabel: snap.displaySourceLabel,
     });
   }
 
@@ -496,6 +812,14 @@ export class ChatManager {
       itemId,
     });
 
+    if (params.isFromPopup && !params.messagesOverride && params.sessionKind === 'article') {
+      if (session.pending.abortController) {
+        session.pending.abortController.abort();
+        session.pending.abortController = undefined;
+      }
+      this.startNewConversation(session);
+    }
+
     ztoolkit.log('[chat] sendChatRequest', {
       sessionId,
       sourceTabId,
@@ -516,6 +840,7 @@ export class ChatManager {
     const maxHistoryMessages = contextRounds * 2;
     if (params.isFromPopup || session.pending.isNewSource) {
       session.conversationHistory = [];
+      session.persistedContextMessages = [];
       // History reset means the model has no memory of prior turns, so the
       // "last sent selection" tracking must also reset — otherwise a popup
       // action that fires with the same selection as before would suppress
@@ -548,6 +873,8 @@ export class ChatManager {
           thinkingEffort: params.thinkingEffort,
           translationRequest: params.translationRequest,
           historyLengthBeforeTurn: session.conversationHistory.length,
+          displayUserText: params.displayUserText,
+          displaySourceLabel: params.displaySourceLabel,
         };
         if (params.translationRequest) return [systemMsg, userMsg];
         return session.conversationHistory.length > 0 ? [systemMsg, ...session.conversationHistory, userMsg] : [systemMsg, userMsg];
@@ -666,6 +993,8 @@ export class ChatManager {
         thinkingEffort: params.thinkingEffort,
         translationRequest: params.translationRequest,
         historyLengthBeforeTurn: session.conversationHistory.length,
+        displayUserText: params.isFromPopup ? undefined : params.userPrompt,
+        displaySourceLabel: session.pending.isNewSource ? params.sourceLabel : undefined,
       };
 
       // Clear images for this tab after building the message
@@ -686,6 +1015,12 @@ export class ChatManager {
     session.sourceLabel = params.sourceLabel ?? session.sourceLabel;
     session.pending.thinkingEffortOverride = params.thinkingEffort;
     session.pending.translationRequest = params.translationRequest;
+    session.pending.displayUserText = params.messagesOverride ? params.displayUserText : params.isFromPopup ? undefined : params.userPrompt;
+    session.pending.displaySourceLabel = params.messagesOverride
+      ? params.displaySourceLabel
+      : session.pending.isNewSource
+        ? params.sourceLabel
+        : undefined;
 
     if (params.sessionKind === 'translation' && sourceTabId) {
       showTranslationWorkspace(sourceTabId);
@@ -704,6 +1039,7 @@ export class ChatManager {
 
     const AC = (typeof AbortController !== 'undefined' ? AbortController : (Zotero.getMainWindow() as any).AbortController) as typeof AbortController;
     session.pending.abortController = new AC();
+    this.notifyHistoryChanged();
     ztoolkit.log('[chat] sendChatRequest:stream-start', {
       sectionId: sessionId,
     });

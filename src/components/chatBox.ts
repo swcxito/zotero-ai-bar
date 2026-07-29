@@ -145,7 +145,7 @@ export function ChatBox({ doc, isUser = false, onRegenerate }: ChatBoxProps): El
               }
             },
           }),
-          ...(!isUser
+          ...(!isUser && onRegenerate
             ? [
                 // createActionButton({
                 //   label: "NOTE",

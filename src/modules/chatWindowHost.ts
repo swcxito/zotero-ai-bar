@@ -1,10 +1,12 @@
 import { config } from '../../package.json';
 import { Icons } from '../components/common';
 import { InputArea, type InputAreaAPI } from '../components/inputArea';
+import { ChatHistoryPanel } from '../components/chatHistoryPanel';
 import { renderMarkdown } from '../utils/markdown';
 import { getString } from '../utils/locale';
 import { getReaderSourceLabel } from './readerBarPopup';
-import { attachCitationHandlers } from './chatUI';
+import { attachCitationHandlers, renderPersistedTranscript } from './chatUI';
+import type { Session } from './chatManager';
 import {
   GLOBAL_AGENT_SESSION_ID,
   getSessionId,
@@ -18,8 +20,24 @@ import {
 const WINDOW_ROOT_ID = 'ai-bar-window-root';
 const WINDOW_DECK_CLASS = 'zaibar-window-deck';
 const SESSION_ID_ATTR = 'data-session-id';
+const WINDOW_HISTORY_CLASS = 'zaibar-window-history';
 
-type WorkspaceRoot = HTMLElement & { _workspaceUnsubscribe?: () => void };
+type WorkspaceRoot = HTMLElement & {
+  _workspaceUnsubscribe?: () => void;
+  _historyTransition?: number;
+  _historyAnimating?: boolean;
+};
+
+function setWindowButtonIcon(button: HTMLButtonElement, url: string): void {
+  button.replaceChildren();
+  button.style.backgroundImage = `url("${url}")`;
+  button.style.backgroundPosition = 'center';
+  button.style.backgroundRepeat = 'no-repeat';
+  button.style.backgroundSize = '16px 16px';
+  button.style.setProperty('-moz-context-properties', 'fill, stroke');
+  button.style.setProperty('fill', 'currentColor');
+  button.style.setProperty('stroke', 'currentColor');
+}
 
 function renderWindowTabs(doc: Document, tabs: HTMLElement): void {
   const snapshot = getWorkspaceSnapshot('window');
@@ -75,6 +93,10 @@ function createWindowSessionPage(doc: Document, sessionId: string): HTMLElement 
   const page = doc.createElement('div');
   page.setAttribute(SESSION_ID_ATTR, sessionId);
   page.classList.add('zaibar-window-session-page', 'flex', 'h-full', 'min-h-0', 'flex-col', 'gap-2');
+  page.style.minWidth = '0';
+  page.style.width = '100%';
+  page.style.maxWidth = '100%';
+  page.style.boxSizing = 'border-box';
   page.style.display = 'none';
 
   const messageContainer = doc.createElement('div');
@@ -121,6 +143,15 @@ export function refreshChatWindowWorkspace(doc: Document): void {
     | null;
   const requestSourceTabId = snapshot.activeKind === 'global-agent' ? undefined : snapshot.sourceTabId;
   const reader = snapshot.sourceTabId ? Zotero.Reader.getByTabID(snapshot.sourceTabId) : undefined;
+  const session = addon.chatManager.getOrCreateSession({
+    sessionId,
+    kind: snapshot.activeKind,
+    sourceTabId: snapshot.activeKind === 'global-agent' ? undefined : snapshot.sourceTabId,
+    itemId: snapshot.activeKind === 'global-agent' ? undefined : reader?.itemID,
+  });
+  const messageContainer = getWindowMessageContainer(sessionId);
+  if (messageContainer) void renderPersistedTranscript(session, messageContainer);
+  updateWindowHistoryView(doc, session, page);
   sharedInput?._inputAreaAPI?.setContext({
     sessionId,
     sessionKind: snapshot.activeKind,
@@ -155,14 +186,167 @@ function selectWindowSessionPage(deck: HTMLElement, page: HTMLElement): void {
   page.style.transform = 'translateX(0)';
 }
 
-function clearActiveWindowHistory(doc: Document): void {
+function getCurrentWindowSession(): Session | undefined {
   const snapshot = getWorkspaceSnapshot('window');
   const sessionId = getSessionId(snapshot.activeKind, snapshot.sourceTabId);
-  if (!sessionId) return;
+  if (!sessionId) return undefined;
+  const reader = snapshot.sourceTabId ? Zotero.Reader.getByTabID(snapshot.sourceTabId) : undefined;
+  return addon.chatManager.getOrCreateSession({
+    sessionId,
+    kind: snapshot.activeKind,
+    sourceTabId: snapshot.activeKind === 'global-agent' ? undefined : snapshot.sourceTabId,
+    itemId: snapshot.activeKind === 'global-agent' ? undefined : reader?.itemID,
+  });
+}
+
+function clearActiveWindowHistory(doc: Document): void {
+  const session = getCurrentWindowSession();
+  if (!session) return;
+  const sessionId = session.id;
   const page = addon.data.sidePaneBodyMap?.get(sessionId);
   const messageContainer = page?.querySelector('.message-container') as HTMLElement | null;
   if (messageContainer) messageContainer.innerHTML = '';
   addon.chatManager.clearSectionHistory(sessionId);
+}
+
+function startNewWindowConversation(doc: Document): void {
+  const session = getCurrentWindowSession();
+  const root = doc.getElementById(WINDOW_ROOT_ID) as WorkspaceRoot | null;
+  if (!session || root?._historyAnimating) return;
+  if (session.kind === 'translation') {
+    clearActiveWindowHistory(doc);
+    return;
+  }
+  if (!addon.chatManager.startNewConversation(session)) return;
+  if (root) root.dataset.historyVisible = 'false';
+  refreshChatWindowWorkspace(doc);
+}
+
+function animateWindowHistoryView(
+  root: WorkspaceRoot,
+  deck: HTMLElement,
+  inputHost: HTMLElement | null,
+  historyHost: HTMLElement,
+  visible: boolean
+): void {
+  const renderedVisible = historyHost.dataset.visible;
+  const setDisplay = () => {
+    deck.style.display = visible ? 'none' : 'flex';
+    if (inputHost) inputHost.style.display = visible ? 'none' : '';
+    historyHost.style.display = visible ? 'flex' : 'none';
+  };
+  if (renderedVisible === undefined || renderedVisible === String(visible)) {
+    historyHost.dataset.visible = String(visible);
+    setDisplay();
+    return;
+  }
+
+  historyHost.dataset.visible = String(visible);
+  const sequence = (root._historyTransition ?? 0) + 1;
+  root._historyTransition = sequence;
+  const view = root.ownerDocument.defaultView;
+  const reducedMotion = view?.matchMedia('(prefers-reduced-motion: reduce)')?.matches ?? false;
+  if (reducedMotion || !view) {
+    setDisplay();
+    root._historyAnimating = false;
+    if (!visible) {
+      (historyHost.firstElementChild as any)?._disposeHistory?.();
+      historyHost.replaceChildren();
+      delete historyHost.dataset.sessionId;
+    }
+    return;
+  }
+
+  root._historyAnimating = true;
+  const outgoing = visible ? [deck, inputHost].filter((element): element is HTMLElement => !!element) : [historyHost];
+  for (const element of outgoing) element.style.pointerEvents = 'none';
+  const exitAnimations = outgoing.map((element) =>
+    element.animate(
+      [
+        { opacity: 1, transform: 'translateX(0)' },
+        { opacity: 0, transform: `translateX(${visible ? '-6px' : '6px'})` },
+      ],
+      { duration: 70, easing: 'ease-in' }
+    )
+  );
+  void Promise.all(exitAnimations.map((animation) => animation.finished.catch(() => undefined))).then(() => {
+    if (root._historyTransition !== sequence || historyHost.dataset.visible !== String(visible)) return;
+    setDisplay();
+    const incoming = visible ? [historyHost] : [deck, inputHost].filter((element): element is HTMLElement => !!element);
+    const enterAnimations = incoming.map((element) => {
+      element.style.pointerEvents = 'none';
+      return element.animate(
+        [
+          { opacity: 0, transform: `translateX(${visible ? '6px' : '-6px'})` },
+          { opacity: 1, transform: 'translateX(0)' },
+        ],
+        { duration: 110, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+      );
+    });
+    void Promise.all(enterAnimations.map((animation) => animation.finished.catch(() => undefined))).then(() => {
+      if (root._historyTransition !== sequence) return;
+      for (const element of incoming) element.style.pointerEvents = '';
+      root._historyAnimating = false;
+      if (!visible) {
+        (historyHost.firstElementChild as any)?._disposeHistory?.();
+        historyHost.replaceChildren();
+        delete historyHost.dataset.sessionId;
+      }
+    });
+  });
+}
+
+function updateWindowHistoryView(doc: Document, session: Session, page: HTMLElement): void {
+  const root = doc.getElementById(WINDOW_ROOT_ID) as WorkspaceRoot | null;
+  const deck = root?.querySelector(`.${WINDOW_DECK_CLASS}`) as HTMLElement | null;
+  const historyHost = root?.querySelector(`.${WINDOW_HISTORY_CLASS}`) as HTMLElement | null;
+  const inputHost = root?.querySelector('.zaibar-window-shared-input') as HTMLElement | null;
+  const historyButton = root?.querySelector('.zaibar-window-history-button') as HTMLButtonElement | null;
+  const newButton = root?.querySelector('.zaibar-window-new-chat') as HTMLButtonElement | null;
+  if (!root || !deck || !historyHost) return;
+  const supportsHistory = session.kind !== 'translation';
+  if (!supportsHistory) root.dataset.historyVisible = 'false';
+  const visible = supportsHistory && root.dataset.historyVisible === 'true';
+  const busy = !!session.pending.abortController;
+  if (historyButton) {
+    historyButton.style.display = supportsHistory ? '' : 'none';
+    historyButton.disabled = busy || !!root._historyAnimating;
+  }
+  if (newButton) {
+    newButton.title = getString((supportsHistory ? 'history-new-chat' : 'sidepane-clear-tooltip') as any);
+    newButton.setAttribute('aria-label', newButton.title);
+    newButton.disabled = busy || !!root._historyAnimating;
+    setWindowButtonIcon(
+      newButton,
+      supportsHistory ? `chrome://${config.addonRef}/content/icons/chat-new.svg` : 'chrome://zotero/skin/16/universal/empty-trash.svg'
+    );
+  }
+  if (visible && (historyHost.dataset.sessionId !== session.id || !historyHost.firstElementChild)) {
+    (historyHost.firstElementChild as any)?._disposeHistory?.();
+    historyHost.replaceChildren();
+    historyHost.dataset.sessionId = session.id;
+    historyHost.appendChild(
+      ChatHistoryPanel(doc, session, {
+        onActivate: async () => {
+          const container = getWindowMessageContainer(session.id);
+          if (container) await renderPersistedTranscript(session, container, true);
+          root.dataset.historyVisible = 'false';
+          refreshChatWindowWorkspace(doc);
+        },
+        onCurrentDeleted: async () => {
+          const container = getWindowMessageContainer(session.id);
+          if (container) await renderPersistedTranscript(session, container, true);
+        },
+        onClose: () => {
+          if (root._historyAnimating) return;
+          root.dataset.historyVisible = 'false';
+          refreshChatWindowWorkspace(doc);
+        },
+      })
+    );
+  }
+  animateWindowHistoryView(root, deck, inputHost, historyHost, visible);
+  if (!visible) page.style.display = 'flex';
 }
 
 export function ensureChatWindowUI(doc: Document) {
@@ -180,18 +364,36 @@ export function ensureChatWindowUI(doc: Document) {
   header.classList.add('zaibar-window-header');
   const tabs = doc.createElement('div');
   tabs.classList.add('zaibar-window-tabs');
-  const clear = doc.createElement('button');
-  clear.type = 'button';
-  clear.classList.add('zaibar-window-clear');
-  clear.title = getString('sidepane-clear-tooltip');
-  clear.innerHTML = Icons.Delete;
-  clear.addEventListener('click', () => clearActiveWindowHistory(doc));
-  header.append(tabs, clear);
+  const history = doc.createElement('button');
+  history.type = 'button';
+  history.classList.add('zaibar-window-clear', 'zaibar-window-history-button');
+  history.title = getString('history-title' as any);
+  history.setAttribute('aria-label', history.title);
+  setWindowButtonIcon(history, `chrome://${config.addonRef}/content/icons/chat-history.svg`);
+  history.addEventListener('click', () => {
+    const session = getCurrentWindowSession();
+    if (!session || session.kind === 'translation' || session.pending.abortController || root._historyAnimating) return;
+    root.dataset.historyVisible = String(root.dataset.historyVisible !== 'true');
+    refreshChatWindowWorkspace(doc);
+  });
+  const newChat = doc.createElement('button');
+  newChat.type = 'button';
+  newChat.classList.add('zaibar-window-clear', 'zaibar-window-new-chat');
+  newChat.title = getString('history-new-chat' as any);
+  newChat.setAttribute('aria-label', newChat.title);
+  setWindowButtonIcon(newChat, `chrome://${config.addonRef}/content/icons/chat-new.svg`);
+  newChat.addEventListener('click', () => startNewWindowConversation(doc));
+  header.append(tabs, history, newChat);
 
   const deck = doc.createElement('div');
   deck.classList.add(WINDOW_DECK_CLASS, 'flex', 'flex-1', 'min-h-0', 'flex-col');
+  deck.style.cssText = 'min-width:0;width:100%;max-width:100%;box-sizing:border-box;';
+  const historyHost = doc.createElement('div');
+  historyHost.classList.add(WINDOW_HISTORY_CLASS);
+  historyHost.style.cssText = 'display:none;flex:1;min-width:0;width:100%;max-width:100%;min-height:0;box-sizing:border-box;overflow:hidden;';
   const inputHost = doc.createElement('div');
   inputHost.classList.add('zaibar-window-shared-input');
+  inputHost.style.cssText = 'min-width:0;width:100%;max-width:100%;box-sizing:border-box;';
   const sharedInput = InputArea(doc, GLOBAL_AGENT_SESSION_ID, {
     sessionKind: 'global-agent',
     chatModeAdjustable: false,
@@ -211,10 +413,16 @@ export function ensureChatWindowUI(doc: Document) {
   sharedInput.style.userSelect = 'none';
   inputHost.appendChild(sharedInput);
   addon.data.sharedInputAreas.add(sharedInput);
-  root.append(header, deck, inputHost);
+  root.dataset.historyVisible = 'false';
+  root.append(header, deck, historyHost, inputHost);
 
   root._workspaceUnsubscribe?.();
-  root._workspaceUnsubscribe = subscribeChatWorkspace(() => refreshChatWindowWorkspace(doc));
+  const unsubscribeWorkspace = subscribeChatWorkspace(() => refreshChatWindowWorkspace(doc));
+  const unsubscribeHistory = addon.chatManager.subscribeHistory(() => refreshChatWindowWorkspace(doc));
+  root._workspaceUnsubscribe = () => {
+    unsubscribeWorkspace();
+    unsubscribeHistory();
+  };
   refreshChatWindowWorkspace(doc);
 }
 
@@ -225,6 +433,7 @@ export function onChatWindowLoad(window: Window) {
     root?._workspaceUnsubscribe?.();
     const sharedInput = root?.querySelector('.zaibar-window-shared-input .input-area-wrapper') as HTMLElement | null;
     if (sharedInput) addon.data.sharedInputAreas.delete(sharedInput);
+    (root?.querySelector(`.${WINDOW_HISTORY_CLASS}`)?.firstElementChild as any)?._disposeHistory?.();
     if (window.arguments?.[0]?.onWindowClosed) {
       window.arguments[0].onWindowClosed();
     }

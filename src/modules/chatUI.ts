@@ -31,8 +31,46 @@ import { getActiveModelContextLimit } from '../utils/providers';
 import { openCitation } from './citationAction';
 import { getItemFullTextByPage } from '../utils/zoteroItemAccess';
 import { normalizePartOfSpeech, type TranslationResult } from '../utils/translation';
+import { createUserMessageBubble } from '../components/userBubble';
 
 Zotero.debug('[zaibar-chatUI] module loaded');
+
+/** Rebuild a completed, text-only transcript loaded from local history. */
+export async function renderPersistedTranscript(session: Session, container: HTMLElement, force = false): Promise<void> {
+  const conversationId = session.conversationId || '';
+  if (!force && container.dataset.conversationId === conversationId) return;
+  container.dataset.conversationId = conversationId;
+  container.innerHTML = '';
+  const renderToken = `${conversationId}:${Date.now()}`;
+  container.dataset.renderToken = renderToken;
+
+  for (const turn of session.persistedTurns) {
+    if (container.dataset.renderToken !== renderToken || !container.isConnected) return;
+    if (turn.userText) {
+      container.appendChild(createUserMessageBubble(container.ownerDocument, turn.userText, [], () => undefined));
+    }
+    const pop = ChatBox({ doc: container.ownerDocument, isUser: false }) as HTMLElement;
+    const chatMessage = pop.querySelector('.chat-message') as HTMLElement | null;
+    if (chatMessage) {
+      if (turn.sourceLabel) {
+        const sourceEl = container.ownerDocument.createElement('div');
+        sourceEl.classList.add('chat-source-label', 'text-xs', 'tracking-wider', 'font-semibold', 'text-slate-400', 'dark:text-neutral-500', 'mb-1');
+        sourceEl.textContent = `Source: ${turn.sourceLabel}`;
+        sourceEl.style.userSelect = 'none';
+        chatMessage.appendChild(sourceEl);
+      }
+      const content = container.ownerDocument.createElement('div');
+      content.classList.add('chat-message-content');
+      content.innerHTML = await renderMarkdown(turn.assistantMarkdown, session.itemId);
+      attachCitationHandlers(content);
+      chatMessage.appendChild(content);
+    }
+    pop.dataset.markdown = turn.assistantMarkdown;
+    pop.querySelector('.chat-actions')?.classList.remove('hidden');
+    container.appendChild(pop);
+  }
+  if (container.dataset.renderToken === renderToken) container.scrollTop = container.scrollHeight;
+}
 
 /**
  * Wire click handlers to any `.zaibar-cite` spans inside `root`.
@@ -624,6 +662,7 @@ export function onLLMStreamEndV2(session: Session, usage?: TokenUsage, aborted?:
         });
       }
     }
+    addon.chatManager.recordCompletedTurn(session, (pop as HTMLElement).dataset.markdown || '', aborted);
   }
   updateSectionInputArea(session.id, false);
   cleanupRequestData(session);
@@ -762,6 +801,7 @@ export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
 
 function cleanupRequestData(session: Session) {
   session.pending = {};
+  addon.chatManager.notifyHistoryStateChanged();
 }
 
 function getMessageContainer(session: Session): HTMLElement | null {
@@ -1459,7 +1499,7 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
     }
   }
 
-  onLLMStreamEndV2(session, agentUsage);
+  onLLMStreamEndV2(session, agentUsage, aborted);
 }
 
 export function onAgentAskUser(session: Session, payload: any) {

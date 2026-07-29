@@ -218,6 +218,16 @@
       </vbox>
       <html:input type="number" min="1" max="64" step="1" style="text-align: left; width: 60px" preference="chat.contextRounds" />
     </hbox>
+    <hbox align="center" style="margin-top: 10px">
+      <vbox flex="1">
+        <html:label data-l10n-id="pref-chat-start-conversation-mode" />
+        <html:small data-l10n-id="pref-chat-start-conversation-mode-desc" />
+      </vbox>
+      <radiogroup preference="chat.startConversationMode" orient="horizontal" style="gap: 10px">
+        <radio value="new" data-l10n-id="pref-chat-start-conversation-new" />
+        <radio value="restore-latest" data-l10n-id="pref-chat-start-conversation-restore" />
+      </radiogroup>
+    </hbox>
   </groupbox>
   <groupbox>
     <label>

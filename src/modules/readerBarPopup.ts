@@ -33,6 +33,11 @@ function getTargetLanguage(): string {
   return prefLang || Zotero.locale;
 }
 
+// Zotero can rebuild a selection popup several times for the same reader
+// (for example while scrolling). Keep at most one lifecycle watcher per
+// reader so an older popup cannot later clear the state of a newer one.
+const selectionPopupWatchers = new Map<object, () => void>();
+
 // TODO 支持其它格式
 
 export function getReaderSourceLabel(reader?: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>) {
@@ -132,6 +137,8 @@ export function registerReaderInitializer() {
     addon.data.selection.currentAnnotation = params.annotation;
     addon.data.selection.currentReader = reader;
     if (reader._internalReader._type === 'pdf') {
+      const readerKey = reader as object;
+      selectionPopupWatchers.get(readerKey)?.();
       const fragment = renderAIBar(doc, reader);
       // Grab the container BEFORE `append(fragment)` — appending a
       // DocumentFragment moves its children and leaves the fragment empty,
@@ -147,37 +154,37 @@ export function registerReaderInitializer() {
       // text the user no longer has highlighted. This also collapses the
       // selection hint bar.
       //
-      // Two complementary signals, whichever fires first:
-      // 1. Polling the reader's own popup state via getSelectionPosition()
-      //    (reliable — does not depend on how Zotero closes the popup DOM).
-      // 2. MutationObserver on the injected container (instant when the
-      //    popup is unmounted).
+      // Poll the reader's own popup state and the injected container. Do not
+      // attach a MutationObserver to Zotero's React document tree here:
+      // selection-popup renders can cross compartments while React is
+      // committing, which intermittently makes Gecko reject observe() even
+      // with an otherwise valid MutationObserverInit.
       if (container) {
         const ownerDoc = doc;
         const view = ownerDoc.defaultView;
         const annotation = params.annotation;
         const internal: any = reader._internalReader;
-        const isSelectionStillOpen = (): boolean => {
+        const isSelectionStillOpen = (): boolean | undefined => {
           try {
             const fn = internal?.getSelectionPosition;
-            // Unknown internals — assume open and rely on the DOM observer.
-            if (typeof fn !== 'function') return true;
+            if (typeof fn !== 'function') return undefined;
             return !!fn.call(internal);
           } catch {
-            // Call failed — assume open and rely on the DOM observer (the
-            // interval dies with the reader window anyway).
-            return true;
+            return undefined;
           }
         };
-        let observer: MutationObserver | undefined;
         let timer: number | undefined;
         let stopped = false;
-        const stop = () => {
+        const onDocumentUnload = () => stop();
+        function stop() {
           if (stopped) return;
           stopped = true;
-          observer?.disconnect();
           if (timer !== undefined && view) view.clearInterval(timer);
-        };
+          view?.removeEventListener('pagehide', onDocumentUnload);
+          if (selectionPopupWatchers.get(readerKey) === stop) {
+            selectionPopupWatchers.delete(readerKey);
+          }
+        }
         const onPopupGone = () => {
           stop();
           // Selecting new text re-renders the popup: a newer selection has
@@ -189,28 +196,26 @@ export function registerReaderInitializer() {
           // Collapse the selection hint bar in every input area.
           refreshSelectionHints();
         };
-        try {
-          observer = new ((ownerDoc.defaultView || ownerDoc) as any).MutationObserver(() => {
-            if (container.isConnected) return;
-            // The popup re-renders on scroll/reposition, which replaces the
-            // injected node while the selection is still active — only treat
-            // it as closed when the reader itself says the popup is gone.
-            if (isSelectionStillOpen()) {
+        if (view) {
+          selectionPopupWatchers.set(readerKey, stop);
+          view.addEventListener('pagehide', onDocumentUnload, { once: true });
+          timer = view.setInterval(() => {
+            // A newer popup/selection owns the shared state now.
+            if (addon.data.selection.currentAnnotation !== annotation) {
               stop();
               return;
             }
-            onPopupGone();
-          });
-          // Watch the whole document subtree: Zotero removes an ancestor of
-          // the container, not necessarily the container itself.
-          observer?.observe(ownerDoc.documentElement || ownerDoc.body, { childList: true, subtree: true });
-        } catch (e) {
-          ztoolkit.log('[ZAIBar] Failed to observe selection popup:', e);
-          observer = undefined;
-        }
-        if (view) {
-          timer = view.setInterval(() => {
-            if (!isSelectionStillOpen()) onPopupGone();
+
+            const isOpen = isSelectionStillOpen();
+            if (!container.isConnected) {
+              // A connected selection may cause Zotero to replace the popup
+              // while repositioning it. Its next render installs a new
+              // watcher, so retire this one without clearing shared state.
+              if (isOpen === true) stop();
+              else onPopupGone();
+              return;
+            }
+            if (isOpen === false) onPopupGone();
           }, 400);
         }
       }
@@ -222,6 +227,8 @@ export function registerReaderInitializer() {
 }
 
 export function unregisterReaderInitializer() {
+  for (const stop of [...selectionPopupWatchers.values()]) stop();
+  selectionPopupWatchers.clear();
   if (addon.data._readerPopupHandler) {
     Zotero.Reader.unregisterEventListener('renderTextSelectionPopup', addon.data._readerPopupHandler);
   }
