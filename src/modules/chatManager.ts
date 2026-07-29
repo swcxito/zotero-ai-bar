@@ -826,8 +826,12 @@ export class ChatManager {
       sourceTabId,
       itemId,
     });
+    // With translate.separateTab disabled, structured translations are
+    // routed into the article session. They are additional turns in the
+    // visible transcript, not popup actions that should start a fresh chat.
+    const isInlineArticleTranslation = params.sessionKind === 'article' && !!params.translationRequest;
 
-    if (params.isFromPopup && !params.messagesOverride && params.sessionKind === 'article') {
+    if (params.isFromPopup && !params.messagesOverride && params.sessionKind === 'article' && !isInlineArticleTranslation) {
       if (session.pending.abortController) {
         session.pending.abortController.abort();
         session.pending.abortController = undefined;
@@ -853,7 +857,7 @@ export class ChatManager {
     // below can drop more if the last request approached the context window.
     const contextRounds = getPref('chat.contextRounds') ?? 8;
     const maxHistoryMessages = contextRounds * 2;
-    if (params.isFromPopup || session.pending.isNewSource) {
+    if (!isInlineArticleTranslation && (params.isFromPopup || session.pending.isNewSource)) {
       session.conversationHistory = [];
       session.persistedContextMessages = [];
       // History reset means the model has no memory of prior turns, so the
