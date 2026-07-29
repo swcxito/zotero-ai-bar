@@ -116,6 +116,11 @@ export function InputArea(
     'transition-all',
     'duration-300'
   );
+  // The input surface forms an opaque foreground layer. The selection hint
+  // slides underneath this layer when dismissed instead of fading in front
+  // of the input controls.
+  container.style.position = 'relative';
+  container.style.zIndex = '2';
 
   // ── selection hint bar ────────────────────────────────────────────────────
   // A light strip that merges with the top of the input box into one rounded
@@ -151,14 +156,16 @@ export function InputArea(
   hintBar.style.position = 'absolute';
   hintBar.style.left = '0';
   hintBar.style.top = '0';
-  hintBar.style.zIndex = '2';
+  hintBar.style.zIndex = '1';
   hintBar.style.height = '28px';
   hintBar.style.minHeight = '28px';
   hintBar.style.opacity = '0';
+  hintBar.style.visibility = 'hidden';
   hintBar.style.overflow = 'hidden';
   hintBar.style.borderWidth = '2px 2px 0 2px';
   hintBar.style.pointerEvents = 'none';
   hintBar.style.transform = 'translateY(0)';
+  hintBar.style.transition = 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1)';
 
   const hintIcon = ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Quote, sizeRem: 0.75 })) as HTMLElement;
   hintIcon.classList.add('flex-shrink-0', 'opacity-70');
@@ -168,24 +175,41 @@ export function InputArea(
   hintText.classList.add('selection-hint-text', 'flex-1', 'min-w-0', 'truncate');
   hintBar.appendChild(hintText);
 
+  let hintAnimationSequence = 0;
+
   function showSelectionHint(text: string) {
     const oneLine = text.replace(/\s+/g, ' ').trim();
     if (!oneLine) return;
     hintText.textContent = `“${oneLine}”`;
     hintBar.title = oneLine;
+    hintAnimationSequence += 1;
+    hintBar.style.visibility = 'visible';
     hintBar.style.opacity = '1';
     hintBar.style.transform = 'translateY(-100%)';
+    // The floating hint owns the merged shape's top outline. Keep the input
+    // border width for stable geometry, but hide its top color so focus-within
+    // does not draw a second horizontal line at the seam.
+    container.style.borderTopColor = 'transparent';
     container.style.borderTopLeftRadius = '0';
     container.style.borderTopRightRadius = '0';
   }
 
   function hideSelectionHint() {
-    hintBar.style.opacity = '0';
+    const sequence = ++hintAnimationSequence;
     hintBar.style.transform = 'translateY(0)';
     // Border width and element height stay constant; only non-layout visual
     // properties change while the floating bar is hidden.
+    container.style.borderTopColor = '';
     container.style.borderTopLeftRadius = '';
     container.style.borderTopRightRadius = '';
+
+    const finishHide = () => {
+      if (sequence !== hintAnimationSequence || hintBar.style.transform !== 'translateY(0)') return;
+      hintBar.style.opacity = '0';
+      hintBar.style.visibility = 'hidden';
+    };
+    hintBar.addEventListener('transitionend', finishHide, { once: true });
+    doc.defaultView?.setTimeout(finishHide, 260);
   }
 
   function updateSelectionHint(text?: string, selectedTabId?: string) {

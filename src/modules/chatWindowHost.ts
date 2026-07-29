@@ -110,7 +110,7 @@ function createWindowSessionPage(doc: Document, sessionId: string): HTMLElement 
     'overflow-y-auto',
     'overflow-x-hidden',
     'px-1',
-    'pb-2'
+    'pb-7'
   );
   messageContainer.style.userSelect = 'text';
 
