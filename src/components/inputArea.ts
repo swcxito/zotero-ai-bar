@@ -22,13 +22,31 @@ import { ImagePreview, createImageViewer } from './imagePreview';
 import { ModelInfo, registerModelInfoAnchor } from './modelInfo';
 import { getString } from '../utils/locale';
 import { getPref } from '../utils/prefs';
-import { Session } from '../modules/chatManager';
+import type { ChatSessionKind } from '../modules/chatWorkspace';
 
 import { startCaptureMode } from '../modules/capture';
 import { getReaderByTabId } from '../modules/tabObserver';
 import { scrollToBottom as doScrollToBottom, setSendBtnEnabled } from '../modules/mainWindowSidePane';
 import { checkModelSupportsImage, promptModelImageUnsupported } from '../utils/providers';
 import { createUserMessageBubble } from './userBubble';
+
+export interface InputAreaContext {
+  sessionId: string;
+  sessionKind: ChatSessionKind;
+  sourceTabId?: string;
+  /** Reader used only by the manual screenshot action. */
+  captureSourceTabId?: string;
+  sourceLabel?: string;
+  chatModeAdjustable?: boolean;
+  allowScreenshot?: boolean;
+  allowSelectionHint?: boolean;
+}
+
+export interface InputAreaAPI {
+  setContext: (context: InputAreaContext) => void;
+  setStreaming: (sessionId: string, isStreaming: boolean) => void;
+  setContextTokens: (sessionId: string, text: string, title: string) => void;
+}
 
 /**
  * Build the InputArea widget and wire up all interactive logic.
@@ -39,18 +57,45 @@ import { createUserMessageBubble } from './userBubble';
 export function InputArea(
   doc: Document,
   sectionId: string,
-  opts?: { onRenderUserBubble?: (bubble: HTMLElement, text: string) => Promise<void> | void; sourceLabel?: string }
+  opts?: {
+    onRenderUserBubble?: (bubble: HTMLElement, text: string, sessionId: string) => Promise<void> | void;
+    sourceLabel?: string;
+    sourceTabId?: string;
+    sessionKind?: ChatSessionKind;
+    chatModeAdjustable?: boolean;
+    allowScreenshot?: boolean;
+    allowSelectionHint?: boolean;
+    captureSourceTabId?: string;
+    /** Stable image-draft key used by a shared host-level input. */
+    draftId?: string;
+    resolveMessageContainer?: (sessionId: string) => HTMLElement | null;
+  }
 ): HTMLElement {
+  let activeSectionId = sectionId;
+  let sessionKind = opts?.sessionKind ?? 'article';
+  let sourceTabId = opts?.sourceTabId;
+  let captureSourceTabId = opts?.captureSourceTabId ?? sourceTabId;
+  let sourceLabel = opts?.sourceLabel;
+  let chatModeAdjustable = opts?.chatModeAdjustable ?? sessionKind === 'article';
+  let allowScreenshot = opts?.allowScreenshot ?? true;
+  let allowSelectionHint = opts?.allowSelectionHint ?? sessionKind !== 'global-agent';
+  const draftId = opts?.draftId ?? sectionId;
   // ── outer wrapper (contains hint bar + input-row + disclaimer) ───────────
   const wrapper = doc.createElement('div');
   wrapper.classList.add('input-area-wrapper', 'max-w-3xl', 'w-full', 'mx-auto', 'my-2', 'flex', 'flex-col', 'relative');
   wrapper.dataset.modelDropdownContainer = 'true';
+  wrapper.dataset.sessionId = activeSectionId;
 
   // ── image preview strip ─────────────────────────────────────────────────
-  const preview = ImagePreview(doc, sectionId, () => {
-    updateScreenshotBtnState();
-    updateSendBtnState();
-  });
+  const preview = ImagePreview(
+    doc,
+    draftId,
+    () => {
+      updateScreenshotBtnState();
+      updateSendBtnState();
+    },
+    () => captureSourceTabId
+  );
 
   // ── input row ─────────────────────────────────────────────────────────────
   const container = doc.createElement('div');
@@ -142,7 +187,7 @@ export function InputArea(
   }
 
   function updateSelectionHint(text?: string, selectedTabId?: string) {
-    if (text && selectedTabId === sectionId) {
+    if (allowSelectionHint && text && selectedTabId === sourceTabId) {
       showSelectionHint(text);
     } else {
       hideSelectionHint();
@@ -153,8 +198,12 @@ export function InputArea(
   // Replaces the old full-text toggle. Three modes: normal / full-text / agent.
   // UI mirrors the thinking-effort button (hover-open dropdown) but the popup
   // is left-aligned and each item shows an icon + label.
-  const session = addon.chatManager.sessionsMap.get(sectionId) ?? new Session(sectionId);
-  addon.chatManager.sessionsMap.set(sectionId, session);
+  let session = addon.chatManager.getOrCreateSession({
+    sessionId: activeSectionId,
+    kind: sessionKind,
+    sourceTabId,
+    itemId: sourceTabId ? getReaderByTabId(sourceTabId)?.itemID : undefined,
+  });
 
   const chatModeOrder: Array<'normal' | 'full-text' | 'agent'> = ['normal', 'full-text', 'agent'];
   const chatModeIconMap: Record<string, string> = {
@@ -183,9 +232,13 @@ export function InputArea(
   chatModeBtn.style.position = 'relative';
 
   function updateChatModeBtnAppearance() {
-    const mode = session.chatMode;
+    const mode = session.effectiveChatMode;
     chatModeBtn.innerHTML = '';
     chatModeBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: chatModeIconMap[mode], sizeRem: 1 })));
+    chatModeBtn.title = chatModeAdjustable ? getString('input-chat-mode-tooltip') : chatModeLabel(mode);
+    chatModeBtn.setAttribute('aria-disabled', String(!chatModeAdjustable));
+    chatModeBtn.tabIndex = chatModeAdjustable ? 0 : -1;
+    chatModeBtn.classList.toggle('cursor-default', !chatModeAdjustable);
 
     if (mode !== 'normal') {
       chatModeBtn.classList.remove('text-slate-400', 'dark:text-neutral-600');
@@ -361,7 +414,7 @@ export function InputArea(
   // Helper: update send button appearance based on textarea content
   // ─────────────────────────────────────────────────────────────────────────
   function updateSendBtnState() {
-    const isStreaming = addon.chatManager.sessionsMap.get(sectionId)?.pending.userMessage ?? false;
+    const isStreaming = addon.chatManager.sessionsMap.get(activeSectionId)?.pending.userMessage ?? false;
     if (isStreaming) return; // streaming state is controlled by ChatManager.updateSectionInputArea
     const hasText = textarea.value.trim().length > 0;
     const hasImages = preview.getCount() > 0;
@@ -370,10 +423,10 @@ export function InputArea(
   }
 
   function updateScreenshotBtnState() {
-    if (preview.isFull()) {
+    if (!allowScreenshot || preview.isFull() || !captureSourceTabId) {
       screenshotBtn.classList.add('opacity-40', 'cursor-not-allowed');
       screenshotBtn.style.pointerEvents = 'none';
-      screenshotBtn.title = getString('input-screenshot-full-tooltip');
+      screenshotBtn.title = preview.isFull() ? getString('input-screenshot-full-tooltip') : getString('input-screenshot-tooltip');
     } else {
       screenshotBtn.classList.remove('opacity-40', 'cursor-not-allowed');
       screenshotBtn.style.pointerEvents = '';
@@ -385,10 +438,15 @@ export function InputArea(
   // Helper: scroll message container to bottom
   // ─────────────────────────────────────────────────────────────────────────
   function scrollToBottom() {
+    const resolved = opts?.resolveMessageContainer?.(activeSectionId);
+    if (resolved) {
+      doScrollToBottom(resolved);
+      return;
+    }
     const rootNode = textarea.getRootNode() as any;
     const container: HTMLElement | null = rootNode.host
       ? ((rootNode as ShadowRoot).querySelector('.message-container') as HTMLElement | null)
-      : ((doc as Document).querySelector('#ai-bar-window-message-container') as HTMLElement | null);
+      : ((wrapper.parentElement?.querySelector('.message-container') as HTMLElement | null) ?? null);
     if (container) {
       doScrollToBottom(container);
     }
@@ -404,7 +462,7 @@ export function InputArea(
 
     // Sidebar mode (inside shadow DOM): mount on reader's iframe body
     if (root.host) {
-      const reader = getReaderByTabId(addon.chatManager.currentTabID);
+      const reader = sourceTabId ? getReaderByTabId(sourceTabId) : null;
       if (reader) {
         const iframeWindow = (reader as any)._iframeWindow;
         const readerDoc = iframeWindow?.[0]?.document;
@@ -435,34 +493,45 @@ export function InputArea(
     const imageCount = preview.getCount();
     if (!text && imageCount === 0) return;
 
+    // Snapshot the route before any async rendering. A tab switch while the
+    // Markdown bubble is being prepared must not redirect this turn.
+    const requestContext = {
+      sessionId: activeSectionId,
+      sessionKind,
+      sourceTabId,
+      sourceLabel,
+    };
+
     //todo enhance streaming state handling:
     // const sectionState = addon.chatManager.sidebarStates.get(sectionId);
     // if (sectionState?.isStreaming) return;
 
     // Get message container — sidebar (shadow DOM) or window (regular DOM)
     const rootNode = textarea.getRootNode() as any;
-    const messageContainer: HTMLElement | null = rootNode.host
-      ? ((rootNode as ShadowRoot).querySelector('.message-container') as HTMLElement | null)
-      : ((doc as Document).querySelector('#ai-bar-window-message-container') as HTMLElement | null);
+    const messageContainer: HTMLElement | null =
+      opts?.resolveMessageContainer?.(requestContext.sessionId) ??
+      (rootNode.host
+        ? ((rootNode as ShadowRoot).querySelector('.message-container') as HTMLElement | null)
+        : ((wrapper.parentElement?.querySelector('.message-container') as HTMLElement | null) ?? null));
     if (!messageContainer) return;
 
     // Read images — check model support before clearing preview
-    const imageUrls = addon.data.inputImages.get(sectionId) || [];
+    const imageUrls = addon.data.inputImages.get(draftId) || [];
     if (imageUrls.length > 0 && !checkModelSupportsImage()) {
       if (!promptModelImageUnsupported()) return; // user cancelled — keep images in preview
       // user chose "send text only" — clear images and proceed
-      addon.data.inputImages.delete(sectionId);
+      addon.data.inputImages.delete(draftId);
       preview.render();
       updateScreenshotBtnState();
       imageUrls.length = 0;
     } else if (imageUrls.length > 0) {
-      addon.data.inputImages.delete(sectionId);
+      addon.data.inputImages.delete(draftId);
       preview.render();
       updateScreenshotBtnState();
     }
 
     const userBubble = createUserMessageBubble(doc, text, imageUrls, openBubbleImageViewer);
-    await opts?.onRenderUserBubble?.(userBubble, text);
+    await opts?.onRenderUserBubble?.(userBubble, text, requestContext.sessionId);
     messageContainer.appendChild(userBubble);
     scrollToBottom();
 
@@ -475,8 +544,11 @@ export function InputArea(
     try {
       await addon.chatManager.sendChatRequest({
         userPrompt: text,
-        sourceLabel: opts?.sourceLabel,
-        tabId: sectionId,
+        sourceLabel: requestContext.sourceLabel,
+        sessionId: requestContext.sessionId,
+        sessionKind: requestContext.sessionKind,
+        sourceTabId: requestContext.sourceTabId,
+        itemId: requestContext.sourceTabId ? getReaderByTabId(requestContext.sourceTabId)?.itemID : undefined,
         images: imageUrls.length > 0 ? imageUrls : undefined,
       });
     } catch (e) {
@@ -536,9 +608,9 @@ export function InputArea(
   sendBtn.addEventListener('click', () => {
     if (sendBtn.dataset.mode === 'stop') {
       // Abort the ongoing stream for this section
-      const session = addon.chatManager.sessionsMap.get(sectionId);
-      if (session?.pending.abortController) {
-        session.pending.abortController.abort();
+      const activeSession = addon.chatManager.sessionsMap.get(activeSectionId);
+      if (activeSession?.pending.abortController) {
+        activeSession.pending.abortController.abort();
       }
     } else {
       handleSend();
@@ -826,6 +898,7 @@ export function InputArea(
   }
 
   function openChatModeDropdown() {
+    if (!chatModeAdjustable) return;
     cancelChatModeHoverClose();
     if (!chatModeBtn.querySelector('.chat-mode-dropdown')) {
       const dropdown = buildChatModeDropdown();
@@ -867,30 +940,115 @@ export function InputArea(
 
   screenshotBtn.addEventListener('click', () => {
     if (preview.isFull()) return;
-    if (addon.chatManager.currentTabID) {
-      const reader = getReaderByTabId(addon.chatManager.currentTabID);
-      if (!reader) {
-        ztoolkit.log('[InputArea] No reader available for capture');
-        return;
-      }
-      if (reader?._type === 'pdf') {
-        startCaptureMode(reader as _ZoteroTypes.ReaderInstance<'pdf'>, (imageData: string) => {
-          preview.addImage(imageData);
-          updateScreenshotBtnState();
-        });
-      }
+    const reader = captureSourceTabId ? getReaderByTabId(captureSourceTabId) : null;
+    if (!reader) {
+      ztoolkit.log('[InputArea] No reader available for capture');
+      return;
+    }
+    if (reader?._type === 'pdf') {
+      startCaptureMode(reader as _ZoteroTypes.ReaderInstance<'pdf'>, (imageData: string) => {
+        preview.addImage(imageData);
+        updateScreenshotBtnState();
+      });
     }
   });
 
+  const streamingBySession = new Map<string, boolean>();
+  const tokenInfoBySession = new Map<string, { text: string; title: string }>();
+
+  function setCapabilityVisible(button: HTMLElement, visible: boolean, animate: boolean = true) {
+    button.style.overflow = 'hidden';
+    button.style.transition = animate
+      ? 'opacity 180ms ease, transform 180ms ease, max-width 220ms ease, padding 220ms ease, margin 220ms ease'
+      : 'none';
+    button.style.opacity = visible ? '1' : '0';
+    button.style.transform = visible ? 'scale(1)' : 'scale(0.82)';
+    button.style.maxWidth = visible ? '52px' : '0';
+    button.style.paddingInline = visible ? '' : '0';
+    button.style.marginInline = visible ? '' : '-2px';
+    button.style.pointerEvents = visible && !button.classList.contains('cursor-not-allowed') ? '' : 'none';
+    button.setAttribute('aria-hidden', String(!visible));
+  }
+
+  function renderSendState(isStreaming: boolean) {
+    if (isStreaming) {
+      sendBtn.dataset.mode = 'stop';
+      setSendBtnEnabled(sendBtn, true);
+      sendBtn.innerHTML = '';
+      sendBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Stop, sizeRem: 1.5, extraClasses: ['text-white'] })));
+      return;
+    }
+    sendBtn.dataset.mode = 'send';
+    sendBtn.innerHTML = '';
+    sendBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Send, sizeRem: 1.5, extraClasses: ['text-white'] })));
+    updateSendBtnState();
+  }
+
+  const inputAreaAPI: InputAreaAPI = {
+    setContext(context) {
+      activeSectionId = context.sessionId;
+      sessionKind = context.sessionKind;
+      sourceTabId = context.sourceTabId;
+      captureSourceTabId = context.captureSourceTabId ?? context.sourceTabId;
+      sourceLabel = context.sourceLabel;
+      chatModeAdjustable = context.chatModeAdjustable ?? sessionKind === 'article';
+      allowScreenshot = context.allowScreenshot ?? true;
+      allowSelectionHint = context.allowSelectionHint ?? sessionKind !== 'global-agent';
+      wrapper.dataset.sessionId = activeSectionId;
+      session = addon.chatManager.getOrCreateSession({
+        sessionId: activeSectionId,
+        kind: sessionKind,
+        sourceTabId,
+        itemId: sourceTabId ? getReaderByTabId(sourceTabId)?.itemID : undefined,
+      });
+      removeThinkingDropdown();
+      removeChatModeDropdown();
+      updateChatModeBtnAppearance();
+      updateThinkingBtnAppearance();
+      updateScreenshotBtnState();
+      setCapabilityVisible(chatModeBtn, true);
+      // The mode dropdown is positioned outside the button. The generic
+      // capability animation clips children, so restore visible overflow now
+      // that the mode button is permanently present in every workspace.
+      chatModeBtn.style.overflow = 'visible';
+      setCapabilityVisible(screenshotBtn, allowScreenshot);
+      updateSelectionHint(addon.data.selection.text, (addon.data.selection.currentReader as any)?.tabID);
+      const tokenInfo = tokenInfoBySession.get(activeSectionId);
+      contextTokens.textContent = tokenInfo?.text ?? '';
+      contextTokens.title = tokenInfo?.title ?? '';
+      renderSendState(streamingBySession.get(activeSectionId) ?? !!session.pending.userMessage);
+    },
+    setStreaming(sessionId, isStreaming) {
+      streamingBySession.set(sessionId, isStreaming);
+      if (sessionId === activeSectionId) renderSendState(isStreaming);
+    },
+    setContextTokens(sessionId, text, title) {
+      tokenInfoBySession.set(sessionId, { text, title });
+      if (sessionId === activeSectionId) {
+        contextTokens.textContent = text;
+        contextTokens.title = title;
+      }
+    },
+  };
+
   preview.render();
-  updateScreenshotBtnState();
 
   (wrapper as any)._imagePreviewAPI = preview;
   (wrapper as any)._selectionHintAPI = { update: updateSelectionHint };
+  (wrapper as any)._inputAreaAPI = inputAreaAPI;
 
   // Sync with a selection that already exists for this tab (e.g. the user
   // selected text before this sidebar section was rendered).
-  updateSelectionHint(addon.data.selection.text, (addon.data.selection.currentReader as any)?.tabID);
+  inputAreaAPI.setContext({
+    sessionId: activeSectionId,
+    sessionKind,
+    sourceTabId,
+    captureSourceTabId,
+    sourceLabel,
+    chatModeAdjustable,
+    allowScreenshot,
+    allowSelectionHint,
+  });
 
   return wrapper;
 }

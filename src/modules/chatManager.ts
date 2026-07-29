@@ -36,6 +36,14 @@ import { getItemIdFromTab } from './tabObserver';
 import { openSidePane } from './mainWindowSidePane';
 import type { ItemMetadata } from '../utils/itemContext';
 import { buildStructuredTranslationPrompt, TRANSLATION_SYSTEM_PROMPT, type TranslationRequestMeta } from '../utils/translation';
+import {
+  getSessionKind,
+  getTranslationRoute,
+  removeWorkspaceSource,
+  selectWorkspaceKind,
+  showTranslationWorkspace,
+  type ChatSessionKind,
+} from './chatWorkspace';
 
 Zotero.debug('[zaibar-chatManager] module loaded');
 
@@ -44,6 +52,9 @@ export type ChatHostMode = 'sidebar' | 'window';
 /** Per-section (per-document tab) state for sidebar chat */
 export class Session {
   id: string;
+  kind: ChatSessionKind;
+  sourceTabId?: string;
+  lockedChatMode?: 'normal' | 'agent';
   conversationHistory: ModelMessage[] = [];
   sourceLabel?: string;
   chatMode: 'normal' | 'full-text' | 'agent' = 'normal';
@@ -115,12 +126,20 @@ export class Session {
    * locate/remove it when Retry is pressed.
    */
   lastAssistantPop?: HTMLElement;
-  constructor(id: string) {
+  constructor(id: string, options?: { kind?: ChatSessionKind; sourceTabId?: string; lockedChatMode?: 'normal' | 'agent' }) {
     this.id = id;
+    this.kind = options?.kind ?? getSessionKind(id);
+    this.sourceTabId = options?.sourceTabId;
+    this.lockedChatMode = options?.lockedChatMode;
     this.chatMode = (getPref('chat.defaultMode') as Session['chatMode'] | undefined) ?? 'normal';
+    if (this.lockedChatMode) this.chatMode = this.lockedChatMode;
     const savedEffort = getPref('chat.thinkingEffort') as Session['thinkingEffort'] | undefined;
     this.thinkingEffort = savedEffort ?? 'none';
     ztoolkit.log('[chat] new Session', id, 'chatMode=', this.chatMode, 'thinkingEffort=', this.thinkingEffort);
+  }
+
+  get effectiveChatMode(): Session['chatMode'] {
+    return this.lockedChatMode ?? this.chatMode;
   }
 }
 
@@ -238,6 +257,9 @@ type ChatRequestParams = (
       userPrompt?: undefined;
     }
 ) & {
+  sessionId: string;
+  sessionKind: ChatSessionKind;
+  sourceTabId?: string;
   sourceLabel?: string;
   doesCopyResponse?: boolean;
   isFromPopup?: boolean;
@@ -247,7 +269,8 @@ type ChatRequestParams = (
   thinkingEffort?: Session['thinkingEffort'];
   /** Internal marker for the dedicated structured translation path. */
   translationRequest?: TranslationRequestMeta;
-} & ({ itemId: number; tabId?: string } | { itemId?: number; tabId: string });
+  itemId?: number;
+};
 
 export type TranslationRequestParams = {
   targetLanguage: string;
@@ -255,7 +278,9 @@ export type TranslationRequestParams = {
   sourceLabel?: string;
   isFromPopup?: boolean;
   contextPromise?: Promise<string[] | undefined>;
-} & ({ itemId: number; tabId?: string } | { itemId?: number; tabId: string });
+  itemId: number;
+  sourceTabId: string;
+};
 
 export class ChatManager {
   public chatHostMode?: ChatHostMode;
@@ -270,6 +295,46 @@ export class ChatManager {
       throw new Error('currentTabID must be a non-empty string.');
     }
     this.currentTabID = currentTabID;
+  }
+
+  getOrCreateSession(params: { sessionId: string; kind: ChatSessionKind; sourceTabId?: string; itemId?: number }): Session {
+    const existing = this.sessionsMap.get(params.sessionId);
+    if (existing) {
+      existing.kind = params.kind;
+      existing.sourceTabId = params.sourceTabId;
+      existing.itemId = params.kind === 'global-agent' ? undefined : (params.itemId ?? existing.itemId);
+      existing.lockedChatMode = params.kind === 'global-agent' ? 'agent' : params.kind === 'translation' ? 'normal' : undefined;
+      if (existing.lockedChatMode) existing.chatMode = existing.lockedChatMode;
+      return existing;
+    }
+
+    if (params.sourceTabId) {
+      const sourceIds = Array.from(this.sessionsMap.values())
+        .map((session) => session.sourceTabId)
+        .filter((sourceId): sourceId is string => !!sourceId);
+      const uniqueSourceIds = Array.from(new Set(sourceIds));
+      if (!uniqueSourceIds.includes(params.sourceTabId) && uniqueSourceIds.length >= 12) {
+        const oldestSourceId = uniqueSourceIds[0];
+        for (const [sessionId, session] of Array.from(this.sessionsMap.entries())) {
+          if (session.sourceTabId === oldestSourceId) {
+            this.sessionsMap.delete(sessionId);
+            addon.data.sidePaneBodyMap?.get(sessionId)?.remove();
+            addon.data.sidePaneBodyMap?.delete(sessionId);
+          }
+        }
+        removeWorkspaceSource(oldestSourceId, false);
+      }
+    }
+
+    const lockedChatMode = params.kind === 'global-agent' ? 'agent' : params.kind === 'translation' ? 'normal' : undefined;
+    const session = new Session(params.sessionId, {
+      kind: params.kind,
+      sourceTabId: params.sourceTabId,
+      lockedChatMode,
+    });
+    session.itemId = params.itemId;
+    this.sessionsMap.set(params.sessionId, session);
+    return session;
   }
 
   clearSectionHistory(sectionId: string) {
@@ -309,7 +374,10 @@ export class ChatManager {
     }
     session.lastAssistantPop = undefined;
     await this.sendChatRequest({
-      tabId: session.id,
+      sessionId: session.id,
+      sessionKind: session.kind,
+      sourceTabId: session.sourceTabId,
+      itemId: session.itemId,
       messagesOverride: { userMessage: snap.userMessage, systemMessage: snap.systemMessage },
       thinkingEffort: snap.thinkingEffort,
       translationRequest: snap.translationRequest,
@@ -324,8 +392,17 @@ export class ChatManager {
   async sendTranslationRequest(params: TranslationRequestParams) {
     const selectedText = params.selectedText ?? addon.data.selection.text;
     if (!selectedText?.trim()) throw new Error('No selected text available for translation.');
+    const separateTab = getPref('translate.separateTab');
+    const { sessionId, sessionKind } = getTranslationRoute(params.sourceTabId, separateTab);
+    if (separateTab) {
+      showTranslationWorkspace(params.sourceTabId);
+    } else {
+      selectWorkspaceKind('article', params.sourceTabId);
+    }
     return this.sendChatRequest({
       ...params,
+      sessionId,
+      sessionKind,
       userPrompt: buildStructuredTranslationPrompt(params.targetLanguage),
       translationRequest: {
         selectedText,
@@ -401,23 +478,31 @@ export class ChatManager {
   async sendChatRequest(params: ChatRequestParams) {
     // Translation requests carry their own immutable selection snapshot. Do
     // not read the mutable global selection after the button was clicked.
-    const selectedText = params.translationRequest?.selectedText ?? addon.data.selection.text;
-    const tabId = params.tabId ?? addon.chatManager.currentTabID;
-    const itemId = params.itemId ?? getItemIdFromTab(params.tabId);
+    const selectionSourceTabId = (addon.data.selection.currentReader as any)?.tabID as string | undefined;
+    const canUseCurrentSelection = params.sessionKind !== 'global-agent' && !!params.sourceTabId && selectionSourceTabId === params.sourceTabId;
+    const selectedText = params.translationRequest?.selectedText ?? (canUseCurrentSelection ? addon.data.selection.text : undefined);
+    const sessionId = params.sessionId;
+    const sourceTabId = params.sourceTabId;
+    const itemId = params.itemId ?? (sourceTabId ? getItemIdFromTab(sourceTabId) : undefined);
 
-    if (tabId === undefined && itemId === undefined) {
+    if (params.sessionKind !== 'global-agent' && sourceTabId === undefined && itemId === undefined) {
       throw new Error('No article available for chat request.');
     }
 
-    const session = this.sessionsMap.get(tabId) ?? new Session(tabId);
-    if (!this.sessionsMap.has(tabId) && this.sessionsMap.size >= 12) {
-      const oldest = this.sessionsMap.keys().next().value!;
-      this.sessionsMap.delete(oldest);
-    }
-    this.sessionsMap.set(tabId, session);
-    session.itemId = itemId;
+    const session = this.getOrCreateSession({
+      sessionId,
+      kind: params.sessionKind,
+      sourceTabId,
+      itemId,
+    });
 
-    ztoolkit.log('[chat] sendChatRequest', { tabId, itemId, chatMode: session.chatMode, sourceLabel: params.sourceLabel });
+    ztoolkit.log('[chat] sendChatRequest', {
+      sessionId,
+      sourceTabId,
+      itemId,
+      chatMode: session.effectiveChatMode,
+      sourceLabel: params.sourceLabel,
+    });
 
     const route = this.getCurrentHostMode();
     const metadata = itemId !== undefined && getPref('chat.autoAttachItemData') ? getItemMetadata(itemId) : undefined;
@@ -472,7 +557,7 @@ export class ChatManager {
       try {
         if (params.contextPromise) {
           selectionContext = await params.contextPromise;
-        } else if (addon.data.selection.contextPromise) {
+        } else if (canUseCurrentSelection && addon.data.selection.contextPromise) {
           selectionContext = await addon.data.selection.contextPromise;
         }
       } catch (e) {
@@ -485,7 +570,7 @@ export class ChatManager {
       });
 
       // Build user message content — include images if model supports them
-      const inputImages = params.translationRequest ? [] : (params.images ?? addon.data.inputImages.get(tabId) ?? []);
+      const inputImages = params.translationRequest ? [] : (params.images ?? addon.data.inputImages.get(sessionId) ?? []);
       const capturedImages = params.translationRequest ? [] : (session.capturedPageImages ?? []);
       const images = [...capturedImages, ...inputImages];
       const hasImages = images.length > 0;
@@ -500,7 +585,7 @@ export class ChatManager {
         : await this.buildSystemContent({
             metadata,
             itemId: itemId,
-            chatMode: session.chatMode,
+            chatMode: session.effectiveChatMode,
             imageCapableModel,
           });
       const systemMsg: SystemModelMessage = {
@@ -585,7 +670,7 @@ export class ChatManager {
 
       // Clear images for this tab after building the message
       if (inputImages.length > 0) {
-        addon.data.inputImages.delete(tabId);
+        addon.data.inputImages.delete(sessionId);
       }
       if (capturedImages.length > 0) {
         session.capturedPageImages = [];
@@ -602,19 +687,25 @@ export class ChatManager {
     session.pending.thinkingEffortOverride = params.thinkingEffort;
     session.pending.translationRequest = params.translationRequest;
 
+    if (params.sessionKind === 'translation' && sourceTabId) {
+      showTranslationWorkspace(sourceTabId);
+    } else if (params.sessionKind === 'article' && sourceTabId) {
+      selectWorkspaceKind('article', sourceTabId);
+    }
+
     if (route === 'window') {
       await ensureChatWindowReady();
       focusChatWindow();
     } else {
       // Sidebar mode: reveal the independent side pane (mirrors focusing the
       // chat window) so popup actions land in a visible panel.
-      openSidePane(tabId);
+      openSidePane();
     }
 
     const AC = (typeof AbortController !== 'undefined' ? AbortController : (Zotero.getMainWindow() as any).AbortController) as typeof AbortController;
     session.pending.abortController = new AC();
     ztoolkit.log('[chat] sendChatRequest:stream-start', {
-      sectionId: tabId,
+      sectionId: sessionId,
     });
     if (params.translationRequest) {
       await streamTranslationV2(messagesPromise, session, params.translationRequest);

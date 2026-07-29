@@ -2,6 +2,10 @@ import { analyzeModelName } from '../src/utils/modelAnalyzer';
 
 const testCases = [
   {
+    in: '',
+    out: { family: 'custom', type: '', version: '' },
+  },
+  {
     in: 'claude-opus-4-6',
     out: { family: 'claude', type: 'opus', version: '4.6' },
   },

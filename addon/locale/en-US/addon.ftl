@@ -27,6 +27,12 @@ sidepane-title = AI-Bar Answer
 sidepane-clear-tooltip = Clear conversation
 sidepane-collapse-tooltip = Collapse panel
 sidepane-toggle-tooltip = Toggle AI-Bar panel
+chat-window-open-tooltip = Open AI-Bar window
+workspace-article = Article Q&A
+workspace-translation = Translation
+workspace-global-agent = Global Assistant
+workspace-no-article = No article
+workspace-close-translation = Close translation tab
 
 model-dialog-title = Model Providers
 model-dialog-add-provider = Add Provider

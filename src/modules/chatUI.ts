@@ -19,8 +19,6 @@
 import { ChatBox } from '../components/chatBox';
 import { ToolCallBox, updateToolCallBox } from '../components/toolCallBox';
 import { escapeHtml, renderMarkdown } from '../utils/markdown';
-import { ensureChatWindow } from '../utils/window';
-import { CHAT_WINDOW_MESSAGE_CONTAINER_ID, ensureChatWindowUI } from './chatWindowHost';
 import { scrollToBottom, setSendBtnEnabled } from './mainWindowSidePane';
 import type { Session, TokenUsage } from './chatManager';
 import { IconView } from '../components/iconView';
@@ -693,23 +691,6 @@ function appendUsageBadge(actions: HTMLElement, usage: any): void {
 }
 
 function updateContextTokenIndicator(sessionId: string, usage: TokenUsage): void {
-  let indicator: HTMLElement | null = null;
-  const body = addon.data.sidePaneBodyMap?.get(sessionId);
-  if (body) {
-    const root = body.querySelector('#ai-bar-chat-root');
-    if (root?.shadowRoot) {
-      indicator = root.shadowRoot.querySelector('.input-context-tokens') as HTMLElement | null;
-    }
-  }
-  if (!indicator && addon.chatManager.getCurrentHostMode() === 'window') {
-    try {
-      const chatWindow = ensureChatWindow();
-      indicator = chatWindow.document.querySelector('.input-context-tokens') as HTMLElement | null;
-    } catch (e) {
-      // window not ready — skip
-    }
-  }
-  if (!indicator) return;
   // Total context = previous turn's input + output (what the next request would carry).
   const contextTokens = usage.totalTokens ?? usage.promptTokens;
   const contextLimit = getActiveModelContextLimit();
@@ -724,10 +705,17 @@ function updateContextTokenIndicator(sessionId: string, usage: TokenUsage): void
   } else {
     text = `${getString('token-usage-context')}: —`;
   }
-  indicator.textContent = text;
-  indicator.title = contextLimit
+  const title = contextLimit
     ? `${getString('token-usage-context-window')}: ${contextLimit.toLocaleString()}`
     : getString('token-usage-context-window-unknown');
+  for (const wrapper of addon.data.sharedInputAreas) {
+    (wrapper as any)._inputAreaAPI?.setContextTokens?.(sessionId, text, title);
+  }
+  const indicator = querySessionElement(sessionId, '.input-context-tokens') as HTMLElement | null;
+  if (indicator) {
+    indicator.textContent = text;
+    indicator.title = title;
+  }
 }
 
 export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
@@ -777,21 +765,24 @@ function cleanupRequestData(session: Session) {
 }
 
 function getMessageContainer(session: Session): HTMLElement | null {
-  if (addon.chatManager.getCurrentHostMode() === 'window') {
-    const chatWindow = ensureChatWindow();
-    ensureChatWindowUI(chatWindow.document);
-    return chatWindow.document.querySelector(`#${CHAT_WINDOW_MESSAGE_CONTAINER_ID}`) as HTMLElement | null;
+  return querySessionElement(session.id, '.message-container') as HTMLElement | null;
+}
+
+function querySessionElement(sessionId: string, selector: string): Element | null {
+  const body = addon.data.sidePaneBodyMap?.get(sessionId);
+  if (body) {
+    const root = body.querySelector('#ai-bar-chat-root');
+    const scope: ParentNode = root?.shadowRoot ?? body;
+    const result = scope.querySelector(selector);
+    if (result) return result;
   }
-
-  if (!addon.data.sidePaneBodyMap) return null;
-  const sectionId = session.id ?? addon.chatManager.currentTabID;
-  if (sectionId === undefined) return null;
-  const body = addon.data.sidePaneBodyMap.get(sectionId);
-  if (!body) return null;
-  const root = body.querySelector('#ai-bar-chat-root');
-  if (!root?.shadowRoot) return null;
-
-  return root.shadowRoot.querySelector('.message-container') as HTMLElement;
+  for (const wrapper of addon.data.sharedInputAreas) {
+    if (wrapper.dataset.sessionId !== sessionId) continue;
+    if (wrapper.matches(selector)) return wrapper;
+    const result = wrapper.querySelector(selector);
+    if (result) return result;
+  }
+  return null;
 }
 
 /**
@@ -799,13 +790,15 @@ function getMessageContainer(session: Session): HTMLElement | null {
  * Called after isStreaming changes so the UI reflects current state.
  */
 function updateSectionInputArea(sessionId: string, isStreaming: boolean) {
+  let handledBySharedInput = false;
+  for (const wrapper of addon.data.sharedInputAreas) {
+    (wrapper as any)._inputAreaAPI?.setStreaming?.(sessionId, isStreaming);
+    if (wrapper.dataset.sessionId === sessionId) handledBySharedInput = true;
+  }
+  if (handledBySharedInput) return;
   const body = addon.data.sidePaneBodyMap?.get(sessionId);
   if (!body) return;
-  const root = body.querySelector('#ai-bar-chat-root');
-  if (!root?.shadowRoot) return;
-  const shadowRoot = root.shadowRoot;
-
-  const inputArea = shadowRoot.querySelector('.input-area');
+  const inputArea = querySessionElement(sessionId, '.input-area');
   if (!inputArea) return;
 
   const doc = body.ownerDocument;
@@ -905,7 +898,7 @@ export function onToolCallEndV2(session: Session, toolResult: any) {
       let parent: HTMLElement;
       let ownerDoc: Document;
       if (root.host) {
-        const reader = getReaderByTabId(addon.chatManager.currentTabID);
+        const reader = session.sourceTabId ? getReaderByTabId(session.sourceTabId) : null;
         if (reader) {
           const iframeWindow = (reader as any)._iframeWindow;
           const readerDoc = iframeWindow?.[0]?.document;

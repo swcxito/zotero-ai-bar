@@ -6,11 +6,12 @@ import { onModelDialogLoad } from './modules/modelDialog';
 import { onPromptEditorLoad } from './modules/promptEditor';
 import { getPref, setPref, registerPrefs } from './utils/prefs';
 import { ensureChatWindowReady } from './utils/window';
-import { registerMainWindowSidePane, unregisterMainWindowSidePane } from './modules/mainWindowSidePane';
+import { registerChatToolbarButton, registerMainWindowSidePane, unregisterMainWindowSidePane } from './modules/mainWindowSidePane';
 import { clearDeadChatWindowRef, isWindowAlive } from './utils/window';
 import { registerTabObserver } from './modules/tabObserver';
 import { preloadLLMRuntime } from './modules/llm';
 import { convertLegacyLLMConfigByKey, ensureCommonProviders, initIconCache, loadV2Config, saveV2Config } from './utils/providers';
+import { isReaderZoteroTab, updateSelectedZoteroTab } from './modules/chatWorkspace';
 
 function zaibarDump(msg: string) {
   try {
@@ -38,14 +39,17 @@ async function onStartup() {
     zaibarDump('LLM runtime preloaded');
 
     addon.chatManager.chatHostMode = addon.chatManager.getCurrentHostMode();
-
-    if (getPref('chat.openOnStartup') && addon.chatManager.getCurrentHostMode() === 'window') {
-      await ensureChatWindowReady();
-    }
+    updateSelectedZoteroTab(addon.chatManager.currentTabID, isReaderZoteroTab(addon.chatManager.currentTabID));
 
     registerReaderInitializer();
     registerPrefs();
     await Promise.all(Zotero.getMainWindows().map((win) => onMainWindowLoad(win)));
+
+    // The standalone window renders ModelInfo immediately. Open it only
+    // after onMainWindowLoad has loaded/migrated the provider configuration.
+    if (getPref('chat.openOnStartup') && addon.chatManager.getCurrentHostMode() === 'window') {
+      await ensureChatWindowReady();
+    }
 
     // Mark initialized as true to confirm plugin loading status
     // outside the plugin (e.g. scaffold testing process)
@@ -69,6 +73,7 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
 
     registerTabObserver();
     addon.chatManager.currentTabID = win.Zotero_Tabs.selectedID;
+    updateSelectedZoteroTab(addon.chatManager.currentTabID, isReaderZoteroTab(addon.chatManager.currentTabID, win));
     Zotero.debug(`${label} currentTabID=${addon.chatManager.currentTabID}`);
 
     registerAIBarStyleSheet(win);
@@ -132,6 +137,7 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
       addon.data.userPrompts = JSON.parse(userPromptsConfig);
     }
 
+    registerChatToolbarButton(win);
     if (addon.chatManager.getCurrentHostMode() === 'sidebar') {
       registerMainWindowSidePane(win);
     }
@@ -147,7 +153,7 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
 
 async function onMainWindowUnload(win: Window): Promise<void> {
   ztoolkit.unregisterAll();
-  unregisterMainWindowSidePane();
+  unregisterMainWindowSidePane(win);
   addon.data.dialog?.window?.close();
   clearDeadChatWindowRef();
 }

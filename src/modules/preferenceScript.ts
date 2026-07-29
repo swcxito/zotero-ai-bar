@@ -23,6 +23,7 @@ import { saveV2Config } from '../utils/providers';
 import { openDialog } from './modelDialog';
 import { openPromptEditor } from './promptEditor';
 import { getLocaleID, getString } from '../utils/locale';
+import { setSeparateTranslationEnabled } from './chatWorkspace';
 
 export async function registerPrefsScripts(_window: Window) {
   if (!addon.data.prefs) {
@@ -185,6 +186,13 @@ async function updatePrefsUI() {
 function bindPrefEvents() {
   const doc = addon.data.prefs?.window.document;
   if (!doc) return;
+  const separateTranslation = doc.querySelector(makeId('separate-translation-tab')) as HTMLInputElement | null;
+  if (!separateTranslation) return;
+  const syncSeparateTranslation = () => {
+    setSeparateTranslationEnabled(!!separateTranslation.checked);
+  };
+  separateTranslation.addEventListener('change', syncSeparateTranslation);
+  separateTranslation.addEventListener('command', syncSeparateTranslation);
 }
 
 function bindInputToLabel(input: HTMLInputElement, label: HTMLElement, initValue: number, scale: number = 1) {

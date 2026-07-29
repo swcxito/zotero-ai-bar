@@ -26,6 +26,7 @@ import { ModelInfo, registerModelInfoAnchor } from '../components/modelInfo';
 import { ExpandButton, ExpandMenuItem } from '../components/buttons/expandButton';
 import { Icons } from '../components/common';
 import { refreshSelectionHints } from './selectionHint';
+import { getArticleSessionId } from './chatWorkspace';
 
 function getTargetLanguage(): string {
   const prefLang = getPref('translate.targetLanguage');
@@ -265,6 +266,7 @@ async function sendStructuredTranslation(
       isFromPopup: true,
       contextPromise,
       itemId: reader.itemID!,
+      sourceTabId: reader.tabID,
     });
   } finally {
     if (useTranslateModel && translateModelId) setPref('llm.modelId', originalModelId);
@@ -307,6 +309,9 @@ function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 
       // Enable auto-copy for smartCopy command only
       doesCopyResponse: input === 'smartCopy',
       itemId: reader.itemID!,
+      sourceTabId: reader.tabID,
+      sessionId: getArticleSessionId(reader.tabID),
+      sessionKind: 'article',
     });
   }
 
@@ -348,6 +353,9 @@ function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 
           sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
           isFromPopup: true,
           itemId: reader.itemID!,
+          sourceTabId: reader.tabID,
+          sessionId: getArticleSessionId(reader.tabID),
+          sessionKind: 'article',
         });
       },
     });

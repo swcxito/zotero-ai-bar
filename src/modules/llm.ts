@@ -148,7 +148,7 @@ export async function streamLLMV2(
         activeProviderId
     );
 
-    const agentEnabled = session.chatMode === 'agent';
+    const agentEnabled = session.effectiveChatMode === 'agent';
     const tools = agentEnabled ? buildTools() : undefined;
     ztoolkit.log('[llm] agentEnabled:', agentEnabled, 'tools:', Object.keys(tools ?? {}));
     Zotero.debug('[zaibar-llm] agentEnabled=' + agentEnabled + ', toolCount=' + Object.keys(tools ?? {}).length);
@@ -308,7 +308,7 @@ export async function streamTranslationV2(
       declaredStructuredSupport,
       selectedTextLength: request.selectedText.length,
       targetLanguage: request.targetLanguage,
-      chatMode: session.chatMode,
+      chatMode: session.effectiveChatMode,
       translationThinkingDepth,
       thinkingEffort: effectiveEffort,
     });

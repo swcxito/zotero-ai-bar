@@ -57,9 +57,14 @@ const IGNORED_KEYWORDS = new Set([
   'free',
 ]);
 
-export function analyzeModelName(modelName: string): ModelAnalysisResult {
+export function analyzeModelName(modelName: string | undefined | null): ModelAnalysisResult {
+  const safeModelName = typeof modelName === 'string' ? modelName.trim() : '';
+  if (!safeModelName) {
+    return { family: 'custom', type: '', version: '' };
+  }
+
   // 0. Remove prefix (everything before last /)
-  const baseId = modelName.split('/').pop() || modelName;
+  const baseId = safeModelName.split('/').pop() || safeModelName;
 
   // 1. Normalization
   const normalizedId = baseId.toLowerCase();

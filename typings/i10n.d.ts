@@ -13,6 +13,7 @@ export type FluentMessageId =
   | 'chat-mode-title'
   | 'chat-regenerate-response'
   | 'chat-save-as-note'
+  | 'chat-window-open-tooltip'
   | 'image-unsupported-message'
   | 'image-unsupported-send-text'
   | 'image-unsupported-title'
@@ -86,6 +87,7 @@ export type FluentMessageId =
   | 'pref-provider'
   | 'pref-provider-alibaba'
   | 'pref-provider-volcengine'
+  | 'pref-separate-translation-tab'
   | 'pref-stream-speed-default'
   | 'pref-stream-speed-performance'
   | 'pref-stream-speed-realtime'
@@ -139,4 +141,9 @@ export type FluentMessageId =
   | 'tool-call-status-pending'
   | 'tool-call-status-running'
   | 'tool-call-translate'
-  | 'tool-call-tree';
+  | 'tool-call-tree'
+  | 'workspace-article'
+  | 'workspace-close-translation'
+  | 'workspace-global-agent'
+  | 'workspace-no-article'
+  | 'workspace-translation';

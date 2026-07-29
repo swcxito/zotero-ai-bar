@@ -30,4 +30,5 @@ pref('translate.useAlternativeModel', false);
 pref('translate.modelId', '');
 pref('translate.targetLanguage', '');
 pref('translate.thinkingDepth', 'minimum');
+pref('translate.separateTab', false);
 pref('imagePreview.location', 'reader');

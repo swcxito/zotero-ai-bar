@@ -6,6 +6,79 @@
     <link href="chrome://__addonRef__/content/styles/katex.min.css" rel="stylesheet" />
     <link href="chrome://__addonRef__/content/styles/atom-one.css" rel="stylesheet" />
     <link href="chrome://__addonRef__/content/app.css" rel="stylesheet" />
+    <link href="chrome://__addonRef__/content/zoteroAIBar.css" rel="stylesheet" />
+    <style>
+      .zaibar-window-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 34px;
+        border-bottom: 1px solid rgba(127, 127, 127, 0.25);
+        padding-bottom: 5px;
+      }
+      .zaibar-window-tabs {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        min-width: 0;
+        flex: 1;
+      }
+      .zaibar-window-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+        max-width: 220px;
+        height: 29px;
+        padding: 4px 8px;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        opacity: 0.72;
+      }
+      .zaibar-window-tab[data-active='true'] {
+        background: rgba(127, 127, 127, 0.18);
+        opacity: 1;
+      }
+      .zaibar-window-tab:disabled {
+        cursor: default;
+        opacity: 0.35;
+      }
+      .zaibar-window-tab-icon {
+        display: inline-flex;
+        flex: 0 0 auto;
+      }
+      .zaibar-window-tab-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .zaibar-window-tab-close {
+        padding-left: 2px;
+        font-size: 15px;
+        line-height: 1;
+      }
+      .zaibar-window-clear {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 5px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        opacity: 0.7;
+      }
+      .zaibar-window-clear:hover {
+        background: rgba(127, 127, 127, 0.16);
+        opacity: 1;
+      }
+    </style>
     <script>
       window.addEventListener('load', () => {
         window.arguments[0].onBodyLoaded(window);
@@ -15,7 +88,7 @@
   </head>
   <body class="bg-zinc-100 text-slate-900 transition-colors duration-300 dark:bg-zinc-900 dark:text-rose-50/90">
     <div class="mx-auto flex h-screen max-w-5xl flex-col px-4 py-4">
-      <div id="ai-bar-window-root" class="flex h-full flex-col gap-2"></div>
+      <div id="ai-bar-window-root" class="flex h-full min-h-0 flex-col gap-2"></div>
     </div>
   </body>
 </html>

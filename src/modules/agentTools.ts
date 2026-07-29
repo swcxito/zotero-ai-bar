@@ -194,8 +194,8 @@ export const capturePageTool = tool({
 
     if (input.itemId !== undefined) {
       reader = await getPDFReaderForItem(input.itemId);
-    } else if (session) {
-      reader = getReaderByTabId(session.id) as _ZoteroTypes.ReaderInstance<'pdf'> | null;
+    } else if (session?.sourceTabId) {
+      reader = getReaderByTabId(session.sourceTabId) as _ZoteroTypes.ReaderInstance<'pdf'> | null;
     }
 
     if (!reader) {

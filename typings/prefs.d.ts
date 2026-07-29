@@ -37,6 +37,7 @@ declare namespace _ZoteroTypes {
       "translate.modelId": string;
       "translate.targetLanguage": string;
       "translate.thinkingDepth": string;
+      "translate.separateTab": boolean;
       "imagePreview.location": string;
     };
   }

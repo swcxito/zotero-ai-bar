@@ -1,27 +1,89 @@
-import { InputArea } from '../components/inputArea';
+import { config } from '../../package.json';
+import { Icons } from '../components/common';
+import { InputArea, type InputAreaAPI } from '../components/inputArea';
 import { renderMarkdown } from '../utils/markdown';
+import { getString } from '../utils/locale';
 import { getReaderSourceLabel } from './readerBarPopup';
 import { attachCitationHandlers } from './chatUI';
+import {
+  GLOBAL_AGENT_SESSION_ID,
+  getSessionId,
+  getWorkspaceSnapshot,
+  hideTranslationWorkspace,
+  selectWorkspaceKind,
+  subscribeChatWorkspace,
+  type ChatSessionKind,
+} from './chatWorkspace';
 
-export const CHAT_WINDOW_MESSAGE_CONTAINER_ID = 'ai-bar-window-message-container';
+const WINDOW_ROOT_ID = 'ai-bar-window-root';
+const WINDOW_DECK_CLASS = 'zaibar-window-deck';
+const SESSION_ID_ATTR = 'data-session-id';
 
-function getMessageContainer(doc: Document) {
-  return doc.querySelector(`#${CHAT_WINDOW_MESSAGE_CONTAINER_ID}`) as HTMLElement | null;
+type WorkspaceRoot = HTMLElement & { _workspaceUnsubscribe?: () => void };
+
+function renderWindowTabs(doc: Document, tabs: HTMLElement): void {
+  const snapshot = getWorkspaceSnapshot('window');
+  const sourceTabId = snapshot.sourceTabId;
+  const articleLabel = sourceTabId ? getString('workspace-article') : getString('workspace-no-article');
+  const kinds: ChatSessionKind[] = ['article'];
+  if (sourceTabId && snapshot.translationVisible) kinds.push('translation');
+  kinds.push('global-agent');
+
+  tabs.innerHTML = '';
+  for (const kind of kinds) {
+    const tab = doc.createElement('button');
+    tab.type = 'button';
+    tab.classList.add('zaibar-window-tab');
+    tab.dataset.active = String(snapshot.activeKind === kind);
+    const disabled = kind === 'article' && !sourceTabId;
+    tab.disabled = disabled;
+    tab.title = kind === 'article' ? articleLabel : getString(`workspace-${kind}` as any);
+
+    const icon = doc.createElement('span');
+    icon.classList.add('zaibar-window-tab-icon');
+    if (kind === 'article') {
+      const image = doc.createElement('img');
+      image.src = `chrome://${config.addonRef}/content/icons/favicon.svg`;
+      image.width = 16;
+      image.height = 16;
+      icon.appendChild(image);
+    } else {
+      icon.innerHTML = kind === 'translation' ? Icons.Translate : Icons.Agent;
+    }
+    const label = doc.createElement('span');
+    label.classList.add('zaibar-window-tab-label');
+    label.textContent = kind === 'article' ? articleLabel : getString(`workspace-${kind}` as any);
+    tab.append(icon, label);
+    tab.addEventListener('click', () => selectWorkspaceKind(kind, sourceTabId));
+
+    if (kind === 'translation') {
+      const close = doc.createElement('span');
+      close.classList.add('zaibar-window-tab-close');
+      close.textContent = '×';
+      close.title = getString('workspace-close-translation');
+      close.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (sourceTabId) hideTranslationWorkspace(sourceTabId);
+      });
+      tab.appendChild(close);
+    }
+    tabs.appendChild(tab);
+  }
 }
 
-export function ensureChatWindowUI(doc: Document) {
-  const root = doc.querySelector('#ai-bar-window-root') as HTMLElement | null;
-  if (!root) return;
-
-  if (getMessageContainer(doc)) return;
+function createWindowSessionPage(doc: Document, sessionId: string): HTMLElement {
+  const page = doc.createElement('div');
+  page.setAttribute(SESSION_ID_ATTR, sessionId);
+  page.classList.add('zaibar-window-session-page', 'flex', 'h-full', 'min-h-0', 'flex-col', 'gap-2');
+  page.style.display = 'none';
 
   const messageContainer = doc.createElement('div');
-  messageContainer.id = CHAT_WINDOW_MESSAGE_CONTAINER_ID;
   messageContainer.classList.add(
     'message-container',
     'flex',
     'flex-col',
     'flex-1',
+    'min-h-0',
     'min-w-0',
     'overflow-y-auto',
     'overflow-x-hidden',
@@ -30,30 +92,145 @@ export function ensureChatWindowUI(doc: Document) {
   );
   messageContainer.style.userSelect = 'text';
 
-  const inputArea = InputArea(doc, addon.chatManager.currentTabID!, {
-    sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
-    onRenderUserBubble: async (bubble, text) => {
-      if (text) {
-        const msgEl = bubble.querySelector('.chat-message') as HTMLElement | null;
-        if (msgEl) {
-          msgEl.innerHTML = await renderMarkdown(text, addon.chatManager.sessionsMap.get(addon.chatManager.currentTabID!)?.itemId);
-          attachCitationHandlers(msgEl as HTMLElement);
-          (msgEl as any).dataset.markdown = text;
-        }
-      }
+  page.appendChild(messageContainer);
+  return page;
+}
+
+function ensureWindowSessionPage(doc: Document, deck: HTMLElement, sessionId: string): HTMLElement {
+  const existing = Array.from(deck.children).find((child) => child.getAttribute(SESSION_ID_ATTR) === sessionId) as HTMLElement | undefined;
+  if (existing) return existing;
+  const page = createWindowSessionPage(doc, sessionId);
+  deck.appendChild(page);
+  addon.data.sidePaneBodyMap?.set(sessionId, page);
+  return page;
+}
+
+export function refreshChatWindowWorkspace(doc: Document): void {
+  const root = doc.getElementById(WINDOW_ROOT_ID) as HTMLElement | null;
+  const tabs = root?.querySelector('.zaibar-window-tabs') as HTMLElement | null;
+  const deck = root?.querySelector(`.${WINDOW_DECK_CLASS}`) as HTMLElement | null;
+  if (!root || !tabs || !deck) return;
+
+  renderWindowTabs(doc, tabs);
+  const snapshot = getWorkspaceSnapshot('window');
+  const sessionId = getSessionId(snapshot.activeKind, snapshot.sourceTabId) ?? GLOBAL_AGENT_SESSION_ID;
+  const page = ensureWindowSessionPage(doc, deck, sessionId);
+  selectWindowSessionPage(deck, page);
+  const sharedInput = root.querySelector('.zaibar-window-shared-input .input-area-wrapper') as
+    | (HTMLElement & { _inputAreaAPI?: InputAreaAPI })
+    | null;
+  const requestSourceTabId = snapshot.activeKind === 'global-agent' ? undefined : snapshot.sourceTabId;
+  const reader = snapshot.sourceTabId ? Zotero.Reader.getByTabID(snapshot.sourceTabId) : undefined;
+  sharedInput?._inputAreaAPI?.setContext({
+    sessionId,
+    sessionKind: snapshot.activeKind,
+    sourceTabId: requestSourceTabId,
+    captureSourceTabId: snapshot.sourceTabId,
+    sourceLabel: requestSourceTabId && reader ? getReaderSourceLabel(reader) : undefined,
+    chatModeAdjustable: snapshot.activeKind === 'article',
+    allowScreenshot: true,
+    allowSelectionHint: snapshot.activeKind !== 'global-agent',
+  });
+}
+
+function selectWindowSessionPage(deck: HTMLElement, page: HTMLElement): void {
+  const current = Array.from(deck.children).find((child) => (child as HTMLElement).dataset.active === 'true') as HTMLElement | undefined;
+  if (current === page) return;
+
+  for (const child of Array.from(deck.children) as HTMLElement[]) {
+    child.dataset.active = String(child === page);
+    child.style.display = child === page ? 'flex' : 'none';
+    child.style.pointerEvents = child === page ? '' : 'none';
+  }
+
+  const view = deck.ownerDocument.defaultView;
+  const reducedMotion = view?.matchMedia('(prefers-reduced-motion: reduce)')?.matches ?? false;
+  page.style.transition = 'none';
+  page.style.opacity = reducedMotion ? '1' : '0';
+  page.style.transform = reducedMotion ? 'none' : 'translateX(4px)';
+  if (reducedMotion) return;
+  page.getBoundingClientRect();
+  page.style.transition = 'opacity 110ms ease-out, transform 140ms ease-out';
+  page.style.opacity = '1';
+  page.style.transform = 'translateX(0)';
+}
+
+function clearActiveWindowHistory(doc: Document): void {
+  const snapshot = getWorkspaceSnapshot('window');
+  const sessionId = getSessionId(snapshot.activeKind, snapshot.sourceTabId);
+  if (!sessionId) return;
+  const page = addon.data.sidePaneBodyMap?.get(sessionId);
+  const messageContainer = page?.querySelector('.message-container') as HTMLElement | null;
+  if (messageContainer) messageContainer.innerHTML = '';
+  addon.chatManager.clearSectionHistory(sessionId);
+}
+
+export function ensureChatWindowUI(doc: Document) {
+  const root = doc.getElementById(WINDOW_ROOT_ID) as WorkspaceRoot | null;
+  if (!root) return;
+  if (root.querySelector(`.${WINDOW_DECK_CLASS}`)) {
+    refreshChatWindowWorkspace(doc);
+    return;
+  }
+
+  addon.data.sidePaneBodyMap = new Map<string, HTMLElement>();
+  root.innerHTML = '';
+
+  const header = doc.createElement('div');
+  header.classList.add('zaibar-window-header');
+  const tabs = doc.createElement('div');
+  tabs.classList.add('zaibar-window-tabs');
+  const clear = doc.createElement('button');
+  clear.type = 'button';
+  clear.classList.add('zaibar-window-clear');
+  clear.title = getString('sidepane-clear-tooltip');
+  clear.innerHTML = Icons.Delete;
+  clear.addEventListener('click', () => clearActiveWindowHistory(doc));
+  header.append(tabs, clear);
+
+  const deck = doc.createElement('div');
+  deck.classList.add(WINDOW_DECK_CLASS, 'flex', 'flex-1', 'min-h-0', 'flex-col');
+  const inputHost = doc.createElement('div');
+  inputHost.classList.add('zaibar-window-shared-input');
+  const sharedInput = InputArea(doc, GLOBAL_AGENT_SESSION_ID, {
+    sessionKind: 'global-agent',
+    chatModeAdjustable: false,
+    allowScreenshot: true,
+    allowSelectionHint: false,
+    draftId: 'shared-input:window',
+    resolveMessageContainer: getWindowMessageContainer,
+    onRenderUserBubble: async (bubble, text, sessionId) => {
+      if (!text) return;
+      const msgEl = bubble.querySelector('.chat-message') as HTMLElement | null;
+      if (!msgEl) return;
+      msgEl.innerHTML = await renderMarkdown(text, addon.chatManager.sessionsMap.get(sessionId)?.itemId);
+      attachCitationHandlers(msgEl);
+      (msgEl as any).dataset.markdown = text;
     },
   });
-  inputArea.style.userSelect = 'none';
+  sharedInput.style.userSelect = 'none';
+  inputHost.appendChild(sharedInput);
+  addon.data.sharedInputAreas.add(sharedInput);
+  root.append(header, deck, inputHost);
 
-  root.appendChild(messageContainer);
-  root.appendChild(inputArea);
+  root._workspaceUnsubscribe?.();
+  root._workspaceUnsubscribe = subscribeChatWorkspace(() => refreshChatWindowWorkspace(doc));
+  refreshChatWindowWorkspace(doc);
 }
 
 export function onChatWindowLoad(window: Window) {
   ensureChatWindowUI(window.document);
   window.addEventListener('unload', () => {
+    const root = window.document.getElementById(WINDOW_ROOT_ID) as WorkspaceRoot | null;
+    root?._workspaceUnsubscribe?.();
+    const sharedInput = root?.querySelector('.zaibar-window-shared-input .input-area-wrapper') as HTMLElement | null;
+    if (sharedInput) addon.data.sharedInputAreas.delete(sharedInput);
     if (window.arguments?.[0]?.onWindowClosed) {
       window.arguments[0].onWindowClosed();
     }
   });
+}
+
+function getWindowMessageContainer(sessionId: string): HTMLElement | null {
+  return (addon.data.sidePaneBodyMap?.get(sessionId)?.querySelector('.message-container') as HTMLElement | null) ?? null;
 }

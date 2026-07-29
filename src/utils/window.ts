@@ -1,5 +1,5 @@
 import { config } from '../../package.json';
-import { CHAT_WINDOW_MESSAGE_CONTAINER_ID, ensureChatWindowUI, onChatWindowLoad } from '../modules/chatWindowHost';
+import { ensureChatWindowUI, onChatWindowLoad } from '../modules/chatWindowHost';
 import { getPref } from './prefs';
 
 export { isWindowAlive, ensureChatWindow, ensureChatWindowReady, focusChatWindow, clearDeadChatWindowRef };
@@ -60,7 +60,7 @@ function isChatWindowReady(chatWindow: Window) {
   if (!doc) return false;
   if (doc.readyState !== 'complete') return false;
   ensureChatWindowUI(doc);
-  return !!doc.querySelector(`#${CHAT_WINDOW_MESSAGE_CONTAINER_ID}`);
+  return !!doc.querySelector('.zaibar-window-deck');
 }
 
 async function ensureChatWindowReady(timeoutMs = 3000) {

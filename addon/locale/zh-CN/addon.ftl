@@ -27,6 +27,12 @@ sidepane-title = AI-Bar 速答
 sidepane-clear-tooltip = 清空对话
 sidepane-collapse-tooltip = 收起面板
 sidepane-toggle-tooltip = 展开 / 收起 AI-Bar 面板
+chat-window-open-tooltip = 打开 AI-Bar 独立窗口
+workspace-article = 文章速答
+workspace-translation = 翻译
+workspace-global-agent = 全局助理
+workspace-no-article = 暂无文章
+workspace-close-translation = 关闭翻译标签
 
 model-dialog-title = 模型提供商
 model-dialog-add-provider = 添加提供商

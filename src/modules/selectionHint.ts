@@ -40,8 +40,13 @@ export function refreshSelectionHints() {
   const map = addon.data.sidePaneBodyMap;
   if (map) {
     for (const body of map.values()) {
-      applyTo(((body.querySelector('#ai-bar-chat-root') as HTMLElement | null)?.shadowRoot ?? undefined) as any);
+      applyTo(((body.querySelector('#ai-bar-chat-root') as HTMLElement | null)?.shadowRoot ?? body) as unknown as any);
     }
+  }
+
+  for (const wrapper of addon.data.sharedInputAreas) {
+    const api = (wrapper as any)._selectionHintAPI as { update?: (text?: string, tabId?: string) => void } | undefined;
+    api?.update?.(text, selectedTabId);
   }
 
   // Standalone chat window (may not exist or may already be closed).

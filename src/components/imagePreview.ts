@@ -133,7 +133,7 @@ export interface ImagePreviewAPI {
   destroy: () => void;
 }
 
-export function ImagePreview(doc: Document, sectionId: string, onChange?: () => void): ImagePreviewAPI {
+export function ImagePreview(doc: Document, sectionId: string, onChange?: () => void, getSourceTabId?: () => string | undefined): ImagePreviewAPI {
   if (!addon.data.inputImages.has(sectionId)) {
     addon.data.inputImages.set(sectionId, []);
   }
@@ -165,7 +165,7 @@ export function ImagePreview(doc: Document, sectionId: string, onChange?: () => 
 
     // Sidebar mode (inside shadow DOM): try to mount on reader's body
     if (root.host) {
-      const reader = getReaderByTabId(addon.chatManager.currentTabID);
+      const reader = getReaderByTabId(getSourceTabId?.() ?? addon.chatManager.currentTabID);
       if (reader) {
         const iframeWindow = (reader as any)._iframeWindow;
         const readerDoc = iframeWindow?.[0]?.document;

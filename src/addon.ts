@@ -41,11 +41,14 @@ class Addon {
     liveProviders?: CommonProviders;
     userProviderConfigV2?: UserProviderConfigV2;
     userPrompts?: UserPrompt[];
-    // map tab IDs to their side pane root elements
+    // Map chat session IDs to their rendered host page (sidebar or window).
     sidePaneBodyMap?: Map<string, HTMLElement>;
+    // One host-level input area per active chat host. Unlike message pages,
+    // these are shared while switching article/translation/global sessions.
+    sharedInputAreas: Set<HTMLElement>;
     // Injected main-window side pane elements (splitter + pane + deck).
     // Set by mainWindowSidePane.registerMainWindowSidePane, cleared on unregister.
-    sidePaneElements?: { splitter: XULElement; pane: XULElement; deck: XULElement };
+    sidePaneElements?: { splitter: XULElement; pane: XULElement; deck: XULElement; tabs: HTMLElement };
     inputImages: Map<string, string[]>;
     _tabObserverID?: string;
     _readerPopupHandler?: (event: any) => void;
@@ -71,6 +74,7 @@ class Addon {
         ztoolkit: createZToolkit(),
         selection: {},
         inputImages: new Map<string, string[]>(),
+        sharedInputAreas: new Set<HTMLElement>(),
         modelInfoAnchors: new Set<HTMLElement>(),
       };
       Services.console.logStringMessage('[zaibar-addon] data initialized');
