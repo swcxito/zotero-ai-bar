@@ -83,6 +83,7 @@ const HISTORY_BUTTON_ID = 'zaibar-sidepane-history-button';
 const NEW_CHAT_BUTTON_ID = 'zaibar-sidepane-new-chat-button';
 const DEFAULT_WIDTH = 340;
 const MIN_WIDTH = 240;
+const MIN_MAIN_CONTENT_WIDTH = 320;
 const PANE_ANIMATION_DURATION = 180;
 
 let unsubscribeWorkspace: (() => void) | undefined;
@@ -93,6 +94,9 @@ let sidePaneUserWidth = DEFAULT_WIDTH;
 let sidePaneHistoryTransition = 0;
 let sidePaneHistoryAnimating = false;
 let sidePaneCollapseAnimating = false;
+let sidePaneCollapsed = false;
+let sidePaneResizeCleanup: (() => void) | undefined;
+let sidePaneBoundsCleanup: (() => void) | undefined;
 
 export function injectCSS(doc: Document | ShadowRoot, filename: string) {
   // 获取插件内资源的 URL
@@ -122,6 +126,12 @@ function getElements() {
   return addon.data.sidePaneElements;
 }
 
+function isSidePaneCollapsed(): boolean {
+  const els = getElements();
+  if (!els || sidePaneCollapseAnimating) return sidePaneCollapsed;
+  return els.pane.getAttribute('collapsed') === 'true' || els.splitter.getAttribute('state') === 'collapsed';
+}
+
 function setSidePaneButtonIcon(button: HTMLButtonElement, url: string): void {
   button.replaceChildren();
   button.style.backgroundImage = `url("${url}")`;
@@ -145,6 +155,34 @@ function unlockSidePaneWidth(pane: XULElement): void {
   pane.style.minWidth = `${MIN_WIDTH}px`;
   pane.style.maxWidth = 'none';
   pane.style.flex = '0 0 auto';
+}
+
+function constrainSidePaneWidth(host: HTMLElement, pane: XULElement, requestedWidth: number): number {
+  const view = host.ownerDocument.defaultView;
+  const hostRect = host.getBoundingClientRect();
+  const mainDeck = host.ownerDocument.getElementById('tabs-deck');
+  let reservedWidth = MIN_MAIN_CONTENT_WIDTH;
+
+  for (const child of Array.from(host.children)) {
+    if (child === pane || child === mainDeck || child.getAttribute('collapsed') === 'true' || child.hasAttribute('hidden')) continue;
+    reservedWidth += child.getBoundingClientRect().width;
+  }
+
+  const visibleRight = Math.min(hostRect.right, view?.innerWidth ?? hostRect.right);
+  const visibleHostWidth = Math.max(0, visibleRight - Math.max(0, hostRect.left));
+  const maximumWidth = Math.max(MIN_WIDTH, Math.floor(visibleHostWidth - reservedWidth));
+  let width = Math.min(maximumWidth, Math.max(MIN_WIDTH, Math.round(requestedWidth)));
+  lockSidePaneWidth(pane, width);
+
+  // XUL can enforce additional minimum sizes that aren't reflected in CSS.
+  // Correct against the actual rendered edge so the pane never extends past
+  // the visible Zotero window even when those native constraints take effect.
+  const overflow = Math.ceil(pane.getBoundingClientRect().right - visibleRight);
+  if (overflow > 0) {
+    width = Math.max(MIN_WIDTH, width - overflow);
+    lockSidePaneWidth(pane, width);
+  }
+  return width;
 }
 
 /** Register the main toolbar entry for both host modes. */
@@ -184,7 +222,7 @@ export function registerChatToolbarButton(win: _ZoteroTypes.MainWindow): void {
     }
     const els = getElements();
     if (!els) return;
-    if (els.pane.getAttribute('collapsed') === 'true') {
+    if (isSidePaneCollapsed()) {
       openSidePane();
     } else {
       setSidePaneCollapsed(true);
@@ -262,15 +300,25 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
   cursor: default;
   opacity: .45;
 }
+#${SPLITTER_ID} {
+  width: 5px;
+  min-width: 5px;
+  max-width: 5px;
+  flex: 0 0 5px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background-color 120ms ease;
+}
+#${SPLITTER_ID}:hover,
+#${SPLITTER_ID}[data-dragging="true"] {
+  background: var(--color-accent-blue, rgba(60, 130, 220, .55));
+}
 #${PANE_ID} .zaibar-sidepane-btn-clear {
   background-image: url("chrome://zotero/skin/16/universal/empty-trash.svg");
 }
 #${PANE_ID} .zaibar-sidepane-btn svg {
   width: 16px;
   height: 16px;
-}
-#${PANE_ID} .zaibar-sidepane-btn-collapse {
-  background-image: url("chrome://zotero/skin/20/universal/sidebar.svg");
 }
 #${PANE_ID} .zaibar-workspace-tabs {
   display: flex;
@@ -318,14 +366,13 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
 }
 `;
 
-  // ── Splitter (native drag-resize + grippy collapse) ───────────────────
-  const splitter = createXUL('splitter');
+  // ── Plugin-owned resize handle ───────────────────────────────────────
+  // Use a plugin-owned resize handle instead of a native XUL splitter. The
+  // latter also resizes Zotero's adjacent context pane and its grippy can
+  // collapse the wrong sidebar.
+  const splitter = createXUL('box');
   splitter.id = SPLITTER_ID;
-  splitter.setAttribute('collapse', 'after');
-  splitter.setAttribute('resizebefore', 'closest');
-  splitter.setAttribute('resizeafter', 'closest');
   splitter.setAttribute('orient', 'horizontal');
-  splitter.appendChild(createXUL('grippy'));
 
   // ── Pane ──────────────────────────────────────────────────────────────
   const pane = createXUL('vbox');
@@ -366,12 +413,7 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
   setSidePaneButtonIcon(newChatBtn, `chrome://${config.addonRef}/content/icons/chat-new.svg`);
   newChatBtn.addEventListener('click', () => startNewSidePaneConversation());
 
-  const collapseBtn = createXUL('toolbarbutton');
-  collapseBtn.classList.add('zaibar-sidepane-btn', 'zaibar-sidepane-btn-collapse');
-  collapseBtn.setAttribute('tooltiptext', getString('sidepane-collapse-tooltip'));
-  collapseBtn.addEventListener('command', () => setSidePaneCollapsed(true));
-
-  header.append(tabs, historyBtn, newChatBtn, collapseBtn);
+  header.append(tabs, historyBtn, newChatBtn);
 
   // Per-tab pages
   const deck = createXUL('deck');
@@ -413,27 +455,93 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
 
   addon.data.sidePaneElements = { splitter, pane, deck, tabs };
 
-  // Restore collapsed state
-  if (getPref('sidepane.collapsed')) {
+  // Restore the state from the previous Zotero session before syncing the
+  // toolbar button, so startup follows the state in which the pane was closed.
+  sidePaneCollapsed = getPref('sidepane.collapsed') === true;
+  if (sidePaneCollapsed) {
     pane.setAttribute('collapsed', 'true');
     splitter.setAttribute('state', 'collapsed');
     splitter.setAttribute('substate', 'after');
   }
 
-  // Persist width/collapse and sync the toggle button after user
-  // interactions with the splitter. Deferred so the native splitter
-  // handlers settle first.
-  const deferredSync = () => {
-    doc.defaultView?.setTimeout(() => {
-      saveSidePaneState(true);
-      syncToggleButtonState();
-    }, 0);
+  const keepSidePaneWithinWindow = () => {
+    if (sidePaneCollapseAnimating || isSidePaneCollapsed()) return;
+    const constrainedWidth = constrainSidePaneWidth(hbox, pane, sidePaneUserWidth);
+    if (constrainedWidth === sidePaneUserWidth) return;
+    sidePaneUserWidth = constrainedWidth;
+    setPref('sidepane.width', sidePaneUserWidth);
   };
-  splitter.addEventListener('mousedown', () => {
-    if (!sidePaneCollapseAnimating && pane.getAttribute('collapsed') !== 'true') unlockSidePaneWidth(pane);
-  });
-  splitter.addEventListener('mouseup', deferredSync);
-  splitter.addEventListener('command', deferredSync);
+  const hostView = doc.defaultView;
+  const ResizeObserverCtor = (hostView as any)?.ResizeObserver as typeof ResizeObserver | undefined;
+  const boundsObserver = ResizeObserverCtor ? new ResizeObserverCtor(keepSidePaneWithinWindow) : undefined;
+  boundsObserver?.observe(hbox);
+  for (const child of Array.from(hbox.children)) boundsObserver?.observe(child);
+  hostView?.addEventListener('resize', keepSidePaneWithinWindow);
+  sidePaneBoundsCleanup?.();
+  sidePaneBoundsCleanup = () => {
+    boundsObserver?.disconnect();
+    hostView?.removeEventListener('resize', keepSidePaneWithinWindow);
+    sidePaneBoundsCleanup = undefined;
+  };
+  keepSidePaneWithinWindow();
+
+  splitter.addEventListener(
+    'mousedown',
+    (event: MouseEvent) => {
+      if (event.button !== 0 || sidePaneCollapseAnimating) return;
+      const view = doc.defaultView;
+      if (!view) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      sidePaneResizeCleanup?.();
+
+      const startedCollapsed = isSidePaneCollapsed();
+      const startX = event.clientX;
+      const startWidth = startedCollapsed ? sidePaneUserWidth : pane.getBoundingClientRect().width;
+      let openedFromDrag = !startedCollapsed;
+      const previousCursor = doc.documentElement.style.cursor;
+      const previousUserSelect = doc.documentElement.style.userSelect;
+      splitter.setAttribute('data-dragging', 'true');
+      doc.documentElement.style.cursor = 'col-resize';
+      doc.documentElement.style.userSelect = 'none';
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        moveEvent.preventDefault();
+        moveEvent.stopPropagation();
+        if (!openedFromDrag) {
+          if (startX - moveEvent.clientX < 4) return;
+          openedFromDrag = true;
+          sidePaneCollapsed = false;
+          setPref('sidepane.collapsed', false);
+          pane.removeAttribute('collapsed');
+          splitter.setAttribute('state', '');
+          splitter.removeAttribute('substate');
+          syncToggleButtonState();
+        }
+        const requestedWidth = Math.round(startWidth + startX - moveEvent.clientX);
+        sidePaneUserWidth = constrainSidePaneWidth(hbox, pane, requestedWidth);
+      };
+
+      const finishResize = () => {
+        view.removeEventListener('mousemove', handleMouseMove, true);
+        view.removeEventListener('mouseup', finishResize, true);
+        view.removeEventListener('blur', finishResize);
+        splitter.removeAttribute('data-dragging');
+        doc.documentElement.style.cursor = previousCursor;
+        doc.documentElement.style.userSelect = previousUserSelect;
+        sidePaneResizeCleanup = undefined;
+        saveSidePaneState();
+        view.dispatchEvent(new (view as any).Event('resize'));
+      };
+
+      sidePaneResizeCleanup = finishResize;
+      view.addEventListener('mousemove', handleMouseMove, true);
+      view.addEventListener('mouseup', finishResize, true);
+      view.addEventListener('blur', finishResize);
+    },
+    true
+  );
 
   unsubscribeWorkspace?.();
   const unsubscribeChatWorkspace = subscribeChatWorkspace(refreshSidePaneWorkspace);
@@ -456,6 +564,8 @@ export function unregisterMainWindowSidePane(win?: Window): void {
   doc?.getElementById(TOOLBAR_STYLE_ID)?.remove();
   if (!els) return;
   cancelReaderReadyCheck();
+  sidePaneResizeCleanup?.();
+  sidePaneBoundsCleanup?.();
   try {
     saveSidePaneState();
   } catch (e) {
@@ -472,6 +582,7 @@ export function unregisterMainWindowSidePane(win?: Window): void {
   sidePaneHistoryTransition = 0;
   sidePaneHistoryAnimating = false;
   sidePaneCollapseAnimating = false;
+  sidePaneCollapsed = false;
   sidePaneUserWidth = DEFAULT_WIDTH;
   unsubscribeWorkspace?.();
   unsubscribeWorkspace = undefined;
@@ -554,8 +665,13 @@ export function setSidePaneCollapsed(collapsed: boolean): void {
   if (!els) return;
   const { pane, splitter } = els;
   const view = pane.ownerDocument?.defaultView;
-  const currentlyCollapsed = pane.getAttribute('collapsed') === 'true';
+  const currentlyCollapsed = isSidePaneCollapsed();
   if (currentlyCollapsed === collapsed || sidePaneCollapseAnimating) return;
+
+  // Persist the requested state immediately. This remains reliable even if
+  // Zotero closes before the collapse/expand animation has finished.
+  sidePaneCollapsed = collapsed;
+  setPref('sidepane.collapsed', collapsed);
 
   const finish = () => {
     if (collapsed) {
@@ -618,7 +734,7 @@ function syncToggleButtonState(): void {
   if (!els) return;
   const btn = els.pane.ownerDocument?.getElementById(TOOLBAR_BTN_ID);
   if (!btn) return;
-  if (els.pane.getAttribute('collapsed') === 'true') {
+  if (isSidePaneCollapsed()) {
     btn.removeAttribute('selected');
   } else {
     btn.setAttribute('selected', 'true');
@@ -644,7 +760,8 @@ function applySidePaneUserWidth(): void {
 function saveSidePaneState(captureUserWidth = false): void {
   const els = getElements();
   if (!els) return;
-  const collapsed = els.pane.getAttribute('collapsed') === 'true';
+  const collapsed = isSidePaneCollapsed();
+  sidePaneCollapsed = collapsed;
   setPref('sidepane.collapsed', collapsed);
   if (!collapsed) {
     if (captureUserWidth) {
@@ -1023,7 +1140,7 @@ function ensureSidePanePage(sessionId: string): HTMLElement {
   injectCSS(shadowRoot, `../zoteroAIBar.css`);
 
   const messageContainer = doc.createElement('div');
-  messageContainer.classList.add('message-container', 'flex', 'flex-col', 'flex-1', 'overflow-y-auto', 'overflow-x-auto', 'min-w-0');
+  messageContainer.classList.add('message-container', 'flex', 'flex-col', 'flex-1', 'overflow-y-auto', 'overflow-x-auto', 'min-w-0', 'pb-7');
   messageContainer.style.userSelect = 'text';
   shadowRoot.appendChild(messageContainer);
 
