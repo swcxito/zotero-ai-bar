@@ -47,7 +47,7 @@ export async function renderPersistedTranscript(session: Session, container: HTM
   for (const turn of session.persistedTurns) {
     if (container.dataset.renderToken !== renderToken || !container.isConnected) return;
     if (turn.userText) {
-      container.appendChild(createUserMessageBubble(container.ownerDocument, turn.userText, [], () => undefined));
+      container.appendChild(createUserMessageBubble(container.ownerDocument, turn.userText, [], () => undefined, turn.referenceText));
     }
     const pop = ChatBox({ doc: container.ownerDocument, isUser: false }) as HTMLElement;
     const chatMessage = pop.querySelector('.chat-message') as HTMLElement | null;
@@ -360,6 +360,19 @@ export function onLLMStreamStartV2(session: Session) {
 
   const doc = container.ownerDocument;
   if (!doc) return;
+
+  if (session.pending.shouldRenderUserBubble && session.pending.displayUserText?.trim()) {
+    container.appendChild(
+      createUserMessageBubble(
+        container.ownerDocument,
+        session.pending.displayUserText.trim(),
+        [],
+        () => undefined,
+        session.pending.displayReferenceText
+      )
+    );
+    session.pending.shouldRenderUserBubble = false;
+  }
 
   // Disable the Retry button on the previous assistant bubble - once a new
   // turn starts, prior replies are no longer retryable. Only the latest is.

@@ -84,6 +84,18 @@ describe('chatHistoryStore', function () {
     assert.isNull(sanitizeHistoryFile({ version: 0, conversations: [] }));
   });
 
+  it('keeps optional reference text while accepting legacy turns without it', function () {
+    const current = conversation(1);
+    current.turns[0].referenceText = 'Quoted selection';
+    const legacy = conversation(2);
+    const sanitized = sanitizeHistoryFile({ version: 1, activeByScope: {}, conversations: [current, legacy] });
+    assert.notEqual(sanitized, null);
+    assert.notEqual(sanitized, 'unsupported');
+    if (!sanitized || sanitized === 'unsupported') return;
+    assert.equal(sanitized.conversations[0].turns[0].referenceText, 'Quoted selection');
+    assert.isUndefined(sanitized.conversations[1].turns[0].referenceText);
+  });
+
   it('builds a compact title from the first available visible body', function () {
     assert.equal(makeConversationTitle('  My   question  ', 'answer', 'New conversation'), 'My question');
     assert.equal(makeConversationTitle(undefined, '**Markdown** answer', 'New conversation'), 'Markdown answer');

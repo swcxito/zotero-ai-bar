@@ -55,6 +55,7 @@ import {
   type PersistedTextMessage,
   type PersistedTurn,
 } from './chatHistoryStore';
+import { createUserMessageBubble } from '../components/userBubble';
 
 Zotero.debug('[zaibar-chatManager] module loaded');
 
@@ -111,9 +112,12 @@ export class Session {
     thinkingEffortOverride?: Session['thinkingEffort'];
     /** Dedicated structured translation request; independent of chatMode. */
     translationRequest?: TranslationRequestMeta;
-    /** Visible user text for local transcript persistence. Popup actions intentionally omit it. */
+    /** Visible user text and quoted selection for the local transcript. */
     displayUserText?: string;
+    displayReferenceText?: string;
     displaySourceLabel?: string;
+    /** Popup turns create their own user bubble when the target host is ready. */
+    shouldRenderUserBubble?: boolean;
     // --- auto-scroll state ---
     /** User paused (scrolled up). Highest priority — disables all auto-scroll. */
     scrollUserPaused?: boolean;
@@ -141,6 +145,7 @@ export class Session {
      *  this (no-op if the turn errored/aborted and never appended). */
     historyLengthBeforeTurn: number;
     displayUserText?: string;
+    displayReferenceText?: string;
     displaySourceLabel?: string;
     persistedTurnId?: string;
   };
@@ -288,6 +293,11 @@ type ChatRequestParams = (
   doesCopyResponse?: boolean;
   isFromPopup?: boolean;
   contextPromise?: Promise<string[] | undefined>;
+  /** Immutable selection captured by the caller before any async UI work. */
+  selectionSnapshot?: {
+    text?: string;
+    contextPromise?: Promise<string[] | undefined>;
+  };
   images?: string[];
   /** Override the session's thinkingEffort for this single request. */
   thinkingEffort?: Session['thinkingEffort'];
@@ -296,6 +306,7 @@ type ChatRequestParams = (
   itemId?: number;
   /** Internal transcript metadata retained by Retry. */
   displayUserText?: string;
+  displayReferenceText?: string;
   displaySourceLabel?: string;
 };
 
@@ -528,6 +539,7 @@ export class ChatManager {
       id: this.createConversationId(),
       createdAt: now,
       userText: session.pending.displayUserText?.trim() || undefined,
+      referenceText: session.pending.displayReferenceText?.trim() ? session.pending.displayReferenceText : undefined,
       assistantMarkdown,
       sourceLabel: session.pending.displaySourceLabel,
     };
@@ -696,6 +708,7 @@ export class ChatManager {
       thinkingEffort: snap.thinkingEffort,
       translationRequest: snap.translationRequest,
       displayUserText: snap.displayUserText,
+      displayReferenceText: snap.displayReferenceText,
       displaySourceLabel: snap.displaySourceLabel,
     });
   }
@@ -796,7 +809,9 @@ export class ChatManager {
     // not read the mutable global selection after the button was clicked.
     const selectionSourceTabId = (addon.data.selection.currentReader as any)?.tabID as string | undefined;
     const canUseCurrentSelection = params.sessionKind !== 'global-agent' && !!params.sourceTabId && selectionSourceTabId === params.sourceTabId;
-    const selectedText = params.translationRequest?.selectedText ?? (canUseCurrentSelection ? addon.data.selection.text : undefined);
+    const selectedText =
+      params.translationRequest?.selectedText ??
+      (params.selectionSnapshot !== undefined ? params.selectionSnapshot.text : canUseCurrentSelection ? addon.data.selection.text : undefined);
     const sessionId = params.sessionId;
     const sourceTabId = params.sourceTabId;
     const itemId = params.itemId ?? (sourceTabId ? getItemIdFromTab(sourceTabId) : undefined);
@@ -874,6 +889,7 @@ export class ChatManager {
           translationRequest: params.translationRequest,
           historyLengthBeforeTurn: session.conversationHistory.length,
           displayUserText: params.displayUserText,
+          displayReferenceText: params.displayReferenceText,
           displaySourceLabel: params.displaySourceLabel,
         };
         if (params.translationRequest) return [systemMsg, userMsg];
@@ -882,7 +898,9 @@ export class ChatManager {
       // get selection context
       let selectionContext: Array<string> | undefined;
       try {
-        if (params.contextPromise) {
+        if (params.selectionSnapshot !== undefined) {
+          selectionContext = await params.selectionSnapshot.contextPromise;
+        } else if (params.contextPromise) {
           selectionContext = await params.contextPromise;
         } else if (canUseCurrentSelection && addon.data.selection.contextPromise) {
           selectionContext = await addon.data.selection.contextPromise;
@@ -993,7 +1011,8 @@ export class ChatManager {
         thinkingEffort: params.thinkingEffort,
         translationRequest: params.translationRequest,
         historyLengthBeforeTurn: session.conversationHistory.length,
-        displayUserText: params.isFromPopup ? undefined : params.userPrompt,
+        displayUserText: params.translationRequest ? undefined : (params.displayUserText ?? params.userPrompt),
+        displayReferenceText: selectedText,
         displaySourceLabel: session.pending.isNewSource ? params.sourceLabel : undefined,
       };
 
@@ -1015,12 +1034,18 @@ export class ChatManager {
     session.sourceLabel = params.sourceLabel ?? session.sourceLabel;
     session.pending.thinkingEffortOverride = params.thinkingEffort;
     session.pending.translationRequest = params.translationRequest;
-    session.pending.displayUserText = params.messagesOverride ? params.displayUserText : params.isFromPopup ? undefined : params.userPrompt;
+    session.pending.displayUserText = params.messagesOverride
+      ? params.displayUserText
+      : params.translationRequest
+        ? undefined
+        : (params.displayUserText ?? params.userPrompt);
+    session.pending.displayReferenceText = params.messagesOverride ? params.displayReferenceText : selectedText;
     session.pending.displaySourceLabel = params.messagesOverride
       ? params.displaySourceLabel
       : session.pending.isNewSource
         ? params.sourceLabel
         : undefined;
+    session.pending.shouldRenderUserBubble = !!params.isFromPopup && !params.messagesOverride && !!session.pending.displayUserText?.trim();
 
     if (params.sessionKind === 'translation' && sourceTabId) {
       showTranslationWorkspace(sourceTabId);
@@ -1035,6 +1060,26 @@ export class ChatManager {
       // Sidebar mode: reveal the independent side pane (mirrors focusing the
       // chat window) so popup actions land in a visible panel.
       openSidePane();
+    }
+
+    // Popup actions have no InputArea sender to create their user bubble.
+    // Render it as soon as the destination host exists; onLLMStreamStartV2
+    // retains a fallback for hosts that finish mounting asynchronously.
+    if (session.pending.shouldRenderUserBubble && session.pending.displayUserText?.trim()) {
+      const container = this.getSessionMessageContainer(session.id);
+      if (container) {
+        container.appendChild(
+          createUserMessageBubble(
+            container.ownerDocument,
+            session.pending.displayUserText.trim(),
+            [],
+            () => undefined,
+            session.pending.displayReferenceText
+          )
+        );
+        container.scrollTop = container.scrollHeight;
+        session.pending.shouldRenderUserBubble = false;
+      }
     }
 
     const AC = (typeof AbortController !== 'undefined' ? AbortController : (Zotero.getMainWindow() as any).AbortController) as typeof AbortController;

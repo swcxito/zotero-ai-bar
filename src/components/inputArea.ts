@@ -146,12 +146,19 @@ export function InputArea(
     'duration-300',
     'ease-in-out'
   );
-  // Collapsed: zero out every geometry property so the bar leaves no trace.
-  hintBar.style.height = '0';
-  hintBar.style.minHeight = '0';
+  // Keep the hint out of normal flow so selection changes never resize the
+  // shared input host (and therefore never push or pull the message viewport).
+  hintBar.style.position = 'absolute';
+  hintBar.style.left = '0';
+  hintBar.style.top = '0';
+  hintBar.style.zIndex = '2';
+  hintBar.style.height = '28px';
+  hintBar.style.minHeight = '28px';
   hintBar.style.opacity = '0';
   hintBar.style.overflow = 'hidden';
-  hintBar.style.borderWidth = '0';
+  hintBar.style.borderWidth = '2px 2px 0 2px';
+  hintBar.style.pointerEvents = 'none';
+  hintBar.style.transform = 'translateY(0)';
 
   const hintIcon = ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Quote, sizeRem: 0.75 })) as HTMLElement;
   hintIcon.classList.add('flex-shrink-0', 'opacity-70');
@@ -166,22 +173,17 @@ export function InputArea(
     if (!oneLine) return;
     hintText.textContent = `“${oneLine}”`;
     hintBar.title = oneLine;
-    hintBar.style.height = '28px';
     hintBar.style.opacity = '1';
-    // Borders only on top/left/right — the open bottom edge extends into the
-    // input box, whose top edge/corners are removed to form one shape.
-    hintBar.style.borderWidth = '2px 2px 0 2px';
-    container.style.borderTopWidth = '0';
+    hintBar.style.transform = 'translateY(-100%)';
     container.style.borderTopLeftRadius = '0';
     container.style.borderTopRightRadius = '0';
   }
 
   function hideSelectionHint() {
-    hintBar.style.height = '0';
     hintBar.style.opacity = '0';
-    hintBar.style.borderWidth = '0';
-    // Restore the input box's own top edge and rounded corners.
-    container.style.borderTopWidth = '';
+    hintBar.style.transform = 'translateY(0)';
+    // Border width and element height stay constant; only non-layout visual
+    // properties change while the floating bar is hidden.
     container.style.borderTopLeftRadius = '';
     container.style.borderTopRightRadius = '';
   }
@@ -346,6 +348,7 @@ export function InputArea(
   const sendBtn = doc.createElement('button') as HTMLButtonElement;
   sendBtn.disabled = true;
   sendBtn.dataset.mode = 'send';
+  sendBtn.style.marginLeft = '1px';
   sendBtn.classList.add(
     'input-send-btn',
     'flex',
@@ -493,6 +496,14 @@ export function InputArea(
     const imageCount = preview.getCount();
     if (!text && imageCount === 0) return;
 
+    const selectionReaderTabId = (addon.data.selection.currentReader as any)?.tabID as string | undefined;
+    const selectionText =
+      sessionKind !== 'global-agent' && sourceTabId && selectionReaderTabId === sourceTabId ? addon.data.selection.text : undefined;
+    const selectionSnapshot = {
+      text: selectionText?.trim() ? selectionText : undefined,
+      contextPromise: selectionText?.trim() ? addon.data.selection.contextPromise : undefined,
+    };
+
     // Snapshot the route before any async rendering. A tab switch while the
     // Markdown bubble is being prepared must not redirect this turn.
     const requestContext = {
@@ -530,7 +541,7 @@ export function InputArea(
       updateScreenshotBtnState();
     }
 
-    const userBubble = createUserMessageBubble(doc, text, imageUrls, openBubbleImageViewer);
+    const userBubble = createUserMessageBubble(doc, text, imageUrls, openBubbleImageViewer, selectionSnapshot.text);
     await opts?.onRenderUserBubble?.(userBubble, text, requestContext.sessionId);
     messageContainer.appendChild(userBubble);
     scrollToBottom();
@@ -550,6 +561,7 @@ export function InputArea(
         sourceTabId: requestContext.sourceTabId,
         itemId: requestContext.sourceTabId ? getReaderByTabId(requestContext.sourceTabId)?.itemID : undefined,
         images: imageUrls.length > 0 ? imageUrls : undefined,
+        selectionSnapshot,
       });
     } catch (e) {
       ztoolkit.log('sendChatRequest error:', e);

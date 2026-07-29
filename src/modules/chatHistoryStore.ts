@@ -6,6 +6,7 @@ export interface PersistedTurn {
   id: string;
   createdAt: number;
   userText?: string;
+  referenceText?: string;
   assistantMarkdown: string;
   sourceLabel?: string;
 }
@@ -59,6 +60,7 @@ function isTurn(value: any): value is PersistedTurn {
     typeof value.createdAt === 'number' &&
     typeof value.assistantMarkdown === 'string' &&
     (value.userText === undefined || typeof value.userText === 'string') &&
+    (value.referenceText === undefined || typeof value.referenceText === 'string') &&
     (value.sourceLabel === undefined || typeof value.sourceLabel === 'string')
   );
 }

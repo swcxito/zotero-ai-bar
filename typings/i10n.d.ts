@@ -11,6 +11,8 @@ export type FluentMessageId =
   | 'chat-mode-full-text'
   | 'chat-mode-normal'
   | 'chat-mode-title'
+  | 'chat-reference-collapse'
+  | 'chat-reference-expand'
   | 'chat-regenerate-response'
   | 'chat-save-as-note'
   | 'chat-window-open-tooltip'

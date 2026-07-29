@@ -17,6 +17,9 @@
  */
 
 import { ChatBox } from './chatBox';
+import { getString } from '../utils/locale';
+import { Icons } from './common';
+import { IconView } from './iconView';
 
 const BUBBLE_ANIMATION_CLASSES = [
   'flex',
@@ -47,14 +50,88 @@ const THUMB_CLASSES = [
   'hover:shadow-md',
 ];
 
+const REFERENCE_COLLAPSED_HEIGHT = '2.5rem';
+
+function createReferenceCard(doc: Document, referenceText: string): HTMLElement {
+  const card = doc.createElement('div');
+  card.classList.add('chat-reference-card', 'w-full', 'px-2.5', 'text-left', 'text-xs', 'text-slate-500', 'dark:text-neutral-400');
+
+  const contentRow = doc.createElement('div');
+  contentRow.classList.add('flex', 'items-start', 'gap-1.5');
+
+  const icon = ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Quote, sizeRem: 0.75 })) as HTMLElement;
+  icon.classList.add('mt-1', 'flex-shrink-0', 'opacity-70', 'select-none');
+
+  const content = doc.createElement('div');
+  content.classList.add('min-w-0', 'flex-1');
+
+  const body = doc.createElement('div');
+  body.classList.add('chat-reference-text', 'whitespace-pre-wrap', 'break-words', 'leading-5');
+  body.textContent = `“${referenceText}”`;
+  body.style.maxHeight = REFERENCE_COLLAPSED_HEIGHT;
+  body.style.overflow = 'hidden';
+
+  const toggle = doc.createElement('button');
+  toggle.type = 'button';
+  toggle.classList.add(
+    'chat-reference-toggle',
+    'mt-1',
+    'text-xs',
+    'font-medium',
+    'text-slate-400',
+    'dark:text-neutral-500',
+    'hover:text-rose-600',
+    'dark:hover:text-rose-300',
+    'select-none'
+  );
+  toggle.textContent = getString('chat-reference-expand' as any);
+  toggle.style.display = 'none';
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.addEventListener('click', () => {
+    const expanded = toggle.getAttribute('aria-expanded') === 'true';
+    toggle.setAttribute('aria-expanded', String(!expanded));
+    toggle.textContent = getString((expanded ? 'chat-reference-expand' : 'chat-reference-collapse') as any);
+    body.style.maxHeight = expanded ? REFERENCE_COLLAPSED_HEIGHT : 'none';
+  });
+
+  content.append(body, toggle);
+  contentRow.append(icon, content);
+  card.appendChild(contentRow);
+
+  let measurementAttempts = 0;
+  const revealToggleIfNeeded = () => {
+    if (!card.isConnected) {
+      if (measurementAttempts++ < 60) scheduleMeasurement();
+      return;
+    }
+    toggle.style.display = body.scrollHeight > body.clientHeight + 1 ? '' : 'none';
+  };
+  const view = doc.defaultView;
+  function scheduleMeasurement() {
+    if (view?.requestAnimationFrame) {
+      view.requestAnimationFrame(revealToggleIfNeeded);
+    } else {
+      view?.setTimeout(revealToggleIfNeeded, 0);
+    }
+  }
+  scheduleMeasurement();
+
+  return card;
+}
+
 export function createUserMessageBubble(
   doc: Document,
   text: string,
   imageUrls: string[],
-  openImageViewer: (images: string[], index: number) => void
+  openImageViewer: (images: string[], index: number) => void,
+  referenceText?: string
 ): HTMLElement {
   const wrapper = doc.createElement('div');
   wrapper.classList.add(...BUBBLE_ANIMATION_CLASSES);
+
+  if (referenceText?.trim()) {
+    wrapper.appendChild(createReferenceCard(doc, referenceText));
+  }
 
   if (imageUrls.length > 0) {
     const imgsRow = doc.createElement('div');

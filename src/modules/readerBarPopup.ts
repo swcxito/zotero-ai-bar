@@ -33,6 +33,10 @@ function getTargetLanguage(): string {
   return prefLang || Zotero.locale;
 }
 
+export function formatPopupActionLabel(label: string, locale: string = Zotero.locale): string {
+  return String(locale).toLowerCase().startsWith('zh') ? `【${label}】` : `[${label}]`;
+}
+
 // Zotero can rebuild a selection popup several times for the same reader
 // (for example while scrolling). Keep at most one lifecycle watcher per
 // reader so an older popup cannot later clear the state of a newer one.
@@ -256,9 +260,10 @@ function smartAutoTranslate(
 
 async function sendStructuredTranslation(
   reader: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>,
-  contextPromise?: Promise<string[] | undefined>
+  contextPromise?: Promise<string[] | undefined>,
+  selectedTextSnapshot?: string
 ) {
-  const selectedText = addon.data.selection.text;
+  const selectedText = selectedTextSnapshot ?? addon.data.selection.text;
   if (!selectedText) return;
 
   const useTranslateModel = getPref('translate.useAlternativeModel');
@@ -269,7 +274,7 @@ async function sendStructuredTranslation(
     await addon.chatManager.sendTranslationRequest({
       targetLanguage: getTargetLanguage(),
       selectedText,
-      sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
+      sourceLabel: getReaderSourceLabel(reader),
       isFromPopup: true,
       contextPromise,
       itemId: reader.itemID!,
@@ -297,21 +302,25 @@ function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 
     if (!input) return;
     ztoolkit.log('Action:', input);
     const command = aiBarCommands[input];
+    const selectedText = addon.data.selection.text;
+    const contextPromise = selectedText ? addon.data.selection.contextPromise : undefined;
 
-    if (!addon.data.selection.text && command) return;
+    if (!selectedText && command) return;
 
     hideContainerOnTimeout();
     disableAll();
 
     if (input === 'translate') {
-      await sendStructuredTranslation(reader);
+      await sendStructuredTranslation(reader, contextPromise, selectedText);
       return;
     }
 
     await addon.chatManager.sendChatRequest({
       // If input matches a command, use the command's prompt; otherwise treat input as a custom prompt
       userPrompt: command?.getPrompt(getTargetLanguage()) ?? input,
-      sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
+      displayUserText: command ? formatPopupActionLabel(getString(command.label)) : input,
+      selectionSnapshot: { text: selectedText, contextPromise },
+      sourceLabel: getReaderSourceLabel(reader),
       isFromPopup: true,
       // Enable auto-copy for smartCopy command only
       doesCopyResponse: input === 'smartCopy',
@@ -354,10 +363,15 @@ function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 
       icon: Icons.Sparkle,
       label: up.name,
       onClick: async () => {
-        if (!addon.data.selection.text) return;
+        const selectedText = addon.data.selection.text;
+        if (!selectedText) return;
+        hideContainerOnTimeout();
+        disableAll();
         await addon.chatManager.sendChatRequest({
           userPrompt: up.prompt,
-          sourceLabel: getReaderSourceLabel(addon.data.selection.currentReader),
+          displayUserText: formatPopupActionLabel(up.name),
+          selectionSnapshot: { text: selectedText, contextPromise: addon.data.selection.contextPromise },
+          sourceLabel: getReaderSourceLabel(reader),
           isFromPopup: true,
           itemId: reader.itemID!,
           sourceTabId: reader.tabID,
