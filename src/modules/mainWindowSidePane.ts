@@ -91,6 +91,7 @@ let readerReadyTimer: number | undefined;
 let pendingReaderTabId: string | undefined;
 let sidePaneHistoryVisible = false;
 let sidePaneUserWidth = DEFAULT_WIDTH;
+let sidePaneRenderedWidth = DEFAULT_WIDTH;
 let sidePaneHistoryTransition = 0;
 let sidePaneHistoryAnimating = false;
 let sidePaneCollapseAnimating = false;
@@ -151,7 +152,7 @@ function unlockSidePaneWidth(pane: XULElement): void {
   pane.style.removeProperty('min-width');
   pane.style.removeProperty('max-width');
   pane.style.removeProperty('flex');
-  pane.setAttribute('width', String(sidePaneUserWidth));
+  pane.setAttribute('width', String(sidePaneRenderedWidth));
   pane.style.minWidth = `${MIN_WIDTH}px`;
   pane.style.maxWidth = 'none';
   pane.style.flex = '0 0 auto';
@@ -379,7 +380,8 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
   pane.id = PANE_ID;
   const savedWidth = getPref('sidepane.width');
   sidePaneUserWidth = savedWidth && savedWidth >= MIN_WIDTH ? savedWidth : DEFAULT_WIDTH;
-  lockSidePaneWidth(pane, sidePaneUserWidth);
+  sidePaneRenderedWidth = sidePaneUserWidth;
+  lockSidePaneWidth(pane, sidePaneRenderedWidth);
   pane.style.paddingLeft = '6px';
   pane.style.boxSizing = 'border-box';
   pane.style.overflow = 'hidden';
@@ -464,26 +466,24 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
     splitter.setAttribute('substate', 'after');
   }
 
-  const keepSidePaneWithinWindow = () => {
-    if (sidePaneCollapseAnimating || isSidePaneCollapsed()) return;
-    const constrainedWidth = constrainSidePaneWidth(hbox, pane, sidePaneUserWidth);
-    if (constrainedWidth === sidePaneUserWidth) return;
-    sidePaneUserWidth = constrainedWidth;
-    setPref('sidepane.width', sidePaneUserWidth);
-  };
   const hostView = doc.defaultView;
-  const ResizeObserverCtor = (hostView as any)?.ResizeObserver as typeof ResizeObserver | undefined;
-  const boundsObserver = ResizeObserverCtor ? new ResizeObserverCtor(keepSidePaneWithinWindow) : undefined;
-  boundsObserver?.observe(hbox);
-  for (const child of Array.from(hbox.children)) boundsObserver?.observe(child);
+  let lastViewportWidth = hostView?.innerWidth;
+  const keepSidePaneWithinWindow = () => {
+    const viewportWidth = hostView?.innerWidth;
+    // Zotero dispatches resize-like layout work while readers are loading.
+    // Ignore it unless the actual window width changed, otherwise temporary
+    // native-pane sizes would alter the user's AI-Bar width.
+    if (viewportWidth === undefined || viewportWidth === lastViewportWidth) return;
+    lastViewportWidth = viewportWidth;
+    sidePaneRenderedWidth = constrainSidePaneWidth(hbox, pane, sidePaneUserWidth);
+  };
   hostView?.addEventListener('resize', keepSidePaneWithinWindow);
   sidePaneBoundsCleanup?.();
   sidePaneBoundsCleanup = () => {
-    boundsObserver?.disconnect();
     hostView?.removeEventListener('resize', keepSidePaneWithinWindow);
     sidePaneBoundsCleanup = undefined;
   };
-  keepSidePaneWithinWindow();
+  sidePaneRenderedWidth = constrainSidePaneWidth(hbox, pane, sidePaneUserWidth);
 
   splitter.addEventListener(
     'mousedown',
@@ -498,7 +498,7 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
 
       const startedCollapsed = isSidePaneCollapsed();
       const startX = event.clientX;
-      const startWidth = startedCollapsed ? sidePaneUserWidth : pane.getBoundingClientRect().width;
+      const startWidth = startedCollapsed ? sidePaneRenderedWidth : pane.getBoundingClientRect().width;
       let openedFromDrag = !startedCollapsed;
       const previousCursor = doc.documentElement.style.cursor;
       const previousUserSelect = doc.documentElement.style.userSelect;
@@ -520,7 +520,8 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
           syncToggleButtonState();
         }
         const requestedWidth = Math.round(startWidth + startX - moveEvent.clientX);
-        sidePaneUserWidth = constrainSidePaneWidth(hbox, pane, requestedWidth);
+        sidePaneRenderedWidth = constrainSidePaneWidth(hbox, pane, requestedWidth);
+        sidePaneUserWidth = sidePaneRenderedWidth;
       };
 
       const finishResize = () => {
@@ -584,6 +585,7 @@ export function unregisterMainWindowSidePane(win?: Window): void {
   sidePaneCollapseAnimating = false;
   sidePaneCollapsed = false;
   sidePaneUserWidth = DEFAULT_WIDTH;
+  sidePaneRenderedWidth = DEFAULT_WIDTH;
   unsubscribeWorkspace?.();
   unsubscribeWorkspace = undefined;
 }
@@ -685,7 +687,7 @@ export function setSidePaneCollapsed(collapsed: boolean): void {
     }
     pane.style.opacity = '';
     pane.style.pointerEvents = '';
-    lockSidePaneWidth(pane, sidePaneUserWidth);
+    lockSidePaneWidth(pane, sidePaneRenderedWidth);
     sidePaneCollapseAnimating = false;
     if (view) view.dispatchEvent(new (view as any).Event('resize'));
     saveSidePaneState();
@@ -701,9 +703,9 @@ export function setSidePaneCollapsed(collapsed: boolean): void {
   sidePaneCollapseAnimating = true;
   pane.style.pointerEvents = 'none';
   unlockSidePaneWidth(pane);
-  pane.style.width = `${sidePaneUserWidth}px`;
+  pane.style.width = `${sidePaneRenderedWidth}px`;
   pane.style.minWidth = '0';
-  pane.style.maxWidth = `${sidePaneUserWidth}px`;
+  pane.style.maxWidth = `${sidePaneRenderedWidth}px`;
 
   if (!collapsed) {
     pane.removeAttribute('collapsed');
@@ -713,12 +715,12 @@ export function setSidePaneCollapsed(collapsed: boolean): void {
   const animation = (pane as unknown as HTMLElement).animate(
     collapsed
       ? [
-          { width: `${sidePaneUserWidth}px`, opacity: 1 },
+          { width: `${sidePaneRenderedWidth}px`, opacity: 1 },
           { width: '0px', opacity: 0 },
         ]
       : [
           { width: '0px', opacity: 0 },
-          { width: `${sidePaneUserWidth}px`, opacity: 1 },
+          { width: `${sidePaneRenderedWidth}px`, opacity: 1 },
         ],
     { duration: PANE_ANIMATION_DURATION, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
   );
@@ -754,7 +756,10 @@ export function openSidePane(): void {
 function applySidePaneUserWidth(): void {
   const els = getElements();
   if (!els || els.pane.getAttribute('collapsed') === 'true' || sidePaneCollapseAnimating) return;
-  lockSidePaneWidth(els.pane, sidePaneUserWidth);
+  // Reapply the last rendered width exactly. Reader initialization changes
+  // Zotero's neighboring panes several times; recalculating bounds here would
+  // make the AI-Bar visibly pulse even though the window itself didn't resize.
+  lockSidePaneWidth(els.pane, sidePaneRenderedWidth);
 }
 
 function saveSidePaneState(captureUserWidth = false): void {
@@ -766,7 +771,10 @@ function saveSidePaneState(captureUserWidth = false): void {
   if (!collapsed) {
     if (captureUserWidth) {
       const measuredWidth = Math.round(els.pane.getBoundingClientRect().width);
-      if (measuredWidth >= MIN_WIDTH) sidePaneUserWidth = measuredWidth;
+      if (measuredWidth >= MIN_WIDTH) {
+        sidePaneUserWidth = measuredWidth;
+        sidePaneRenderedWidth = measuredWidth;
+      }
     }
     applySidePaneUserWidth();
     setPref('sidepane.width', sidePaneUserWidth);
