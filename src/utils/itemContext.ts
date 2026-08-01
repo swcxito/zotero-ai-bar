@@ -132,7 +132,8 @@ export function getItemMetadata(itemId: number): ItemMetadata | undefined {
 
 /**
  * Retrieve the full text of the attachment for the given Zotero item ID.
- * Truncates to 50,000 characters to keep prompts manageable.
+ * Returns the complete indexed attachment text. Callers that place text in a
+ * model prompt must perform their own context-window preflight.
  */
 export async function getItemFullText(itemId: number): Promise<string | undefined> {
   try {
@@ -168,8 +169,7 @@ export async function getItemFullText(itemId: number): Promise<string | undefine
     if (!text) {
       return undefined;
     }
-    const MAX = 50000;
-    return text.length > MAX ? text.slice(0, MAX) + '\n...[truncated]' : text;
+    return text;
   } catch (e) {
     ztoolkit.log('getItemFullText failed:', e);
     return undefined;

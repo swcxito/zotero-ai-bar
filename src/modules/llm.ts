@@ -33,7 +33,15 @@ import {
   clearTranslationPreviewV2,
 } from './chatUI';
 import { ensureWebStreamsGlobals } from '../utils/webStreamsGlobals';
-import { getActiveModelStructuredOutputSupport, PROVIDER_ENV_KEY_MAP, resolveApiUrl, type Model } from '../utils/providers';
+import {
+  findModelMetadata,
+  getActiveModelContextLimit,
+  PROVIDER_ENV_KEY_MAP,
+  resolveApiUrl,
+  type Model,
+  type ModelSelect,
+  type ProviderId,
+} from '../utils/providers';
 import { buildTools } from './agentTools';
 import {
   extractTranslationFallback,
@@ -43,6 +51,14 @@ import {
   type TranslationRequestMeta,
   type TranslationResult,
 } from '../utils/translation';
+import {
+  buildCompactionPrompt,
+  calculateContextBudget,
+  COMPACTION_SUMMARY_MAX_TOKENS,
+  createCheckpointMessage,
+  isContextOverflowError,
+  planContextCompaction,
+} from './contextCompaction';
 // import { JSONObject } from "@ai-sdk/provider";
 
 const SDK_CACHE: Record<string, any> = {};
@@ -77,6 +93,111 @@ export async function preloadLLMRuntime() {
   Zotero.debug('[zaibar-llm] preloadLLMRuntime done');
 }
 
+export function mergePromptCacheProviderOptions(providerOptions: Record<string, any>, providerId: string, cacheKey: string): Record<string, any> {
+  const result = { ...providerOptions };
+  if (providerId === 'openai') {
+    result.openai = { ...result.openai, promptCacheKey: cacheKey };
+  } else if (providerId === 'anthropic') {
+    result.anthropic = { ...result.anthropic, cacheControl: { type: 'ephemeral' } };
+  }
+  return result;
+}
+
+function withPromptCacheOptions(providerOptions: Record<string, any>, session: Session): Record<string, any> {
+  const active = addon.data.userProviderConfigV2?.active;
+  if (!active) return providerOptions;
+  const cacheKey = `${session.conversationId ?? session.id}:${active.providerId}:${active.modelId}`;
+  const result = mergePromptCacheProviderOptions(providerOptions, active.providerId, cacheKey);
+  Zotero.debug(`[zaibar-cache] provider=${active.providerId}, key=${cacheKey}`);
+  return result;
+}
+
+async function summarizeCompactionHead(params: {
+  model: any;
+  head: ModelMessage[];
+  previousSummary?: string;
+  abortSignal?: AbortSignal;
+}): Promise<string> {
+  let lastError: unknown;
+  for (const toolOutputLimit of [2000, 500]) {
+    try {
+      const result = streamTextFn!({
+        model: params.model,
+        messages: buildCompactionPrompt({
+          previousSummary: params.previousSummary,
+          messages: params.head,
+          toolOutputLimit,
+        }),
+        allowSystemInMessages: true,
+        abortSignal: params.abortSignal,
+        maxOutputTokens: COMPACTION_SUMMARY_MAX_TOKENS,
+        maxRetries: 1,
+      });
+      const summary = (await result.text).trim();
+      if (summary) return summary;
+      lastError = new Error('Compaction returned an empty checkpoint.');
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError ?? new Error('Context compaction failed.');
+}
+
+async function compactRequestMessages(params: {
+  messages: ModelMessage[];
+  session: Session;
+  model: any;
+  tools?: Record<string, any>;
+  outputAllowance?: number;
+  force?: boolean;
+}): Promise<ModelMessage[]> {
+  const contextLimit = getActiveModelContextLimit();
+  const budget = calculateContextBudget({
+    messages: params.messages,
+    contextLimit,
+    outputAllowance: params.outputAllowance ?? COMPACTION_SUMMARY_MAX_TOKENS,
+    tools: params.tools,
+  });
+  Zotero.debug(
+    `[zaibar-compaction] estimated=${budget.estimatedInputTokens}, threshold=${budget.thresholdTokens}, mode=${params.session.effectiveChatMode}`
+  );
+  if (!params.force && !budget.shouldCompact) return params.messages;
+
+  const systemMessages = params.messages.filter((message) => message.role === 'system');
+  const conversationMessages = params.messages.filter((message) => message.role !== 'system');
+  const plan = planContextCompaction(conversationMessages, {
+    mode: params.session.effectiveChatMode,
+    contextRounds: params.session.effectiveChatMode === 'agent' ? undefined : (getPref('chat.contextRounds') ?? 8),
+    contextLimit,
+  });
+  if (!plan?.head.length) return params.messages;
+
+  const summary = await summarizeCompactionHead({
+    model: params.model,
+    head: plan.head,
+    previousSummary: plan.previousSummary,
+    abortSignal: params.session.pending.abortController?.signal,
+  });
+  const checkpointMessage = createCheckpointMessage(summary);
+  const currentTurnStart = plan.tail.map((message) => message.role).lastIndexOf('user');
+  const completedTail = currentTurnStart >= 0 ? plan.tail.slice(0, currentTurnStart) : plan.tail;
+  const completedTailRounds = completedTail.filter((message) => message.role === 'user').length;
+  const coveredTurn = params.session.persistedTurns.at(-(completedTailRounds + 1));
+  params.session.conversationHistory = [checkpointMessage, ...completedTail];
+  if (params.session.lastTurnSnapshot) {
+    params.session.lastTurnSnapshot.historyLengthBeforeTurn = params.session.conversationHistory.length;
+  }
+  params.session.contextCheckpoint = {
+    summary,
+    coveredThroughTurnId: coveredTurn?.id ?? params.session.contextCheckpoint?.coveredThroughTurnId,
+    createdAt: Date.now(),
+    recentTail: completedTail.map((message) => ({ ...message })) as ModelMessage[],
+  };
+  addon.chatManager.persistActiveContext(params.session);
+  Zotero.debug(`[zaibar-compaction] checkpoint created, head=${plan.head.length}, tail=${plan.tail.length}`);
+  return [...systemMessages, checkpointMessage, ...plan.tail];
+}
+
 export async function streamLLMV2(
   messagesOrPromise: ModelMessage[] | Promise<ModelMessage[]>,
   session: Session,
@@ -96,13 +217,12 @@ export async function streamLLMV2(
         '/' +
         (addon.data.userProviderConfigV2?.active?.modelId || '?')
     );
-
     const modelSettings = buildModelSettings();
-    const messages = await messagesOrPromise;
+    let messages = await messagesOrPromise;
     Zotero.debug('[zaibar-llm] messages count=' + messages.length);
 
     const activeProviderId = addon.data.userProviderConfigV2?.active?.providerId ?? '';
-    const providerOptions: Record<string, any> = {};
+    let providerOptions: Record<string, any> = {};
     for (const [k, v] of Object.entries(V2_PROVIDER_OPTIONS)) {
       providerOptions[k] = v;
     }
@@ -115,6 +235,7 @@ export async function streamLLMV2(
         ...thinkingOpts,
       };
     }
+    providerOptions = withPromptCacheOptions(providerOptions, session);
 
     // Thinking models consume part of maxOutputTokens for reasoning tokens.
     // If the budget equals or exceeds maxOutputTokens, the API returns only
@@ -122,12 +243,12 @@ export async function streamLLMV2(
     // max_tokens; OpenAI o-series counts reasoning against
     // max_completion_tokens; Google counts against maxOutputTokens).
     // Bump maxOutputTokens to leave room for actual output when thinking is on.
-    let maxOutputTokens = getPref('llm.maxTokens') || 2000;
+    let maxOutputTokens = getConfiguredMaxOutputTokens();
     const anthropicBudget = (thinkingOpts as any)?.thinking?.budgetTokens;
     const googleBudget = (providerOptions.google as any)?.thinkingBudget;
     const thinkingBudget = (typeof anthropicBudget === 'number' ? anthropicBudget : 0) + (typeof googleBudget === 'number' ? googleBudget : 0);
     const hasThinking = effectiveEffort !== 'none';
-    if (hasThinking && maxOutputTokens <= thinkingBudget) {
+    if (hasThinking && maxOutputTokens !== undefined && maxOutputTokens <= thinkingBudget) {
       maxOutputTokens = thinkingBudget + 2000;
     }
     // For OpenAI o-series and Alibaba, which don't expose an explicit budget
@@ -135,7 +256,7 @@ export async function streamLLMV2(
     // when thinking is enabled at medium or higher effort.
     if (hasThinking && effectiveEffort !== 'low' && (activeProviderId === 'openai' || activeProviderId === 'openrouter')) {
       const minHeadroom = effectiveEffort === 'xhigh' ? 16000 : effectiveEffort === 'high' ? 10000 : 6000;
-      if (maxOutputTokens < minHeadroom) maxOutputTokens = minHeadroom;
+      if (maxOutputTokens !== undefined && maxOutputTokens < minHeadroom) maxOutputTokens = minHeadroom;
     }
     Zotero.debug(
       '[zaibar-llm] maxOutputTokens=' +
@@ -147,6 +268,7 @@ export async function streamLLMV2(
         ', provider=' +
         activeProviderId
     );
+    const maxOutputTokensSetting = maxOutputTokens === undefined ? {} : { maxOutputTokens };
 
     const agentEnabled = session.effectiveChatMode === 'agent';
     const tools = agentEnabled ? buildTools() : undefined;
@@ -158,101 +280,160 @@ export async function streamLLMV2(
 
       // System prompt is passed as agent instructions; remaining messages are
       // the conversation history plus the current user message.
-      const systemMessage = session.pending.systemMessage;
-      const conversationMessages = messages.filter((m) => m.role !== 'system');
-
-      const agent = new ToolLoopAgent({
-        model,
-        instructions: systemMessage?.content,
-        tools,
-        toolChoice: 'auto',
-        stopWhen: stepCountIs(MAX_AGENT_ITERATIONS),
-        experimental_context: session,
-        providerOptions,
-        maxOutputTokens: maxOutputTokens,
-        maxRetries: 2,
-      });
-
-      const result = await agent.stream({
-        messages: conversationMessages,
-        abortSignal: session.pending.abortController?.signal,
-      });
-
+      messages = await compactRequestMessages({ messages, session, model, tools, outputAllowance: maxOutputTokens });
+      const systemMessage = messages.find((message) => message.role === 'system') ?? session.pending.systemMessage;
       session.pending.isAgentMode = true;
-      await consumeAgentStream(session, result, refreshRate);
+      let agentInputMessages = messages.filter((message) => message.role !== 'system');
+      let latestStepMessages = agentInputMessages;
+      let retryHistory: ModelMessage[] | undefined;
+      let retryCheckpoint = session.contextCheckpoint;
+
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const agent = new ToolLoopAgent({
+          model,
+          instructions: systemMessage?.content,
+          tools,
+          toolChoice: 'auto',
+          stopWhen: stepCountIs(MAX_AGENT_ITERATIONS),
+          experimental_context: session,
+          prepareStep: async ({ messages: stepMessages }: any) => {
+            const prepared = await compactRequestMessages({
+              messages: [{ role: 'system', content: systemMessage?.content ?? '' } as ModelMessage, ...stepMessages],
+              session,
+              model,
+              tools,
+              outputAllowance: maxOutputTokens,
+            });
+            latestStepMessages = prepared.filter((message) => message.role !== 'system');
+            return { messages: latestStepMessages };
+          },
+          providerOptions,
+          ...maxOutputTokensSetting,
+          maxRetries: 2,
+        });
+
+        const result = await agent.stream({
+          messages: agentInputMessages,
+          abortSignal: session.pending.abortController?.signal,
+        });
+        const outcome = await consumeAgentStream(session, result, refreshRate, { deferContextOverflow: attempt === 0 });
+        if (attempt === 0 && outcome.contextOverflowBeforeOutput) {
+          Zotero.debug('[zaibar-compaction] Agent provider overflow before output; compacting and retrying once');
+          retryHistory = session.conversationHistory.map((message) => ({ ...message })) as ModelMessage[];
+          retryCheckpoint = session.contextCheckpoint;
+          const prepared = await compactRequestMessages({
+            messages: [{ role: 'system', content: systemMessage?.content ?? '' } as ModelMessage, ...latestStepMessages],
+            session,
+            model,
+            tools,
+            outputAllowance: maxOutputTokens,
+            force: true,
+          });
+          agentInputMessages = prepared.filter((message) => message.role !== 'system');
+          const currentTurnStart = agentInputMessages.map((message) => message.role).lastIndexOf('user');
+          session.pending.agentResumeMessages = currentTurnStart >= 0 ? agentInputMessages.slice(currentTurnStart + 1) : [];
+          continue;
+        }
+        if (attempt === 1 && outcome.failed && retryHistory) {
+          session.conversationHistory = retryHistory;
+          session.contextCheckpoint = retryCheckpoint;
+          addon.chatManager.persistActiveContext(session);
+        }
+        break;
+      }
     } else {
       Zotero.debug('[zaibar-llm] consuming full stream');
+      messages = await compactRequestMessages({ messages, session, model, outputAllowance: maxOutputTokens });
       // The system message is built by us from item metadata + stable
       // instructions (no user input), so the prompt-injection risk the SDK
       // warns about doesn't apply here. Keep it in `messages` and explicitly
       // allow it — some openai-compatible providers don't handle the separate
       // `system` option consistently, which produced empty replies.
-      const result = streamTextFn!({
-        model: model,
-        messages: messages,
-        allowSystemInMessages: true,
-        abortSignal: session.pending.abortController?.signal,
-        ...modelSettings,
-        maxOutputTokens: maxOutputTokens,
-        providerOptions,
-        onError: ({ error }: { error: unknown }) => {
-          streamErrorHandled = true;
-          Zotero.debug('[zaibar-llm] streamText onError: ' + (error as any)?.message);
-          handleStreamError(session, error);
-        },
-      });
+      const historyBeforeOverflowRetry = session.conversationHistory.map((message) => ({ ...message })) as ModelMessage[];
+      const checkpointBeforeOverflowRetry = session.contextCheckpoint;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        let callbackError: unknown;
+        let streamError: unknown;
+        let fullText = '';
+        let count = 0;
+        const result = streamTextFn!({
+          model: model,
+          messages: messages,
+          allowSystemInMessages: true,
+          abortSignal: session.pending.abortController?.signal,
+          ...modelSettings,
+          ...maxOutputTokensSetting,
+          providerOptions,
+          onError: ({ error }: { error: unknown }) => {
+            callbackError = error;
+            Zotero.debug('[zaibar-llm] streamText onError: ' + (error as any)?.message);
+          },
+        });
 
-      let fullText = '';
-      let count = 0;
-      let streamPartError: string | undefined;
-
-      for await (const part of result.fullStream) {
-        switch (part.type) {
-          case 'reasoning-start':
-            onReasoningStartV2(session);
-            break;
-          case 'reasoning-delta':
-            onReasoningDeltaV2(session, part.text);
-            break;
-          case 'reasoning-end':
-            onReasoningEndV2(session);
-            break;
-          case 'text-delta':
-            fullText += part.text;
-            count++;
-            if (count % refreshRate === 0) {
-              await onLLMStreamUpdateV2({ session, fullText });
+        try {
+          for await (const part of result.fullStream) {
+            switch (part.type) {
+              case 'reasoning-start':
+                onReasoningStartV2(session);
+                break;
+              case 'reasoning-delta':
+                onReasoningDeltaV2(session, part.text);
+                break;
+              case 'reasoning-end':
+                onReasoningEndV2(session);
+                break;
+              case 'text-delta':
+                fullText += part.text;
+                count++;
+                if (count % refreshRate === 0) await onLLMStreamUpdateV2({ session, fullText });
+                break;
+              case 'error':
+                streamError = (part as any)?.error ?? part;
+                break;
+              default:
+                Zotero.debug('[zaibar-llm] unhandled stream part type: ' + part.type);
+                break;
             }
-            break;
-          case 'error': {
-            // AI SDK v6 emits terminal stream errors as an `error` part rather
-            // than via onError. Without this case the error is silently
-            // dropped and the user sees reasoning with no final output.
-            const errObj = (part as any)?.error ?? part;
-            streamPartError = buildErrorMessage(errObj);
-            Zotero.debug('[zaibar-llm] streamText error part: ' + streamPartError);
-            break;
           }
-          default:
-            Zotero.debug('[zaibar-llm] unhandled stream part type: ' + part.type);
-            break;
+        } catch (error) {
+          streamError = error;
         }
-      }
 
-      if (streamPartError && !streamErrorHandled) {
-        streamErrorHandled = true;
-        handleStreamError(session, streamPartError);
-      }
+        const failure = streamError ?? callbackError;
+        if (failure && !fullText.trim() && attempt === 0 && isContextOverflowError(failure)) {
+          Zotero.debug('[zaibar-compaction] provider overflow before output; compacting and retrying once');
+          messages = await compactRequestMessages({
+            messages,
+            session,
+            model,
+            outputAllowance: maxOutputTokens,
+            force: true,
+          });
+          continue;
+        }
+        if (failure) {
+          if (attempt === 1) {
+            session.conversationHistory = historyBeforeOverflowRetry;
+            session.contextCheckpoint = checkpointBeforeOverflowRetry;
+            addon.chatManager.persistActiveContext(session);
+          }
+          streamErrorHandled = true;
+          handleStreamError(session, failure);
+          break;
+        }
 
-      if (!streamErrorHandled) {
         await onLLMStreamUpdateV2({ session, fullText, force: true });
         let usage: any;
         try {
           usage = await result.usage;
-        } catch (e: any) {
-          Zotero.debug('[zaibar-llm] usage fetch failed: ' + (e?.message || e));
+        } catch (error: any) {
+          Zotero.debug('[zaibar-llm] usage fetch failed: ' + (error?.message || error));
+        }
+        if (typeof usage?.cachedInputTokens === 'number') {
+          Zotero.debug(`[zaibar-cache] cachedInputTokens=${usage.cachedInputTokens}`);
         }
         onLLMStreamEndV2(session, usage);
+        break;
       }
     }
   } catch (error: any) {
@@ -260,6 +441,10 @@ export async function streamLLMV2(
     // Abort from intentional stop: use the normal-end handler for UI cleanup
     // but signal `aborted` so the partial turn isn't recorded in history.
     if (error?.name === 'AbortError') {
+      onLLMStreamEndV2(session, undefined, true);
+      return;
+    }
+    if (error?.name === 'FullTextRequestCancelledError') {
       onLLMStreamEndV2(session, undefined, true);
       return;
     }
@@ -295,16 +480,17 @@ export async function streamTranslationV2(
   try {
     await preloadLLMRuntime();
     onLLMStreamStartV2(session);
-    const model = await createModel();
+    const modelSelection = resolveModelSelection(request.modelKey);
+    const model = await createModel(modelSelection);
     const messages = await messagesOrPromise;
     const chatThinkingEffort = session.pending.thinkingEffortOverride ?? session.thinkingEffort;
     const translationThinkingDepth = getPref('translate.thinkingDepth') === 'follow-chat' ? 'follow-chat' : 'minimum';
-    const effectiveEffort = resolveTranslationThinkingEffort(translationThinkingDepth, chatThinkingEffort);
-    const providerOptions = buildProviderOptions(effectiveEffort);
-    const maxOutputTokens = getMaxOutputTokensWithThinkingHeadroom(effectiveEffort, providerOptions);
-    const declaredStructuredSupport = getActiveModelStructuredOutputSupport();
+    const effectiveEffort = resolveTranslationThinkingEffort(translationThinkingDepth, chatThinkingEffort, modelSelection);
+    const providerOptions = buildProviderOptions(effectiveEffort, modelSelection);
+    const maxOutputTokens = getMaxOutputTokensWithThinkingHeadroom(effectiveEffort, providerOptions, modelSelection);
+    const declaredStructuredSupport = getModelStructuredOutputSupport(modelSelection);
     logTranslationDebug('request-start', {
-      model: getActiveModelKey(),
+      model: getModelKey(modelSelection),
       declaredStructuredSupport,
       selectedTextLength: request.selectedText.length,
       targetLanguage: request.targetLanguage,
@@ -319,6 +505,7 @@ export async function streamTranslationV2(
       session,
       providerOptions,
       maxOutputTokens,
+      modelSelection,
       strict: false,
       selectedText: request.selectedText,
     });
@@ -338,6 +525,7 @@ export async function streamTranslationV2(
       session,
       providerOptions,
       maxOutputTokens,
+      modelSelection,
       strict: true,
       selectedText: request.selectedText,
     });
@@ -404,14 +592,15 @@ function isTranslationAbort(session: Session, error: unknown): boolean {
 
 async function runTranslationAttempt(params: {
   model: any;
+  modelSelection: ModelSelect;
   messages: ModelMessage[];
   session: Session;
   providerOptions: Record<string, any>;
-  maxOutputTokens: number;
+  maxOutputTokens?: number;
   strict: boolean;
   selectedText: string;
 }): Promise<TranslationAttempt> {
-  const modelKey = getActiveModelKey();
+  const modelKey = getModelKey(params.modelSelection);
   if (STRUCTURED_OUTPUT_UNSUPPORTED_MODELS.has(modelKey)) {
     logTranslationDebug('preflight-selected-json-text-path', { model: modelKey, strict: params.strict });
     return runJsonTextTranslationAttempt(params);
@@ -437,23 +626,25 @@ async function runTranslationAttempt(params: {
 
 async function runSchemaTranslationAttempt(params: {
   model: any;
+  modelSelection: ModelSelect;
   messages: ModelMessage[];
   session: Session;
   providerOptions: Record<string, any>;
-  maxOutputTokens: number;
+  maxOutputTokens?: number;
   strict: boolean;
   selectedText: string;
 }): Promise<TranslationAttempt> {
   let streamError: unknown;
   let partialUpdateCount = 0;
   const prompt = buildDedicatedTranslationPrompt(params.messages, params.strict, false);
+  const maxOutputTokensSetting = params.maxOutputTokens === undefined ? {} : { maxOutputTokens: params.maxOutputTokens };
   const result = streamTextFn!({
     model: params.model,
     system: prompt.system,
     messages: prompt.messages,
     abortSignal: params.session.pending.abortController?.signal,
-    ...buildModelSettings(),
-    maxOutputTokens: params.maxOutputTokens,
+    ...buildModelSettings(params.modelSelection),
+    ...maxOutputTokensSetting,
     providerOptions: params.providerOptions,
     maxRetries: 2,
     output: Output.object({
@@ -576,10 +767,11 @@ async function runSchemaTranslationAttempt(params: {
  */
 async function runJsonTextTranslationAttempt(params: {
   model: any;
+  modelSelection: ModelSelect;
   messages: ModelMessage[];
   session: Session;
   providerOptions: Record<string, any>;
-  maxOutputTokens: number;
+  maxOutputTokens?: number;
   strict: boolean;
   selectedText: string;
 }): Promise<TranslationAttempt> {
@@ -589,13 +781,14 @@ async function runJsonTextTranslationAttempt(params: {
   let failedPartialParseCount = 0;
   let reasoningActive = false;
   const prompt = buildDedicatedTranslationPrompt(params.messages, params.strict, true);
+  const maxOutputTokensSetting = params.maxOutputTokens === undefined ? {} : { maxOutputTokens: params.maxOutputTokens };
   const result = streamTextFn!({
     model: params.model,
     system: prompt.system,
     messages: prompt.messages,
     abortSignal: params.session.pending.abortController?.signal,
-    ...buildModelSettings(),
-    maxOutputTokens: params.maxOutputTokens,
+    ...buildModelSettings(params.modelSelection),
+    ...maxOutputTokensSetting,
     providerOptions: params.providerOptions,
     maxRetries: 2,
     onError: ({ error }: { error: unknown }) => {
@@ -771,17 +964,38 @@ function buildDedicatedTranslationPrompt(messages: ModelMessage[], strict: boole
   };
 }
 
-function getActiveModelKey(): string {
-  const active = addon.data.userProviderConfigV2?.active;
-  return active ? `${active.providerId}::${active.modelId}` : 'unknown';
+function getModelKey(selection: ModelSelect): string {
+  return `${selection.providerId}::${selection.modelId}`;
 }
 
-function isJsonResponseFormatCompatibilityError(error: unknown): boolean {
+function resolveModelSelection(modelKey?: string): ModelSelect {
+  const active = addon.data.userProviderConfigV2?.active;
+  if (modelKey) {
+    const separator = modelKey.indexOf('::');
+    if (separator > 0 && separator < modelKey.length - 2) {
+      const candidate = {
+        providerId: modelKey.slice(0, separator) as ProviderId,
+        modelId: modelKey.slice(separator + 2),
+      };
+      const exists = addon.data.userProviderConfigV2?.addedModels.some(
+        (model) => model.providerId === candidate.providerId && model.id === candidate.modelId && model.enabled !== false
+      );
+      if (exists) return candidate;
+      Zotero.debug('[zaibar-llm] configured translation model is unavailable: ' + modelKey);
+    }
+  }
+  if (!active) throw new Error('No active model selected.');
+  return active;
+}
+
+export function isJsonResponseFormatCompatibilityError(error: unknown): boolean {
   const message = buildErrorMessage(error).toLowerCase();
   const mentionsJsonMode = message.includes('response_format') || message.includes('json_object');
   const incompatible =
     message.includes('not supported') ||
     message.includes('unsupported') ||
+    message.includes('unavailable') ||
+    message.includes('not available') ||
     message.includes('not valid') ||
     message.includes('invalidparameter') ||
     message.includes("must contain the word 'json'");
@@ -800,10 +1014,10 @@ function normalizeTranslationOriginal(output: TranslationResult, selectedText: s
   return normalizeTranslationResultCandidate(output, selectedText) ?? ({ ...output, originalText: selectedText } as TranslationResult);
 }
 
-function buildProviderOptions(effort: Session['thinkingEffort']): Record<string, any> {
-  const activeProviderId = addon.data.userProviderConfigV2?.active?.providerId ?? '';
+function buildProviderOptions(effort: Session['thinkingEffort'], selection: ModelSelect): Record<string, any> {
+  const activeProviderId = selection.providerId;
   const providerOptions: Record<string, any> = { ...V2_PROVIDER_OPTIONS };
-  providerOptions.google = getGoogleThinkingConfig(addon.data.userProviderConfigV2?.active?.modelId ?? '', effort);
+  providerOptions.google = getGoogleThinkingConfig(selection.modelId, effort);
   const thinkingOpts = getThinkingProviderOptions(activeProviderId, effort);
   if (thinkingOpts && activeProviderId) {
     providerOptions[activeProviderId] = {
@@ -814,50 +1028,64 @@ function buildProviderOptions(effort: Session['thinkingEffort']): Record<string,
   return providerOptions;
 }
 
-function resolveTranslationThinkingEffort(depth: 'minimum' | 'follow-chat', chatEffort: Session['thinkingEffort']): Session['thinkingEffort'] {
+function resolveTranslationThinkingEffort(
+  depth: 'minimum' | 'follow-chat',
+  chatEffort: Session['thinkingEffort'],
+  selection: ModelSelect
+): Session['thinkingEffort'] {
   if (depth === 'follow-chat') return chatEffort;
 
   // Non-reasoning models have nothing to disable. For reasoning models,
   // explicitly disable thinking where supported; otherwise use the lowest
   // reasoning level exposed by the provider.
-  if (getActiveModelMetadata()?.reasoning !== true) return 'none';
-  const providerId = addon.data.userProviderConfigV2?.active?.providerId ?? '';
-  return providerCanDisableThinking(providerId) ? 'none' : 'low';
+  if (getModelMetadata(selection)?.reasoning !== true) return 'none';
+  return providerCanDisableThinking(selection) ? 'none' : 'low';
 }
 
-function providerCanDisableThinking(providerId: string): boolean {
+function providerCanDisableThinking(selection: ModelSelect): boolean {
+  const { providerId, modelId } = selection;
   if (providerId === 'google' || providerId.startsWith('google-vertex')) {
-    const modelId = (addon.data.userProviderConfigV2?.active?.modelId ?? '').toLowerCase();
+    const normalizedModelId = modelId.toLowerCase();
     // Gemini 3 and Gemini 2.5 Pro expose a minimum thinking level rather
     // than a true off state. Flash-family models accept thinkingBudget=0.
-    return !modelId.startsWith('gemini-3') && !modelId.includes('gemini-2.5-pro');
+    return !normalizedModelId.startsWith('gemini-3') && !normalizedModelId.includes('gemini-2.5-pro');
   }
   return getThinkingProviderOptions(providerId, 'none') !== undefined;
 }
 
-function getMaxOutputTokensWithThinkingHeadroom(effort: Session['thinkingEffort'], providerOptions: Record<string, any>): number {
-  let maxOutputTokens = getPref('llm.maxTokens') || 2000;
-  const activeProviderId = addon.data.userProviderConfigV2?.active?.providerId ?? '';
+function getMaxOutputTokensWithThinkingHeadroom(
+  effort: Session['thinkingEffort'],
+  providerOptions: Record<string, any>,
+  selection: ModelSelect
+): number | undefined {
+  let maxOutputTokens = getConfiguredMaxOutputTokens();
+  const activeProviderId = selection.providerId;
   const providerThinking = activeProviderId ? providerOptions[activeProviderId] : undefined;
   const anthropicBudget = providerThinking?.thinking?.budgetTokens;
   const googleBudget = providerOptions.google?.thinkingBudget;
   const thinkingBudget = (typeof anthropicBudget === 'number' ? anthropicBudget : 0) + (typeof googleBudget === 'number' ? googleBudget : 0);
-  if (effort !== 'none' && maxOutputTokens <= thinkingBudget) maxOutputTokens = thinkingBudget + 2000;
+  if (effort !== 'none' && maxOutputTokens !== undefined && maxOutputTokens <= thinkingBudget) maxOutputTokens = thinkingBudget + 2000;
   if (effort !== 'none' && effort !== 'low' && (activeProviderId === 'openai' || activeProviderId === 'openrouter')) {
     const minHeadroom = effort === 'xhigh' ? 16000 : effort === 'high' ? 10000 : 6000;
-    if (maxOutputTokens < minHeadroom) maxOutputTokens = minHeadroom;
+    if (maxOutputTokens !== undefined && maxOutputTokens < minHeadroom) maxOutputTokens = minHeadroom;
   }
   return maxOutputTokens;
 }
 
-function buildModelSettings() {
+function getConfiguredMaxOutputTokens(): number | undefined {
+  if (!getPref('llm.maxTokensEnabled')) return undefined;
+  const configured = getPref('llm.maxTokens');
+  return configured > 0 ? configured : 2000;
+}
+
+function buildModelSettings(selection: ModelSelect = resolveModelSelection()) {
   const temperatureEnabled = getPref('llm.temperatureEnabled');
   if (!temperatureEnabled) {
     Zotero.debug('[zaibar-llm] temperature disabled by user setting');
     return {};
   }
   const temp100 = getPref('llm.temperature100');
-  const modelMetadata = getActiveModelMetadata();
+  const modelMetadata = getModelMetadata(selection);
   if (modelMetadata?.temperature === false) {
     Zotero.debug('[zaibar-llm] temperature disabled for active model');
     return {};
@@ -865,15 +1093,24 @@ function buildModelSettings() {
   return { temperature: temp100 / 100 };
 }
 
-function getActiveModelMetadata(): Model | undefined {
+function getModelMetadata(selection: ModelSelect): Model | undefined {
   const v2 = addon.data.userProviderConfigV2;
-  const active = v2?.active;
-  if (!active) return undefined;
-
   return (
-    addon.data.commonProviders?.[active.providerId]?.models[active.modelId] ??
-    v2?.addedModels.find((model) => model.providerId === active.providerId && model.id === active.modelId)
+    addon.data.commonProviders?.[selection.providerId]?.models[selection.modelId] ??
+    v2?.addedModels.find((model) => model.providerId === selection.providerId && model.id === selection.modelId)
   );
+}
+
+function getModelStructuredOutputSupport(selection: ModelSelect): boolean | undefined {
+  const v2 = addon.data.userProviderConfigV2;
+  const addedModel = v2?.addedModels.find((model) => model.providerId === selection.providerId && model.id === selection.modelId);
+  const modelName = addedModel?.name ?? selection.modelId;
+  const commonMeta = findModelMetadata(modelName, selection.modelId, selection.providerId, addon.data.commonProviders);
+  const liveMeta = findModelMetadata(modelName, selection.modelId, selection.providerId, addon.data.liveProviders);
+  for (const model of [addedModel, commonMeta, liveMeta]) {
+    if (typeof model?.structured_output === 'boolean') return model.structured_output;
+  }
+  return undefined;
 }
 
 export function buildErrorMessage(error: unknown): string {
@@ -1097,14 +1334,14 @@ async function loadSDK(npm: string): Promise<(cfg: Record<string, unknown>) => a
   }
 }
 
-export async function createModel() {
+export async function createModel(selection: ModelSelect = resolveModelSelection()) {
   await preloadLLMRuntime();
   Zotero.debug('[zaibar-llm] createModel start');
 
   const v2 = addon.data.userProviderConfigV2;
-  if (!v2?.active) throw new Error('No active model selected.');
+  if (!v2) throw new Error('Model configuration is unavailable.');
 
-  const { providerId, modelId } = v2.active;
+  const { providerId, modelId } = selection;
   Zotero.debug('[zaibar-llm] createModel active=' + providerId + '/' + modelId);
   const providerEnv = v2.env[providerId] ?? {};
   const commonProvider = addon.data.commonProviders?.[providerId];
@@ -1134,7 +1371,7 @@ export async function createModel() {
   }
 
   Zotero.debug('[zaibar-llm] createModel provider npm=' + npm + ', baseUrl=' + (baseUrl ? 'yes' : 'no'));
-  const supportsStructuredOutputs = getActiveModelStructuredOutputSupport() === true;
+  const supportsStructuredOutputs = getModelStructuredOutputSupport(selection) === true;
   const model = await createProvider(npm, {
     providerId,
     modelId: resolvedModelId,

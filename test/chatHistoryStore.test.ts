@@ -34,7 +34,7 @@ describe('chatHistoryStore', function () {
   it('keeps favorites outside the regular conversation limit', function () {
     const favorite = conversation(999, true);
     const file: PersistedChatHistoryFile = {
-      version: 1,
+      version: 2,
       activeByScope: {},
       conversations: [favorite, ...Array.from({ length: MAX_REGULAR_CONVERSATIONS + 2 }, (_, index) => conversation(index))],
     };
@@ -50,7 +50,7 @@ describe('chatHistoryStore', function () {
   it('trims regular turns but leaves favorite conversations intact', function () {
     const regular = conversation(1, false, MAX_REGULAR_TURNS + 5);
     const favorite = conversation(2, true, MAX_REGULAR_TURNS + 5);
-    const file: PersistedChatHistoryFile = { version: 1, activeByScope: {}, conversations: [regular, favorite] };
+    const file: PersistedChatHistoryFile = { version: 2, activeByScope: {}, conversations: [regular, favorite] };
     pruneHistory(file);
     assert.lengthOf(regular.turns, MAX_REGULAR_TURNS);
     assert.lengthOf(favorite.turns, MAX_REGULAR_TURNS + 5);
@@ -80,7 +80,7 @@ describe('chatHistoryStore', function () {
   });
 
   it('rejects newer file versions without treating them as corruption', function () {
-    assert.equal(sanitizeHistoryFile({ version: 2, conversations: [] }), 'unsupported');
+    assert.equal(sanitizeHistoryFile({ version: 3, conversations: [] }), 'unsupported');
     assert.isNull(sanitizeHistoryFile({ version: 0, conversations: [] }));
   });
 
@@ -94,6 +94,32 @@ describe('chatHistoryStore', function () {
     if (!sanitized || sanitized === 'unsupported') return;
     assert.equal(sanitized.conversations[0].turns[0].referenceText, 'Quoted selection');
     assert.isUndefined(sanitized.conversations[1].turns[0].referenceText);
+  });
+
+  it('migrates v1 history to v2 without losing conversations', function () {
+    const legacy = conversation(7);
+    const sanitized = sanitizeHistoryFile({ version: 1, activeByScope: { 'article:7': legacy.id }, conversations: [legacy] });
+    assert.notEqual(sanitized, null);
+    assert.notEqual(sanitized, 'unsupported');
+    if (!sanitized || sanitized === 'unsupported') return;
+    assert.equal(sanitized.version, 2);
+    assert.equal(sanitized.conversations[0].turns[0].userText, 'Question 0');
+  });
+
+  it('restores a valid v2 checkpoint and recent tail', function () {
+    const current = conversation(8);
+    current.checkpoint = {
+      summary: 'frozen summary',
+      coveredThroughTurnId: 'turn-8-0',
+      createdAt: 123,
+      recentTail: [{ role: 'user', content: 'recent question' } as any],
+    };
+    const sanitized = sanitizeHistoryFile({ version: 2, activeByScope: {}, conversations: [current] });
+    assert.notEqual(sanitized, null);
+    assert.notEqual(sanitized, 'unsupported');
+    if (!sanitized || sanitized === 'unsupported') return;
+    assert.equal(sanitized.conversations[0].checkpoint?.summary, 'frozen summary');
+    assert.equal((sanitized.conversations[0].checkpoint?.recentTail[0] as any).content, 'recent question');
   });
 
   it('builds a compact title from the first available visible body', function () {

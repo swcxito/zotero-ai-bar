@@ -19,7 +19,7 @@
 import { config } from '../../package.json';
 import { getSelectionContext } from '../utils/selectionContext';
 import { getString } from '../utils/locale';
-import { getPref, setPref } from '../utils/prefs';
+import { getPref } from '../utils/prefs';
 import { aiBarCommands } from '../utils/prompts';
 import { ActionButton } from '../components/buttons/actionButton';
 import { ModelInfo, registerModelInfoAnchor } from '../components/modelInfo';
@@ -266,23 +266,15 @@ async function sendStructuredTranslation(
   const selectedText = selectedTextSnapshot ?? addon.data.selection.text;
   if (!selectedText) return;
 
-  const useTranslateModel = getPref('translate.useAlternativeModel');
-  const translateModelId = getPref('translate.modelId');
-  const originalModelId = getPref('llm.modelId');
-  if (useTranslateModel && translateModelId) setPref('llm.modelId', translateModelId);
-  try {
-    await addon.chatManager.sendTranslationRequest({
-      targetLanguage: getTargetLanguage(),
-      selectedText,
-      sourceLabel: getReaderSourceLabel(reader),
-      isFromPopup: true,
-      contextPromise,
-      itemId: reader.itemID!,
-      sourceTabId: reader.tabID,
-    });
-  } finally {
-    if (useTranslateModel && translateModelId) setPref('llm.modelId', originalModelId);
-  }
+  await addon.chatManager.sendTranslationRequest({
+    targetLanguage: getTargetLanguage(),
+    selectedText,
+    sourceLabel: getReaderSourceLabel(reader),
+    isFromPopup: true,
+    contextPromise,
+    itemId: reader.itemID!,
+    sourceTabId: reader.tabID,
+  });
 }
 
 function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>): DocumentFragment {

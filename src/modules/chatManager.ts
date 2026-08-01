@@ -49,13 +49,13 @@ import {
   ChatHistoryStore,
   getConversationScope,
   makeConversationTitle,
-  normalizeTextContext,
   type ConversationScope,
   type PersistedConversation,
-  type PersistedTextMessage,
   type PersistedTurn,
 } from './chatHistoryStore';
 import { createUserMessageBubble } from '../components/userBubble';
+import { calculateContextBudget, createCheckpointMessage, type ContextCheckpoint } from './contextCompaction';
+import { buildDocumentSnapshot, createDocumentFingerprint } from '../utils/documentSnapshot';
 
 Zotero.debug('[zaibar-chatManager] module loaded');
 
@@ -74,7 +74,8 @@ export class Session {
   conversationCreatedAt?: number;
   conversationLastMessageAt?: number;
   persistedTurns: PersistedTurn[] = [];
-  persistedContextMessages: PersistedTextMessage[] = [];
+  persistedContextMessages: ModelMessage[] = [];
+  contextCheckpoint?: ContextCheckpoint;
   sourceLabel?: string;
   chatMode: 'normal' | 'full-text' | 'agent' = 'normal';
   thinkingEffort: 'none' | 'low' | 'medium' | 'high' | 'xhigh' = 'none';
@@ -103,6 +104,8 @@ export class Session {
     lastRenderedLength?: number;
     // --- agent ---
     isAgentMode?: boolean;
+    /** Messages already produced in the current Agent turn before an overflow retry. */
+    agentResumeMessages?: ModelMessage[];
     toolCalls?: Map<string, AgentToolCall>;
     toolResults?: Map<string, AgentToolResult>;
     toolCallBoxes?: Map<string, HTMLElement>;
@@ -193,79 +196,6 @@ export type AgentUserAnswer = {
   customInput?: string;
 };
 
-/**
- * A "round" starts at a `user` message and includes every following
- * assistant/tool message up to (but not including) the next `user` message.
- * Cutting only at round boundaries guarantees we never split an
- * `assistant.tool_calls` from its `tool` results — which is what triggers
- * DeepSeek's "Messages with role 'tool' must be a response to a preceding
- * message with 'tool_calls'" error.
- *
- * conversationHistory never contains a `system` message (it's appended
- * separately in sendChatRequest), so we only deal with user/assistant/tool.
- */
-function findRoundStartIndices(messages: ModelMessage[]): number[] {
-  const starts: number[] = [];
-  for (let i = 0; i < messages.length; i++) {
-    if (messages[i].role === 'user') starts.push(i);
-  }
-  return starts;
-}
-
-/**
- * Trim history to at most `maxMessages`, never breaking a round.
- * If the most recent round alone exceeds the cap, we keep only that round
- * rather than splitting it.
- */
-function trimHistoryToRounds(messages: ModelMessage[], maxMessages: number): ModelMessage[] {
-  if (messages.length <= maxMessages) return messages;
-  const starts = findRoundStartIndices(messages);
-  if (starts.length === 0) return messages.slice(-maxMessages);
-  // Walk from the last round backward, accumulating until we exceed the cap.
-  let keepFrom = starts[starts.length - 1];
-  let count = messages.length - keepFrom;
-  for (let i = starts.length - 2; i >= 0; i--) {
-    const roundLen = starts[i + 1] - starts[i];
-    if (count + roundLen > maxMessages) break;
-    keepFrom = starts[i];
-    count += roundLen;
-  }
-  return messages.slice(keepFrom);
-}
-
-/**
- * Token-aware narrowing: if the last request's prompt tokens approach the
- * active model's context window, drop oldest rounds until we estimate we're
- * back under ~70% of the limit. Falls back gracefully when usage or limit is
- * unknown. Always cuts on round boundaries (pair-safe).
- */
-function narrowHistoryByTokenBudget(
-  messages: ModelMessage[],
-  lastPromptTokens: number | undefined,
-  contextLimit: number | undefined
-): ModelMessage[] {
-  if (!lastPromptTokens || !contextLimit || contextLimit <= 0) return messages;
-  if (lastPromptTokens / contextLimit < 0.85) return messages;
-  const target = contextLimit * 0.7;
-  const starts = findRoundStartIndices(messages);
-  if (starts.length <= 1) return messages;
-  // Drop rounds from the front. Estimate new token usage proportionally to
-  // message count (coarse but cheap; the next request's real usage will
-  // re-calibrate).
-  let keepFrom = starts[0];
-  for (let i = 1; i < starts.length; i++) {
-    const keptFraction = (messages.length - starts[i]) / messages.length;
-    const estimated = lastPromptTokens * keptFraction;
-    if (estimated <= target) {
-      keepFrom = starts[i];
-      break;
-    }
-    keepFrom = starts[i];
-    if (i === starts.length - 1) break;
-  }
-  return messages.slice(keepFrom);
-}
-
 export interface TokenUsage {
   promptTokens?: number;
   completionTokens?: number;
@@ -330,6 +260,7 @@ export class ChatManager {
   public readonly historyStore = new ChatHistoryStore();
   private historyListeners = new Set<() => void>();
   private initializedScopeConversations = new Map<ConversationScope, string>();
+  private fullTextChoices = new Map<string, 'agent' | 'snapshot' | 'cancel'>();
   /** Per-section sidebar state (keyed by item.id / sectionId) */
 
   public sessionsMap: Map<string, Session> = new Map();
@@ -403,6 +334,7 @@ export class ChatManager {
       session.persistedTurns = [];
       session.persistedContextMessages = [];
       session.conversationHistory = [];
+      session.contextCheckpoint = undefined;
       session.sourceLabel = undefined;
       session.lastSentSelectionText = undefined;
       session.lastTurnSnapshot = undefined;
@@ -415,7 +347,15 @@ export class ChatManager {
     session.conversationCreatedAt = conversation.createdAt;
     session.conversationLastMessageAt = conversation.lastMessageAt;
     session.persistedTurns = conversation.turns.map((turn) => ({ ...turn }));
-    session.persistedContextMessages = conversation.contextMessages.map((message) => ({ ...message }));
+    session.contextCheckpoint = conversation.checkpoint
+      ? { ...conversation.checkpoint, recentTail: conversation.checkpoint.recentTail.map((message) => ({ ...message })) }
+      : undefined;
+    const restoredContext = conversation.contextMessages.length
+      ? conversation.contextMessages
+      : session.contextCheckpoint
+        ? [createCheckpointMessage(session.contextCheckpoint.summary), ...session.contextCheckpoint.recentTail]
+        : [];
+    session.persistedContextMessages = restoredContext.map((message) => ({ ...message })) as ModelMessage[];
     session.conversationHistory = session.persistedContextMessages.map((message) => ({ ...message })) as ModelMessage[];
     session.sourceLabel = conversation.turns
       .slice()
@@ -550,14 +490,13 @@ export class ChatManager {
     session.conversationTitle ??= makeConversationTitle(turn.userText, assistantMarkdown, getString('history-default-title' as any));
     session.conversationCreatedAt ??= now;
     session.conversationLastMessageAt = now;
-    const contextRounds = getPref('chat.contextRounds') ?? 8;
-    const currentContext = session.pending.userMessage
-      ? normalizeTextContext([session.pending.userMessage, { role: 'assistant', content: assistantMarkdown } as ModelMessage], 1)
-      : [];
-    session.persistedContextMessages = normalizeTextContext(
-      [...(session.persistedContextMessages as ModelMessage[]), ...(currentContext as ModelMessage[])],
-      contextRounds
-    );
+    session.persistedContextMessages = session.conversationHistory.map((message) => ({ ...message })) as ModelMessage[];
+    if (session.contextCheckpoint) {
+      session.contextCheckpoint = {
+        ...session.contextCheckpoint,
+        recentTail: session.conversationHistory.slice(1).map((message) => ({ ...message })) as ModelMessage[],
+      };
+    }
     const persistedKind: PersistedConversation['kind'] = session.kind === 'global-agent' ? 'global-agent' : 'article';
     const conversation: PersistedConversation = {
       id: session.conversationId!,
@@ -570,6 +509,7 @@ export class ChatManager {
       lastMessageAt: now,
       turns: session.favorite ? session.persistedTurns : session.persistedTurns.slice(-100),
       contextMessages: session.persistedContextMessages,
+      checkpoint: session.contextCheckpoint,
     };
     session.persistedTurns = conversation.turns.map((entry) => ({ ...entry }));
     this.historyStore.upsert(conversation);
@@ -587,11 +527,31 @@ export class ChatManager {
     this.notifyHistoryChanged();
   }
 
+  /** Persist a model-context checkpoint without changing the durable UI transcript. */
+  persistActiveContext(session: Session): void {
+    const scope = this.getSessionScope(session);
+    if (!scope || !session.conversationId || !session.conversationCreatedAt || !session.persistedTurns.length) return;
+    session.persistedContextMessages = session.conversationHistory.map((message) => ({ ...message })) as ModelMessage[];
+    const existing = this.historyStore.get(session.conversationId);
+    if (!existing) return;
+    this.historyStore.upsert({
+      ...existing,
+      contextMessages: session.persistedContextMessages,
+      checkpoint: session.contextCheckpoint,
+    });
+  }
+
   removePersistedTurnForRetry(session: Session, turnId: string | undefined): void {
     if (!turnId || session.kind === 'translation') return;
     session.persistedTurns = session.persistedTurns.filter((turn) => turn.id !== turnId);
     const lastUserIndex = session.persistedContextMessages.map((message) => message.role).lastIndexOf('user');
     if (lastUserIndex >= 0) session.persistedContextMessages = session.persistedContextMessages.slice(0, lastUserIndex);
+    if (session.contextCheckpoint) {
+      session.contextCheckpoint = {
+        ...session.contextCheckpoint,
+        recentTail: session.conversationHistory.slice(1).map((message) => ({ ...message })) as ModelMessage[],
+      };
+    }
     if (!session.persistedTurns.length) {
       if (session.conversationId) this.historyStore.delete(session.conversationId);
       session.conversationTitle = undefined;
@@ -614,6 +574,7 @@ export class ChatManager {
       lastMessageAt,
       turns: session.persistedTurns,
       contextMessages: session.persistedContextMessages,
+      checkpoint: session.contextCheckpoint,
     });
   }
 
@@ -739,6 +700,7 @@ export class ChatManager {
       translationRequest: {
         selectedText,
         targetLanguage: params.targetLanguage,
+        modelKey: getPref('translate.useAlternativeModel') ? getPref('translate.modelId') || undefined : undefined,
       },
     });
   }
@@ -756,8 +718,10 @@ export class ChatManager {
     itemId?: number;
     chatMode?: 'normal' | 'full-text' | 'agent';
     imageCapableModel?: boolean;
+    session?: Session;
   }): Promise<string> {
-    const { metadata, itemId, chatMode, imageCapableModel } = params;
+    const { metadata, itemId, imageCapableModel, session } = params;
+    let chatMode = params.chatMode;
     let systemPrompt = SYSTEM_PROMPT_PREFIX;
 
     // Append item metadata if enabled (stable → cacheable)
@@ -788,7 +752,71 @@ export class ChatManager {
     if (chatMode === 'full-text' && itemId !== undefined) {
       const fullText = await getItemFullText(itemId);
       if (fullText) {
-        systemPrompt += '\n\n# Full Document Text\n<fulldoc>\n' + fullText + '\n</fulldoc>';
+        const active = addon.data.userProviderConfigV2?.active;
+        const contextLimit = getActiveModelContextLimit();
+        const fingerprint = `${itemId}:${active?.providerId ?? ''}:${active?.modelId ?? ''}:${createDocumentFingerprint(fullText)}`;
+        const fullDocumentBlock = '\n\n# Full Document Text\n<fulldoc>\n' + fullText + '\n</fulldoc>';
+        const unsafe = calculateContextBudget({
+          messages: [{ role: 'system', content: systemPrompt + fullDocumentBlock }],
+          contextLimit,
+          outputAllowance: 4096,
+        }).shouldCompact;
+        const previousChoice = unsafe ? this.fullTextChoices.get(fingerprint) : undefined;
+        let useSnapshot = previousChoice === 'snapshot';
+        if (previousChoice === 'agent' && session) {
+          session.chatMode = 'agent';
+          chatMode = 'agent';
+        } else if (previousChoice === 'cancel') {
+          const error = new Error('Full-text request cancelled.');
+          error.name = 'FullTextRequestCancelledError';
+          throw error;
+        }
+        if (unsafe && !previousChoice) {
+          const services = Zotero.getMainWindow().Services as any;
+          const flags =
+            services.prompt.BUTTON_POS_0 * services.prompt.BUTTON_TITLE_IS_STRING +
+            services.prompt.BUTTON_POS_1 * services.prompt.BUTTON_TITLE_IS_STRING +
+            services.prompt.BUTTON_POS_2 * services.prompt.BUTTON_TITLE_CANCEL;
+          const english = String((Zotero as any).locale ?? '').startsWith('en');
+          const result = services.prompt.confirmEx(
+            Zotero.getMainWindow(),
+            english ? 'Document is too long' : '文档过长',
+            english
+              ? 'The complete document may exceed this model’s context window. Agent mode can inspect it on demand with grep/read.'
+              : '完整文档可能超过当前模型的上下文窗口。Agent 模式可通过 grep/read 按需读取。',
+            flags,
+            english ? 'Switch to Agent (recommended)' : '切换到 Agent（推荐）',
+            english ? 'Continue with document snapshot' : '继续使用文档快照',
+            '',
+            '',
+            {}
+          );
+          if (result === 0 && session) {
+            this.fullTextChoices.set(fingerprint, 'agent');
+            session.chatMode = 'agent';
+            chatMode = 'agent';
+          } else if (result === 1) {
+            useSnapshot = true;
+            this.fullTextChoices.set(fingerprint, 'snapshot');
+          } else {
+            this.fullTextChoices.set(fingerprint, 'cancel');
+            const error = new Error('Full-text request cancelled.');
+            error.name = 'FullTextRequestCancelledError';
+            throw error;
+          }
+        }
+        if (chatMode === 'full-text') {
+          if (useSnapshot) {
+            const snapshotBudget = Math.max(4096, Math.min(32000, Math.round((contextLimit ?? 64000) * 0.35)));
+            const snapshot = buildDocumentSnapshot(fullText, metadata, snapshotBudget);
+            systemPrompt +=
+              '\n\n# Document Snapshot\nThis is a deterministic partial snapshot, not the complete document. Do not claim that it contains the full text.\n<document-snapshot>\n' +
+              snapshot +
+              '\n</document-snapshot>';
+          } else {
+            systemPrompt += fullDocumentBlock;
+          }
+        }
       }
     }
 
@@ -864,29 +892,18 @@ export class ChatManager {
 
     session.pending.isNewSource = !!params.sourceLabel && session.sourceLabel !== params.sourceLabel;
 
-    // cleanup history — pair-safe trimming.
-    // `contextRounds` caps how many rounds we keep; the token-aware pass
-    // below can drop more if the last request approached the context window.
-    const contextRounds = getPref('chat.contextRounds') ?? 8;
-    const maxHistoryMessages = contextRounds * 2;
     // Reader popup shortcuts append to the current article conversation.
     // Only an actual source change resets model context; starting a new
     // conversation remains an explicit action in the chat header.
     if (session.pending.isNewSource) {
       session.conversationHistory = [];
       session.persistedContextMessages = [];
+      session.contextCheckpoint = undefined;
       // History reset means the model has no memory of prior turns, so the
       // "last sent selection" tracking must also reset — otherwise a popup
       // action that fires with the same selection as before would suppress
       // the block and leave the new conversation without any selection context.
       session.lastSentSelectionText = undefined;
-    } else {
-      session.conversationHistory = trimHistoryToRounds(session.conversationHistory, maxHistoryMessages);
-      session.conversationHistory = narrowHistoryByTokenBudget(
-        session.conversationHistory,
-        session.lastUsage?.promptTokens,
-        getActiveModelContextLimit()
-      );
     }
     if (session.pending.abortController) {
       session.pending.abortController.abort();
@@ -951,6 +968,7 @@ export class ChatManager {
             itemId: itemId,
             chatMode: session.effectiveChatMode,
             imageCapableModel,
+            session,
           });
       const systemMsg: SystemModelMessage = {
         role: 'system',

@@ -119,7 +119,7 @@ export interface AddedModel extends Model {
   enabled: boolean;
 }
 
-interface ModelSelect {
+export interface ModelSelect {
   providerId: ProviderId;
   modelId: string;
 }

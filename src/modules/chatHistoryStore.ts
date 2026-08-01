@@ -1,4 +1,5 @@
 import type { ModelMessage } from 'ai';
+import type { ContextCheckpoint } from './contextCompaction';
 
 export type ConversationScope = `article:${number}` | 'global-agent';
 
@@ -26,16 +27,17 @@ export interface PersistedConversation {
   createdAt: number;
   lastMessageAt: number;
   turns: PersistedTurn[];
-  contextMessages: PersistedTextMessage[];
+  contextMessages: ModelMessage[];
+  checkpoint?: ContextCheckpoint;
 }
 
 export interface PersistedChatHistoryFile {
-  version: 1;
+  version: 2;
   activeByScope: Record<string, string>;
   conversations: PersistedConversation[];
 }
 
-const HISTORY_VERSION = 1 as const;
+const HISTORY_VERSION = 2 as const;
 export const MAX_REGULAR_CONVERSATIONS = 100;
 export const MAX_REGULAR_TURNS = 100;
 const HISTORY_FILENAME = 'chat-history-v1.json';
@@ -51,6 +53,24 @@ export function getConversationScope(kind: 'article' | 'global-agent', itemId?: 
 
 function isTextMessage(value: any): value is PersistedTextMessage {
   return !!value && (value.role === 'user' || value.role === 'assistant') && typeof value.content === 'string' && value.content.trim().length > 0;
+}
+
+function isModelMessage(value: any): value is ModelMessage {
+  return (
+    !!value &&
+    (value.role === 'user' || value.role === 'assistant' || value.role === 'tool') &&
+    (typeof value.content === 'string' || Array.isArray(value.content))
+  );
+}
+
+function sanitizeCheckpoint(value: any): ContextCheckpoint | undefined {
+  if (!value || typeof value.summary !== 'string' || !value.summary.trim() || typeof value.createdAt !== 'number') return undefined;
+  return {
+    summary: value.summary,
+    coveredThroughTurnId: typeof value.coveredThroughTurnId === 'string' ? value.coveredThroughTurnId : undefined,
+    createdAt: value.createdAt,
+    recentTail: Array.isArray(value.recentTail) ? value.recentTail.filter(isModelMessage) : [],
+  };
 }
 
 function isTurn(value: any): value is PersistedTurn {
@@ -85,13 +105,15 @@ function sanitizeConversation(value: any): PersistedConversation | undefined {
     createdAt,
     lastMessageAt,
     turns: favorite ? turns : turns.slice(-MAX_REGULAR_TURNS),
-    contextMessages: Array.isArray(value.contextMessages) ? value.contextMessages.filter(isTextMessage) : [],
+    contextMessages: Array.isArray(value.contextMessages) ? value.contextMessages.filter(isModelMessage) : [],
+    checkpoint: sanitizeCheckpoint(value.checkpoint),
   };
 }
 
 export function sanitizeHistoryFile(value: any): PersistedChatHistoryFile | null | 'unsupported' {
   if (!value || typeof value !== 'object') return null;
-  if (value.version !== HISTORY_VERSION) return typeof value.version === 'number' && value.version > HISTORY_VERSION ? 'unsupported' : null;
+  if (typeof value.version === 'number' && value.version > HISTORY_VERSION) return 'unsupported';
+  if (value.version !== 1 && value.version !== HISTORY_VERSION) return null;
   const conversations: PersistedConversation[] = Array.isArray(value.conversations)
     ? value.conversations
         .map((entry: any) => sanitizeConversation(entry))

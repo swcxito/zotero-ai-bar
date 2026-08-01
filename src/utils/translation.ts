@@ -109,6 +109,8 @@ function normalizeSinglePartOfSpeech(value: string): string | undefined {
 export interface TranslationRequestMeta {
   selectedText: string;
   targetLanguage: string;
+  /** Optional providerId::modelId used only for this translation request. */
+  modelKey?: string;
 }
 
 export const TRANSLATION_SYSTEM_PROMPT = 'You are a dedicated translation engine.';

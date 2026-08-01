@@ -21,6 +21,7 @@ import { ToolCallBox, updateToolCallBox } from '../components/toolCallBox';
 import { escapeHtml, renderMarkdown } from '../utils/markdown';
 import { scrollToBottom, setSendBtnEnabled } from './mainWindowSidePane';
 import type { Session, TokenUsage } from './chatManager';
+import { isContextOverflowError } from './contextCompaction';
 import { IconView } from '../components/iconView';
 import { Icons } from '../components/common';
 import { getString } from '../utils/locale';
@@ -1296,12 +1297,17 @@ export function onReasoningEndV2(session: Session) {
  * Text segments and tool cards are interleaved in stream order:
  *   text-segment-1 → tool-card-1 → text-segment-2 → tool-card-2 → ...
  */
-export async function consumeAgentStream(session: Session, result: any, refreshRate: number) {
+export async function consumeAgentStream(
+  session: Session,
+  result: any,
+  refreshRate: number,
+  options?: { deferContextOverflow?: boolean }
+): Promise<{ failed: boolean; error?: unknown; hadText: boolean; contextOverflowBeforeOutput: boolean }> {
   const pop = session.pending.messagePop as HTMLElement | undefined;
-  if (!pop) return;
+  if (!pop) return { failed: true, hadText: false, contextOverflowBeforeOutput: false };
 
   const chatMessage = pop.querySelector('.chat-message') as HTMLElement | null;
-  if (!chatMessage) return;
+  if (!chatMessage) return { failed: true, hadText: false, contextOverflowBeforeOutput: false };
 
   const doc = pop.ownerDocument!;
 
@@ -1313,6 +1319,8 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
   let textBuffer = '';
   let textChunkCount = 0;
   let aborted = false;
+  let streamFailure: unknown;
+  let contextOverflowBeforeOutput = false;
   let fullMarkdownBuffer = ''; // accumulate raw markdown for copy
 
   function ensureTextSegment(): HTMLElement {
@@ -1458,6 +1466,12 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
         case 'error': {
           ztoolkit.log('[chatUI] agent stream error part:', part);
           const errObj = (part as any)?.error ?? part;
+          streamFailure = errObj;
+          if (options?.deferContextOverflow && !fullMarkdownBuffer.trim() && isContextOverflowError(errObj)) {
+            contextOverflowBeforeOutput = true;
+            aborted = true;
+            break;
+          }
           const errMsg = buildErrorMessage(errObj);
           onLLMStreamErrorV2({ session, error: errMsg });
           aborted = true;
@@ -1474,10 +1488,20 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
       aborted = true;
     } else {
       ztoolkit.log('[chatUI] agent stream iteration failed:', e);
-      const errMsg = buildErrorMessage(e);
-      onLLMStreamErrorV2({ session, error: errMsg });
-      aborted = true;
+      streamFailure = e;
+      if (options?.deferContextOverflow && !fullMarkdownBuffer.trim() && isContextOverflowError(e)) {
+        contextOverflowBeforeOutput = true;
+        aborted = true;
+      } else {
+        const errMsg = buildErrorMessage(e);
+        onLLMStreamErrorV2({ session, error: errMsg });
+        aborted = true;
+      }
     }
+  }
+
+  if (contextOverflowBeforeOutput) {
+    return { failed: true, error: streamFailure, hadText: false, contextOverflowBeforeOutput: true };
   }
 
   // Flush remaining text (skip if buffer is empty to avoid creating an empty segment)
@@ -1497,6 +1521,9 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
         if (session.pending.userMessage) {
           session.conversationHistory.push(session.pending.userMessage);
         }
+        if (session.pending.agentResumeMessages?.length) {
+          session.conversationHistory.push(...session.pending.agentResumeMessages);
+        }
         session.conversationHistory.push(...response.messages);
       }
       agentUsage = (response as any)?.usage;
@@ -1507,12 +1534,21 @@ export async function consumeAgentStream(session: Session, result: any, refreshR
           ztoolkit.log('[chatUI] agent usage fetch failed:', e);
         }
       }
+      if (typeof agentUsage?.cachedInputTokens === 'number') {
+        Zotero.debug(`[zaibar-cache] agent cachedInputTokens=${agentUsage.cachedInputTokens}`);
+      }
     } catch (e) {
       ztoolkit.log('[chatUI] failed to get agent response messages:', e);
     }
   }
 
   onLLMStreamEndV2(session, agentUsage, aborted);
+  return {
+    failed: aborted,
+    error: streamFailure,
+    hadText: Boolean(fullMarkdownBuffer.trim()),
+    contextOverflowBeforeOutput: false,
+  };
 }
 
 export function onAgentAskUser(session: Session, payload: any) {
