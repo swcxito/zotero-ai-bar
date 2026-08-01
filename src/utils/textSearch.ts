@@ -40,6 +40,76 @@ export type GrepInTextOptions = {
   lineToPage?: Map<number, number>;
 };
 
+export type GrepPage = {
+  excerpts: GrepMatch[];
+  totalMatches: number;
+  truncated: boolean;
+  nextOffset?: number;
+  remaining: number;
+};
+
+const MAX_GREP_RESULTS = 500;
+const MAX_EXCERPT_CHARS = 2000;
+const MAX_GREP_OUTPUT_CHARS = 250000;
+
+export function grepInTextPaginated(
+  text: string,
+  pattern: string,
+  useRegex: boolean,
+  maxResults: number,
+  offset: number,
+  pageTexts?: string[],
+  options?: GrepInTextOptions
+): GrepPage {
+  const safeMax = Math.max(1, Math.min(MAX_GREP_RESULTS, maxResults));
+  const safeOffset = Math.max(0, Math.floor(offset));
+  const lines = options?.lines ?? text.split('\n');
+  const lineToPage = options?.lineToPage ?? (pageTexts ? buildLineToPageMap(lines, pageTexts) : undefined);
+  const matches: GrepMatch[] = [];
+  if (!pattern) return { excerpts: [], totalMatches: 0, truncated: false, remaining: 0 };
+
+  let test: (line: string) => boolean;
+  if (!useRegex) {
+    const needle = pattern.toLowerCase();
+    test = (line) => line.toLowerCase().includes(needle);
+  } else {
+    try {
+      const regex = new RegExp(pattern, 'i');
+      test = (line) => regex.test(line);
+    } catch (error) {
+      return {
+        excerpts: [{ line: 0, excerpt: `Invalid pattern: ${String(error)}` }],
+        totalMatches: 1,
+        truncated: false,
+        remaining: 0,
+      };
+    }
+  }
+
+  let totalMatches = 0;
+  let outputChars = 0;
+  for (let index = 0; index < lines.length; index++) {
+    if (!test(lines[index])) continue;
+    if (totalMatches >= safeOffset && matches.length < safeMax) {
+      const excerpt = lines[index].trim().slice(0, MAX_EXCERPT_CHARS);
+      if (outputChars + excerpt.length <= MAX_GREP_OUTPUT_CHARS) {
+        matches.push({ line: index + 1, excerpt, page: lineToPage?.get(index) });
+        outputChars += excerpt.length;
+      }
+    }
+    totalMatches++;
+  }
+  const nextOffset = safeOffset + matches.length;
+  const remaining = Math.max(0, totalMatches - nextOffset);
+  return {
+    excerpts: matches,
+    totalMatches,
+    truncated: remaining > 0,
+    nextOffset: remaining > 0 ? nextOffset : undefined,
+    remaining,
+  };
+}
+
 /**
  * Search for a literal or regex pattern inside a text block.
  * Case-insensitive. Returns up to maxResults matches with 1-based line numbers.
@@ -54,48 +124,7 @@ export function grepInText(
   pageTexts?: string[],
   options?: GrepInTextOptions
 ): GrepMatch[] {
-  const safeMax = Math.max(1, Math.min(50, maxResults));
-  if (!pattern) {
-    return [];
-  }
-
-  // Literal fast path: lowercase substring scan, no regex engine.
-  // useRegex===false means pattern is a plain literal; case-insensitivity is
-  // handled by lowercasing both sides.
-  const lines = options?.lines ?? text.split('\n');
-  const lineToPage = options?.lineToPage ?? (pageTexts ? buildLineToPageMap(lines, pageTexts) : undefined);
-
-  const results: GrepMatch[] = [];
-  if (!useRegex) {
-    const needle = pattern.toLowerCase();
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].toLowerCase().includes(needle)) {
-        results.push({ line: i + 1, excerpt: lines[i].trim(), page: lineToPage?.get(i) });
-        if (results.length >= safeMax) break;
-      }
-    }
-    return results;
-  }
-
-  // Regex path. Note: we use the 'i' flag WITHOUT 'g'. A previous version used
-  // 'gi' and called regex.test() per line - but 'g' makes test() stateful
-  // (lastIndex carries across lines), which silently skipped matches on
-  // consecutive identical matching lines. We only need "does this line match",
-  // so a stateless case-insensitive test is correct and faster.
-  let regex: RegExp;
-  try {
-    regex = new RegExp(pattern, 'i');
-  } catch (e) {
-    return [{ line: 0, excerpt: `Invalid pattern: ${String(e)}` }];
-  }
-
-  for (let i = 0; i < lines.length; i++) {
-    if (regex.test(lines[i])) {
-      results.push({ line: i + 1, excerpt: lines[i].trim(), page: lineToPage?.get(i) });
-      if (results.length >= safeMax) break;
-    }
-  }
-  return results;
+  return grepInTextPaginated(text, pattern, useRegex, maxResults, 0, pageTexts, options).excerpts;
 }
 
 function escapeRegExp(value: string): string {

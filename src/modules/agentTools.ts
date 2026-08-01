@@ -9,7 +9,7 @@ import { tool, asSchema } from 'ai';
 import type { Session, AgentUserAnswer } from './chatManager';
 import { getItemFullText } from '../utils/itemContext';
 import { getZoteroItem, readItemText, searchLibraryItems, buildLibraryTree, getItemFullTextByPage } from '../utils/zoteroItemAccess';
-import { grepInText } from '../utils/textSearch';
+import { grepInTextPaginated } from '../utils/textSearch';
 import { onAgentAskUser } from './chatUI';
 import { getReaderByTabId } from './tabObserver';
 import { capturePageByNumber, getPDFReaderForItem } from './capture';
@@ -90,11 +90,18 @@ export const grepTool = tool({
       throw new Error('Full text not available for this item.');
     }
 
-    const results = grepInText(fullText, input.pattern, input.useRegex ?? true, input.maxResults ?? 20, pageTexts, {
+    const results = grepInTextPaginated(fullText, input.pattern, input.useRegex ?? true, input.maxResults ?? 50, input.offset ?? 0, pageTexts, {
       lines: pageResult?.lines,
       lineToPage: pageResult?.lineToPage,
     });
-    return { matches: results.length, excerpts: results };
+    return {
+      matches: results.excerpts.length,
+      totalMatches: results.totalMatches,
+      excerpts: results.excerpts,
+      truncated: results.truncated,
+      nextOffset: results.nextOffset,
+      remaining: results.remaining,
+    };
   },
 });
 

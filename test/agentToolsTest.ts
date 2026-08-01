@@ -1,4 +1,4 @@
-import { grepInText } from '../src/utils/textSearch';
+import { grepInText, grepInTextPaginated } from '../src/utils/textSearch';
 import { askUserSchema, grepSchema, readSchema, globSchema, treeSchema } from '../src/utils/agentSchemas';
 
 function assert(condition: boolean, message: string) {
@@ -32,6 +32,12 @@ function runTests() {
   });
   assert(parsed.success, 'valid single question');
 
+  const paginationText = Array.from({ length: 120 }, (_, index) => `match ${index}`).join('\n');
+  const firstPage = grepInTextPaginated(paginationText, 'match', false, 50, 0);
+  assert(firstPage.excerpts.length === 50 && firstPage.nextOffset === 50 && firstPage.remaining === 70, 'grep first page metadata');
+  const lastPage = grepInTextPaginated(paginationText, 'match', false, 50, 100);
+  assert(lastPage.excerpts.length === 20 && !lastPage.truncated, 'grep last page metadata');
+
   parsed = askUserSchema.safeParse({
     questions: Array.from({ length: 6 }, (_, i) => ({ question: `Q${i}`, options: ['A', 'B'] })),
   });
@@ -45,7 +51,7 @@ function runTests() {
   // grepSchema
   assert(!grepSchema.safeParse({}).success, 'grep requires pattern');
   assert(grepSchema.safeParse({ pattern: 'test', useRegex: true, maxResults: 10 }).success, 'grep valid');
-  assert(!grepSchema.safeParse({ pattern: 'test', maxResults: 100 }).success, 'grep maxResults above 50');
+  assert(!grepSchema.safeParse({ pattern: 'test', maxResults: 501 }).success, 'grep maxResults above 500');
 
   // readSchema
   assert(!readSchema.safeParse({ includeFullText: true }).success, 'read requires itemId');

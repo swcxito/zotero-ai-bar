@@ -31,7 +31,15 @@ export const grepSchema = z.object({
     .optional()
     .default(true)
     .describe('Treat pattern as a regular expression (default: true). Set to false for a literal case-insensitive match.'),
-  maxResults: z.number().int().min(1).max(50).optional().describe('Maximum number of matching excerpts to return.'),
+  maxResults: z
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .optional()
+    .default(50)
+    .describe('Maximum number of matching excerpts to return (default 50, max 500).'),
+  offset: z.number().int().min(0).optional().default(0).describe('Zero-based match offset for paginating large result sets.'),
 });
 
 export type GrepPayload = z.infer<typeof grepSchema>;

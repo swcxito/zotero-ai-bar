@@ -28,6 +28,8 @@ export type ReadItemResult = {
   page?: number;
   lineRange?: { start: number; end: number };
   targetRange?: { start: number; end: number };
+  truncated?: boolean;
+  nextStartLine?: number;
 };
 
 export type GlobItem = {
@@ -132,15 +134,39 @@ export async function getItemFullTextByPage(itemId: number): Promise<PageTextRes
   }
 }
 
-function formatLines(lines: string[], start: number, end: number, targetStart?: number, targetEnd?: number, lineOffset: number = 0): string {
-  const maxWidth = String(lineOffset + end).length;
+const MAX_READ_LINES = 5000;
+const MAX_READ_CHARS = 250000;
+
+export function formatLinesLimited(
+  lines: string[],
+  start: number,
+  end: number,
+  targetStart?: number,
+  targetEnd?: number,
+  lineOffset: number = 0
+): { text: string; end: number; truncated: boolean } {
+  const cappedEnd = Math.min(end, start + MAX_READ_LINES);
+  const maxWidth = String(lineOffset + cappedEnd).length;
   const parts: string[] = [];
-  for (let i = start; i < end; i++) {
-    const lineNum = String(lineOffset + i + 1).padStart(maxWidth, ' ');
-    const inTarget = targetStart !== undefined && targetEnd !== undefined && i >= targetStart && i < targetEnd;
-    parts.push(`${inTarget ? '>' : ' '} ${lineNum} | ${lines[i]}`);
+  let chars = 0;
+  let actualEnd = start;
+  for (let index = start; index < cappedEnd; index++) {
+    const lineNum = String(lineOffset + index + 1).padStart(maxWidth, ' ');
+    const inTarget = targetStart !== undefined && targetEnd !== undefined && index >= targetStart && index < targetEnd;
+    const row = `${inTarget ? '>' : ' '} ${lineNum} | ${lines[index]}`;
+    const separator = parts.length ? 1 : 0;
+    if (chars + separator + row.length > MAX_READ_CHARS) {
+      if (!parts.length) {
+        parts.push(row.slice(0, MAX_READ_CHARS));
+        actualEnd = index + 1;
+      }
+      break;
+    }
+    parts.push(row);
+    chars += separator + row.length;
+    actualEnd = index + 1;
   }
-  return parts.join('\n');
+  return { text: parts.join('\n'), end: actualEnd, truncated: actualEnd < end };
 }
 
 /**
@@ -222,17 +248,21 @@ export async function readItemText(
         lineOffset += pageResult.pageLineCounts[p] ?? pageResult.pageTexts[p].split('\n').length;
       }
 
-      result.text = formatLines(lines, 0, lines.length, undefined, undefined, lineOffset);
+      const formatted = formatLinesLimited(lines, 0, lines.length, undefined, undefined, lineOffset);
+      result.text = formatted.text;
       result.page = pageNumber;
-      result.lineRange = { start: lineOffset + 1, end: lineOffset + lines.length };
-      result.targetRange = { start: lineOffset + 1, end: lineOffset + lines.length };
+      result.lineRange = { start: lineOffset + 1, end: lineOffset + formatted.end };
+      result.targetRange = { start: lineOffset + 1, end: lineOffset + formatted.end };
+      result.truncated = formatted.truncated;
+      result.nextStartLine = formatted.truncated ? lineOffset + formatted.end + 1 : undefined;
       return result;
     }
 
     // Line-based reading (uses precomputed lines - no re-split).
     const allLines = pageResult.lines;
     const targetStart = Math.max(0, (startLine ?? 1) - 1);
-    const targetEnd = endLine !== undefined ? Math.min(allLines.length, endLine) : targetStart + 1;
+    const requestedTargetEnd = endLine !== undefined ? Math.min(allLines.length, endLine) : targetStart + 1;
+    const targetEnd = Math.min(requestedTargetEnd, targetStart + MAX_READ_LINES);
     if (targetStart >= allLines.length) {
       return { error: `Start line ${startLine} is out of range (1-${allLines.length})` };
     }
@@ -241,9 +271,12 @@ export async function readItemText(
     const readStart = Math.max(0, targetStart - ctx);
     const readEnd = Math.min(allLines.length, targetEnd + ctx);
 
-    result.text = formatLines(allLines, readStart, readEnd, targetStart, targetEnd);
-    result.lineRange = { start: readStart + 1, end: readEnd };
-    result.targetRange = { start: targetStart + 1, end: targetEnd };
+    const formatted = formatLinesLimited(allLines, readStart, readEnd, targetStart, targetEnd);
+    result.text = formatted.text;
+    result.lineRange = { start: readStart + 1, end: formatted.end };
+    result.targetRange = { start: targetStart + 1, end: Math.min(targetEnd, formatted.end) };
+    result.truncated = formatted.truncated || targetEnd < requestedTargetEnd;
+    result.nextStartLine = result.truncated ? Math.max(targetStart + 1, formatted.end + 1) : undefined;
   }
 
   return result;
@@ -412,6 +445,30 @@ function resolveCollectionByKey(key: string, libraryID: number): any | undefined
   }
 }
 
+export function isValidTreeItem(item: any): boolean {
+  if (!item || !item.isRegularItem?.() || item.isAttachment?.() || item.isNote?.() || item.isAnnotation?.()) return false;
+  const creators = (item.getCreators?.() ?? []) as any[];
+  const authors = creators
+    .map((creator) => `${creator.firstName ?? ''} ${creator.lastName ?? ''} ${creator.name ?? ''}`.trim())
+    .filter(Boolean)
+    .join(' ');
+  const fields = ['title', 'date', 'publicationTitle', 'proceedingsTitle', 'publisher', 'abstractNote'];
+  return Boolean(authors || fields.some((field) => String(item.getField?.(field) ?? '').trim()));
+}
+
+function filterValidTreeItems(rawItems: any[]): any[] {
+  const result: any[] = [];
+  for (const rawItem of rawItems) {
+    try {
+      const item = typeof rawItem === 'number' ? Zotero.Items.get(rawItem) : rawItem;
+      if (isValidTreeItem(item)) result.push(item);
+    } catch (error) {
+      ztoolkit.log('[tree] failed to resolve item:', error);
+    }
+  }
+  return result;
+}
+
 async function countItemsRecursive(collectionId: number | undefined, libraryID: number): Promise<number> {
   try {
     let ownItems: any[];
@@ -424,12 +481,12 @@ async function countItemsRecursive(collectionId: number | undefined, libraryID: 
       raw = Zotero.Items.getAll(libraryID, true);
       ownItems = (Array.isArray(raw) ? raw : await raw) as any[];
     }
-    let count = Array.isArray(ownItems) ? ownItems.length : 0;
+    let count = Array.isArray(ownItems) ? filterValidTreeItems(ownItems).length : 0;
     if (!Array.isArray(ownItems)) {
       ztoolkit.log('[tree] getChildItems/getAll did not return an array for', collectionId ?? 'root', raw);
     }
-    const children =
-      collectionId !== undefined ? (Zotero.Collections.getByParent(collectionId) as any[]) : (Zotero.Collections.getByLibrary(libraryID) as any[]);
+    if (collectionId === undefined) return count;
+    const children = Zotero.Collections.getByParent(collectionId) as any[];
     for (const child of children) {
       count += await countItemsRecursive(child.id, libraryID);
     }
@@ -477,7 +534,7 @@ async function renderItemLines(collectionId: number, prefix: string, itemLimit: 
     const collection = Zotero.Collections.get(collectionId);
     const raw = collection?.getChildItems?.(true) as any;
     const awaited = Array.isArray(raw) ? raw : await raw;
-    const items = (Array.isArray(awaited) ? awaited : []) as any[];
+    const items = filterValidTreeItems((Array.isArray(awaited) ? awaited : []) as any[]);
     if (!Array.isArray(awaited)) {
       ztoolkit.log('[tree] getChildItems did not return array for collection', collectionId, awaited);
     }
@@ -486,8 +543,7 @@ async function renderItemLines(collectionId: number, prefix: string, itemLimit: 
       try {
         const isLast = i === sliced.length - 1;
         const branch = isLast ? '└── ' : '├── ';
-        const rawItem = sliced[i];
-        const item = typeof rawItem === 'number' ? Zotero.Items.get(rawItem) : rawItem;
+        const item = sliced[i];
         if (!item) {
           continue;
         }
@@ -519,7 +575,7 @@ async function renderRootItemLines(libraryID: number, prefix: string, itemLimit:
     for (const rawItem of allItems) {
       try {
         const item = typeof rawItem === 'number' ? Zotero.Items.get(rawItem) : rawItem;
-        if (item && (!item.getCollections || item.getCollections().length === 0)) {
+        if (isValidTreeItem(item) && (!item.getCollections || item.getCollections().length === 0)) {
           items.push(item);
         }
       } catch (itemErr) {
