@@ -12,6 +12,7 @@ declare namespace _ZoteroTypes {
       "llm.modelName": string;
       "llm.temperature100": number;
       "llm.temperatureEnabled": boolean;
+      "llm.maxTokensEnabled": boolean;
       "llm.maxTokens": number;
       "llm.streamUpdateSpeed": string;
       "chat.location": string;

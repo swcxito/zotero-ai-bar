@@ -49,6 +49,7 @@ function populateSelectorFromV2(selector: HTMLSelectElement, doc: Document, incl
   if (includeEmptyOption) {
     const opt = doc.createElement('option');
     opt.value = '';
+    opt.textContent = getString('pref-translate-model-default');
     selector.appendChild(opt);
   }
 
@@ -90,9 +91,12 @@ function setInitialSelectorValue(selector: HTMLSelectElement, doc: Document) {
   }
 }
 
+const THINKING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh'] as const;
+
 async function updatePrefsUI() {
   const doc = addon.data.prefs?.window.document;
   if (!doc) return;
+  let refreshTranslationModelState: (() => void) | undefined;
 
   // Model selector
   const modelSelector = doc.querySelector(makeId('model-selector')) as HTMLSelectElement;
@@ -109,6 +113,11 @@ async function updatePrefsUI() {
         // Dialog has already updated addon.data.userProviderConfigV2 in memory
         populateSelectorFromV2(modelSelector, doc);
         setInitialSelectorValue(modelSelector, doc);
+        if (translateModelSelector) {
+          populateSelectorFromV2(translateModelSelector, doc, true);
+          translateModelSelector.value = getPref('translate.modelId');
+          refreshTranslationModelState?.();
+        }
       });
     });
   }
@@ -131,9 +140,72 @@ async function updatePrefsUI() {
     syncTemperatureDisabled();
   }
 
+  const maxTokensCheckbox = doc.querySelector(makeId('max-tokens-enabled')) as HTMLInputElement;
+  const maxTokensInput = doc.querySelector(makeId('max-tokens-input')) as HTMLInputElement;
+  if (maxTokensCheckbox && maxTokensInput) {
+    maxTokensCheckbox.checked = !!getPref('llm.maxTokensEnabled');
+    maxTokensInput.value = String(getPref('llm.maxTokens'));
+    const syncMaxTokensDisabled = () => {
+      maxTokensInput.disabled = !maxTokensCheckbox.checked;
+      setPref('llm.maxTokensEnabled', maxTokensCheckbox.checked);
+    };
+    maxTokensCheckbox.addEventListener('change', syncMaxTokensDisabled);
+    maxTokensInput.addEventListener('change', () => {
+      const value = Number(maxTokensInput.value);
+      if (Number.isFinite(value)) setPref('llm.maxTokens', value);
+    });
+    syncMaxTokensDisabled();
+  }
+
+  const thinkingInput = doc.querySelector(makeId('default-thinking-effort')) as HTMLInputElement;
+  const thinkingValue = doc.querySelector(makeId('default-thinking-effort-value')) as HTMLElement;
+  if (thinkingInput && thinkingValue) {
+    const storedEffort = getPref('chat.thinkingEffort');
+    const storedIndex = THINKING_EFFORTS.indexOf(storedEffort as (typeof THINKING_EFFORTS)[number]);
+    thinkingInput.value = String(storedIndex >= 0 ? storedIndex : 0);
+    const syncThinkingEffort = (persist: boolean) => {
+      const effort = THINKING_EFFORTS[Number(thinkingInput.value)] ?? 'none';
+      thinkingValue.textContent = getString(`thinking-effort-${effort}`);
+      if (persist) setPref('chat.thinkingEffort', effort);
+    };
+    thinkingInput.addEventListener('input', () => syncThinkingEffort(true));
+    syncThinkingEffort(false);
+  }
+
   const translateModelSelector = doc.querySelector(makeId('translate-model-selector')) as HTMLSelectElement;
   if (translateModelSelector) {
     populateSelectorFromV2(translateModelSelector, doc, true);
+    translateModelSelector.value = getPref('translate.modelId');
+    translateModelSelector.addEventListener('change', () => {
+      setPref('translate.modelId', translateModelSelector.value);
+    });
+  }
+
+  const useTranslateModelCheckbox = doc.querySelector(makeId('use-translate-model')) as XUL.Checkbox;
+  if (useTranslateModelCheckbox && translateModelSelector) {
+    const syncTranslationModelState = (persist: boolean) => {
+      let useAlternative = !!useTranslateModelCheckbox.checked;
+      const hasAlternativeModels = translateModelSelector.options.length > 1;
+      if (useAlternative && !hasAlternativeModels) {
+        useAlternative = false;
+        useTranslateModelCheckbox.checked = false;
+        persist = true;
+      }
+      useTranslateModelCheckbox.disabled = !hasAlternativeModels;
+      translateModelSelector.disabled = !useAlternative;
+      if (useAlternative && !translateModelSelector.value && translateModelSelector.options.length > 1) {
+        translateModelSelector.selectedIndex = 1;
+        setPref('translate.modelId', translateModelSelector.value);
+      }
+      if (persist) setPref('translate.useAlternativeModel', useAlternative);
+    };
+    refreshTranslationModelState = () => {
+      useTranslateModelCheckbox.checked = !!getPref('translate.useAlternativeModel');
+      syncTranslationModelState(false);
+    };
+    useTranslateModelCheckbox.addEventListener('command', () => syncTranslationModelState(true));
+    useTranslateModelCheckbox.addEventListener('change', () => syncTranslationModelState(true));
+    refreshTranslationModelState();
   }
 
   // Populate target language selector from Zotero.Styles.locales

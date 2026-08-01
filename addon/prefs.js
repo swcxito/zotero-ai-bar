@@ -3,6 +3,7 @@ pref('llm.apiKey', '');
 pref('llm.modelName', 'gpt-4o');
 pref('llm.temperature100', 50);
 pref('llm.temperatureEnabled', false);
+pref('llm.maxTokensEnabled', false);
 pref('llm.maxTokens', 3000);
 pref('llm.streamUpdateSpeed', 'default');
 pref('chat.location', 'sidebar');

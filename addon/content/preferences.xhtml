@@ -51,27 +51,97 @@
         <html:input type="range" min="0" max="200" step="5" preference="llm.temperature100" id="__addonRef__-temperature-input" />
       </vbox>
       <vbox flex="1">
-        <html:label data-l10n-id="pref-max-tokens" />
-        <html:input type="number" min="256" max="8192" step="256" value="2048" style="text-align: left" preference="llm.maxTokens" />
+        <html:label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin-bottom: 4px">
+          <html:input type="checkbox" id="__addonRef__-max-tokens-enabled" preference="llm.maxTokensEnabled" />
+          <html:span data-l10n-id="pref-max-tokens" />
+        </html:label>
+        <html:input
+          id="__addonRef__-max-tokens-input"
+          type="number"
+          min="256"
+          max="131072"
+          step="256"
+          style="text-align: left"
+          preference="llm.maxTokens"
+        />
       </vbox>
     </hbox>
     <hbox align="center" style="margin-top: 6px">
       <html:label data-l10n-id="pref-default-chat-mode" flex="1" />
-      <html:select class="select" id="__addonRef__-default-chat-mode" preference="chat.defaultMode">
-        <html:option value="normal" data-l10n-id="chat-mode-normal" />
-        <html:option value="full-text" data-l10n-id="chat-mode-full-text" />
-        <html:option value="agent" data-l10n-id="chat-mode-agent" />
+      <radiogroup id="__addonRef__-default-chat-mode" preference="chat.defaultMode" orient="horizontal" style="gap: 10px">
+        <radio value="normal" data-l10n-id="pref-default-chat-mode-normal" />
+        <radio value="full-text" data-l10n-id="pref-default-chat-mode-full-text" />
+        <radio value="agent" data-l10n-id="pref-default-chat-mode-agent" />
+      </radiogroup>
+    </hbox>
+    <hbox align="center" style="margin-top: 10px; gap: 12px">
+      <html:label data-l10n-id="pref-default-thinking-effort" flex="1" />
+      <vbox style="width: 260px">
+        <html:div style="display: grid; grid-template-columns: repeat(5, 1fr); text-align: center; font-size: 0.9em">
+          <html:span data-l10n-id="thinking-effort-none" />
+          <html:span data-l10n-id="thinking-effort-low" />
+          <html:span data-l10n-id="thinking-effort-medium" />
+          <html:span data-l10n-id="thinking-effort-high" />
+          <html:span data-l10n-id="thinking-effort-xhigh" />
+        </html:div>
+        <html:input id="__addonRef__-default-thinking-effort" type="range" min="0" max="4" step="1" />
+      </vbox>
+      <html:strong id="__addonRef__-default-thinking-effort-value" style="width: 36px; text-align: center" />
+    </hbox>
+  </groupbox>
+  <groupbox>
+    <label>
+      <html:h2 data-l10n-id="pref-ui" />
+    </label>
+    <hbox align="center">
+      <html:label data-l10n-id="pref-stream-update-speed" flex="1" />
+      <html:select class="select" id="__addonRef__-stream-update-speed-selector" preference="llm.streamUpdateSpeed">
+        <html:option value="realtime" data-l10n-id="pref-stream-speed-realtime" />
+        <html:option value="default" data-l10n-id="pref-stream-speed-default" />
+        <html:option value="slow" data-l10n-id="pref-stream-speed-slow" />
+        <html:option value="performance" data-l10n-id="pref-stream-speed-performance" />
       </html:select>
     </hbox>
-    <hbox align="center" style="margin-top: 6px">
-      <html:label data-l10n-id="pref-default-thinking-effort" flex="1" />
-      <html:select class="select" id="__addonRef__-default-thinking-effort" preference="chat.thinkingEffort">
-        <html:option value="none" data-l10n-id="thinking-effort-none" />
-        <html:option value="low" data-l10n-id="thinking-effort-low" />
-        <html:option value="medium" data-l10n-id="thinking-effort-medium" />
-        <html:option value="high" data-l10n-id="thinking-effort-high" />
-        <html:option value="xhigh" data-l10n-id="thinking-effort-xhigh" />
-      </html:select>
+    <hbox align="center" style="margin-top: 10px">
+      <vbox flex="1">
+        <html:label data-l10n-id="pref-chat-location" />
+        <html:small data-l10n-id="pref-chat-location-desc" />
+      </vbox>
+      <radiogroup preference="chat.location" orient="horizontal" style="gap: 10px">
+        <radio value="sidebar" data-l10n-id="pref-chat-location-sidebar" />
+        <radio value="window" data-l10n-id="pref-chat-location-window" />
+      </radiogroup>
+    </hbox>
+    <hbox align="center" style="margin-top: 10px">
+      <vbox flex="1">
+        <html:label data-l10n-id="pref-image-preview-location" />
+        <html:small data-l10n-id="pref-image-preview-location-desc" />
+      </vbox>
+      <radiogroup preference="imagePreview.location" orient="horizontal" style="gap: 10px">
+        <radio value="reader" data-l10n-id="pref-image-preview-location-reader" />
+        <radio value="window" data-l10n-id="pref-image-preview-location-window" />
+      </radiogroup>
+    </hbox>
+    <hbox align="center" style="margin-top: 10px; gap: 20px">
+      <checkbox id="__addonRef__-chat-window-always-on-top" preference="chat.windowAlwaysOnTop" data-l10n-id="pref-chat-window-always-on-top" />
+      <checkbox id="__addonRef__-chat-open-on-startup" preference="chat.openOnStartup" data-l10n-id="pref-chat-open-on-startup" />
+    </hbox>
+    <hbox align="center" style="margin-top: 10px">
+      <vbox flex="1">
+        <html:label data-l10n-id="pref-context-rounds" />
+        <html:small data-l10n-id="pref-context-rounds-desc" />
+      </vbox>
+      <html:input type="number" min="1" max="64" step="1" style="text-align: left; width: 60px" preference="chat.contextRounds" />
+    </hbox>
+    <hbox align="center" style="margin-top: 10px">
+      <vbox flex="1">
+        <html:label data-l10n-id="pref-chat-start-conversation-mode" />
+        <html:small data-l10n-id="pref-chat-start-conversation-mode-desc" />
+      </vbox>
+      <radiogroup preference="chat.startConversationMode" orient="horizontal" style="gap: 10px">
+        <radio value="new" data-l10n-id="pref-chat-start-conversation-new" />
+        <radio value="restore-latest" data-l10n-id="pref-chat-start-conversation-restore" />
+      </radiogroup>
     </hbox>
   </groupbox>
   <groupbox>
@@ -153,7 +223,6 @@
       <radiogroup preference="translate.extendContext" orient="horizontal" style="gap: 10px">
         <radio value="follow" data-l10n-id="pref-auto-translate-mode-follow" />
         <radio value="always" data-l10n-id="pref-auto-translate-mode-always" />
-        <!--        TODO edit chat manager to fit this-->
         <radio value="never" data-l10n-id="pref-auto-translate-mode-never" />
       </radiogroup>
     </hbox>
@@ -172,61 +241,6 @@
           </html:select>
         </vbox>
       </label>
-    </hbox>
-  </groupbox>
-  <groupbox>
-    <label>
-      <html:h2 data-l10n-id="pref-ui" />
-    </label>
-    <hbox align="center">
-      <html:label data-l10n-id="pref-stream-update-speed" flex="1" />
-      <html:select class="select" id="__addonRef__-stream-update-speed-selector" preference="llm.streamUpdateSpeed">
-        <html:option value="realtime" data-l10n-id="pref-stream-speed-realtime" />
-        <html:option value="default" data-l10n-id="pref-stream-speed-default" />
-        <html:option value="slow" data-l10n-id="pref-stream-speed-slow" />
-        <html:option value="performance" data-l10n-id="pref-stream-speed-performance" />
-      </html:select>
-    </hbox>
-    <hbox align="center" style="margin-top: 10px">
-      <vbox flex="1">
-        <html:label data-l10n-id="pref-chat-location" />
-        <html:small data-l10n-id="pref-chat-location-desc" />
-      </vbox>
-      <radiogroup preference="chat.location" orient="horizontal" style="gap: 10px">
-        <radio value="sidebar" data-l10n-id="pref-chat-location-sidebar" />
-        <radio value="window" data-l10n-id="pref-chat-location-window" />
-      </radiogroup>
-    </hbox>
-    <hbox align="center" style="margin-top: 10px">
-      <vbox flex="1">
-        <html:label data-l10n-id="pref-image-preview-location" />
-        <html:small data-l10n-id="pref-image-preview-location-desc" />
-      </vbox>
-      <radiogroup preference="imagePreview.location" orient="horizontal" style="gap: 10px">
-        <radio value="reader" data-l10n-id="pref-image-preview-location-reader" />
-        <radio value="window" data-l10n-id="pref-image-preview-location-window" />
-      </radiogroup>
-    </hbox>
-    <hbox align="center" style="margin-top: 10px; gap: 20px">
-      <checkbox id="__addonRef__-chat-window-always-on-top" preference="chat.windowAlwaysOnTop" data-l10n-id="pref-chat-window-always-on-top" />
-      <checkbox id="__addonRef__-chat-open-on-startup" preference="chat.openOnStartup" data-l10n-id="pref-chat-open-on-startup" />
-    </hbox>
-    <hbox align="center" style="margin-top: 10px">
-      <vbox flex="1">
-        <html:label data-l10n-id="pref-context-rounds" />
-        <html:small data-l10n-id="pref-context-rounds-desc" />
-      </vbox>
-      <html:input type="number" min="1" max="64" step="1" style="text-align: left; width: 60px" preference="chat.contextRounds" />
-    </hbox>
-    <hbox align="center" style="margin-top: 10px">
-      <vbox flex="1">
-        <html:label data-l10n-id="pref-chat-start-conversation-mode" />
-        <html:small data-l10n-id="pref-chat-start-conversation-mode-desc" />
-      </vbox>
-      <radiogroup preference="chat.startConversationMode" orient="horizontal" style="gap: 10px">
-        <radio value="new" data-l10n-id="pref-chat-start-conversation-new" />
-        <radio value="restore-latest" data-l10n-id="pref-chat-start-conversation-restore" />
-      </radiogroup>
     </hbox>
   </groupbox>
   <groupbox>
