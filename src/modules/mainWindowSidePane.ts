@@ -483,7 +483,11 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
     hostView?.removeEventListener('resize', keepSidePaneWithinWindow);
     sidePaneBoundsCleanup = undefined;
   };
-  sidePaneRenderedWidth = constrainSidePaneWidth(hbox, pane, sidePaneUserWidth);
+  // Startup must restore the exact width saved at shutdown. Zotero's context
+  // pane is still settling here, so constraining against its temporary size
+  // would make the AI-Bar start narrower than the user's saved width.
+  applySidePaneUserWidth();
+  hostView?.requestAnimationFrame(() => applySidePaneUserWidth());
 
   splitter.addEventListener(
     'mousedown',
