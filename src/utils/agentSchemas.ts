@@ -80,6 +80,30 @@ export const treeSchema = z.object({
 
 export type TreePayload = z.infer<typeof treeSchema>;
 
+export const searchPapersSchema = z.object({
+  title: z.string().trim().min(1).max(500).describe('The complete or partial title of the paper to search for.'),
+  limit: z.number().int().min(1).max(10).optional().default(5).describe('Maximum number of Crossref candidates to return (default 5, max 10).'),
+});
+
+export type SearchPapersPayload = z.infer<typeof searchPapersSchema>;
+
+const doiSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(500)
+  .refine(
+    (value) => /^(?:(?:https?:\/\/(?:dx\.)?doi\.org\/)|doi:\s*)?10\.\d{4,9}\/\S+$/i.test(value),
+    'A valid DOI is required, for example 10.1000/example.'
+  );
+
+export const addPaperSchema = z.object({
+  doi: doiSchema.describe('The DOI returned by search_papers.'),
+  title: z.string().trim().min(1).max(500).describe('The candidate title returned by search_papers, used for duplicate checking.'),
+});
+
+export type AddPaperPayload = z.infer<typeof addPaperSchema>;
+
 const otherMeaningSchema = z.object({
   pos: z.string().describe('Part of speech ONLY, e.g. "adj.", "n.", "v.". No definition text here.'),
   translatedText: z.string().describe('The translated meaning ONLY, no part-of-speech prefix.'),

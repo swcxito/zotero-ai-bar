@@ -22,7 +22,7 @@ If you find this project helpful, please consider supporting its development and
 
 ### Agent / Tool Calling
 
-- **Autonomous agent mode**: The AI can now call tools to search the document, read pages/lines, search your library, capture PDF pages as images, ask you clarifying questions, and more — no need to manually feed context.
+- **Autonomous agent mode**: The AI can now call tools to search the document, read pages/lines, search your library, find papers online by title, add DOI metadata and available full text to the dedicated `AI 下载文献` collection, capture PDF pages as images, ask you clarifying questions, and more — no need to manually feed context.
 - **Tool call cards**: Each tool invocation renders as a collapsible card showing inputs and outputs inline, interleaved with the reply text in stream order.
 
 ### Thinking Effort Control

@@ -14,6 +14,7 @@ import { onAgentAskUser } from './chatUI';
 import { getReaderByTabId } from './tabObserver';
 import { capturePageByNumber, getOrOpenPDFReaderForItem } from './capture';
 import { checkModelSupportsImage } from '../utils/providers';
+import { addPaperToZotero, searchCrossrefPapers } from './literatureTools';
 import {
   askUserSchema,
   grepSchema,
@@ -22,6 +23,8 @@ import {
   treeSchema,
   translateSchema,
   capturePageSchema,
+  searchPapersSchema,
+  addPaperSchema,
   type AskUserPayload,
   type GrepPayload,
   type ReadPayload,
@@ -29,9 +32,21 @@ import {
   type TreePayload,
   type TranslatePayload,
   type CapturePagePayload,
+  type SearchPapersPayload,
+  type AddPaperPayload,
 } from '../utils/agentSchemas';
 
-export type { AskUserPayload, GrepPayload, ReadPayload, GlobPayload, TreePayload, TranslatePayload, CapturePagePayload } from '../utils/agentSchemas';
+export type {
+  AskUserPayload,
+  GrepPayload,
+  ReadPayload,
+  GlobPayload,
+  TreePayload,
+  TranslatePayload,
+  CapturePagePayload,
+  SearchPapersPayload,
+  AddPaperPayload,
+} from '../utils/agentSchemas';
 
 function getSession(options: { experimental_context?: unknown }): Session | undefined {
   return options.experimental_context as Session | undefined;
@@ -157,6 +172,20 @@ export const treeTool = tool({
   },
 });
 
+export const searchPapersTool = tool({
+  description:
+    'Search Crossref for papers by title and return DOI candidates with local title-similarity scores. This tool does not change the Zotero library. If highConfidence is true, you may immediately pass the recommended DOI and its exact candidate title to add_paper. If requiresConfirmation is true, use ask_user to let the user choose a candidate before adding anything. Never guess a DOI when there are no candidates.',
+  inputSchema: asSchema(searchPapersSchema),
+  execute: async (input: SearchPapersPayload) => searchCrossrefPapers(input),
+});
+
+export const addPaperTool = tool({
+  description:
+    'Add one paper to the Zotero user library from a DOI and the exact title returned by search_papers. The tool checks the whole library, including Trash, for a matching DOI or normalized title before making changes. A DUPLICATE_ITEM error is terminal: report the existing item and do not retry. Successful items are filed under the root collection “AI 下载文献”. Always report whether fullTextDownloaded is true; if warningCode is NO_FULL_TEXT_ATTACHMENT, explicitly tell the user that the item was added but no PDF/EPUB full-text attachment was downloaded.',
+  inputSchema: asSchema(addPaperSchema),
+  execute: async (input: AddPaperPayload) => addPaperToZotero(input),
+});
+
 export const translateTool = tool({
   description: [
     'Present a translation result to the user in a structured, visually formatted card. Use this tool ONLY for single words and abbreviations.',
@@ -230,6 +259,8 @@ export function buildTools(_options?: { imageSupport?: boolean }) {
     read: readTool,
     glob: globTool,
     tree: treeTool,
+    search_papers: searchPapersTool,
+    add_paper: addPaperTool,
     translate: translateTool,
     capture_page: capturePageTool,
   };

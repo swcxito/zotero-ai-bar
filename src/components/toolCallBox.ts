@@ -22,6 +22,8 @@ const ICON_MAP: Record<string, string> = {
   read: Icons.Book,
   glob: Icons.FolderOpen,
   tree: Icons.Tree,
+  search_papers: Icons.Search,
+  add_paper: Icons.Add,
   ask_user: Icons.CircleQuestion,
   translate: Icons.Translate,
   capture_page: Icons.Screenshot,

@@ -937,6 +937,19 @@ export function onToolCallEndV2(session: Session, toolResult: any) {
     return;
   }
 
+  if (toolResult.toolName === 'search_papers' && output && typeof output === 'object' && Array.isArray(output.candidates)) {
+    const candidateCount = output.candidates.length;
+    const confidence = output.highConfidence ? 'high confidence' : output.requiresConfirmation ? 'confirmation required' : 'no DOI found';
+    updateToolCallBox(box, `${getString('tool-call-status-done')} · ${candidateCount} candidates · ${confidence}`, JSON.stringify(output, null, 2));
+    return;
+  }
+
+  if (toolResult.toolName === 'add_paper' && output && typeof output === 'object' && output.status === 'added') {
+    const attachmentStatus = output.fullTextDownloaded ? 'full text downloaded' : 'no full-text attachment';
+    updateToolCallBox(box, `${getString('tool-call-status-done')} · ${attachmentStatus}`, JSON.stringify(output, null, 2));
+    return;
+  }
+
   if (toolResult.toolName === 'read' && output && typeof output === 'object' && output.text) {
     updateToolCallBox(box, getString('tool-call-status-done'), output.text);
     return;

@@ -1,5 +1,5 @@
 import { grepInText, grepInTextPaginated } from '../src/utils/textSearch';
-import { askUserSchema, grepSchema, readSchema, globSchema, treeSchema } from '../src/utils/agentSchemas';
+import { addPaperSchema, askUserSchema, grepSchema, readSchema, globSchema, searchPapersSchema, treeSchema } from '../src/utils/agentSchemas';
 
 function assert(condition: boolean, message: string) {
   if (!condition) {
@@ -71,6 +71,17 @@ function runTests() {
   assert(!treeSchema.safeParse({ depth: 6 }).success, 'tree depth above 5');
   assert(!treeSchema.safeParse({ itemLimit: 0 }).success, 'tree itemLimit 0');
   assert(!treeSchema.safeParse({ itemLimit: 201 }).success, 'tree itemLimit above 200');
+
+  // searchPapersSchema
+  assert(searchPapersSchema.safeParse({ title: 'Attention Is All You Need' }).success, 'paper search accepts a title');
+  assert(!searchPapersSchema.safeParse({ title: '   ' }).success, 'paper search rejects an empty title');
+  assert(!searchPapersSchema.safeParse({ title: 'Paper', limit: 11 }).success, 'paper search limit above 10');
+
+  // addPaperSchema
+  assert(addPaperSchema.safeParse({ doi: '10.1000/example', title: 'Example paper' }).success, 'paper import accepts DOI and title');
+  assert(addPaperSchema.safeParse({ doi: 'https://doi.org/10.1000/example', title: 'Example paper' }).success, 'paper import accepts DOI URL');
+  assert(!addPaperSchema.safeParse({ doi: 'not-a-doi', title: 'Example paper' }).success, 'paper import rejects invalid DOI');
+  assert(!addPaperSchema.safeParse({ doi: '10.1000/example', title: '' }).success, 'paper import requires candidate title');
 
   console.log('All agent tool tests passed.');
 }
