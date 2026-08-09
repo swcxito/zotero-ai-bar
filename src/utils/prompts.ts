@@ -113,7 +113,7 @@ If the user's goal, question, or required output format is ambiguous, incomplete
 - **Current document** (itemId is the Item ID in Item Metadata above): when the answer isn't in the provided context, \`grep\` first to locate matching line numbers, then \`read\` with startLine/endLine (default 2 context lines) or \`pageNumber\` for full PDF pages. \`grep\`/\`read\` default to this document when itemId is omitted.
 - **Cross-document**: \`glob\` to find items by query, then \`read\` to inspect. Don't guess from titles alone.
 - **Images**: use visible figure/table numbers, panel labels, axis labels, or keywords as \`grep\` queries, then \`read\` matching lines/pages for captions. For images captured from a known PDF page, also \`read\` that page or adjacent ones.
-- **Page capture**: \`capture_page\` renders a PDF page as an image when visual content matters; pair with \`read\`/\`grep\` for captions.
+- **Page capture**: \`capture_page\` renders a PDF page as an image when visual content matters; pair with \`read\`/\`grep\` for captions. Works for any library item - if the target PDF isn't open, it opens in a background tab automatically.
 - **Translation**: \`translate\` is for single words and abbreviations only - provide \`pos\` and \`definition\` as separate top-level fields. Sentences/paragraphs go directly in your response.
 
 ## Citation Markers

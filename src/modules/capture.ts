@@ -413,6 +413,11 @@ export async function capturePageByNumber(
     throw new Error(`Page ${pageNumber} is out of range (1-${totalPages})`);
   }
 
+  // A reader whose tab is not selected has an inactive docShell: pdf.js sees
+  // document.visibilityState 'hidden' and never paints page canvases.
+  const selectedTabID = (Zotero.getMainWindow() as any)?.Zotero_Tabs?.selectedID;
+  const isHiddenTab = !!reader.tabID && selectedTabID !== reader.tabID;
+
   // pdf.js creates a <div class="page" data-page-number="N"> for every page
   // up front (for scroll sizing), but only renders the canvas for pages near
   // the viewport — off-screen canvases are destroyed to save memory. So we
@@ -449,7 +454,22 @@ export async function capturePageByNumber(
     return copyCanvas(sourceCanvas);
   }
 
-  // Path 2: scroll the target page into view so pdf.js renders it, wait for
+  // Path 2: render the page offscreen via pdf.js, executed entirely inside
+  // the reader's own realm (calling page.render() from the plugin realm
+  // doesn't work — Firefox Xray wrappers break pdf.js's parameter
+  // destructuring). This also covers background tabs, whose on-screen
+  // canvases are never painted (inactive docShell).
+  try {
+    return await renderPageOffscreen(reader, iframeWindow, pdfWindow, pageNumber);
+  } catch (e) {
+    ztoolkit.log('[capture] offscreen render failed:', e);
+    if (isHiddenTab) {
+      // The scroll-and-wait path below can never succeed on a hidden tab.
+      throw e;
+    }
+  }
+
+  // Path 3: scroll the target page into view so pdf.js renders it, wait for
   // the canvas to appear, then copy it. We do NOT call page.render() directly
   // — Firefox Xray wrappers between the plugin realm and the pdf.js iframe
   // realm break pdf.js's parameter destructuring.
@@ -488,6 +508,84 @@ export async function capturePageByNumber(
 }
 
 /**
+ * Render a PDF page to an image with pdf.js, without relying on any
+ * on-screen canvas. The code runs entirely inside the reader's realm via
+ * `eval` on the (waived) window: only the numeric page number crosses the
+ * realm boundary, so Xray wrappers can't break pdf.js's parameter
+ * destructuring. Works for hidden/background tabs too.
+ */
+async function renderPageOffscreen(
+  reader: _ZoteroTypes.ReaderInstance<'pdf'>,
+  iframeWindow: any,
+  pdfWindow: any,
+  pageNumber: number
+): Promise<{ dataUrl: string; width: number; height: number; pageNumber: number }> {
+  const appWindow = await waitForPdfJsDocument(reader, iframeWindow, pdfWindow, 15000);
+  if (!appWindow) {
+    throw new Error('Timed out waiting for the PDF to finish loading. Please try again.');
+  }
+
+  const totalPages = appWindow.PDFViewerApplication?.pdfDocument?.numPages ?? 0;
+  if (totalPages > 0 && (pageNumber < 1 || pageNumber > totalPages)) {
+    throw new Error(`Page ${pageNumber} is out of range (1-${totalPages})`);
+  }
+
+  const code = `
+    (async () => {
+      const app = window.PDFViewerApplication;
+      const doc = app && app.pdfDocument;
+      if (!doc) throw new Error('PDF document not loaded');
+      const page = await doc.getPage(${pageNumber});
+      const base = page.getViewport({ scale: 1 });
+      const scale = Math.min(2, Math.max(0.5, 1600 / Math.max(base.width, base.height)));
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas 2D context not available');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      return { dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height };
+    })()
+  `;
+  const realm = appWindow.wrappedJSObject ?? appWindow;
+  const result = await realm.eval(code);
+  return { dataUrl: result.dataUrl, width: result.width, height: result.height, pageNumber };
+}
+
+/**
+ * Wait until pdf.js inside the reader has loaded the document
+ * (`PDFViewerApplication.pdfDocument`). Resolves the window hosting pdf.js,
+ * or null on timeout.
+ */
+function waitForPdfJsDocument(reader: _ZoteroTypes.ReaderInstance<'pdf'>, iframeWindow: any, pdfWindow: any, timeoutMs: number): Promise<any | null> {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const check = () => {
+      const candidates = [pdfWindow, iframeWindow, (reader as any)?._primaryView?._iframeWindow];
+      for (const win of candidates) {
+        try {
+          if (win?.PDFViewerApplication?.pdfDocument) {
+            resolve(win);
+            return;
+          }
+        } catch {
+          // Window not accessible yet — keep waiting
+        }
+      }
+      if (Date.now() - start > timeoutMs) {
+        resolve(null);
+        return;
+      }
+      setTimeout(check, 200);
+    };
+    check();
+  });
+}
+
+/**
  * Wait until a specific PDF page canvas is rendered (non-zero size).
  * Resolves true on success, false on timeout.
  */
@@ -512,31 +610,131 @@ function waitForCanvasRendered(pdfWindow: any, pageNumber: number, timeoutMs: nu
   });
 }
 
-export async function getPDFReaderForItem(itemId: number): Promise<_ZoteroTypes.ReaderInstance<'pdf'> | null> {
+async function resolvePDFAttachmentId(itemId: number): Promise<number | null> {
   const item = Zotero.Items.get(itemId);
   if (!item) {
     return null;
   }
 
-  let attachmentId: number;
   if (item.isAttachment()) {
-    attachmentId = itemId;
-  } else {
-    const bestAttachment = await item.getBestAttachment();
-    if (!bestAttachment) {
-      return null;
-    }
-    attachmentId = bestAttachment.id;
+    return itemId;
   }
+  const bestAttachment = await item.getBestAttachment();
+  return bestAttachment ? bestAttachment.id : null;
+}
 
+function findOpenPDFReader(attachmentId: number): _ZoteroTypes.ReaderInstance<'pdf'> | null {
   const readers = Zotero.Reader._readers;
   for (const reader of readers) {
     if (reader.itemID === attachmentId && (reader as any)._type === 'pdf') {
       return reader as _ZoteroTypes.ReaderInstance<'pdf'>;
     }
   }
-
   return null;
+}
+
+export async function getPDFReaderForItem(itemId: number): Promise<_ZoteroTypes.ReaderInstance<'pdf'> | null> {
+  const attachmentId = await resolvePDFAttachmentId(itemId);
+  if (attachmentId == null) {
+    return null;
+  }
+  return findOpenPDFReader(attachmentId);
+}
+
+// Guards against duplicate background tabs when several capture calls for the
+// same unopened item run in parallel (agent mode can batch tool calls).
+const readerOpenPromises = new Map<number, Promise<_ZoteroTypes.ReaderInstance<'pdf'> | null>>();
+
+/**
+ * Like getPDFReaderForItem, but when no reader is open for the item, the PDF
+ * is opened in a background tab first — the user keeps reading the current
+ * document while its pages become available for capture. The opened tab is
+ * left in place (in the background) so subsequent captures are instant.
+ */
+export async function getOrOpenPDFReaderForItem(itemId: number): Promise<_ZoteroTypes.ReaderInstance<'pdf'> | null> {
+  const existing = await getPDFReaderForItem(itemId);
+  if (existing) {
+    return existing;
+  }
+
+  let promise = readerOpenPromises.get(itemId);
+  if (!promise) {
+    promise = openPDFReaderInBackground(itemId).finally(() => {
+      readerOpenPromises.delete(itemId);
+    });
+    readerOpenPromises.set(itemId, promise);
+  }
+  return promise;
+}
+
+async function openPDFReaderInBackground(itemId: number): Promise<_ZoteroTypes.ReaderInstance<'pdf'> | null> {
+  const attachmentId = await resolvePDFAttachmentId(itemId);
+  if (attachmentId == null) {
+    return null;
+  }
+
+  const attachment = Zotero.Items.get(attachmentId);
+  if (!attachment || attachment.attachmentReaderType !== 'pdf') {
+    return null;
+  }
+
+  // A reader may have appeared (e.g. user opened the tab) while we awaited
+  // above — everything below this point runs without further awaits until
+  // Zotero.Reader.open(), so this check closes the race.
+  const alreadyOpen = findOpenPDFReader(attachmentId);
+  if (alreadyOpen) {
+    return alreadyOpen;
+  }
+
+  // A session-restored tab for this attachment may exist without a loaded
+  // reader. Passing its tabID loads the reader into that tab; note that
+  // allowDuplicate must be true here, otherwise Zotero.Reader.open() selects
+  // the existing tab and steals focus from the document being read.
+  const win = Zotero.getMainWindow() as any;
+  const unloadedTabID: string | undefined = win?.Zotero_Tabs?.getTabIDByItemID?.(attachmentId);
+
+  let reader = (await Zotero.Reader.open(
+    attachmentId,
+    undefined,
+    unloadedTabID ? { openInBackground: true, allowDuplicate: true, tabID: unloadedTabID } : { openInBackground: true, allowDuplicate: false }
+  )) as _ZoteroTypes.ReaderInstance<'pdf'> | null | undefined;
+
+  if (!reader) {
+    // open() returns undefined when it selected an existing unloaded tab —
+    // wait for its reader instance to appear.
+    reader = await waitForPDFReader(attachmentId, 10000);
+  }
+  if (!reader) {
+    return null;
+  }
+
+  try {
+    // _initPromise never rejects (Zotero doesn't call _rejectInitPromise),
+    // so it would hang forever on init failure — bound it with a timeout.
+    await Promise.race([reader._initPromise, new Promise((resolve) => setTimeout(resolve, 15000))]);
+  } catch (e) {
+    ztoolkit.log('[capture] waiting for reader init failed:', e);
+  }
+  return reader;
+}
+
+function waitForPDFReader(attachmentId: number, timeoutMs: number): Promise<_ZoteroTypes.ReaderInstance<'pdf'> | null> {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const check = () => {
+      const reader = findOpenPDFReader(attachmentId);
+      if (reader) {
+        resolve(reader);
+        return;
+      }
+      if (Date.now() - start > timeoutMs) {
+        resolve(null);
+        return;
+      }
+      setTimeout(check, 150);
+    };
+    check();
+  });
 }
 
 export function openCapturePreview(images: string[], startIndex: number): void {

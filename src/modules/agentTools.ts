@@ -12,7 +12,7 @@ import { getZoteroItem, readItemText, searchLibraryItems, buildLibraryTree, getI
 import { grepInTextPaginated } from '../utils/textSearch';
 import { onAgentAskUser } from './chatUI';
 import { getReaderByTabId } from './tabObserver';
-import { capturePageByNumber, getPDFReaderForItem } from './capture';
+import { capturePageByNumber, getOrOpenPDFReaderForItem } from './capture';
 import { checkModelSupportsImage } from '../utils/providers';
 import {
   askUserSchema,
@@ -188,7 +188,7 @@ export const translateTool = tool({
 
 export const capturePageTool = tool({
   description:
-    'Capture a specific page of a PDF as an image and display it in the chat. Use this when the user wants to see or analyze a figure, table, diagram, or other visual content from a document. If no itemId is provided, the current document is used. The returned pageNumber can be used with read(pageNumber) or grep/read searches to inspect the same page, nearby caption, and in-text references before explaining the image. Note: this tool produces an image output and requires a vision-capable model. If the current model does not support image input, you should inform the user and handle the request using text-only tools (grep, read) instead, or ask the user to switch to a vision model.',
+    'Capture a specific page of a PDF as an image and display it in the chat. Use this when the user wants to see or analyze a figure, table, diagram, or other visual content from a document. If no itemId is provided, the current document is used. If the target PDF is not open in a reader, it is opened automatically in a background tab without switching away from the current tab. The returned pageNumber can be used with read(pageNumber) or grep/read searches to inspect the same page, nearby caption, and in-text references before explaining the image. Note: this tool produces an image output and requires a vision-capable model. If the current model does not support image input, you should inform the user and handle the request using text-only tools (grep, read) instead, or ask the user to switch to a vision model.',
   inputSchema: asSchema(capturePageSchema),
   execute: async (input: CapturePagePayload, options) => {
     const session = getSession(options);
@@ -200,13 +200,18 @@ export const capturePageTool = tool({
     let reader: _ZoteroTypes.ReaderInstance<'pdf'> | null = null;
 
     if (input.itemId !== undefined) {
-      reader = await getPDFReaderForItem(input.itemId);
+      // Reuses an open reader when one exists; otherwise opens the PDF in a
+      // background tab (current tab keeps focus) and captures from there.
+      reader = await getOrOpenPDFReaderForItem(input.itemId);
+      if (!reader) {
+        throw new Error('Could not access a PDF for this item. The item may not have a PDF attachment, or the attachment file may be unavailable.');
+      }
     } else if (session?.sourceTabId) {
       reader = getReaderByTabId(session.sourceTabId) as _ZoteroTypes.ReaderInstance<'pdf'> | null;
     }
 
     if (!reader) {
-      throw new Error('No PDF reader available for this item. Please open it in the PDF reader first.');
+      throw new Error('No PDF reader available for the current document. Please open it in the PDF reader first.');
     }
 
     const result = await capturePageByNumber(reader, input.pageNumber);
