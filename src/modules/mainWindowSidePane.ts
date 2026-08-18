@@ -53,6 +53,7 @@ import { InputArea, type InputAreaAPI } from '../components/inputArea';
 import { ChatHistoryPanel } from '../components/chatHistoryPanel';
 import { getString } from '../utils/locale';
 import { getPref, setPref } from '../utils/prefs';
+import { installChatSelectionCopyHandler, registerChatSelectionCopyContainer, uninstallChatSelectionCopyHandler } from '../utils/chatSelectionCopy';
 import { Icons } from '../components/common';
 import { getReaderSourceLabel } from './readerBarPopup';
 import { renderPersistedTranscript } from './chatUI';
@@ -238,6 +239,7 @@ export function registerChatToolbarButton(win: _ZoteroTypes.MainWindow): void {
  */
 export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
   const doc = win.document;
+  installChatSelectionCopyHandler(doc);
   if (doc.getElementById(PANE_ID)) return;
 
   if (!addon.data.sidePaneBodyMap) {
@@ -565,6 +567,7 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
 export function unregisterMainWindowSidePane(win?: Window): void {
   const els = getElements();
   const doc = win?.document ?? els?.pane.ownerDocument ?? Zotero.getMainWindow()?.document;
+  if (doc) uninstallChatSelectionCopyHandler(doc);
   doc?.getElementById(TOOLBAR_BTN_ID)?.remove();
   doc?.getElementById(TOOLBAR_STYLE_ID)?.remove();
   if (!els) return;
@@ -1154,6 +1157,7 @@ function ensureSidePanePage(sessionId: string): HTMLElement {
   const messageContainer = doc.createElement('div');
   messageContainer.classList.add('message-container', 'flex', 'flex-col', 'flex-1', 'overflow-y-auto', 'overflow-x-auto', 'min-w-0', 'pb-7');
   messageContainer.style.userSelect = 'text';
+  registerChatSelectionCopyContainer(messageContainer);
   shadowRoot.appendChild(messageContainer);
 
   deck.appendChild(page);

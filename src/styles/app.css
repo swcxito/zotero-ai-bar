@@ -33,6 +33,65 @@
   }
 }
 
+.chat-selection-copy-popover {
+  position: fixed;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #334155;
+  box-shadow:
+    0 8px 24px rgba(15, 23, 42, 0.18),
+    0 2px 6px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(12px);
+  user-select: none;
+}
+
+.chat-selection-copy-button {
+  min-height: 26px;
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chat-selection-copy-button:hover {
+  background: rgba(244, 63, 94, 0.12);
+  color: #e11d48;
+}
+
+.chat-selection-copy-button:focus-visible {
+  outline: 2px solid rgba(244, 63, 94, 0.55);
+  outline-offset: 1px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .chat-selection-copy-popover {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(39, 39, 42, 0.96);
+    color: #f4f4f5;
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.4),
+      0 2px 6px rgba(0, 0, 0, 0.28);
+  }
+
+  .chat-selection-copy-button:hover {
+    background: rgba(244, 63, 94, 0.2);
+    color: #fda4af;
+  }
+}
+
 /* Keep the selection hint bar's border color in sync with the input box's
  * focus-within highlight while the two are merged into one rounded shape. */
 .input-area-wrapper:focus-within .selection-hint-bar {

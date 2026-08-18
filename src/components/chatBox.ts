@@ -18,6 +18,7 @@
 
 import { Icons } from './common';
 import { getString } from '../utils/locale';
+import { renderedElementToPlainText } from '../utils/chatSelectionCopy';
 import { ActionButton } from './buttons/actionButton';
 
 export interface ChatBoxProps {
@@ -37,7 +38,7 @@ function getAnswerText(messageEl: Element | null | undefined): string {
   if (!messageEl) return '';
   const clone = messageEl.cloneNode(true) as HTMLElement;
   clone.querySelectorAll('.tool-call-box, .chat-source-label').forEach((el) => el.remove());
-  return clone.textContent || '';
+  return renderedElementToPlainText(clone);
 }
 
 export function ChatBox({ doc, isUser = false, onRegenerate }: ChatBoxProps): Element {

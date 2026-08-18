@@ -5,6 +5,10 @@ pref-provider-volcengine = 火山引擎
 
 chat-copy-text = 复制内容
 chat-copy-markdown = 复制原始Markdown
+chat-selection-copy-actions = 复制选区
+chat-selection-copy-markdown = Markdown
+chat-selection-copy-plain = 纯文本
+chat-selection-copy-copied = 已复制
 chat-save-as-note = 保存为笔记
 chat-regenerate-response = 重新生成
 chat-reference-expand = 展开

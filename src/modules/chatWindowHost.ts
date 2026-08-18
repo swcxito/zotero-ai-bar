@@ -4,6 +4,7 @@ import { InputArea, type InputAreaAPI } from '../components/inputArea';
 import { ChatHistoryPanel } from '../components/chatHistoryPanel';
 import { renderMarkdown } from '../utils/markdown';
 import { getString } from '../utils/locale';
+import { installChatSelectionCopyHandler, registerChatSelectionCopyContainer, uninstallChatSelectionCopyHandler } from '../utils/chatSelectionCopy';
 import { getReaderSourceLabel } from './readerBarPopup';
 import { attachCitationHandlers, renderPersistedTranscript } from './chatUI';
 import type { Session } from './chatManager';
@@ -113,6 +114,7 @@ function createWindowSessionPage(doc: Document, sessionId: string): HTMLElement 
     'pb-7'
   );
   messageContainer.style.userSelect = 'text';
+  registerChatSelectionCopyContainer(messageContainer);
 
   page.appendChild(messageContainer);
   return page;
@@ -352,6 +354,8 @@ function updateWindowHistoryView(doc: Document, session: Session, page: HTMLElem
 export function ensureChatWindowUI(doc: Document) {
   const root = doc.getElementById(WINDOW_ROOT_ID) as WorkspaceRoot | null;
   if (!root) return;
+
+  installChatSelectionCopyHandler(doc);
   if (root.querySelector(`.${WINDOW_DECK_CLASS}`)) {
     refreshChatWindowWorkspace(doc);
     return;
@@ -429,6 +433,7 @@ export function ensureChatWindowUI(doc: Document) {
 export function onChatWindowLoad(window: Window) {
   ensureChatWindowUI(window.document);
   window.addEventListener('unload', () => {
+    uninstallChatSelectionCopyHandler(window.document);
     const root = window.document.getElementById(WINDOW_ROOT_ID) as WorkspaceRoot | null;
     root?._workspaceUnsubscribe?.();
     const sharedInput = root?.querySelector('.zaibar-window-shared-input .input-area-wrapper') as HTMLElement | null;

@@ -83,7 +83,10 @@ marked.use(
   // 公式渲染扩展（自动处理 $...$ 和 $$...$$）
   markedKatex({
     throwOnError: false, // 公式错误时不中断渲染
-    output: 'html',
+    // Keep KaTeX's hidden MathML annotation. The selection-copy serializer
+    // reads its application/x-tex payload to restore the original formula
+    // instead of copying the many visual glyph spans as plain text.
+    output: 'htmlAndMathml',
     nonStandard: true, // 支持非标准的公式
   }),
   markedXhtml()
