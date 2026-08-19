@@ -300,6 +300,7 @@ export function InputArea(
   textarea.placeholder = getString('reader-bar-ask-placeholder');
   textarea.classList.add(
     'flex-1',
+    'min-w-0',
     'bg-transparent',
     'border-none',
     'outline-none',
@@ -312,6 +313,10 @@ export function InputArea(
     'font-medium',
     'overflow-y-auto'
   );
+  // Zotero 8's global key handler only recognises text inputs and
+  // [contenteditable="true"] as editable targets. Keep the native textarea,
+  // but add the marker so reader shortcuts never consume typed characters.
+  textarea.setAttribute('contenteditable', 'true');
   // max-height approximately 5 lines, overflow scrolls
   textarea.style.maxHeight = '7rem';
 
@@ -435,7 +440,19 @@ export function InputArea(
   // ─────────────────────────────────────────────────────────────────────────
   function autoResize() {
     textarea.style.height = 'auto';
+    // InputArea is assembled before it is attached to the shadow root. An
+    // unattached textarea reports a zero scrollHeight; persisting that as an
+    // inline height leaves an almost unclickable input with a displaced
+    // placeholder. Leave the row-sized native height in place until layout is
+    // available.
+    if (!textarea.isConnected || textarea.scrollHeight <= 0) return;
     textarea.style.height = Math.min(textarea.scrollHeight, 112) + 'px'; // 112 ≈ 7rem
+  }
+
+  function resizeAfterMount() {
+    const view = doc.defaultView;
+    if (!view) return;
+    view.requestAnimationFrame(() => autoResize());
   }
 
   function persistTextDraft() {
@@ -1075,7 +1092,9 @@ export function InputArea(
   };
 
   textarea.value = readChatTextDraft(addon.data.inputDraftTexts, draftId);
-  autoResize();
+  // The caller attaches the returned wrapper after this function completes.
+  // Measure on the following frame so restored drafts use the mounted layout.
+  resizeAfterMount();
   preview.render();
 
   (wrapper as any)._imagePreviewAPI = preview;

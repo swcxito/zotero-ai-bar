@@ -253,6 +253,14 @@ function animateWindowHistoryView(
     historyHost.style.display = visible ? 'flex' : 'none';
   };
   if (renderedVisible === undefined || renderedVisible === String(visible)) {
+    // Workspace updates may repeat while a history transition is in flight.
+    // Always restore interaction state when settling the already-requested
+    // view so the shared textarea cannot remain pointer-disabled.
+    if (root._historyAnimating) root._historyTransition = (root._historyTransition ?? 0) + 1;
+    for (const element of [deck, inputHost, historyHost]) {
+      if (element) element.style.pointerEvents = '';
+    }
+    root._historyAnimating = false;
     historyHost.dataset.visible = String(visible);
     setDisplay();
     return;

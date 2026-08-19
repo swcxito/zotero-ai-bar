@@ -832,6 +832,14 @@ function animateSidePaneHistoryView(deck: XULElement, inputHost: HTMLElement | n
   };
   applySidePaneUserWidth();
   if (renderedVisible === undefined || renderedVisible === String(visible)) {
+    // A workspace/history refresh can arrive while the transition is still
+    // running. Settle all participants here; otherwise the input host can be
+    // left permanently non-interactive by the interrupted animation.
+    if (sidePaneHistoryAnimating) sidePaneHistoryTransition += 1;
+    for (const element of [deck as unknown as HTMLElement, inputHost, historyHost]) {
+      if (element) element.style.pointerEvents = '';
+    }
+    sidePaneHistoryAnimating = false;
     historyHost.dataset.visible = String(visible);
     setDisplay();
     return;
