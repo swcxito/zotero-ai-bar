@@ -7,7 +7,7 @@ import { onPromptEditorLoad } from './modules/promptEditor';
 import { getPref, setPref, registerPrefs } from './utils/prefs';
 import { ensureChatWindowReady } from './utils/window';
 import { registerChatToolbarButton, registerMainWindowSidePane, unregisterMainWindowSidePane } from './modules/mainWindowSidePane';
-import { clearDeadChatWindowRef, isWindowAlive } from './utils/window';
+import { clearDeadChatWindowRef, closeChatWindowForHostSwitch, isWindowAlive } from './utils/window';
 import { registerTabObserver } from './modules/tabObserver';
 import { preloadLLMRuntime } from './modules/llm';
 import { convertLegacyLLMConfigByKey, ensureCommonProviders, initIconCache, loadV2Config, saveV2Config } from './utils/providers';
@@ -171,7 +171,7 @@ async function onShutdown(): Promise<void> {
   unregisterMainWindowSidePane();
   addon.data.dialog?.window?.close();
   if (isWindowAlive(addon.chatManager.chatWindow)) {
-    addon.chatManager.chatWindow?.close();
+    await closeChatWindowForHostSwitch();
   }
   // Remove addon object
   addon.data.alive = false;

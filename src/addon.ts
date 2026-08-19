@@ -50,6 +50,7 @@ class Addon {
     // Set by mainWindowSidePane.registerMainWindowSidePane, cleared on unregister.
     sidePaneElements?: { splitter: XULElement; pane: XULElement; deck: XULElement; tabs: HTMLElement };
     inputImages: Map<string, string[]>;
+    inputDraftTexts: Map<string, string>;
     _tabObserverID?: string;
     _readerPopupHandler?: (event: any) => void;
     // ModelInfo anchor elements across windows (sidebar, reader popup).
@@ -74,6 +75,7 @@ class Addon {
         ztoolkit: createZToolkit(),
         selection: {},
         inputImages: new Map<string, string[]>(),
+        inputDraftTexts: new Map<string, string>(),
         sharedInputAreas: new Set<HTMLElement>(),
         modelInfoAnchors: new Set<HTMLElement>(),
       };

@@ -29,6 +29,7 @@ import { getReaderByTabId } from '../modules/tabObserver';
 import { scrollToBottom as doScrollToBottom, setSendBtnEnabled } from '../modules/mainWindowSidePane';
 import { checkModelSupportsImage, promptModelImageUnsupported } from '../utils/providers';
 import { createUserMessageBubble } from './userBubble';
+import { readChatTextDraft, writeChatTextDraft } from '../utils/chatDraft';
 
 export interface InputAreaContext {
   sessionId: string;
@@ -437,6 +438,10 @@ export function InputArea(
     textarea.style.height = Math.min(textarea.scrollHeight, 112) + 'px'; // 112 ≈ 7rem
   }
 
+  function persistTextDraft() {
+    writeChatTextDraft(addon.data.inputDraftTexts, draftId, textarea.value);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Helper: update send button appearance based on textarea content
   // ─────────────────────────────────────────────────────────────────────────
@@ -572,6 +577,7 @@ export function InputArea(
 
     // Clear textarea and reset height
     textarea.value = '';
+    persistTextDraft();
     textarea.style.height = 'auto';
     updateSendBtnState();
 
@@ -598,6 +604,7 @@ export function InputArea(
 
   // textarea: auto-resize + button state sync
   textarea.addEventListener('input', () => {
+    persistTextDraft();
     autoResize();
     updateSendBtnState();
   });
@@ -1067,6 +1074,8 @@ export function InputArea(
     },
   };
 
+  textarea.value = readChatTextDraft(addon.data.inputDraftTexts, draftId);
+  autoResize();
   preview.render();
 
   (wrapper as any)._imagePreviewAPI = preview;

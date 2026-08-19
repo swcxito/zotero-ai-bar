@@ -1,8 +1,11 @@
 import { config } from '../../package.json';
 import { ensureChatWindowUI, onChatWindowLoad } from '../modules/chatWindowHost';
+import { ChatWindowCloseCoordinator } from './chatWindowClose';
 import { getPref } from './prefs';
 
-export { isWindowAlive, ensureChatWindow, ensureChatWindowReady, focusChatWindow, clearDeadChatWindowRef };
+export { isWindowAlive, ensureChatWindow, ensureChatWindowReady, focusChatWindow, clearDeadChatWindowRef, closeChatWindowForHostSwitch };
+
+const closeCoordinator = new ChatWindowCloseCoordinator<Window>();
 
 /**
  * Check if the window is alive.
@@ -29,12 +32,20 @@ function ensureChatWindow() {
 
   const windowArgs: {
     onBodyLoaded: (win: Window) => void;
-    onWindowClosed: () => void;
+    onWindowClosed: (win: Window) => void;
+    shouldPreventClose: (win: Window) => boolean;
   } = {
     onBodyLoaded: onChatWindowLoad,
-    onWindowClosed: () => {
+    onWindowClosed: (win) => {
       addon.chatManager.chatWindow = undefined;
+      if (closeCoordinator.consumeProgrammatic(win)) return;
+      void import('../modules/chatHostController').then(({ handleStandaloneChatWindowClosed }) => handleStandaloneChatWindowClosed());
     },
+    shouldPreventClose: (win) =>
+      closeCoordinator.shouldPrevent(
+        win,
+        Array.from(addon.chatManager.sessionsMap.values()).some((session) => !!session.activeRequestPromise || !!session.pending.abortController)
+      ),
   };
 
   const dialogWindow = Zotero.getMainWindow().openDialog(
@@ -101,4 +112,23 @@ function focusChatWindow() {
   const chatWindow = ensureChatWindow();
   chatWindow.focus();
   return chatWindow;
+}
+
+async function closeChatWindowForHostSwitch(): Promise<void> {
+  clearDeadChatWindowRef();
+  const chatWindow = addon.chatManager.chatWindow;
+  if (!isWindowAlive(chatWindow)) return;
+  closeCoordinator.markProgrammatic(chatWindow as Window);
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    chatWindow!.addEventListener('unload', finish, { once: true });
+    chatWindow!.close();
+    Zotero.getMainWindow().setTimeout(finish, 500);
+  });
+  addon.chatManager.chatWindow = undefined;
 }

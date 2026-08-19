@@ -6,6 +6,7 @@ import { createChatTurnNavigator, disposeChatTurnNavigatorHost, setChatTurnNavig
 import { renderMarkdown } from '../utils/markdown';
 import { getString } from '../utils/locale';
 import { installChatSelectionCopyHandler, registerChatSelectionCopyContainer, uninstallChatSelectionCopyHandler } from '../utils/chatSelectionCopy';
+import { SHARED_CHAT_DRAFT_ID } from '../utils/chatDraft';
 import { getReaderSourceLabel } from './readerBarPopup';
 import { attachCitationHandlers, renderPersistedTranscript } from './chatUI';
 import type { Session } from './chatManager';
@@ -23,6 +24,7 @@ const WINDOW_ROOT_ID = 'ai-bar-window-root';
 const WINDOW_DECK_CLASS = 'zaibar-window-deck';
 const SESSION_ID_ATTR = 'data-session-id';
 const WINDOW_HISTORY_CLASS = 'zaibar-window-history';
+const WINDOW_HOST_SWITCH_CLASS = 'zaibar-window-host-switch';
 
 type WorkspaceRoot = HTMLElement & {
   _workspaceUnsubscribe?: () => void;
@@ -137,6 +139,16 @@ export function refreshChatWindowWorkspace(doc: Document): void {
   const tabs = root?.querySelector('.zaibar-window-tabs') as HTMLElement | null;
   const deck = root?.querySelector(`.${WINDOW_DECK_CLASS}`) as HTMLElement | null;
   if (!root || !tabs || !deck) return;
+
+  const hostSwitch = root.querySelector(`.${WINDOW_HOST_SWITCH_CLASS}`) as HTMLButtonElement | null;
+  if (hostSwitch) {
+    const blocked = Array.from(addon.chatManager.sessionsMap.values()).some(
+      (session) => !!session.activeRequestPromise || !!session.pending.abortController
+    );
+    hostSwitch.disabled = blocked;
+    hostSwitch.title = getString((blocked ? 'chat-host-switch-busy' : 'chat-host-switch-to-sidebar') as any);
+    hostSwitch.setAttribute('aria-label', hostSwitch.title);
+  }
 
   renderWindowTabs(doc, tabs);
   const snapshot = getWorkspaceSnapshot('window');
@@ -390,7 +402,18 @@ export function ensureChatWindowUI(doc: Document) {
   newChat.setAttribute('aria-label', newChat.title);
   setWindowButtonIcon(newChat, `chrome://${config.addonRef}/content/icons/chat-new.svg`);
   newChat.addEventListener('click', () => startNewWindowConversation(doc));
-  header.append(tabs, history, newChat);
+  const hostSwitch = doc.createElement('button');
+  hostSwitch.type = 'button';
+  hostSwitch.classList.add('zaibar-window-clear', WINDOW_HOST_SWITCH_CLASS);
+  hostSwitch.title = getString('chat-host-switch-to-sidebar' as any);
+  hostSwitch.setAttribute('aria-label', hostSwitch.title);
+  setWindowButtonIcon(hostSwitch, `chrome://${config.addonRef}/content/icons/chat-dock-sidebar.svg`);
+  hostSwitch.addEventListener('click', async () => {
+    if (hostSwitch.disabled) return;
+    const { switchChatHost } = await import('./chatHostController');
+    await switchChatHost('sidebar');
+  });
+  header.append(tabs, history, newChat, hostSwitch);
 
   const deck = doc.createElement('div');
   deck.classList.add(WINDOW_DECK_CLASS, 'flex', 'flex-1', 'min-h-0', 'flex-col');
@@ -406,7 +429,7 @@ export function ensureChatWindowUI(doc: Document) {
     chatModeAdjustable: false,
     allowScreenshot: true,
     allowSelectionHint: false,
-    draftId: 'shared-input:window',
+    draftId: SHARED_CHAT_DRAFT_ID,
     resolveMessageContainer: getWindowMessageContainer,
     onRenderUserBubble: async (bubble, text, sessionId) => {
       if (!text) return;
@@ -435,16 +458,24 @@ export function ensureChatWindowUI(doc: Document) {
 
 export function onChatWindowLoad(window: Window) {
   ensureChatWindowUI(window.document);
+  const preventCloseWhileStreaming = (event: BeforeUnloadEvent) => {
+    if (!window.arguments?.[0]?.shouldPreventClose?.(window)) return;
+    event.preventDefault();
+    event.returnValue = '';
+  };
+  window.addEventListener('beforeunload', preventCloseWhileStreaming);
   window.addEventListener('unload', () => {
     uninstallChatSelectionCopyHandler(window.document);
+    window.removeEventListener('beforeunload', preventCloseWhileStreaming);
     const root = window.document.getElementById(WINDOW_ROOT_ID) as WorkspaceRoot | null;
     root?._workspaceUnsubscribe?.();
     const sharedInput = root?.querySelector('.zaibar-window-shared-input .input-area-wrapper') as HTMLElement | null;
     if (sharedInput) addon.data.sharedInputAreas.delete(sharedInput);
     root?.querySelectorAll(`.${WINDOW_DECK_CLASS} > [${SESSION_ID_ATTR}]`).forEach((page) => disposeChatTurnNavigatorHost(page));
     (root?.querySelector(`.${WINDOW_HISTORY_CLASS}`)?.firstElementChild as any)?._disposeHistory?.();
+    addon.data.sidePaneBodyMap?.clear();
     if (window.arguments?.[0]?.onWindowClosed) {
-      window.arguments[0].onWindowClosed();
+      window.arguments[0].onWindowClosed(window);
     }
   });
 }

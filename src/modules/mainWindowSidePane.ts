@@ -55,6 +55,7 @@ import { createChatTurnNavigator, disposeChatTurnNavigatorHost, setChatTurnNavig
 import { getString } from '../utils/locale';
 import { getPref, setPref } from '../utils/prefs';
 import { installChatSelectionCopyHandler, registerChatSelectionCopyContainer, uninstallChatSelectionCopyHandler } from '../utils/chatSelectionCopy';
+import { SHARED_CHAT_DRAFT_ID } from '../utils/chatDraft';
 import { Icons } from '../components/common';
 import { getReaderSourceLabel } from './readerBarPopup';
 import { renderPersistedTranscript } from './chatUI';
@@ -83,6 +84,7 @@ const SESSION_ID_ATTR = 'data-session-id';
 const HISTORY_HOST_ID = 'zaibar-sidepane-history';
 const HISTORY_BUTTON_ID = 'zaibar-sidepane-history-button';
 const NEW_CHAT_BUTTON_ID = 'zaibar-sidepane-new-chat-button';
+const HOST_SWITCH_BUTTON_ID = 'zaibar-sidepane-host-switch-button';
 const DEFAULT_WIDTH = 340;
 const MIN_WIDTH = 240;
 const MIN_MAIN_CONTENT_WIDTH = 320;
@@ -192,7 +194,11 @@ export function registerChatToolbarButton(win: _ZoteroTypes.MainWindow): void {
   }
 
   const tabsToolbar = doc.getElementById('zotero-tabs-toolbar');
-  if (!tabsToolbar || doc.getElementById(TOOLBAR_BTN_ID)) return;
+  if (!tabsToolbar) return;
+  if (doc.getElementById(TOOLBAR_BTN_ID)) {
+    refreshChatToolbarButton(win);
+    return;
+  }
   const toggleBtn = (doc as any).createXULElement('toolbarbutton') as XULElement;
   toggleBtn.id = TOOLBAR_BTN_ID;
   toggleBtn.classList.add('zotero-tb-button');
@@ -219,6 +225,25 @@ export function registerChatToolbarButton(win: _ZoteroTypes.MainWindow): void {
     }
   });
   tabsToolbar.insertBefore(toggleBtn, tabsToolbar.firstChild);
+  refreshChatToolbarButton(win);
+}
+
+export function refreshChatToolbarButton(win: _ZoteroTypes.MainWindow): void {
+  const btn = win.document.getElementById(TOOLBAR_BTN_ID);
+  if (!btn) return;
+  const windowMode = addon.chatManager.getCurrentHostMode() === 'window';
+  btn.setAttribute('tooltiptext', windowMode ? getString('chat-window-open-tooltip' as any) : getString('sidepane-toggle-tooltip'));
+  if (windowMode) {
+    btn.removeAttribute('selected');
+  } else {
+    syncToggleButtonState();
+  }
+}
+
+export function unregisterChatToolbarButton(win?: Window): void {
+  const doc = win?.document ?? Zotero.getMainWindow()?.document;
+  doc?.getElementById(TOOLBAR_BTN_ID)?.remove();
+  doc?.getElementById(TOOLBAR_STYLE_ID)?.remove();
 }
 
 /**
@@ -405,7 +430,20 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
   setSidePaneButtonIcon(newChatBtn, `chrome://${config.addonRef}/content/icons/chat-new.svg`);
   newChatBtn.addEventListener('click', () => startNewSidePaneConversation());
 
-  header.append(tabs, historyBtn, newChatBtn);
+  const hostSwitchBtn = doc.createElement('button');
+  hostSwitchBtn.type = 'button';
+  hostSwitchBtn.id = HOST_SWITCH_BUTTON_ID;
+  hostSwitchBtn.classList.add('zaibar-sidepane-btn');
+  hostSwitchBtn.title = getString('chat-host-switch-to-window' as any);
+  hostSwitchBtn.setAttribute('aria-label', hostSwitchBtn.title);
+  setSidePaneButtonIcon(hostSwitchBtn, `chrome://${config.addonRef}/content/icons/chat-pop-out.svg`);
+  hostSwitchBtn.addEventListener('click', async () => {
+    if (hostSwitchBtn.disabled) return;
+    const { switchChatHost } = await import('./chatHostController');
+    await switchChatHost('window');
+  });
+
+  header.append(tabs, historyBtn, newChatBtn, hostSwitchBtn);
 
   // Per-tab pages
   const deck = createXUL('deck');
@@ -433,7 +471,7 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
     chatModeAdjustable: false,
     allowScreenshot: true,
     allowSelectionHint: false,
-    draftId: 'shared-input:sidebar',
+    draftId: SHARED_CHAT_DRAFT_ID,
     resolveMessageContainer: getSessionMessageContainer,
   });
   inputShadow.appendChild(sharedInput);
@@ -552,12 +590,11 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
 /**
  * Remove the injected side pane (plugin shutdown / window unload).
  */
-export function unregisterMainWindowSidePane(win?: Window): void {
+export function unregisterMainWindowSidePane(win?: Window, options: { removeToolbar?: boolean } = {}): void {
   const els = getElements();
   const doc = win?.document ?? els?.pane.ownerDocument ?? Zotero.getMainWindow()?.document;
   if (doc) uninstallChatSelectionCopyHandler(doc);
-  doc?.getElementById(TOOLBAR_BTN_ID)?.remove();
-  doc?.getElementById(TOOLBAR_STYLE_ID)?.remove();
+  if (options.removeToolbar !== false) unregisterChatToolbarButton(win);
   if (!els) return;
   cancelReaderReadyCheck();
   sidePaneResizeCleanup?.();
@@ -911,6 +948,15 @@ function updateSidePaneHistoryView(session: Session, page: HTMLElement): void {
 function refreshSidePaneWorkspace(): void {
   const els = getElements();
   if (!els) return;
+  const hostSwitch = els.pane.ownerDocument.getElementById(HOST_SWITCH_BUTTON_ID) as HTMLButtonElement | null;
+  if (hostSwitch) {
+    const blocked = Array.from(addon.chatManager.sessionsMap.values()).some(
+      (session) => !!session.activeRequestPromise || !!session.pending.abortController
+    );
+    hostSwitch.disabled = blocked;
+    hostSwitch.title = getString((blocked ? 'chat-host-switch-busy' : 'chat-host-switch-to-window') as any);
+    hostSwitch.setAttribute('aria-label', hostSwitch.title);
+  }
   const snapshot = getWorkspaceSnapshot('sidebar');
   const sourceTabId = snapshot.sourceTabId;
   const articleLabel = getString('workspace-article');
