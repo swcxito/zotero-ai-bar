@@ -14,6 +14,7 @@ type ChatSelectionCopyState = {
   activeContainer?: HTMLElement;
   popover?: HTMLElement;
   dismissTimer?: number;
+  animationFrame?: number;
   shortcutHandled: boolean;
   keyHandler: (event: KeyboardEvent) => void;
   copyHandler: (event: ClipboardEvent) => void;
@@ -21,6 +22,7 @@ type ChatSelectionCopyState = {
   pointerHandler: (event: MouseEvent) => void;
   selectionHandler: () => void;
   viewportHandler: () => void;
+  blurHandler: () => void;
 };
 
 type DocumentWithCopyState = Document & {
@@ -160,14 +162,34 @@ function consumeCopyEvent(event: Event, text: string): void {
   event.stopPropagation();
 }
 
-function hideSelectionPopover(state: ChatSelectionCopyState): void {
-  const view = state.popover?.ownerDocument.defaultView;
+function hideSelectionPopover(state: ChatSelectionCopyState, animated = false): void {
+  const popover = state.popover;
+  const view = popover?.ownerDocument.defaultView;
+  if (animated && popover?.dataset.dismissing === 'true') return;
   if (state.dismissTimer !== undefined) {
     view?.clearTimeout(state.dismissTimer);
     state.dismissTimer = undefined;
   }
-  state.popover?.remove();
-  state.popover = undefined;
+  if (state.animationFrame !== undefined) {
+    view?.cancelAnimationFrame(state.animationFrame);
+    state.animationFrame = undefined;
+  }
+  if (!popover) return;
+  if (!animated || !view) {
+    popover.remove();
+    state.popover = undefined;
+    return;
+  }
+
+  popover.dataset.dismissing = 'true';
+  popover.style.pointerEvents = 'none';
+  popover.style.opacity = '0';
+  popover.style.transform = popover.dataset.placement === 'above' ? 'translateY(5px) scale(.97)' : 'translateY(-5px) scale(.97)';
+  state.dismissTimer = view.setTimeout(() => {
+    popover.remove();
+    if (state.popover === popover) state.popover = undefined;
+    state.dismissTimer = undefined;
+  }, 180);
 }
 
 function showCopySuccess(doc: Document, state: ChatSelectionCopyState, popover: HTMLElement, button: HTMLButtonElement): void {
@@ -188,9 +210,7 @@ function showCopySuccess(doc: Document, state: ChatSelectionCopyState, popover: 
 
   state.dismissTimer = doc.defaultView?.setTimeout(() => {
     if (state.popover !== popover) return;
-    popover.style.opacity = '0';
-    popover.style.transform = popover.dataset.placement === 'above' ? 'translateY(4px)' : 'translateY(-4px)';
-    state.dismissTimer = doc.defaultView?.setTimeout(() => hideSelectionPopover(state), 180);
+    hideSelectionPopover(state, true);
   }, 1000);
 }
 
@@ -406,7 +426,9 @@ function showSelectionPopover(doc: Document, state: ChatSelectionCopyState): voi
     'backdrop-filter:blur(12px)',
     'user-select:none',
     'pointer-events:auto',
-    'transition:opacity 180ms ease,transform 180ms ease',
+    'opacity:0',
+    'will-change:opacity,transform',
+    'transition:opacity 160ms ease,transform 200ms cubic-bezier(.2,.8,.2,1)',
   ].join(';');
   popover.append(
     createPopoverButton(doc, getString('chat-selection-copy-markdown'), (button) => {
@@ -433,6 +455,19 @@ function showSelectionPopover(doc: Document, state: ChatSelectionCopyState): voi
   popover.dataset.placement = position.placement;
   popover.style.left = `${Math.round(position.left)}px`;
   popover.style.top = `${Math.round(position.top)}px`;
+  popover.style.transform = position.placement === 'above' ? 'translateY(7px) scale(.96)' : 'translateY(-7px) scale(.96)';
+
+  if (viewport?.requestAnimationFrame) {
+    state.animationFrame = viewport.requestAnimationFrame(() => {
+      state.animationFrame = undefined;
+      if (state.popover !== popover || popover.dataset.dismissing === 'true') return;
+      popover.style.opacity = '1';
+      popover.style.transform = 'translateY(0) scale(1)';
+    });
+  } else {
+    popover.style.opacity = '1';
+    popover.style.transform = 'translateY(0) scale(1)';
+  }
 }
 
 /**
@@ -501,12 +536,13 @@ export function installChatSelectionCopyHandler(doc: Document): void {
   state.pointerHandler = (event) => {
     const target = (event.composedPath?.()[0] ?? event.target) as Node | null;
     if (target && state.popover?.contains(target)) return;
-    hideSelectionPopover(state);
+    hideSelectionPopover(state, true);
   };
   state.selectionHandler = () => {
-    if (!selectedChatText(doc, state)) hideSelectionPopover(state);
+    if (!selectedChatText(doc, state)) hideSelectionPopover(state, true);
   };
-  state.viewportHandler = () => hideSelectionPopover(state);
+  state.viewportHandler = () => hideSelectionPopover(state, true);
+  state.blurHandler = () => hideSelectionPopover(state, true);
 
   ownedDocument[STATE_PROPERTY] = state;
   const eventRoot = doc.defaultView ?? doc;
@@ -517,6 +553,7 @@ export function installChatSelectionCopyHandler(doc: Document): void {
   doc.addEventListener('mousedown', state.pointerHandler, true);
   doc.addEventListener('selectionchange', state.selectionHandler);
   eventRoot.addEventListener('resize', state.viewportHandler as EventListener);
+  eventRoot.addEventListener('blur', state.blurHandler as EventListener, true);
   doc.getElementById('cmd_copy')?.addEventListener('command', state.commandHandler, true);
 }
 
@@ -538,7 +575,7 @@ export function registerChatSelectionCopyContainer(container: HTMLElement): void
   container.addEventListener('keyup', (event) => {
     if (event.shiftKey) showSelectionPopover(doc, state);
   });
-  container.addEventListener('scroll', () => hideSelectionPopover(state), { passive: true });
+  container.addEventListener('scroll', () => hideSelectionPopover(state, true), { passive: true });
 }
 
 export function uninstallChatSelectionCopyHandler(doc: Document): void {
@@ -553,6 +590,7 @@ export function uninstallChatSelectionCopyHandler(doc: Document): void {
   doc.removeEventListener('mousedown', state.pointerHandler, true);
   doc.removeEventListener('selectionchange', state.selectionHandler);
   eventRoot.removeEventListener('resize', state.viewportHandler as EventListener);
+  eventRoot.removeEventListener('blur', state.blurHandler as EventListener, true);
   doc.getElementById('cmd_copy')?.removeEventListener('command', state.commandHandler, true);
   hideSelectionPopover(state);
   delete ownedDocument[STATE_PROPERTY];
