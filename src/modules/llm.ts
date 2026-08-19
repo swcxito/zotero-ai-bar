@@ -499,6 +499,22 @@ export async function streamTranslationV2(
       thinkingEffort: effectiveEffort,
     });
 
+    // Qwen-MT is a dedicated translation endpoint rather than a general chat
+    // model. It accepts exactly one user message, rejects system messages, and
+    // returns plain translated text instead of structured JSON.
+    if (isQwenMtModel(modelSelection)) {
+      await streamQwenMtTranslation({
+        model,
+        modelSelection,
+        session,
+        providerOptions,
+        maxOutputTokens,
+        targetLanguage: request.targetLanguage,
+        selectedText: request.selectedText,
+      });
+      return;
+    }
+
     const first = await runTranslationAttempt({
       model,
       messages,
@@ -575,6 +591,85 @@ export async function streamTranslationV2(
     Zotero.debug('[zaibar-llm] streamTranslationV2 catch: ' + (error?.name || '') + ' ' + (error?.message || error));
     handleStreamError(session, error);
   }
+}
+
+async function streamQwenMtTranslation(params: {
+  model: any;
+  modelSelection: ModelSelect;
+  session: Session;
+  providerOptions: Record<string, any>;
+  maxOutputTokens?: number;
+  targetLanguage: string;
+  selectedText: string;
+}): Promise<void> {
+  let streamError: unknown;
+  const streamState = createQwenMtStreamState();
+  const maxOutputTokensSetting = params.maxOutputTokens === undefined ? {} : { maxOutputTokens: params.maxOutputTokens };
+  const result = streamTextFn!({
+    model: params.model,
+    // Qwen-MT accepts one user message. Put the language instruction in the
+    // prompt instead of translation_options so locale codes such as zh-CN do
+    // not get rejected by the provider's supported-language enum.
+    messages: [{ role: 'user', content: buildQwenMtPrompt(params.targetLanguage, params.selectedText) }],
+    abortSignal: params.session.pending.abortController?.signal,
+    ...buildModelSettings(params.modelSelection),
+    ...maxOutputTokensSetting,
+    providerOptions: params.providerOptions,
+    maxRetries: 2,
+    onError: ({ error }: { error: unknown }) => {
+      streamError = error;
+    },
+  });
+
+  try {
+    for await (const part of result.fullStream) {
+      switch (part.type) {
+        case 'reasoning-start':
+          onReasoningStartV2(params.session);
+          break;
+        case 'reasoning-delta':
+          onReasoningDeltaV2(params.session, part.text);
+          break;
+        case 'reasoning-end':
+          onReasoningEndV2(params.session);
+          break;
+        case 'text-delta':
+          consumeQwenMtStreamChunk(streamState, part.text);
+          // Do not render until the first two meaningful chunks tell us
+          // whether this endpoint appends deltas or replaces with a
+          // cumulative prefix. This avoids showing a duplicated preview while
+          // the stream mode is still unknown.
+          if (streamState.mode) await onLLMStreamUpdateV2({ session: params.session, fullText: streamState.text });
+          break;
+        case 'error':
+          streamError = (part as any).error ?? part;
+          break;
+      }
+    }
+  } catch (error) {
+    streamError = error;
+  }
+
+  if (streamError) throw streamError;
+  const fullText = finalizeQwenMtStream(streamState, qwenMtUsesIncrementalOutput(params.modelSelection));
+  if (!fullText.trim()) throw new Error('The Qwen-MT model returned an empty translation.');
+
+  let usage: any;
+  try {
+    usage = await result.usage;
+  } catch {
+    // Usage is optional.
+  }
+  // Qwen-MT returns plain text, but the translation workspace still expects
+  // the common translation-card shape. Wrap the completed text locally; no
+  // JSON is requested from or parsed from the model.
+  onTranslationResultV2(params.session, {
+    textType: 'text',
+    originalText: params.selectedText,
+    targetLanguage: params.targetLanguage,
+    translatedText: fullText,
+  });
+  onLLMStreamEndV2(params.session, usage);
 }
 
 function finishAbortedTranslation(session: Session): boolean {
@@ -1014,11 +1109,94 @@ function normalizeTranslationOriginal(output: TranslationResult, selectedText: s
   return normalizeTranslationResultCandidate(output, selectedText) ?? ({ ...output, originalText: selectedText } as TranslationResult);
 }
 
+export function isQwenMtModel(selection: Pick<ModelSelect, 'modelId'>): boolean {
+  const modelId = selection.modelId.trim().toLowerCase();
+  return /^qwen-mt(?:$|[-_.])/.test(modelId);
+}
+
+export function qwenMtUsesIncrementalOutput(selection: Pick<ModelSelect, 'modelId'>): boolean {
+  const modelId = selection.modelId.trim().toLowerCase();
+  return !/^qwen-mt-(?:plus|turbo)(?:$|[-_.])/.test(modelId);
+}
+
+type QwenMtStreamMode = 'append' | 'replace';
+
+type QwenMtStreamState = {
+  mode?: QwenMtStreamMode;
+  lastChunk: string;
+  appendText: string;
+  replaceText: string;
+  text: string;
+};
+
+function createQwenMtStreamState(): QwenMtStreamState {
+  return { lastChunk: '', appendText: '', replaceText: '', text: '' };
+}
+
+function consumeQwenMtStreamChunk(state: QwenMtStreamState, chunk: string): void {
+  if (!chunk) return;
+
+  const previousChunk = state.lastChunk;
+  state.appendText += chunk;
+  state.replaceText = chunk;
+
+  if (!state.mode && previousChunk) {
+    // A cumulative stream grows from the previous chunk; an incremental
+    // stream emits a separate delta that normally is not prefixed by it.
+    if (chunk.length > previousChunk.length && chunk.startsWith(previousChunk)) {
+      state.mode = 'replace';
+    } else if (chunk !== previousChunk) {
+      state.mode = 'append';
+    }
+  }
+
+  state.lastChunk = chunk;
+  state.text = state.mode === 'append' ? state.appendText : state.replaceText;
+}
+
+function finalizeQwenMtStream(state: QwenMtStreamState, fallbackIncremental: boolean): string {
+  if (!state.mode) {
+    state.mode = fallbackIncremental ? 'append' : 'replace';
+    state.text = state.mode === 'append' ? state.appendText : state.replaceText;
+  }
+  return state.text;
+}
+
+export function mergeQwenMtStreamChunks(chunks: string[], fallbackIncremental: boolean): { mode: QwenMtStreamMode; text: string } {
+  const state = createQwenMtStreamState();
+  for (const chunk of chunks) consumeQwenMtStreamChunk(state, chunk);
+  const text = finalizeQwenMtStream(state, fallbackIncremental);
+  return { mode: state.mode!, text };
+}
+
+export function buildQwenMtPrompt(targetLanguage: string, selectedText: string): string {
+  const normalizedLanguage = targetLanguage.trim();
+  const displayLanguage = getLanguageDisplayName(normalizedLanguage);
+  const languageInstruction =
+    displayLanguage && displayLanguage !== normalizedLanguage ? `${displayLanguage} (${normalizedLanguage})` : displayLanguage;
+  return [
+    `Translate the following text into ${languageInstruction || 'the requested target language'}.`,
+    'Return only the translation. Do not add explanations, labels, quotation marks, or commentary.',
+    '# Text to translate',
+    selectedText,
+  ].join('\n\n');
+}
+
+function getLanguageDisplayName(language: string): string {
+  if (!language) return '';
+  try {
+    const displayNames = new Intl.DisplayNames(['en'], { type: 'language' });
+    return displayNames.of(language) ?? language;
+  } catch {
+    return language;
+  }
+}
+
 function buildProviderOptions(effort: Session['thinkingEffort'], selection: ModelSelect): Record<string, any> {
   const activeProviderId = selection.providerId;
   const providerOptions: Record<string, any> = { ...V2_PROVIDER_OPTIONS };
   providerOptions.google = getGoogleThinkingConfig(selection.modelId, effort);
-  const thinkingOpts = getThinkingProviderOptions(activeProviderId, effort);
+  const thinkingOpts = isQwenMtModel(selection) ? undefined : getThinkingProviderOptions(activeProviderId, effort);
   if (thinkingOpts && activeProviderId) {
     providerOptions[activeProviderId] = {
       ...providerOptions[activeProviderId],

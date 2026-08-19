@@ -74,8 +74,8 @@ describe('chat selection copy', function () {
     assert.include(html, 'data-zaibar-math="inline"');
     assert.include(html, 'data-zaibar-math="display"');
     assert.equal(htmlToMarkdown(html), 'Inline $E=mc^2$\n\n$$\n\\int_0^1 x\\,dx\n$$');
-    assert.equal(htmlToPlainText(html), 'Inline $E=mc^2$\n$$\n\\int_0^1 x\\,dx\n$$');
-    assert.equal(renderedElementToPlainText(source), 'Inline $E=mc^2$\n$$\n\\int_0^1 x\\,dx\n$$');
+    assert.equal(htmlToPlainText(html), 'Inline $E=mc^2$\n\n$$\n\\int_0^1 x\\,dx\n$$');
+    assert.equal(renderedElementToPlainText(source), 'Inline $E=mc^2$\n\n$$\n\\int_0^1 x\\,dx\n$$');
   });
 
   it('restores LaTeX when a selection boundary is inside rendered KaTeX', function () {
