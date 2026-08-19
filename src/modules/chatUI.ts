@@ -33,6 +33,7 @@ import { openCitation } from './citationAction';
 import { getItemFullTextByPage } from '../utils/zoteroItemAccess';
 import { normalizePartOfSpeech, type TranslationResult } from '../utils/translation';
 import { createUserMessageBubble } from '../components/userBubble';
+import { captureAssistantPreviewSnapshot } from '../components/chatTurnNavigator';
 
 Zotero.debug('[zaibar-chatUI] module loaded');
 
@@ -67,6 +68,7 @@ export async function renderPersistedTranscript(session: Session, container: HTM
       chatMessage.appendChild(content);
     }
     pop.dataset.markdown = turn.assistantMarkdown;
+    captureAssistantPreviewSnapshot(pop);
     pop.querySelector('.chat-actions')?.classList.remove('hidden');
     container.appendChild(pop);
   }
@@ -638,6 +640,7 @@ function bindAutoScrollTracker(container: HTMLElement, session: Session) {
 export function onLLMStreamEndV2(session: Session, usage?: TokenUsage, aborted?: boolean) {
   const pop = session.pending.messagePop;
   if (pop) {
+    captureAssistantPreviewSnapshot(pop as HTMLElement);
     const actions = pop.querySelector('.chat-actions');
     if (actions) {
       actions.classList.remove('hidden');
@@ -806,6 +809,7 @@ export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
         chatMsg.innerHTML = `<div class="ai-bar-error-text">${escapeHtml(data.error)}</div>`;
       }
     }
+    captureAssistantPreviewSnapshot(pop as HTMLElement);
     maybeAutoScroll(data.session);
   }
   // Clear streaming state

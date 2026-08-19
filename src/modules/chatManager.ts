@@ -54,6 +54,7 @@ import {
   type PersistedTurn,
 } from './chatHistoryStore';
 import { createUserMessageBubble } from '../components/userBubble';
+import { disposeChatTurnNavigatorHost } from '../components/chatTurnNavigator';
 import { calculateContextBudget, createCheckpointMessage, type ContextCheckpoint } from './contextCompaction';
 import { buildDocumentSnapshot, createDocumentFingerprint } from '../utils/documentSnapshot';
 
@@ -606,7 +607,9 @@ export class ChatManager {
         for (const [sessionId, session] of Array.from(this.sessionsMap.entries())) {
           if (session.sourceTabId === oldestSourceId) {
             this.sessionsMap.delete(sessionId);
-            addon.data.sidePaneBodyMap?.get(sessionId)?.remove();
+            const body = addon.data.sidePaneBodyMap?.get(sessionId);
+            disposeChatTurnNavigatorHost(body);
+            body?.remove();
             addon.data.sidePaneBodyMap?.delete(sessionId);
           }
         }

@@ -42,7 +42,7 @@ function getAnswerText(messageEl: Element | null | undefined): string {
 }
 
 export function ChatBox({ doc, isUser = false, onRegenerate }: ChatBoxProps): Element {
-  return ztoolkit.UI.createElement(doc, 'div', {
+  const box = ztoolkit.UI.createElement(doc, 'div', {
     tag: 'div',
     classList: [
       'w-full',
@@ -175,5 +175,7 @@ export function ChatBox({ doc, isUser = false, onRegenerate }: ChatBoxProps): El
         ],
       },
     ],
-  });
+  }) as HTMLElement;
+  if (!isUser) box.dataset.chatRole = 'assistant';
+  return box;
 }

@@ -13,6 +13,12 @@ chat-save-as-note = 保存为笔记
 chat-regenerate-response = 重新生成
 chat-reference-expand = 展开
 chat-reference-collapse = 收起
+chat-turn-navigator-label = 对话定位
+chat-turn-navigator-turn-label = 跳转到第 { $index } 轮对话
+chat-turn-navigator-generating = 正在生成回复…
+chat-turn-navigator-image-message = 图片消息
+chat-turn-navigator-empty-user = 用户消息
+chat-turn-navigator-empty-assistant = 暂无回复
 
 reader-bar-explain = 解释
 reader-bar-translate = 翻译

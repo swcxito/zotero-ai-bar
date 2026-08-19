@@ -13,6 +13,12 @@ chat-save-as-note = Save as Note
 chat-regenerate-response = Regenerate response
 chat-reference-expand = Show more
 chat-reference-collapse = Show less
+chat-turn-navigator-label = Conversation navigator
+chat-turn-navigator-turn-label = Go to conversation { $index }
+chat-turn-navigator-generating = Generating response…
+chat-turn-navigator-image-message = Image message
+chat-turn-navigator-empty-user = User message
+chat-turn-navigator-empty-assistant = No response
 
 reader-bar-explain = Explain
 reader-bar-translate = Translate

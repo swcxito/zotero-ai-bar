@@ -2,6 +2,7 @@ import { config } from '../../package.json';
 import { Icons } from '../components/common';
 import { InputArea, type InputAreaAPI } from '../components/inputArea';
 import { ChatHistoryPanel } from '../components/chatHistoryPanel';
+import { createChatTurnNavigator, disposeChatTurnNavigatorHost, setChatTurnNavigatorHost } from '../components/chatTurnNavigator';
 import { renderMarkdown } from '../utils/markdown';
 import { getString } from '../utils/locale';
 import { installChatSelectionCopyHandler, registerChatSelectionCopyContainer, uninstallChatSelectionCopyHandler } from '../utils/chatSelectionCopy';
@@ -116,7 +117,9 @@ function createWindowSessionPage(doc: Document, sessionId: string): HTMLElement 
   messageContainer.style.userSelect = 'text';
   registerChatSelectionCopyContainer(messageContainer);
 
-  page.appendChild(messageContainer);
+  const navigator = createChatTurnNavigator(doc, messageContainer);
+  page.appendChild(navigator.shell);
+  setChatTurnNavigatorHost(page, navigator.dispose);
   return page;
 }
 
@@ -438,6 +441,7 @@ export function onChatWindowLoad(window: Window) {
     root?._workspaceUnsubscribe?.();
     const sharedInput = root?.querySelector('.zaibar-window-shared-input .input-area-wrapper') as HTMLElement | null;
     if (sharedInput) addon.data.sharedInputAreas.delete(sharedInput);
+    root?.querySelectorAll(`.${WINDOW_DECK_CLASS} > [${SESSION_ID_ATTR}]`).forEach((page) => disposeChatTurnNavigatorHost(page));
     (root?.querySelector(`.${WINDOW_HISTORY_CLASS}`)?.firstElementChild as any)?._disposeHistory?.();
     if (window.arguments?.[0]?.onWindowClosed) {
       window.arguments[0].onWindowClosed();

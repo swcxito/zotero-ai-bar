@@ -51,6 +51,7 @@
 import { config } from '../../package.json';
 import { InputArea, type InputAreaAPI } from '../components/inputArea';
 import { ChatHistoryPanel } from '../components/chatHistoryPanel';
+import { createChatTurnNavigator, disposeChatTurnNavigatorHost, setChatTurnNavigatorHost } from '../components/chatTurnNavigator';
 import { getString } from '../utils/locale';
 import { getPref, setPref } from '../utils/prefs';
 import { installChatSelectionCopyHandler, registerChatSelectionCopyContainer, uninstallChatSelectionCopyHandler } from '../utils/chatSelectionCopy';
@@ -569,6 +570,7 @@ export function unregisterMainWindowSidePane(win?: Window): void {
   const sharedInput = els.pane.querySelector(`#${SHARED_INPUT_HOST_ID}`)?.shadowRoot?.querySelector('.input-area-wrapper') as HTMLElement | null;
   if (sharedInput) addon.data.sharedInputAreas.delete(sharedInput);
   (els.pane.querySelector(`#${HISTORY_HOST_ID}`)?.firstElementChild as any)?._disposeHistory?.();
+  for (const child of Array.from(els.deck.children)) disposeChatTurnNavigatorHost(child);
   els.splitter.remove();
   els.pane.remove();
   addon.data.sidePaneElements = undefined;
@@ -613,6 +615,7 @@ export function removeSidePaneTab(tabID?: string): void {
     const deck = els.deck;
     for (const child of Array.from(deck.children) as Element[]) {
       if (sessionIds.includes(child.getAttribute(SESSION_ID_ATTR) || '')) {
+        disposeChatTurnNavigatorHost(child);
         child.remove();
       }
     }
@@ -1105,7 +1108,9 @@ function ensureSidePanePage(sessionId: string): HTMLElement {
   messageContainer.classList.add('message-container', 'flex', 'flex-col', 'flex-1', 'overflow-y-auto', 'overflow-x-auto', 'min-w-0', 'pb-7');
   messageContainer.style.userSelect = 'text';
   registerChatSelectionCopyContainer(messageContainer);
-  shadowRoot.appendChild(messageContainer);
+  const navigator = createChatTurnNavigator(doc, messageContainer);
+  shadowRoot.appendChild(navigator.shell);
+  setChatTurnNavigatorHost(page, navigator.dispose);
 
   deck.appendChild(page);
   addon.data.sidePaneBodyMap!.set(sessionId, page);

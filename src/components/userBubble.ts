@@ -128,6 +128,9 @@ export function createUserMessageBubble(
 ): HTMLElement {
   const wrapper = doc.createElement('div');
   wrapper.classList.add(...BUBBLE_ANIMATION_CLASSES);
+  wrapper.dataset.chatRole = 'user';
+  wrapper.dataset.chatPreviewText =
+    text.trim() || (imageUrls.length > 0 ? getString('chat-turn-navigator-image-message' as any) : referenceText?.trim() || '');
 
   if (referenceText?.trim()) {
     wrapper.appendChild(createReferenceCard(doc, referenceText));
