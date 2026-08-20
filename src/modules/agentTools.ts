@@ -156,10 +156,11 @@ export const globTool = tool({
 
 export const treeTool = tool({
   description:
-    'List the hierarchical structure of the Zotero library like the Linux tree command. Returns a formatted text with collection/item metadata in square brackets.',
+    'List the hierarchical structure of the Zotero library like the Linux tree command. Returns names and item metadata without collection keys to save tokens. To start from a visible subcollection, pass rootCollectionPath as an exact name path such as ["Parent", "Child"].',
   inputSchema: asSchema(treeSchema),
   execute: async (input: TreePayload) => {
     const result = await buildLibraryTree({
+      rootCollectionPath: input.rootCollectionPath,
       rootCollectionKey: input.rootCollectionKey,
       depth: input.depth,
       includeItems: input.includeItems,

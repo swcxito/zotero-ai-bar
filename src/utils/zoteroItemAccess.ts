@@ -373,6 +373,7 @@ function itemToGlobItem(itemId: number): GlobItem {
 }
 
 export type TreeOptions = {
+  rootCollectionPath?: string[];
   rootCollectionKey?: string;
   depth?: number;
   includeItems?: boolean;
@@ -399,7 +400,16 @@ export async function buildLibraryTree(options: TreeOptions = {}): Promise<strin
     let rootType: 'library' | 'collection' = 'library';
     let rootId: number | undefined;
 
-    if (options.rootCollectionKey) {
+    if (options.rootCollectionPath?.length) {
+      const resolved = resolveCollectionByPath(options.rootCollectionPath, libraryID);
+      if (resolved.error || !resolved.collection) {
+        return { error: resolved.error || `Collection not found: ${options.rootCollectionPath.join(' > ')}` };
+      }
+      rootCollection = resolved.collection;
+      rootName = rootCollection.name;
+      rootType = 'collection';
+      rootId = rootCollection.id;
+    } else if (options.rootCollectionKey) {
       rootCollection = resolveCollectionByKey(options.rootCollectionKey, libraryID);
       if (!rootCollection) {
         return { error: `Collection not found: ${options.rootCollectionKey}` };
@@ -421,8 +431,14 @@ export async function buildLibraryTree(options: TreeOptions = {}): Promise<strin
 
     await renderTreeLines(childCollections as any[], libraryID, '', depth, 1, includeItems, itemLimit, lines);
 
-    if (includeItems && rootId === undefined) {
-      await renderRootItemLines(libraryID, '', itemLimit, lines);
+    if (includeItems) {
+      if (rootId === undefined) {
+        await renderRootItemLines(libraryID, '', itemLimit, lines);
+      } else {
+        // A collection used as the root can also contain direct items. They
+        // are not part of childCollections, so render them explicitly.
+        await renderItemLines(rootId, '', itemLimit, lines);
+      }
     }
 
     return lines.join('\n');
@@ -443,6 +459,46 @@ function resolveCollectionByKey(key: string, libraryID: number): any | undefined
     ztoolkit.log('resolveCollectionByKey failed:', e);
     return undefined;
   }
+}
+
+function resolveCollectionByPath(path: string[], libraryID: number): { collection?: any; error?: string } {
+  try {
+    const segments = path.map((segment) => segment.trim()).filter(Boolean);
+    if (segments.length === 0) {
+      return { error: 'Collection path cannot be empty.' };
+    }
+
+    let candidates = Zotero.Collections.getByLibrary(libraryID) as any[];
+    let parentName = 'library root';
+
+    for (let index = 0; index < segments.length; index++) {
+      const segment = segments[index];
+      const matches = candidates.filter((collection) => collection?.name === segment);
+      if (matches.length === 0) {
+        return { error: `Collection not found under ${parentName}: ${segment}` };
+      }
+      if (matches.length > 1) {
+        return { error: `Collection path is ambiguous under ${parentName}: ${segment}` };
+      }
+
+      const collection = matches[0];
+      parentName = segments.slice(0, index + 1).join(' > ');
+      candidates = Zotero.Collections.getByParent(collection.id) as any[];
+
+      if (index === segments.length - 1) {
+        return { collection };
+      }
+    }
+
+    return { error: `Collection not found: ${segments.join(' > ')}` };
+  } catch (e) {
+    ztoolkit.log('resolveCollectionByPath failed:', e);
+    return { error: `Failed to resolve collection path: ${segmentsForError(path)}` };
+  }
+}
+
+function segmentsForError(path: string[]): string {
+  return path.join(' > ') || '(empty)';
 }
 
 export function isValidTreeItem(item: any): boolean {

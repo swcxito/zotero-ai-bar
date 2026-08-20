@@ -72,7 +72,20 @@ export const globSchema = z.object({
 export type GlobPayload = z.infer<typeof globSchema>;
 
 export const treeSchema = z.object({
-  rootCollectionKey: z.string().optional().describe('Start from a specific collection key; omit to start from the library root.'),
+  rootCollectionPath: z
+    .array(z.string().trim().min(1))
+    .min(1)
+    .max(20)
+    .optional()
+    .describe(
+      'Start from a collection by its exact name path, from the library top level downward, e.g. ["Parent", "Child"]. Do not include the library name. Prefer this when the tree output only contains collection names.'
+    ),
+  rootCollectionKey: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe('Start from a specific collection key. Use only when the key is already known; omit to start from the library root.'),
   depth: z.number().int().min(1).max(5).optional().default(2).describe('Maximum depth of subcollections to traverse (1–5).'),
   includeItems: z.boolean().optional().default(true).describe('Whether to list item titles under leaf collections.'),
   itemLimit: z.number().int().min(1).max(200).optional().default(20).describe('Max items to list per collection when includeItems is true (1–200).'),

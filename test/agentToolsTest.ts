@@ -66,7 +66,9 @@ function runTests() {
 
   // treeSchema
   assert(treeSchema.safeParse({}).success, 'tree defaults valid');
+  assert(treeSchema.safeParse({ rootCollectionPath: ['Parent', 'Child'], depth: 3 }).success, 'tree accepts a collection name path');
   assert(treeSchema.safeParse({ rootCollectionKey: 'ABC123', depth: 3, includeItems: true, itemLimit: 200 }).success, 'tree valid');
+  assert(!treeSchema.safeParse({ rootCollectionPath: [] }).success, 'tree rejects an empty collection path');
   assert(!treeSchema.safeParse({ depth: 0 }).success, 'tree depth below 1');
   assert(!treeSchema.safeParse({ depth: 6 }).success, 'tree depth above 5');
   assert(!treeSchema.safeParse({ itemLimit: 0 }).success, 'tree itemLimit 0');
