@@ -176,8 +176,7 @@ function toggleModelDropdown(anchor: HTMLElement, dropUp = false) {
           modelId: m.id,
         };
         setPref('llm.modelId', `${providerId}::${m.id}`);
-        saveV2Config(addon.data.userProviderConfigV2!);
-        updateModelInfoDisplay(anchor);
+        void saveV2Config(addon.data.userProviderConfigV2!);
       },
     }));
     groups.push({ title: provider?.name ?? providerId, items });

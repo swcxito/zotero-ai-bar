@@ -639,11 +639,13 @@ export async function saveV2Config(v2: UserProviderConfigV2): Promise<void> {
     })),
   };
   setPref(V2_CONFIG_PREF_KEY as keyof _ZoteroTypes.Prefs['PluginPrefsMap'], JSON.stringify(lightweight));
-  await saveV2Models(v2.addedModels);
+  // Publish the new runtime selection before waiting for file I/O. Model
+  // changes from the reader selection popup must update the sidebar and the
+  // standalone chat window immediately; a slow or failed models-file write
+  // must not leave those already-mounted controls showing the previous model.
   addon.data.userProviderConfigV2 = v2;
-  // Refresh all ModelInfo buttons (sidebar + reader popup) so icon/version
-  // reflect the new active model or model metadata.
   addon.data.refreshModelInfoAnchors?.();
+  await saveV2Models(v2.addedModels);
   ztoolkit.log('[saveV2Config] Persisted (prefs + models file)');
 }
 
