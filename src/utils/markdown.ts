@@ -34,15 +34,18 @@ const ALLOWED_RAW_HTML_TAGS = ['sub'] as const;
  * Cite marker body alternatives (the part after `[cite:` and before `]`):
  *  - `<itemId>[:<page>|L<line>[-<end>]][|<title>]`  item cite (cross-doc;
  *    line form resolves line->page at render time)
- *  - `p<page>[-<end>]`              page cite (current doc only)
+ *  - `p<page>[-<end>]`              page cite (current doc only; an optional
+ *    `|<title>` suffix is accepted for compatibility)
  *  - `L<line>[-<end>]`              line cite (current doc only; resolves
- *    line->page at render time, renders like a page cite)
+ *    line->page at render time, renders like a page cite; an optional
+ *    `|<title>` suffix is accepted for compatibility; a repeated `L` before
+ *    the range end is also accepted)
  *
  * The dash in ranges accepts `-`, `\u2013` (en-dash), `\u2014` (em-dash), or `~`.
  * Kept as a raw string so it can be embedded in larger regexes (e.g. the
  * wrapper-stripping patterns and the main marker regex).
  */
-const CITE_BODY = String.raw`(?:\d+(?::(?:\d+|L\d+(?:(?:-|\u2013|\u2014|~)\s*\d+)?)?)?(?:\|[^\]]*)?|p\d+(?:(?:-|\u2013|\u2014|~)\s*\d+)?|L\d+(?:(?:-|\u2013|\u2014|~)\s*\d+)?)`;
+const CITE_BODY = String.raw`(?:\d+(?::(?:\d+|L\d+(?:(?:-|\u2013|\u2014|~)\s*L?\d+)?)?)?(?:\|[^\]]*)?|p\d+(?:(?:-|\u2013|\u2014|~)\s*\d+)?(?:\|[^\]]*)?|L\d+(?:(?:-|\u2013|\u2014|~)\s*L?\d+)?(?:\|[^\]]*)?)`;
 const CITE_MARKER_RE = new RegExp(`\\[cite:(${CITE_BODY})\\]`, 'g');
 /** Placeholder prefix used by `extractCiteMarkers` / `restoreCiteMarkers`. */
 const CITE_PLACEHOLDER_PREFIX = 'ZAIBARCITE';
@@ -329,8 +332,15 @@ function renderCiteBody(
   asHeader: boolean,
   linePageMap?: Map<string, number | undefined>
 ): string | null {
+  // A few model responses attach a title to a current-document shorthand,
+  // e.g. `[cite:L49-L51|Paper title]`. The title is not needed here because
+  // currentItemId supplies the document context, but accepting and ignoring
+  // it keeps the citation clickable instead of exposing the raw marker.
+  const titleSeparator = body.indexOf('|');
+  const bodyWithoutTitle = titleSeparator >= 0 ? body.slice(0, titleSeparator) : body;
+
   // Item cite: <itemId>[:<page>|L<line>[-<end>]][|<title>]
-  const itemMatch = body.match(/^(\d+)(?::([^|]+))?(?:\|.*)?$/);
+  const itemMatch = bodyWithoutTitle.match(/^(\d+)(?::([^|]+))?$/);
   if (itemMatch) {
     const itemId = parseInt(itemMatch[1], 10);
     const slot = itemMatch[2]; // "5", "L42", "L42-58", or undefined
@@ -341,7 +351,7 @@ function renderCiteBody(
 
     if (slot && slot.startsWith('L')) {
       // Cross-document line cite: resolve line -> page at render time.
-      const lineMatch = slot.match(/^L(\d+)\s*(?:(?:-|\u2013|\u2014|~)\s*(\d+))?$/);
+      const lineMatch = slot.match(/^L(\d+)\s*(?:(?:-|\u2013|\u2014|~)\s*L?(\d+))?$/);
       if (lineMatch) {
         line = parseInt(lineMatch[1], 10);
         const endStr = lineMatch[2];
@@ -371,7 +381,7 @@ function renderCiteBody(
   }
 
   // Page cite: p<page>[-<end>]  (current document only)
-  const pageMatch = body.match(/^p(\d+)\s*(?:(?:-|\u2013|\u2014|~)\s*(\d+))?$/);
+  const pageMatch = bodyWithoutTitle.match(/^p(\d+)\s*(?:(?:-|\u2013|\u2014|~)\s*(\d+))?$/);
   if (pageMatch) {
     const start = parseInt(pageMatch[1], 10);
     const endStr = pageMatch[2];
@@ -390,7 +400,7 @@ function renderCiteBody(
   // cites); the end line is dropped from the resolved label. Falls back to
   // "L.X" with data-line (click handler resolves on click) when the
   // lineToPage map is unavailable.
-  const lineMatch = body.match(/^L(\d+)\s*(?:(?:-|\u2013|\u2014|~)\s*(\d+))?$/);
+  const lineMatch = bodyWithoutTitle.match(/^L(\d+)\s*(?:(?:-|\u2013|\u2014|~)\s*L?(\d+))?$/);
   if (lineMatch) {
     const start = parseInt(lineMatch[1], 10);
     const endStr = lineMatch[2];

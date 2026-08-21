@@ -20,6 +20,8 @@ describe('chatWorkspace', function () {
   const sourceB = 'test-reader-b';
 
   afterEach(function () {
+    updateSelectedZoteroTab(sourceA, true);
+    selectWorkspaceKind('article', sourceA);
     removeWorkspaceSource(sourceA);
     removeWorkspaceSource(sourceB);
     updateSelectedZoteroTab('zotero-pane', false);
@@ -58,14 +60,15 @@ describe('chatWorkspace', function () {
     assert.equal(standalone.activeKind, 'translation');
   });
 
-  it('remembers the selected workspace independently for each article', function () {
+  it('shares the article/global workspace selection across all articles', function () {
     updateSelectedZoteroTab(sourceA, true);
     selectWorkspaceKind('global-agent', sourceA);
     updateSelectedZoteroTab(sourceB, true);
-    selectWorkspaceKind('article', sourceB);
-
-    updateSelectedZoteroTab(sourceA, true);
     assert.equal(getWorkspaceSnapshot('sidebar').activeKind, 'global-agent');
+
+    selectWorkspaceKind('article', sourceB);
+    updateSelectedZoteroTab(sourceA, true);
+    assert.equal(getWorkspaceSnapshot('sidebar').activeKind, 'article');
     updateSelectedZoteroTab(sourceB, true);
     assert.equal(getWorkspaceSnapshot('sidebar').activeKind, 'article');
   });

@@ -3,8 +3,14 @@ export type ChatWorkspaceHost = 'sidebar' | 'window';
 
 export const GLOBAL_AGENT_SESSION_ID = 'global-agent';
 
-const activeKindBySource = new Map<string, ChatSessionKind>();
+/**
+ * The article/global workspace choice is shared by every reader. A reader's
+ * chat session is still independent, but switching readers must not silently
+ * switch the workspace kind back to that reader's previous choice.
+ */
+let sharedWorkspaceKind: Exclude<ChatSessionKind, 'translation'> = 'article';
 const visibleTranslationSources = new Set<string>();
+let activeTranslationSourceTabId: string | undefined;
 const listeners = new Set<() => void>();
 
 let selectedZoteroTabId: string | undefined;
@@ -89,8 +95,8 @@ export function getActiveWorkspaceKind(host: ChatWorkspaceHost): ChatSessionKind
   const sourceTabId = getWorkspaceSource(host);
   if (host === 'sidebar' && !selectedReaderTabId) return 'global-agent';
   if (!sourceTabId) return 'global-agent';
-  const saved = activeKindBySource.get(sourceTabId) ?? 'article';
-  return saved === 'translation' && !visibleTranslationSources.has(sourceTabId) ? 'article' : saved;
+  if (activeTranslationSourceTabId === sourceTabId && visibleTranslationSources.has(sourceTabId)) return 'translation';
+  return sharedWorkspaceKind;
 }
 
 export function selectWorkspaceKind(kind: ChatSessionKind, sourceTabId?: string): void {
@@ -98,9 +104,10 @@ export function selectWorkspaceKind(kind: ChatSessionKind, sourceTabId?: string)
   if (kind === 'translation') {
     if (!source) return;
     visibleTranslationSources.add(source);
-    activeKindBySource.set(source, kind);
-  } else if (source) {
-    activeKindBySource.set(source, kind);
+    activeTranslationSourceTabId = source;
+  } else {
+    sharedWorkspaceKind = kind;
+    if (source === activeTranslationSourceTabId) activeTranslationSourceTabId = undefined;
   }
   notifyWorkspaceChanged();
 }
@@ -108,15 +115,13 @@ export function selectWorkspaceKind(kind: ChatSessionKind, sourceTabId?: string)
 export function showTranslationWorkspace(sourceTabId: string): void {
   lastReaderTabId = sourceTabId;
   visibleTranslationSources.add(sourceTabId);
-  activeKindBySource.set(sourceTabId, 'translation');
+  activeTranslationSourceTabId = sourceTabId;
   notifyWorkspaceChanged();
 }
 
 export function hideTranslationWorkspace(sourceTabId: string): void {
   visibleTranslationSources.delete(sourceTabId);
-  if (activeKindBySource.get(sourceTabId) === 'translation') {
-    activeKindBySource.set(sourceTabId, 'article');
-  }
+  if (activeTranslationSourceTabId === sourceTabId) activeTranslationSourceTabId = undefined;
   notifyWorkspaceChanged();
 }
 
@@ -127,16 +132,14 @@ export function isTranslationWorkspaceVisible(sourceTabId?: string): boolean {
 export function setSeparateTranslationEnabled(enabled: boolean): void {
   if (!enabled) {
     visibleTranslationSources.clear();
-    for (const [sourceTabId, kind] of Array.from(activeKindBySource.entries())) {
-      if (kind === 'translation') activeKindBySource.set(sourceTabId, 'article');
-    }
+    activeTranslationSourceTabId = undefined;
   }
   notifyWorkspaceChanged();
 }
 
 export function removeWorkspaceSource(sourceTabId: string, notify: boolean = true): void {
-  activeKindBySource.delete(sourceTabId);
   visibleTranslationSources.delete(sourceTabId);
+  if (activeTranslationSourceTabId === sourceTabId) activeTranslationSourceTabId = undefined;
   if (selectedReaderTabId === sourceTabId) selectedReaderTabId = undefined;
   if (lastReaderTabId === sourceTabId) lastReaderTabId = undefined;
   if (notify) notifyWorkspaceChanged();

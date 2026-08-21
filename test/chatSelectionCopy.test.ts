@@ -78,6 +78,15 @@ describe('chat selection copy', function () {
     assert.equal(renderedElementToPlainText(source), 'Inline $E=mc^2$\n\n$$\n\\int_0^1 x\\,dx\n$$');
   });
 
+  it('renders a current-document line citation with an unexpected title suffix', async function () {
+    const html = await renderMarkdown('[cite:L49-L51|A 50 Gb/s 190 mW Asymmetric 3-Tap FFE VCSEL Driver]');
+
+    assert.notInclude(html, '[cite:L49-L51|A 50 Gb/s 190 mW Asymmetric 3-Tap FFE VCSEL Driver]');
+    assert.include(html, 'class="zaibar-cite"');
+    assert.include(html, 'data-line="49"');
+    assert.include(html, 'data-line-range="49-51"');
+  });
+
   it('restores LaTeX when a selection boundary is inside rendered KaTeX', function () {
     const doc = Zotero.getMainWindow().document;
     const source = doc.createElement('p');
