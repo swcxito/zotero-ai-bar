@@ -9,12 +9,18 @@ import { renderedElementToPlainText } from '../utils/chatSelectionCopy';
 import { getString } from '../utils/locale';
 
 export const CHAT_TURN_NAVIGATOR_MIN_WIDTH = 520;
+export const CHAT_INPUT_MAX_WIDTH_REM = 48;
 
 export type ChatTurnRole = 'user' | 'assistant';
 
 export interface PairedTurnIndexes {
   userIndex?: number;
   assistantIndex?: number;
+}
+
+export interface MarkerGroupMaskBounds {
+  top: number;
+  height: number;
 }
 
 interface ChatTurnNodes {
@@ -35,7 +41,16 @@ type ChatTurnNavigatorHost = HTMLElement & {
 
 const NAVIGATOR_INSET = 16;
 const MARKER_GAP = 10;
+const MASK_VERTICAL_PADDING = 18;
 const ACTIVE_PROBE_RATIO = 0.28;
+
+export function getChatInputMaxWidth(rootFontSizePx: number): number {
+  return Math.max(0, rootFontSizePx) * CHAT_INPUT_MAX_WIDTH_REM;
+}
+
+export function shouldUseCompactNavigator(containerWidth: number, rootFontSizePx: number): boolean {
+  return containerWidth < getChatInputMaxWidth(rootFontSizePx);
+}
 
 export function pairChatTurnRoles(roles: ChatTurnRole[]): PairedTurnIndexes[] {
   const turns: PairedTurnIndexes[] = [];
@@ -72,6 +87,18 @@ export function getCenteredMarkerPositions(count: number, height: number, prefer
 
 export function getHoverMarkerWidth(index: number, hoveredIndex: number): number {
   return Math.max(8, 26 - Math.abs(index - hoveredIndex) * 6);
+}
+
+export function getMarkerGroupMaskBounds(
+  positions: number[],
+  containerHeight: number,
+  padding = MASK_VERTICAL_PADDING
+): MarkerGroupMaskBounds | undefined {
+  if (!positions.length || containerHeight <= 0) return undefined;
+  const safePadding = Math.max(0, padding);
+  const top = Math.max(0, positions[0] - safePadding);
+  const bottom = Math.min(containerHeight, positions[positions.length - 1] + safePadding);
+  return { top, height: Math.max(0, bottom - top) };
 }
 
 export function getActiveTurnIndex(
@@ -201,7 +228,14 @@ export function createChatTurnNavigator(doc: Document, messageContainer: HTMLEle
 
   const reducedMotion = () => view?.matchMedia('(prefers-reduced-motion: reduce)')?.matches ?? false;
 
+  const getRootFontSize = () => {
+    const fontSize = view?.getComputedStyle(doc.documentElement).fontSize;
+    const parsed = Number.parseFloat(fontSize || '');
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 16;
+  };
+
   const updateMarkerAppearance = () => {
+    rail.dataset.expanded = String(hoveredIndex !== null);
     markerElements.forEach((marker, index) => {
       marker.dataset.active = String(index === activeIndex);
       marker.dataset.hovered = String(index === hoveredIndex);
@@ -250,6 +284,7 @@ export function createChatTurnNavigator(doc: Document, messageContainer: HTMLEle
     }
 
     const hasRoom = shell.clientWidth >= CHAT_TURN_NAVIGATOR_MIN_WIDTH;
+    shell.dataset.navigatorCompact = String(shouldUseCompactNavigator(shell.clientWidth, getRootFontSize()));
     const hasScrollableTurns = turns.length >= 2 && messageContainer.scrollHeight > messageContainer.clientHeight + 1;
     const visible = hasRoom && hasScrollableTurns;
     shell.dataset.navigatorVisible = String(visible);
@@ -262,6 +297,11 @@ export function createChatTurnNavigator(doc: Document, messageContainer: HTMLEle
     }
 
     markerPositions = getCenteredMarkerPositions(turns.length, rail.clientHeight || shell.clientHeight);
+    const maskBounds = getMarkerGroupMaskBounds(markerPositions, rail.clientHeight || shell.clientHeight);
+    if (maskBounds) {
+      rail.style.setProperty('--chat-turn-navigator-mask-top', `${maskBounds.top}px`);
+      rail.style.setProperty('--chat-turn-navigator-mask-height', `${maskBounds.height}px`);
+    }
     markerElements.forEach((marker, index) => {
       marker.style.top = `${markerPositions[index]}px`;
     });

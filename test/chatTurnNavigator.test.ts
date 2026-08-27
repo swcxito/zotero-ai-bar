@@ -1,16 +1,27 @@
 import { assert } from 'chai';
 import {
   CHAT_TURN_NAVIGATOR_MIN_WIDTH,
+  getChatInputMaxWidth,
   getActiveTurnIndex,
   getCenteredMarkerPositions,
   getHoverMarkerWidth,
+  getMarkerGroupMaskBounds,
   getMarkerHitIndex,
   pairChatTurnRoles,
+  shouldUseCompactNavigator,
 } from '../src/components/chatTurnNavigator';
 
 describe('chatTurnNavigator', function () {
   it('uses the wider visibility threshold', function () {
     assert.equal(CHAT_TURN_NAVIGATOR_MIN_WIDTH, 520);
+  });
+
+  it('keeps the navigator compact until the 48rem input reaches its maximum width', function () {
+    assert.equal(getChatInputMaxWidth(16), 768);
+    assert.equal(getChatInputMaxWidth(13), 624);
+    assert.isTrue(shouldUseCompactNavigator(767.9, 16));
+    assert.isFalse(shouldUseCompactNavigator(768, 16));
+    assert.isFalse(shouldUseCompactNavigator(520, 10));
   });
 
   it('pairs user and assistant nodes into turns while preserving incomplete turns', function () {
@@ -43,6 +54,13 @@ describe('chatTurnNavigator', function () {
     assert.equal(getHoverMarkerWidth(2, 4), 14);
     assert.equal(getHoverMarkerWidth(1, 4), 8);
     assert.equal(getHoverMarkerWidth(0, 4), 8);
+  });
+
+  it('limits the mask to the centered marker group', function () {
+    assert.isUndefined(getMarkerGroupMaskBounds([], 100));
+    assert.deepEqual(getMarkerGroupMaskBounds([50], 100), { top: 32, height: 36 });
+    assert.deepEqual(getMarkerGroupMaskBounds([40, 50, 60], 100), { top: 22, height: 56 });
+    assert.deepEqual(getMarkerGroupMaskBounds([2, 8], 10), { top: 0, height: 10 });
   });
 
   it('maps gaps to the nearest marker but ignores space outside the marker group', function () {
