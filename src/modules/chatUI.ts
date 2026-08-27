@@ -75,12 +75,10 @@ export async function renderPersistedTranscript(session: Session, container: HTM
   if (container.dataset.renderToken === renderToken) container.scrollTop = container.scrollHeight;
 }
 
-/**
- * Wire click handlers to any `.zaibar-cite` spans inside `root`.
- * Safe to call repeatedly on the same root — already-bound spans are
- * skipped via a `data-bound` flag.
- */
+/** Wire interactions for rendered Markdown. Safe to call repeatedly. */
 export function attachCitationHandlers(root: HTMLElement): void {
+  attachCodeBlockHandlers(root);
+
   const spans = root.querySelectorAll<HTMLElement>('.zaibar-cite:not([data-bound])');
   for (const span of spans) {
     span.setAttribute('data-bound', '1');
@@ -100,6 +98,48 @@ export function attachCitationHandlers(root: HTMLElement): void {
       }
     });
     attachCitationTooltip(span);
+  }
+}
+
+function attachCodeBlockHandlers(root: HTMLElement): void {
+  const slots = root.querySelectorAll<HTMLElement>('.chat-code-copy-slot:not([data-bound])');
+  for (const slot of slots) {
+    const doc = slot.ownerDocument;
+    const copyLabel = getString('chat-copy-text');
+    const copiedLabel = getString('chat-selection-copy-copied');
+    const button = ztoolkit.UI.createElement(doc, 'button', {
+      namespace: 'html',
+      classList: ['chat-code-copy'],
+      properties: { type: 'button', title: copyLabel },
+      attributes: { 'aria-label': copyLabel, 'data-zaibar-copy-ignore': 'true' },
+    }) as HTMLButtonElement;
+    const renderIcon = (iconMarkup: string) => {
+      const icon = ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup, sizeRem: 0.9, extraClasses: ['chat-code-copy-icon'] }));
+      button.replaceChildren(icon);
+    };
+    renderIcon(Icons.Copy);
+    slot.appendChild(button);
+    slot.setAttribute('data-bound', '1');
+    let feedbackVersion = 0;
+
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const code = button.closest('.chat-code-block')?.querySelector('pre code')?.textContent?.replace(/\n$/, '') ?? '';
+      new ztoolkit.Clipboard().addText(code, 'text/plain').copy();
+
+      renderIcon(Icons.Check);
+      button.title = copiedLabel;
+      button.setAttribute('aria-label', copiedLabel);
+      button.classList.add('is-copied');
+      const currentFeedbackVersion = ++feedbackVersion;
+      button.ownerDocument.defaultView?.setTimeout(() => {
+        if (!button.isConnected || currentFeedbackVersion !== feedbackVersion) return;
+        renderIcon(Icons.Copy);
+        button.title = copyLabel;
+        button.setAttribute('aria-label', copyLabel);
+        button.classList.remove('is-copied');
+      }, 1600);
+    });
   }
 }
 

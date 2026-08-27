@@ -78,6 +78,19 @@ describe('chat selection copy', function () {
     assert.equal(renderedElementToPlainText(source), 'Inline $E=mc^2$\n\n$$\n\\int_0^1 x\\,dx\n$$');
   });
 
+  it('renders a non-copyable code language header without adding it to copied content', async function () {
+    const html = await renderMarkdown('```typescript\nconst answer = 42;\n```');
+
+    assert.include(html, 'class="chat-code-block"');
+    assert.include(html, 'class="chat-code-language">typescript</span>');
+    assert.include(html, 'class="chat-code-copy-slot"');
+    assert.notInclude(html, '<button');
+    assert.notInclude(html, '<svg');
+    assert.include(html, 'data-zaibar-copy-ignore="true"');
+    assert.equal(htmlToMarkdown(html), '```typescript\nconst answer = 42;\n```');
+    assert.equal(htmlToPlainText(html), 'const answer = 42;');
+  });
+
   it('renders a current-document line citation with an unexpected title suffix', async function () {
     const html = await renderMarkdown('[cite:L49-L51|A 50 Gb/s 190 mW Asymmetric 3-Tap FFE VCSEL Driver]');
 

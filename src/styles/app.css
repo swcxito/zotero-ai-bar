@@ -463,6 +463,52 @@
     @apply bg-transparent p-0 text-inherit;
   }
 
+  .chat-message .chat-code-block {
+    @apply mx-2 my-4 min-w-0 max-w-full overflow-hidden rounded-xl bg-zinc-50 shadow-sm shadow-rose-200 dark:bg-zinc-800 dark:shadow-rose-950;
+  }
+
+  .chat-message .chat-code-header {
+    @apply flex h-9 items-center justify-between border-b border-zinc-200 bg-zinc-100/80 px-4 text-xs text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/45 dark:text-zinc-400;
+    user-select: none;
+    -moz-user-select: none;
+  }
+
+  .chat-message .chat-code-language {
+    @apply min-w-0 truncate font-mono font-medium;
+    user-select: none;
+    -moz-user-select: none;
+  }
+
+  .chat-message .chat-code-copy-slot {
+    @apply ml-4 inline-flex flex-shrink-0;
+  }
+
+  .chat-message .chat-code-copy {
+    @apply inline-flex flex-shrink-0 items-center justify-center rounded-md border-0 bg-transparent p-1.5 text-zinc-500 transition-colors hover:bg-white hover:text-rose-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-rose-400 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-rose-300;
+    cursor: pointer;
+    user-select: none;
+    -moz-user-select: none;
+  }
+
+  .chat-message .chat-code-copy.is-copied {
+    @apply text-rose-500 dark:text-rose-300;
+  }
+
+  .chat-message .chat-code-copy-icon {
+    color: currentColor;
+  }
+
+  .chat-message .chat-code-copy-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .chat-message .chat-code-block pre {
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
   /* Citation jump buttons — rendered from [cite:itemId[:page]] markers */
   .chat-message .zaibar-cite {
     @apply inline-flex max-w-full items-center gap-1 rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 align-baseline text-[0.85em] font-medium text-rose-700 transition-colors hover:bg-rose-100 hover:text-rose-900 dark:border-rose-700/60 dark:bg-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-800/50 dark:hover:text-rose-100;

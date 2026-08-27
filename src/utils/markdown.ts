@@ -107,6 +107,23 @@ marked.use({
       const raw = typeof token === 'string' ? token : (token?.text ?? '');
       return escapeHtml(raw);
     },
+    code(token: any) {
+      const code = typeof token === 'string' ? token : (token?.text ?? '');
+      const infoString = typeof token === 'string' ? '' : (token?.lang ?? '');
+      const language = infoString.match(/^\S*/)?.[0] || 'text';
+      const className = language === 'text' ? 'hljs' : `hljs language-${escapeHtml(language)}`;
+      const renderedCode = token?.escaped ? code : escapeHtml(code);
+
+      return [
+        '<div class="chat-code-block">',
+        '<div class="chat-code-header" data-zaibar-copy-ignore="true">',
+        `<span class="chat-code-language">${escapeHtml(language)}</span>`,
+        '<span class="chat-code-copy-slot" data-zaibar-copy-ignore="true"></span>',
+        '</div>',
+        `<pre><code class="${className}">${renderedCode.replace(/\n$/, '')}\n</code></pre>`,
+        '</div>',
+      ].join('');
+    },
   },
 });
 
@@ -191,12 +208,11 @@ export async function renderMarkdown(markdown: string, currentItemId?: number): 
       html = html.replaceAll(token, value);
     });
 
-    // 针对 Zotero 的 innerHTML 安全检查，补全 math 和 svg 的命名空间
-    // 避免 "Removed unsafe attribute. Element: svg. Attribute: xmlns." 警告
-    // 同时也确保在 XHTML 环境下这些标签能被正确识别
-    html = html
-      .replace(/<math(?![^>]*xmlns)/g, '<math xmlns="http://www.w3.org/1998/Math/MathML"')
-      .replace(/<svg(?![^>]*xmlns)/g, '<svg xmlns="http://www.w3.org/2000/svg"');
+    // MathML requires an explicit namespace in Zotero's XHTML environment.
+    // Do not inject xmlns into SVG strings here: Zotero removes that attribute
+    // from innerHTML. Interactive SVG icons are hydrated with IconView after
+    // the sanitized Markdown HTML has been inserted into the document.
+    html = html.replace(/<math(?![^>]*xmlns)/g, '<math xmlns="http://www.w3.org/1998/Math/MathML"');
 
     // Restore cite markers from placeholders and render as HTML.
     // Two passes:

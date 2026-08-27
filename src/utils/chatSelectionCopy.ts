@@ -220,6 +220,7 @@ function inlineMarkdown(node: Node): string {
   }
   if (node.nodeType !== 1) return '';
   const element = node as HTMLElement;
+  if (element.hasAttribute('data-zaibar-copy-ignore')) return '';
   const tag = element.tagName.toLowerCase();
   const content = Array.from(element.childNodes).map(inlineMarkdown).join('');
   if (tag === 'br') return '  \n';
@@ -273,6 +274,7 @@ function markdownForNode(node: Node): string {
   if (node.nodeType === 3) return (node.nodeValue ?? '').replace(/\s+/g, ' ');
   if (node.nodeType !== 1) return '';
   const element = node as HTMLElement;
+  if (element.hasAttribute('data-zaibar-copy-ignore')) return '';
   const tag = element.tagName.toLowerCase();
   const mathKind = element.getAttribute('data-zaibar-math');
   if (mathKind) {
@@ -306,6 +308,7 @@ function plainTextForNode(node: Node): string {
   if (node.nodeType === 3) return node.nodeValue ?? '';
   if (node.nodeType !== 1) return '';
   const element = node as HTMLElement;
+  if (element.hasAttribute('data-zaibar-copy-ignore')) return '';
   const tag = element.tagName.toLowerCase();
   const mathKind = element.getAttribute('data-zaibar-math');
   if (mathKind) {
