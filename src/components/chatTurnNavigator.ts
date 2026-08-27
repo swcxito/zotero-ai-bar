@@ -229,7 +229,9 @@ export function createChatTurnNavigator(doc: Document, messageContainer: HTMLEle
   const reducedMotion = () => view?.matchMedia('(prefers-reduced-motion: reduce)')?.matches ?? false;
 
   const getRootFontSize = () => {
-    const fontSize = view?.getComputedStyle(doc.documentElement).fontSize;
+    const root = doc.documentElement;
+    if (!view || !root) return 16;
+    const fontSize = view.getComputedStyle(root)?.fontSize;
     const parsed = Number.parseFloat(fontSize || '');
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 16;
   };
