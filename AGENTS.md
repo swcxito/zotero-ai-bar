@@ -24,6 +24,23 @@ git tag --points-at HEAD
 
 Pushing the version tag triggers `.github/workflows/release.yml`, which builds the XPI and creates the GitHub Release through the Zotero plugin reusable release workflow.
 
+### Post-release confirmation
+
+Do not report a release as complete immediately after the release command pushes the branch and tag. Confirm the remote workflows and published artifact with:
+
+```bash
+gh run list --workflow ci.yml --commit "$(git rev-parse HEAD)" --limit 1 --json databaseId,status,conclusion,url
+gh run list --workflow release.yml --commit "$(git rev-parse HEAD)" --limit 1 --json databaseId,status,conclusion,url
+gh release view "$(git tag --points-at HEAD)" --json tagName,isDraft,isPrerelease,assets,url
+```
+
+Wait for both returned workflow runs to finish, using `gh run watch <run-id> --exit-status` when needed. A release is confirmed only when:
+
+- Both `CI` and `Release` have `status: completed` and `conclusion: success`.
+- The GitHub Release exists for the new tag, is neither a draft nor a prerelease, and includes `zotero-ai-bar.xpi`.
+
+If either workflow fails, inspect the failed job and its annotations or logs, fix the cause, and publish the next patch version. Do not move or overwrite an already-pushed version tag unless explicitly requested.
+
 ## XML-safe icons in Zotero native UI
 
 This rule applies to UI injected into Zotero-owned documents, including the main window, side panes, reader UI, and other native Zotero surfaces. It does not apply to plugin-owned windows created from the add-on's own HTML/XHTML pages, although reusing the same helpers there is allowed.
