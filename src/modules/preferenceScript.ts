@@ -24,6 +24,7 @@ import { openDialog } from './modelDialog';
 import { openPromptEditor } from './promptEditor';
 import { getLocaleID, getString } from '../utils/locale';
 import { setSeparateTranslationEnabled } from './chatWorkspace';
+import { CHAT_FONT_SIZE_LEVELS, getChatFontSizeValue, normalizeChatFontSizeIndex, refreshChatFontSize } from '../utils/chatFontSize';
 
 export async function registerPrefsScripts(_window: Window) {
   if (!addon.data.prefs) {
@@ -170,6 +171,26 @@ async function updatePrefsUI() {
     };
     thinkingInput.addEventListener('input', () => syncThinkingEffort(true));
     syncThinkingEffort(false);
+  }
+
+  const chatFontSizeInput = doc.querySelector(makeId('chat-font-size')) as HTMLInputElement;
+  const chatFontSizeValue = doc.querySelector(makeId('chat-font-size-value')) as HTMLElement;
+  if (chatFontSizeInput && chatFontSizeValue) {
+    const syncChatFontSize = (persist: boolean) => {
+      const index = normalizeChatFontSizeIndex(chatFontSizeInput.value);
+      chatFontSizeInput.value = String(index);
+      chatFontSizeValue.textContent = getChatFontSizeValue(index);
+      if (persist) {
+        setPref('chat.fontSize', index);
+        refreshChatFontSize();
+      }
+    };
+    chatFontSizeInput.min = '0';
+    chatFontSizeInput.max = String(CHAT_FONT_SIZE_LEVELS.length - 1);
+    chatFontSizeInput.step = '1';
+    chatFontSizeInput.value = String(normalizeChatFontSizeIndex(getPref('chat.fontSize')));
+    chatFontSizeInput.addEventListener('input', () => syncChatFontSize(true));
+    syncChatFontSize(false);
   }
 
   const translateModelSelector = doc.querySelector(makeId('translate-model-selector')) as HTMLSelectElement;

@@ -28,6 +28,7 @@ declare namespace _ZoteroTypes {
       "chat.formulaOptimization": boolean;
       "chat.contextRounds": number;
       "chat.defaultMode": string;
+      "chat.fontSize": number;
       "chat.startConversationMode": string;
       "chat.autoAttachItemData": boolean;
       "chat.openOnStartup": boolean;

@@ -9,6 +9,7 @@ import { installChatSelectionCopyHandler, registerChatSelectionCopyContainer, un
 import { SHARED_CHAT_DRAFT_ID } from '../utils/chatDraft';
 import { getReaderSourceLabel } from './readerBarPopup';
 import { attachCitationHandlers, renderPersistedTranscript } from './chatUI';
+import { applyChatFontSize } from '../utils/chatFontSize';
 import type { Session } from './chatManager';
 import {
   GLOBAL_AGENT_SESSION_ID,
@@ -117,6 +118,7 @@ function createWindowSessionPage(doc: Document, sessionId: string): HTMLElement 
     'pb-7'
   );
   messageContainer.style.userSelect = 'text';
+  applyChatFontSize(messageContainer);
   registerChatSelectionCopyContainer(messageContainer);
 
   const navigator = createChatTurnNavigator(doc, messageContainer);

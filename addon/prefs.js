@@ -21,6 +21,7 @@ pref('llm.modelId', '');
 pref('chat.formulaOptimization', true);
 pref('chat.contextRounds', 8);
 pref('chat.defaultMode', 'normal');
+pref('chat.fontSize', 2);
 pref('chat.startConversationMode', 'new');
 pref('chat.autoAttachItemData', false);
 pref('chat.openOnStartup', false);

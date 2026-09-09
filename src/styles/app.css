@@ -402,6 +402,30 @@
     display: none;
   }
 
+  .message-container .chat-message {
+    font-size: var(--zaibar-chat-font-size, 15px);
+  }
+
+  .message-container .chat-message h1 {
+    font-size: 1.6em;
+  }
+
+  .message-container .chat-message h2 {
+    font-size: 1.333333em;
+  }
+
+  .message-container .chat-message h3 {
+    font-size: 1.2em;
+  }
+
+  .message-container .chat-message h4 {
+    font-size: 1.066667em;
+  }
+
+  .message-container .chat-message table {
+    font-size: 0.933333em;
+  }
+
   .chat-message-content {
     max-width: 100%;
   }

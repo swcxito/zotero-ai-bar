@@ -102,6 +102,23 @@
         <html:option value="performance" data-l10n-id="pref-stream-speed-performance" />
       </html:select>
     </hbox>
+    <hbox align="center" style="margin-top: 14px; gap: 12px">
+      <vbox flex="1">
+        <html:label data-l10n-id="pref-chat-font-size" />
+        <html:small data-l10n-id="pref-chat-font-size-desc" />
+      </vbox>
+      <vbox style="width: 270px">
+        <html:div style="display: grid; grid-template-columns: repeat(5, 1fr); text-align: center; font-size: 0.9em">
+          <html:span data-l10n-id="pref-chat-font-size-small" />
+          <html:span data-l10n-id="pref-chat-font-size-medium-small" />
+          <html:span data-l10n-id="pref-chat-font-size-normal" />
+          <html:span data-l10n-id="pref-chat-font-size-medium-large" />
+          <html:span data-l10n-id="pref-chat-font-size-large" />
+        </html:div>
+        <html:input id="__addonRef__-chat-font-size" type="range" min="0" max="4" step="1" />
+      </vbox>
+      <html:strong id="__addonRef__-chat-font-size-value" style="width: 42px; text-align: center" />
+    </hbox>
     <hbox align="center" style="margin-top: 10px">
       <vbox flex="1">
         <html:label data-l10n-id="pref-chat-location" />

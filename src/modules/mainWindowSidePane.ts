@@ -59,6 +59,7 @@ import { SHARED_CHAT_DRAFT_ID } from '../utils/chatDraft';
 import { Icons } from '../components/common';
 import { getReaderSourceLabel } from './readerBarPopup';
 import { renderPersistedTranscript } from './chatUI';
+import { applyChatFontSize } from '../utils/chatFontSize';
 import type { Session } from './chatManager';
 import {
   GLOBAL_AGENT_SESSION_ID,
@@ -1161,6 +1162,7 @@ function ensureSidePanePage(sessionId: string): HTMLElement {
   const messageContainer = doc.createElement('div');
   messageContainer.classList.add('message-container', 'flex', 'flex-col', 'flex-1', 'overflow-y-auto', 'overflow-x-auto', 'min-w-0', 'pb-7');
   messageContainer.style.userSelect = 'text';
+  applyChatFontSize(messageContainer);
   registerChatSelectionCopyContainer(messageContainer);
   const navigator = createChatTurnNavigator(doc, messageContainer);
   shadowRoot.appendChild(navigator.shell);
