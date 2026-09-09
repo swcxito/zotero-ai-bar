@@ -60,6 +60,26 @@ describe('chat selection copy', function () {
   it('converts rendered selection HTML to Markdown without an HTML clipboard flavor', function () {
     assert.equal(htmlToMarkdown('<p>Hello <strong>formatted</strong> text</p>'), 'Hello **formatted** text');
     assert.equal(htmlToMarkdown('<ul><li>One</li><li>Two</li></ul>'), '- One\n- Two');
+    assert.equal(
+      htmlToMarkdown('<table><thead><tr><th>Name</th><th>Value</th></tr></thead><tbody><tr><td>A</td><td>1</td></tr></tbody></table>'),
+      '| Name | Value |\n| --- | --- |\n| A | 1 |'
+    );
+  });
+
+  it('preserves the table structure when the selection starts and ends inside table cells', function () {
+    const doc = Zotero.getMainWindow().document;
+    const source = doc.createElement('div');
+    source.innerHTML = '<table><thead><tr><th>Name</th><th>Value</th></tr></thead><tbody><tr><td>A</td><td>1</td></tr></tbody></table>';
+    const firstCellText = source.querySelector('th')!.firstChild!;
+    const lastCellText = source.querySelector('td:last-child')!.firstChild!;
+    const range = doc.createRange();
+    range.setStart(firstCellText, 0);
+    range.setEnd(lastCellText, lastCellText.textContent!.length);
+    const selection = { rangeCount: 1, getRangeAt: () => range } as unknown as Selection;
+
+    const html = selectionToHtml(selection, doc);
+    assert.include(html, '<table>');
+    assert.equal(htmlToMarkdown(html), '| Name | Value |\n| --- | --- |\n| A | 1 |');
   });
 
   it('restores inline and display formulas from the production KaTeX output', async function () {

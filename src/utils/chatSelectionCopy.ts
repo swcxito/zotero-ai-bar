@@ -46,6 +46,10 @@ function mathRootForNode(node: Node | null): Element | null {
   return katex ?? element.closest?.('.katex-display') ?? null;
 }
 
+function tableRootForNode(node: Node | null): Element | null {
+  return elementForNode(node)?.closest?.('table') ?? null;
+}
+
 function isEditableTarget(target: EventTarget | null): boolean {
   const element = target && 'nodeType' in target ? elementForNode(target as Node) : null;
   if (!element) return false;
@@ -83,6 +87,15 @@ export function selectionToHtml(selection: Selection, doc: Document): string {
   const wrapper = doc.createElement('div');
   for (let index = 0; index < selection.rangeCount; index++) {
     const range = selection.getRangeAt(index).cloneRange();
+    const startTable = tableRootForNode(range.startContainer);
+    const endTable = tableRootForNode(range.endContainer);
+
+    // Selecting text inside a table produces a fragment such as <tbody><tr>
+    // instead of the table element itself. Expand the affected boundaries so
+    // the Markdown converter can preserve the table structure.
+    if (startTable) range.setStartBefore(startTable);
+    if (endTable) range.setEndAfter(endTable);
+
     const startMath = mathRootForNode(range.startContainer);
     const endMath = mathRootForNode(range.endContainer);
 
@@ -261,7 +274,9 @@ function listMarkdown(list: Element, depth = 0): string {
 
 function tableMarkdown(table: Element): string {
   const rows = Array.from(table.querySelectorAll('tr')).map((row) =>
-    Array.from(row.querySelectorAll(':scope > th, :scope > td')).map((cell) => inlineMarkdown(cell).trim().replace(/\|/g, '\\|'))
+    Array.from(row.children)
+      .filter((cell) => ['th', 'td'].includes(cell.tagName.toLowerCase()))
+      .map((cell) => inlineMarkdown(cell).trim().replace(/\|/g, '\\|'))
   );
   if (!rows.length || !rows[0].length) return '';
   const width = Math.max(...rows.map((row) => row.length));
