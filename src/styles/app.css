@@ -65,14 +65,14 @@
   position: absolute;
   z-index: 0;
   top: var(--chat-turn-navigator-mask-top, 50%);
-  left: 2px;
+  right: 2px;
   width: 26px;
   height: var(--chat-turn-navigator-mask-height, 0px);
   border-radius: 10px;
-  background: linear-gradient(to right, rgba(212, 212, 216, 0.98) 0%, rgba(212, 212, 216, 0.82) 52%, rgba(212, 212, 216, 0) 100%);
+  background: linear-gradient(to left, rgba(212, 212, 216, 0.98) 0%, rgba(212, 212, 216, 0.82) 52%, rgba(212, 212, 216, 0) 100%);
   box-shadow:
-    inset 1px 0 rgba(255, 255, 255, 0.7),
-    4px 0 14px rgba(15, 23, 42, 0.22);
+    inset -1px 0 rgba(255, 255, 255, 0.7),
+    -4px 0 14px rgba(15, 23, 42, 0.22);
   backdrop-filter: blur(4px);
   mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%);
   opacity: 0;
@@ -82,7 +82,7 @@
 }
 
 .chat-turn-navigator-shell[data-navigator-compact='true'] .chat-turn-navigator::before {
-  left: 0;
+  right: 0;
 }
 
 .chat-turn-navigator[data-expanded='true']::before {
@@ -98,23 +98,23 @@
 
 .chat-turn-navigator-marker {
   position: absolute;
-  left: 2px;
+  right: 2px;
   display: block;
   height: 2px;
   border-radius: 9999px;
   background: rgba(100, 116, 139, 0.48);
   opacity: 0.72;
   transform: translateY(-50%);
-  transform-origin: left center;
+  transform-origin: right center;
   transition:
     width 160ms cubic-bezier(0.22, 1, 0.36, 1),
-    left 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    right 160ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 140ms ease,
     background-color 140ms ease;
 }
 
 .chat-turn-navigator-shell[data-navigator-compact='true'] .chat-turn-navigator-marker {
-  left: 0;
+  right: 0;
 }
 
 .chat-turn-navigator:hover .chat-turn-navigator-marker,
@@ -143,7 +143,7 @@
 
 .chat-turn-navigator-preview {
   position: absolute;
-  left: 34px;
+  right: 34px;
   z-index: 30;
   box-sizing: border-box;
   max-width: 360px;
@@ -187,18 +187,18 @@
 }
 
 .dark .chat-turn-navigator::before {
-  background: linear-gradient(to right, rgba(82, 82, 91, 0.98) 0%, rgba(82, 82, 91, 0.82) 52%, rgba(82, 82, 91, 0) 100%);
+  background: linear-gradient(to left, rgba(82, 82, 91, 0.98) 0%, rgba(82, 82, 91, 0.82) 52%, rgba(82, 82, 91, 0) 100%);
   box-shadow:
-    inset 1px 0 rgba(255, 255, 255, 0.2),
-    4px 0 14px rgba(0, 0, 0, 0.5);
+    inset -1px 0 rgba(255, 255, 255, 0.2),
+    -4px 0 14px rgba(0, 0, 0, 0.5);
 }
 
 @media (prefers-color-scheme: dark) {
   .chat-turn-navigator::before {
-    background: linear-gradient(to right, rgba(82, 82, 91, 0.98) 0%, rgba(82, 82, 91, 0.82) 52%, rgba(82, 82, 91, 0) 100%);
+    background: linear-gradient(to left, rgba(82, 82, 91, 0.98) 0%, rgba(82, 82, 91, 0.82) 52%, rgba(82, 82, 91, 0) 100%);
     box-shadow:
-      inset 1px 0 rgba(255, 255, 255, 0.2),
-      4px 0 14px rgba(0, 0, 0, 0.5);
+      inset -1px 0 rgba(255, 255, 255, 0.2),
+      -4px 0 14px rgba(0, 0, 0, 0.5);
   }
 
   .chat-turn-navigator-marker {

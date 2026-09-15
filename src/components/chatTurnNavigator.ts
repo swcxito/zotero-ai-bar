@@ -41,6 +41,7 @@ type ChatTurnNavigatorHost = HTMLElement & {
 
 const NAVIGATOR_INSET = 16;
 const MARKER_GAP = 10;
+const DEFAULT_MARKER_WIDTH = 8;
 const MASK_VERTICAL_PADDING = 18;
 const ACTIVE_PROBE_RATIO = 0.28;
 
@@ -212,7 +213,9 @@ export function createChatTurnNavigator(doc: Document, messageContainer: HTMLEle
   preview.append(userText, assistantText);
   rail.appendChild(preview);
 
-  shell.append(rail, messageContainer);
+  // Keep the conversation content first so the quick-scroll rail sits on the
+  // right side of the chat area without changing the message width model.
+  shell.append(messageContainer, rail);
 
   const view = doc.defaultView;
   let turns: ChatTurnNodes[] = [];
@@ -241,7 +244,7 @@ export function createChatTurnNavigator(doc: Document, messageContainer: HTMLEle
     markerElements.forEach((marker, index) => {
       marker.dataset.active = String(index === activeIndex);
       marker.dataset.hovered = String(index === hoveredIndex);
-      marker.style.width = `${hoveredIndex === null ? 5 : getHoverMarkerWidth(index, hoveredIndex)}px`;
+      marker.style.width = `${hoveredIndex === null ? DEFAULT_MARKER_WIDTH : getHoverMarkerWidth(index, hoveredIndex)}px`;
     });
   };
 
