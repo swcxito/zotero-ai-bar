@@ -20,6 +20,80 @@
 @tailwind components;
 @tailwind utilities;
 
+.connect-chatgpt-label {
+  display: inline-grid;
+  grid-template-columns: max-content;
+  overflow: hidden;
+  min-width: 0;
+  transition: width 220ms ease;
+}
+
+.connect-chatgpt-label > span {
+  grid-area: 1 / 1;
+  justify-self: start;
+  width: max-content;
+  white-space: nowrap;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.connect-chatgpt-label > [data-connect-label='connected'] {
+  opacity: 0;
+  transform: translateY(5px);
+}
+
+.connect-chatgpt-label[data-state='connected'] > [data-connect-label='disconnected'] {
+  opacity: 0;
+  transform: translateY(-5px);
+}
+
+.connect-chatgpt-label[data-state='connected'] > [data-connect-label='connected'] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#connect-chatgpt-button {
+  transition:
+    background-color 220ms ease,
+    color 220ms ease,
+    box-shadow 220ms ease,
+    opacity 180ms ease,
+    padding-inline 220ms ease,
+    transform 150ms ease;
+}
+
+#connect-chatgpt-button:disabled {
+  pointer-events: none;
+  background-color: rgb(63 63 70);
+}
+
+#connect-chatgpt-label[data-state='connected'] > [data-connect-label='connected'] {
+  color: rgb(134 239 172);
+}
+
+#connect-chatgpt-button[data-connected='true'] {
+  padding-inline: 1.125rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  #connect-chatgpt-button:disabled {
+    background-color: rgb(212 212 216);
+  }
+
+  #connect-chatgpt-label[data-state='connected'] > [data-connect-label='connected'] {
+    color: rgb(21 128 61);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connect-chatgpt-label > span,
+  .connect-chatgpt-label,
+  #connect-chatgpt-button {
+    transition: none;
+  }
+}
+
 .chat-turn-navigator-shell {
   position: relative;
   display: flex;

@@ -135,6 +135,7 @@ export type FluentMessageId =
   | 'model-dialog-add-model'
   | 'model-dialog-add-provider'
   | 'model-dialog-browse-model'
+  | 'model-dialog-chatgpt-connected'
   | 'model-dialog-connect-chatgpt'
   | 'model-dialog-custom-provider'
   | 'model-dialog-delete-model'

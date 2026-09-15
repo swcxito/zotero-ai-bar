@@ -72,6 +72,7 @@ model-dialog-type-model = Click or type model name...
 model-dialog-delete-model = Delete Model
 model-dialog-add-model = Add Model
 model-dialog-connect-chatgpt = Connect ChatGPT
+model-dialog-chatgpt-connected = Connected
 model-dialog-model-label = Model
 
 # Codex subscription

@@ -72,6 +72,7 @@ model-dialog-type-model = 点击或输入模型名称...
 model-dialog-delete-model = 删除模型
 model-dialog-add-model = 添加模型
 model-dialog-connect-chatgpt = 连接 ChatGPT
+model-dialog-chatgpt-connected = 已连接
 model-dialog-model-label = 模型
 
 # Codex 订阅

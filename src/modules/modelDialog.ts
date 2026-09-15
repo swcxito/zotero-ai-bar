@@ -85,7 +85,7 @@ class ModelDialogV2 {
   private codexCollapsed = false;
 
   // Pinned to top when search is empty (order = display order)
-  private static readonly PINNED_ORDER = ['openai', 'google', 'anthropic', 'alibaba-cn', 'deepseek', 'moonshotai-cn', 'minimax-cn', 'zhipuai'];
+  private static readonly PINNED_ORDER = ['openai', 'google', 'anthropic', 'alibaba-cn', 'deepseek', 'moonshotai-cn', 'xai', 'zhipuai'];
   private static readonly PINNED_SET = new Set(ModelDialogV2.PINNED_ORDER);
 
   private static readonly SELECT_ITEM_CLASS =
@@ -265,11 +265,25 @@ class ModelDialogV2 {
 
   /** Keep setup controls hidden during connection; reveal them only after an actionable failure. */
   private updateCodexConnectionControls() {
+    const connected = !!codexRuntime.accountKey;
     const button = this.doc.getElementById('connect-chatgpt-button') as HTMLButtonElement | null;
+    const label = this.doc.getElementById('connect-chatgpt-label');
+    const disconnectedLabel = label?.querySelector('[data-connect-label="disconnected"]');
+    const connectedLabel = label?.querySelector('[data-connect-label="connected"]');
+    label?.setAttribute('data-state', connected ? 'connected' : 'disconnected');
+    disconnectedLabel?.setAttribute('aria-hidden', String(connected));
+    connectedLabel?.setAttribute('aria-hidden', String(!connected));
+    const activeLabel = connected ? connectedLabel : disconnectedLabel;
+    if (label && activeLabel) {
+      const labelWidth = activeLabel.getBoundingClientRect().width;
+      if (labelWidth > 0) label.style.width = `${Math.ceil(labelWidth)}px`;
+    }
     if (button) {
-      button.disabled = this.codexBusy || codexRuntime.loginPending || !!codexRuntime.accountKey;
+      button.dataset.connected = String(connected);
+      button.setAttribute('aria-label', getString(connected ? 'model-dialog-chatgpt-connected' : 'model-dialog-connect-chatgpt'));
+      button.disabled = this.codexBusy || codexRuntime.loginPending || connected;
       button.setAttribute('aria-busy', String(this.codexBusy || codexRuntime.loginPending));
-      button.style.opacity = button.disabled ? '0.6' : '';
+      button.style.opacity = this.codexBusy || codexRuntime.loginPending ? '0.6' : '';
       button.style.cursor = button.disabled ? 'default' : '';
     }
     const waiting = this.doc.getElementById('codex-login-wait');

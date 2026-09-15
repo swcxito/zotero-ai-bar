@@ -33,7 +33,10 @@
               class="relative z-10 flex items-center gap-2 rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:bg-zinc-700 active:scale-95 dark:bg-zinc-100 dark:text-black dark:hover:bg-white"
             >
               <span id="connect-chatgpt-icon" class="h-4 w-4"></span>
-              <span data-l10n-id="model-dialog-connect-chatgpt">连接 ChatGPT</span>
+              <span id="connect-chatgpt-label" class="connect-chatgpt-label" data-state="disconnected">
+                <span data-connect-label="disconnected" data-l10n-id="model-dialog-connect-chatgpt">连接 ChatGPT</span>
+                <span data-connect-label="connected" data-l10n-id="model-dialog-chatgpt-connected" aria-hidden="true">已连接</span>
+              </span>
             </button>
             <button
               id="add-provider-button"

@@ -63,6 +63,7 @@ describe('Codex in isolated Zotero', function () {
       const doc = dialog!.document;
       assert.equal(doc.getElementById('connect-chatgpt-button')?.nextElementSibling?.id, 'add-provider-button');
       assert.isNull(doc.getElementById('codex-provider-card'));
+      assert.equal(doc.getElementById('connect-chatgpt-label')?.getAttribute('data-state'), 'disconnected');
       addon.data.userProviderConfigV2!.addedProviders[CODEX_PROVIDER_ID] = { id: CODEX_PROVIDER_ID, name: 'Codex 订阅', env: [] };
       for (const listener of codexSettingsListeners) listener();
       assert.isNull(doc.getElementById('codex-provider-card'), 'Saved metadata without login must not show a card');
@@ -83,6 +84,8 @@ describe('Codex in isolated Zotero', function () {
       assert.equal(doc.getElementById('provider-block')?.firstElementChild?.id, 'codex-provider-card');
       const card = doc.getElementById('codex-provider-card')!;
       assert.isTrue((doc.getElementById('connect-chatgpt-button') as HTMLButtonElement).disabled);
+      assert.equal(doc.getElementById('connect-chatgpt-label')?.getAttribute('data-state'), 'connected');
+      assert.include(doc.getElementById('connect-chatgpt-label')?.textContent ?? '', getString('model-dialog-chatgpt-connected'));
       assert.isTrue(card.classList.contains('provider-card'), 'Reuse the shared provider card');
       assert.include(card.firstElementChild!.textContent!, getString('codex-card-title'));
       assert.include(card.firstElementChild!.textContent!, 'f***e@example.org');
@@ -147,6 +150,8 @@ describe('Codex in isolated Zotero', function () {
       assert.isNull(doc.getElementById('codex-provider-card'));
       assert.isUndefined(addon.data.userProviderConfigV2!.addedProviders[CODEX_PROVIDER_ID]);
       assert.isFalse((doc.getElementById('connect-chatgpt-button') as HTMLButtonElement).disabled);
+      assert.equal(doc.getElementById('connect-chatgpt-label')?.getAttribute('data-state'), 'disconnected');
+      assert.include(doc.getElementById('connect-chatgpt-label')?.textContent ?? '', getString('model-dialog-connect-chatgpt'));
     } finally {
       dialog?.close();
       await Zotero.Promise.delay(100);
