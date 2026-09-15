@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import path from 'node:path';
-import { runtimePolicy, policyArguments, contextFingerprint, sanitizeCodexBinding, isPublicPdfUrl } from '../../src/modules/codex/policy';
+import { runtimePolicy, policyArguments, contextFingerprint, sanitizeCodexBinding } from '../../src/modules/codex/policy';
 import { CodexRpc } from '../../src/modules/codex/protocol';
 import { codexRuntime, discoverCandidates } from '../../src/modules/codex/runtime';
 
@@ -35,21 +35,6 @@ describe('Codex components', function () {
       assert.throws(() => runtimePolicy('codex-cli 0.155.0', features), /尚未验证/);
       assert.throws(() => runtimePolicy('codex-cli 0.154.0-alpha.6.2', ''), /不完整/);
       assert.throws(() => runtimePolicy('codex-cli 0.154.0-alpha.6.2', features + '\nINVALID$ stable true'), /格式/);
-    });
-
-    it('only accepts public HTTPS document URLs', function () {
-      assert.isTrue(isPublicPdfUrl('https://arxiv.org/pdf/1234.5678'));
-      for (const url of [
-        'file:///tmp/doc.pdf',
-        'http://example.org/a.pdf',
-        'https://127.0.0.1/a.pdf',
-        'https://[::1]/a.pdf',
-        'https://localhost/a.pdf',
-        'https://foo.local/a.pdf',
-        'https://user:secret@example.org/a.pdf',
-        'https://example.org:8080/a.pdf',
-      ])
-        assert.isFalse(isPublicPdfUrl(url), url);
     });
 
     it('sanitizes persisted bindings and detects edited histories', function () {

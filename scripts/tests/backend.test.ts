@@ -130,49 +130,6 @@ describe('Codex chat backend', function () {
     assert.isDefined(state.server.requests.find((r: any) => r.method === 'turn/start').params.outputSchema);
   });
 
-  it('reads only explicitly supplied PDF URLs, without cookies, redirects or library writes', async function () {
-    const savedFetch = globalThis.fetch;
-    let fetched = 0;
-    try {
-      globalThis.fetch = async (_url: any, options: any) => {
-        fetched++;
-        assert.equal(options.credentials, 'omit');
-        assert.equal(options.redirect, 'error');
-        return new Response('%PDF-synthetic', { status: 200 });
-      };
-      (globalThis as any).Zotero.PDFWorker = { _enqueue: (callback: any) => callback(), _query: async () => ({ text: 'Synthetic paper content' }) };
-      const session = sessionFixture();
-      session.pending.userMessage.content = 'Read https://example.org/paper.pdf';
-      state.server.tools = [
-        { tool: 'zotero_read_pdf_url', args: { url: 'https://example.org/paper.pdf' } },
-        { tool: 'zotero_read_pdf_url', args: { url: 'https://elsewhere.org/private.pdf' } },
-      ];
-      await streamCodex(messagesFor(session), session);
-      assert.equal(fetched, 1);
-      assert.equal(state.writes, 0);
-      assert.isTrue(state.server.replies[0].result.success);
-      assert.isFalse(state.server.replies[1].result.success);
-    } finally {
-      globalThis.fetch = savedFetch;
-    }
-  });
-
-  it('reports scanned PDFs instead of claiming to have read their text', async function () {
-    const savedFetch = globalThis.fetch;
-    try {
-      globalThis.fetch = async () => new Response('%PDF-synthetic');
-      (globalThis as any).Zotero.PDFWorker = { _enqueue: (callback: any) => callback(), _query: async () => ({ text: '' }) };
-      const session = sessionFixture();
-      session.pending.userMessage.content = 'https://example.org/scanned.pdf';
-      state.server.tools = [{ tool: 'zotero_read_pdf_url', args: { url: 'https://example.org/scanned.pdf' } }];
-      await streamCodex(messagesFor(session), session);
-      assert.isFalse(state.server.replies[0].result.success);
-      assert.include(state.server.replies[0].result.contentItems[0].text, '截图');
-    } finally {
-      globalThis.fetch = savedFetch;
-    }
-  });
-
   it('does not fall back to an API key, unavailable model or another account', async function () {
     state.server.account = { type: 'apiKey' };
     const session = sessionFixture();

@@ -165,7 +165,7 @@ export function CardModelRow({ doc, data, onSelectModel, iconMarkup, removable =
     (row as HTMLElement).dataset.modelId = data.id;
   }
   const checkbox = row.querySelector('input[type="checkbox"]') as HTMLInputElement;
-  checkbox.setAttribute('aria-label', `显示 ${data?.name || '模型'}`);
+  checkbox.setAttribute('aria-label', `${getString('model-dialog-model-label')}: ${data?.name || getString('model-dialog-model-label')}`);
   checkbox.addEventListener('change', () => onEnabledChange?.(checkbox.checked));
   modelRowDataMap.set(row, () => {
     const nameValue = (row.querySelector('input[type="text"]') as HTMLInputElement).value;

@@ -141,9 +141,9 @@ class ModelDialogV2 {
     loginStatus.id = 'codex-login-wait';
     loginStatus.className = 'mb-4 flex items-center gap-3 text-sm text-zinc-500';
     const waiting = this.doc.createElement('span');
-    waiting.textContent = '请在浏览器中完成登录（最多等待 3 分钟）';
+    waiting.textContent = getString('codex-login-waiting');
     const cancel = this.doc.createElement('button');
-    cancel.textContent = '取消登录';
+    cancel.textContent = getString('codex-login-cancel');
     cancel.addEventListener('click', () => codexRuntime.cancelLogin());
     loginStatus.append(waiting, cancel);
     this.doc.getElementById('provider-block')?.before(loginStatus);
@@ -213,8 +213,8 @@ class ModelDialogV2 {
     status.className = 'mb-3 whitespace-pre-wrap break-words text-sm';
     const path = this.doc.createElement('input');
     path.id = 'codex-runtime-path';
-    path.placeholder = 'codex 可执行文件的完整路径（未检测到运行时时填写）';
-    path.setAttribute('aria-label', 'Codex 运行时路径');
+    path.placeholder = getString('codex-runtime-path-placeholder');
+    path.setAttribute('aria-label', getString('codex-runtime-path-label'));
     path.className = 'mb-3 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm dark:border-zinc-600';
     const controls = this.doc.createElement('div');
     controls.className = 'flex flex-wrap items-center gap-3 text-sm';
@@ -226,7 +226,7 @@ class ModelDialogV2 {
       controls.append(node);
     };
     button(
-      '刷新 / 继续',
+      getString('codex-refresh-continue'),
       () =>
         void this.runCodexConnection(async () => {
           if (path.value.trim()) await codexRuntime.selectPath(path.value.trim());
@@ -235,10 +235,10 @@ class ModelDialogV2 {
         })
     );
     button(
-      '选择文件',
+      getString('codex-select-file'),
       () =>
         void this.runCodexConnection(async () => {
-          const selected = await new ztoolkit.FilePicker('选择 codex 可执行文件', 'open', undefined, undefined, this.win).open();
+          const selected = await new ztoolkit.FilePicker(getString('codex-runtime-picker-title'), 'open', undefined, undefined, this.win).open();
           if (!selected) return;
           path.value = selected;
           await codexRuntime.selectPath(selected);
@@ -246,8 +246,8 @@ class ModelDialogV2 {
         })
     );
     for (const [label, url] of [
-      ['安装 ChatGPT 应用', 'https://learn.chatgpt.com/docs/app'],
-      ['安装 Codex CLI', 'https://learn.chatgpt.com/docs/cli'],
+      [getString('codex-install-chatgpt'), 'https://learn.chatgpt.com/docs/app'],
+      [getString('codex-install-cli'), 'https://learn.chatgpt.com/docs/cli'],
     ]) {
       const link = this.doc.createElement('a');
       link.textContent = label;
@@ -331,7 +331,7 @@ class ModelDialogV2 {
       this.doc,
       'button',
       InlineButton({
-        label: '刷新模型',
+        label: getString('codex-refresh-models'),
         iconMarkup: Icons.Redo,
         onClicked: (event) => {
           // Show the busy state on the button itself; revealing the connection panel would shift the
@@ -346,7 +346,7 @@ class ModelDialogV2 {
     content.append(refresh);
     const card = ProviderCard({
       providerId: CODEX_PROVIDER_ID,
-      providerName: 'ChatGPT订阅',
+      providerName: getString('codex-card-title'),
       titleClassList: ['text-sm', 'font-semibold', 'text-zinc-700', 'dark:text-zinc-200'],
       headerDetails: [this.codexHeadDetails(accountKey)],
       iconUrl: resolveProviderIcon(CODEX_PROVIDER_ID),

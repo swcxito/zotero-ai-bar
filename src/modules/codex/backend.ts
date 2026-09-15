@@ -1,5 +1,4 @@
 import { asSchema, type ModelMessage } from 'ai';
-import { z } from 'zod';
 import type { Session } from '../chatManager';
 import { getSharedToolDefinitions } from '../agentTools';
 import { getPref } from '../../utils/prefs';
@@ -16,9 +15,10 @@ import {
   onToolCallEndV2,
   onTranslationResultV2,
 } from '../chatUI';
-import { CODEX_PROVIDER_ID, contextFingerprint, disableConfiguredMcp, isPublicPdfUrl, type CodexBinding } from './policy';
+import { CODEX_PROVIDER_ID, contextFingerprint, disableConfiguredMcp, type CodexBinding } from './policy';
 import { codexDirectory, codexRuntime } from './runtime';
 import type { CodexRpc, RpcMessage } from './protocol';
+import { codexString } from './i18n';
 
 const handlers = new WeakMap<CodexRpc, Map<string, (message: RpcMessage) => Promise<unknown>>>();
 
@@ -69,48 +69,6 @@ function historicalText(messages: ModelMessage[]): string {
     .join('\n\n');
 }
 
-async function readRemotePdf(url: string, allowedUrls: Set<string>, signal?: AbortSignal) {
-  if (!allowedUrls.has(url) || !isPublicPdfUrl(url)) throw new Error('仅允许读取用户消息中明确提供的公开 HTTPS PDF 链接。');
-  const response = await fetch(url, { credentials: 'omit', redirect: 'error', signal });
-  if (!response.ok || !response.body) throw new Error('PDF 无法访问。请提供直接下载链接，或将文献添加到 Zotero 后读取。');
-  const limit = 20 * 1024 * 1024;
-  if (Number(response.headers.get('content-length')) > limit) {
-    await response.body.cancel();
-    throw new Error('PDF 超过 20 MB，请从 Zotero 附件读取。');
-  }
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.length;
-      if (size > limit) throw new Error('PDF 超过 20 MB，请从 Zotero 附件读取。');
-      chunks.push(value);
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined);
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.length;
-  }
-  if (String.fromCharCode(...bytes.subarray(0, 5)) !== '%PDF-') throw new Error('链接未返回 PDF 文件。');
-  const worker = Zotero.PDFWorker as any;
-  if (!worker?._enqueue || !worker?._query) throw new Error('此 Zotero 版本不支持独立 PDF 解析，请将文献添加到 Zotero 后读取。');
-  // In-memory parsing only: no temporary attachment, library mutation or arbitrary file access.
-  const result = await worker._enqueue(async () => {
-    const buf = bytes.buffer;
-    return worker._query('pdf.getFulltext', { buf, maxPages: 100, password: '' }, [buf]);
-  }, true);
-  const text = String(result?.text || '');
-  if (!text.trim()) throw new Error('此 PDF 没有可提取文字。请在 Zotero 中打开并使用页面截图工具。');
-  return { url, text: text.slice(0, 200000), truncated: text.length > 200000, pageLimit: 100 };
-}
-
 const translationSchema = {
   type: 'object',
   properties: {
@@ -151,11 +109,11 @@ export async function streamCodex(
     rpc = await codexRuntime.connect();
     const accountResult = await rpc.request('account/read', { refreshToken: false });
     if (accountResult.account?.type !== 'chatgpt' || !accountResult.account.email)
-      throw new Error('请在 Codex 订阅设置中使用 ChatGPT 账号登录。不会切换到 API 计费。');
+      throw new Error(codexString('codex-error-account-required', '请在 Codex 订阅设置中使用 ChatGPT 账号登录。不会切换到 API 计费。'));
     const account = accountResult.account.email as string;
     const modelId = codexModelSelection(translation?.modelKey);
     const model = codexRuntime.models.find((entry) => entry.model === modelId);
-    if (!model) throw new Error('所选 Codex 模型当前不可用，请刷新模型列表并重新选择。');
+    if (!model) throw new Error(codexString('codex-error-model-unavailable', '所选 Codex 模型当前不可用，请刷新模型列表并重新选择。'));
     const imageSupport = model.inputModalities?.includes('image') ?? false;
     const mode = translation ? 'translation' : session.effectiveChatMode;
     const toolDefinitions = translation ? {} : getSharedToolDefinitions();
@@ -165,16 +123,6 @@ export async function streamCodex(
         ([name]) => mode === 'agent' || ['read', 'grep', 'glob', 'tree', 'capture_page', 'ask_user'].includes(name)
       )
     );
-    const allowedUrls = new Set(
-      messages.filter((message) => message.role === 'user').flatMap((message) => historicalText([message]).match(/https:\/\/[^\s<>"')\]]+/g) || [])
-    );
-    if (!translation)
-      tools.read_pdf_url = {
-        description:
-          'Read a public PDF URL explicitly supplied by the user. Try native web search/open first. Parses at most 100 pages / 20 MB without adding anything to Zotero. For screenshots use Zotero attachments and capture_page.',
-        inputSchema: z.object({ url: z.string().url() }).strict(),
-        execute: (input: { url: string }) => readRemotePdf(input.url, allowedUrls, signal),
-      };
     const dynamicTools = Object.entries(tools).map(([name, definition]) => ({
       name: `zotero_${name}`,
       description: definition.description,
@@ -287,7 +235,7 @@ export async function streamCodex(
       if (!active) return;
       const params = message.params || {};
       if (message.method === 'client/disconnected') {
-        rejectDone(new Error('Codex 连接中断，未自动重试。'));
+        rejectDone(new Error(codexString('codex-error-turn-disconnected', 'Codex 连接中断，未自动重试。')));
         return;
       }
       if (params.threadId !== threadId) return;
@@ -319,7 +267,11 @@ export async function streamCodex(
           void renderQueue.catch(rejectDone);
         }
       } else if (message.method === 'error') {
-        rejectDone(new Error('Codex 请求连接失败，请检查账号、额度或 Zotero 网络代理。已停止等待，不会自动重发操作。'));
+        rejectDone(
+          new Error(
+            codexString('codex-error-request-connection', 'Codex 请求连接失败，请检查账号、额度或 Zotero 网络代理。已停止等待，不会自动重发操作。')
+          )
+        );
       } else if (message.method === 'item/reasoning/summaryTextDelta') {
         if (!reasoning) {
           reasoning = true;
@@ -340,7 +292,11 @@ export async function streamCodex(
         else {
           const info = params.turn?.error?.codexErrorInfo;
           rejectDone(
-            new Error(info === 'usageLimitExceeded' ? 'Codex 订阅额度不足，请等待额度恢复。' : 'Codex 请求失败。请检查登录、额度及网络；未自动重试。')
+            new Error(
+              info === 'usageLimitExceeded'
+                ? codexString('codex-error-quota', 'Codex 订阅额度不足，请等待额度恢复。')
+                : codexString('codex-error-request-failed', 'Codex 请求失败。请检查登录、额度及网络；未自动重试。')
+            )
           );
         }
       }
@@ -375,7 +331,10 @@ export async function streamCodex(
       effort: desired && efforts.includes(desired) ? desired : model.defaultReasoningEffort,
       ...(translation ? { outputSchema: translationSchema } : {}),
     });
-    responseTimer = setTimeout(() => rejectDone(new Error('Codex 60 秒内未返回内容，请检查 Zotero 网络代理后重试。')), 60000);
+    responseTimer = setTimeout(
+      () => rejectDone(new Error(codexString('codex-error-no-response', 'Codex 60 秒内未返回内容，请检查 Zotero 网络代理后重试。'))),
+      60000
+    );
     void starting
       .then((result) => {
         if (!active || signal?.aborted) void rpc!.request('turn/interrupt', { threadId, turnId: result.turn.id }).catch(() => undefined);
@@ -388,17 +347,17 @@ export async function streamCodex(
     await done;
     await renderQueue;
     if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
-    if (!fullText.trim()) throw new Error('Codex 已结束请求，但没有返回文字。请刷新账号与模型后重试。');
+    if (!fullText.trim()) throw new Error(codexString('codex-error-empty-response', 'Codex 已结束请求，但没有返回文字。请刷新账号与模型后重试。'));
     if (reasoning) onReasoningEndV2(session);
     if (translation) {
       let result: unknown;
       try {
         result = JSON.parse(fullText);
       } catch {
-        throw new Error('Codex 未返回有效的翻译结果。');
+        throw new Error(codexString('codex-error-translation-invalid', 'Codex 未返回有效的翻译结果。'));
       }
       const normalized = normalizeTranslationResultCandidate(result, translation.selectedText);
-      if (!normalized) throw new Error('Codex 翻译结果不完整，请重试。');
+      if (!normalized) throw new Error(codexString('codex-error-translation-incomplete', 'Codex 翻译结果不完整，请重试。'));
       onTranslationResultV2(session, normalized);
     } else {
       await onLLMStreamUpdateV2({ session, fullText, force: true });

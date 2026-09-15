@@ -5,6 +5,7 @@ import { maskAccountEmail } from '../../src/components/codexCardHeader';
 import { openDialog } from '../../src/modules/modelDialog';
 import { CODEX_PROVIDER_ID } from '../../src/modules/codex/policy';
 import { CodexRpc } from '../../src/modules/codex/protocol';
+import { getString } from '../../src/utils/locale';
 
 describe('Codex in isolated Zotero', function () {
   before(function () {
@@ -83,7 +84,7 @@ describe('Codex in isolated Zotero', function () {
       const card = doc.getElementById('codex-provider-card')!;
       assert.isTrue((doc.getElementById('connect-chatgpt-button') as HTMLButtonElement).disabled);
       assert.isTrue(card.classList.contains('provider-card'), 'Reuse the shared provider card');
-      assert.include(card.firstElementChild!.textContent!, 'ChatGPT订阅');
+      assert.include(card.firstElementChild!.textContent!, getString('codex-card-title'));
       assert.include(card.firstElementChild!.textContent!, 'f***e@example.org');
       assert.notInclude(card.textContent!, 'fixture@example.org');
       assert.include(card.firstElementChild!.textContent!, 'Plus');

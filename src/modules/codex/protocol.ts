@@ -1,3 +1,5 @@
+import { codexString } from './i18n';
+
 export type RpcMessage = { id?: number | string; method?: string; params?: any; result?: any; error?: { code: number; message: string } };
 
 /** Newline-delimited JSON-RPC. No shell, sockets, polling or model API HTTP in the plugin. */
@@ -22,10 +24,12 @@ export class CodexRpc {
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`Codex ${method} 超时；操作不会自动重试。`));
+        reject(new Error(codexString('codex-error-request-timeout', `Codex ${method} 超时；操作不会自动重试。`, { method })));
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
-      void this.write(JSON.stringify({ id, method, params }) + '\n').catch(() => this.close(new Error('Codex 通信中断。')));
+      void this.write(JSON.stringify({ id, method, params }) + '\n').catch(() =>
+        this.close(new Error(codexString('codex-error-communication-disconnected', 'Codex 通信中断。')))
+      );
     });
   }
 
@@ -33,7 +37,7 @@ export class CodexRpc {
     if (this.closed) return;
     this.buffer += chunk;
     if (this.buffer.length > 32 * 1024 * 1024) {
-      this.close(new Error('Codex 消息超出大小限制。'));
+      this.close(new Error(codexString('codex-error-message-too-large', 'Codex 消息超出大小限制。')));
       return;
     }
     let index: number;
@@ -46,7 +50,7 @@ export class CodexRpc {
         message = JSON.parse(line);
         if (!message || typeof message !== 'object' || Array.isArray(message)) throw new Error('Invalid message');
       } catch {
-        this.close(new Error('Codex 返回了无效协议消息。'));
+        this.close(new Error(codexString('codex-error-invalid-message', 'Codex 返回了无效协议消息。')));
         return;
       }
       if (message.method && message.id !== undefined) {
@@ -57,14 +61,21 @@ export class CodexRpc {
         clearTimeout(pending.timer);
         this.pending.delete(message.id);
         // Do not propagate arbitrary server error bodies (may contain credentials).
-        if (message.error) pending.reject(new Error(`Codex ${message.error.code}: 请求失败。请检查登录、模型和运行时状态。`));
+        if (message.error)
+          pending.reject(
+            new Error(
+              codexString('codex-error-response', `Codex ${message.error.code}: 请求失败。请检查登录、模型和运行时状态。`, {
+                code: message.error.code,
+              })
+            )
+          );
         else pending.resolve(message.result);
       } else {
         for (const listener of this.listeners) {
           try {
             listener(message);
           } catch {
-            this.close(new Error('Codex 事件处理失败。'));
+            this.close(new Error(codexString('codex-error-event-handler', 'Codex 事件处理失败。')));
             return;
           }
         }
@@ -74,7 +85,7 @@ export class CodexRpc {
 
   private async respond(message: RpcMessage): Promise<void> {
     try {
-      if (!this.onRequest) throw new Error('Unsupported request');
+      if (!this.onRequest) throw new Error(codexString('codex-error-unsupported-request', 'Codex 不支持此操作。'));
       const result = await this.onRequest(message);
       if (!this.closed) await this.write(JSON.stringify({ id: message.id, result }) + '\n');
     } catch {
@@ -85,7 +96,7 @@ export class CodexRpc {
     }
   }
 
-  close(error = new Error('Codex 连接已关闭。')): void {
+  close(error = new Error(codexString('codex-error-connection-closed', 'Codex 连接已关闭。'))): void {
     if (this.closed) return;
     this.closed = error;
     for (const pending of this.pending.values()) {

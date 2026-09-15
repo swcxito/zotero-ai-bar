@@ -1,4 +1,5 @@
 import { saveV2Config, type AddedModel } from '../../utils/providers';
+import { getString } from '../../utils/locale';
 import { setPref } from '../../utils/prefs';
 import { CODEX_PROVIDER_ID } from './policy';
 import { codexRuntime } from './runtime';
@@ -22,7 +23,12 @@ export async function publishModels(): Promise<void> {
   if (!v2 || !codexRuntime.accountKey || !codexRuntime.models.length) return;
   const key = JSON.stringify(codexRuntime.models);
   if (key === lastPublished && v2.addedProviders[CODEX_PROVIDER_ID]) return;
-  v2.addedProviders[CODEX_PROVIDER_ID] = { id: CODEX_PROVIDER_ID, name: 'Codex 订阅', env: [], doc: 'https://learn.chatgpt.com/docs/app-server' };
+  v2.addedProviders[CODEX_PROVIDER_ID] = {
+    id: CODEX_PROVIDER_ID,
+    name: getString('codex-provider-name'),
+    env: [],
+    doc: 'https://learn.chatgpt.com/docs/app-server',
+  };
   const models: AddedModel[] = codexRuntime.models.map((model) => ({
     providerId: CODEX_PROVIDER_ID,
     id: model.model,

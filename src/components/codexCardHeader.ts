@@ -1,4 +1,5 @@
 import type { TagElementProps } from 'zotero-plugin-toolkit';
+import { codexString } from '../modules/codex/i18n';
 
 /** Marks the head detail block so refreshes can swap it without touching the rest of the card. */
 export const CODEX_HEAD_DETAILS_CLASS = 'codex-head-details';
@@ -12,16 +13,19 @@ export function maskAccountEmail(email: string): string {
 
 export function codexHeaderDetails(email: string, plan: string | undefined, runtime: string): TagElementProps[] {
   const tiers: Record<string, [string, string[]]> = {
-    free: ['Free', ['border-zinc-400', 'text-zinc-600', 'dark:text-zinc-300']],
-    go: ['Go', ['border-cyan-500', 'text-cyan-700', 'dark:text-cyan-300']],
-    plus: ['Plus', ['border-blue-500', 'text-blue-700', 'dark:text-blue-300']],
-    pro: ['Pro', ['border-purple-500', 'text-purple-700', 'dark:text-purple-300']],
-    team: ['Team', ['border-amber-500', 'text-amber-700', 'dark:text-amber-300']],
-    business: ['Business', ['border-emerald-500', 'text-emerald-700', 'dark:text-emerald-300']],
-    enterprise: ['Enterprise', ['border-rose-500', 'text-rose-700', 'dark:text-rose-300']],
-    edu: ['Edu', ['border-teal-500', 'text-teal-700', 'dark:text-teal-300']],
+    free: [codexString('codex-plan-free', 'Free'), ['border-zinc-400', 'text-zinc-600', 'dark:text-zinc-300']],
+    go: [codexString('codex-plan-go', 'Go'), ['border-cyan-500', 'text-cyan-700', 'dark:text-cyan-300']],
+    plus: [codexString('codex-plan-plus', 'Plus'), ['border-blue-500', 'text-blue-700', 'dark:text-blue-300']],
+    pro: [codexString('codex-plan-pro', 'Pro'), ['border-purple-500', 'text-purple-700', 'dark:text-purple-300']],
+    team: [codexString('codex-plan-team', 'Team'), ['border-amber-500', 'text-amber-700', 'dark:text-amber-300']],
+    business: [codexString('codex-plan-business', 'Business'), ['border-emerald-500', 'text-emerald-700', 'dark:text-emerald-300']],
+    enterprise: [codexString('codex-plan-enterprise', 'Enterprise'), ['border-rose-500', 'text-rose-700', 'dark:text-rose-300']],
+    edu: [codexString('codex-plan-edu', 'Edu'), ['border-teal-500', 'text-teal-700', 'dark:text-teal-300']],
   };
-  const [label, colors] = tiers[plan?.toLowerCase() || ''] || [plan || '未知订阅', ['border-zinc-400', 'text-zinc-600', 'dark:text-zinc-300']];
+  const [label, colors] = tiers[plan?.toLowerCase() || ''] || [
+    plan || codexString('codex-plan-unknown', 'Unknown plan'),
+    ['border-zinc-400', 'text-zinc-600', 'dark:text-zinc-300'],
+  ];
   return [
     {
       tag: 'div',
