@@ -76,6 +76,8 @@ export interface LimitConfig {
 
 /** 模型定义 */
 export interface Model {
+  /** Subscription runtime capabilities, not inferred from a static catalog. */
+  reasoningEfforts?: string[];
   id: string;
   name: string;
   family: ModelFamily;
@@ -746,6 +748,7 @@ function hasLocalIcon(providerId: string): boolean {
 
 /** 获取 provider 图标：本地优先 → 缓存 → favicon */
 export function resolveProviderIcon(providerId: string): string {
+  if (providerId === 'codex-subscription') return getV2LogoUrl('openai');
   if (hasLocalIcon(providerId)) return getV2LogoUrl(providerId);
   const cached = loadIconCache()[providerId];
   if (cached) return cached;

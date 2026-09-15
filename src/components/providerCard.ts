@@ -16,7 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { CardHead } from './cardHead';
+import { CardHead, type CardHeadProps } from './cardHead';
 import { CardModelRow } from './modelRow';
 import { InlineButton } from './buttons/inlineButton';
 import { modelRowDataMap, cardDataMap } from './common';
@@ -33,6 +33,10 @@ export interface ProviderCardV2Props {
   doc: Document;
   onAddModel?: (cb: (id: string, name: string) => void) => void;
   onDelete?: () => void;
+  content?: Node;
+  headerDetails?: CardHeadProps['details'];
+  titleClassList?: string[];
+  modelListContent?: Node;
 }
 
 export function ProviderCard({
@@ -47,6 +51,10 @@ export function ProviderCard({
   doc,
   onAddModel,
   onDelete = () => {},
+  content,
+  headerDetails,
+  titleClassList,
+  modelListContent,
 }: ProviderCardV2Props): Node {
   const card = ztoolkit.UI.createElement(doc, 'div', {
     classList: [
@@ -211,10 +219,14 @@ export function ProviderCard({
       isCustom,
       onDeleteClicked,
       onToggleCollapse,
+      details: headerDetails,
+      titleClassList,
     })
   );
 
-  modelCardList?.appendChild(addModelButton);
+  if (content) cardBody.firstElementChild?.replaceChildren(content);
+  else if (modelListContent) modelCardList?.appendChild(modelListContent);
+  else modelCardList?.appendChild(addModelButton);
   card.append(header, cardBody);
 
   return card;

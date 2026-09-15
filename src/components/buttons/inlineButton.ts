@@ -26,12 +26,18 @@ export interface InlineButtonProps {
   onClicked: (e: Event) => void;
   label?: string;
   classList?: string[];
+  iconMarkup?: string;
 }
 
-export function InlineButton({ onClicked, label = getString('model-dialog-add-model'), classList }: InlineButtonProps): TagElementProps {
+export function InlineButton({
+  onClicked,
+  label = getString('model-dialog-add-model'),
+  classList,
+  iconMarkup = Icons.Add,
+}: InlineButtonProps): TagElementProps {
   return ButtonBase({
     label,
-    iconMarkup: Icons.Add,
+    iconMarkup,
     classList: classList ?? [...BUTTON_VARIANTS.inline],
     labelClassList: ['inline-button-label'],
     onClick: (e) => onClicked(e),

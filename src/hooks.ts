@@ -12,6 +12,7 @@ import { registerTabObserver } from './modules/tabObserver';
 import { preloadLLMRuntime } from './modules/llm';
 import { convertLegacyLLMConfigByKey, ensureCommonProviders, initIconCache, loadV2Config, saveV2Config } from './utils/providers';
 import { isReaderZoteroTab, updateSelectedZoteroTab } from './modules/chatWorkspace';
+import { codexRuntime } from './modules/codex/runtime';
 
 function zaibarDump(msg: string) {
   try {
@@ -31,6 +32,7 @@ async function onStartup() {
     zaibarDump('Zotero promises resolved');
 
     initLocale();
+    void codexRuntime.detect();
     Zotero.debug(`${label} locale initialized`);
     zaibarDump('locale initialized');
 
@@ -162,6 +164,7 @@ async function onMainWindowUnload(win: Window): Promise<void> {
 }
 
 async function onShutdown(): Promise<void> {
+  await codexRuntime.stop(true);
   await addon.chatManager.flushHistory();
   ztoolkit.unregisterAll();
   if (addon.data._tabObserverID) {

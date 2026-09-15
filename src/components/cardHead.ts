@@ -30,6 +30,8 @@ export interface CardHeadProps {
   isCustom: boolean;
   onDeleteClicked: () => void;
   onToggleCollapse: (e: Event) => void;
+  titleClassList?: string[];
+  details?: TagElementProps[];
 }
 
 function makeEnvInput(key: string, value: string): TagElementProps {
@@ -71,10 +73,12 @@ export function CardHead({
   isCustom,
   onDeleteClicked,
   onToggleCollapse,
+  titleClassList,
+  details,
 }: CardHeadProps): ElementProps {
   const nameLabel: TagElementProps = {
     tag: 'div',
-    classList: ['text-xs', 'font-semibold', 'opacity-60', 'truncate', 'cursor-default', 'text-zinc-700', 'dark:text-zinc-300'],
+    classList: titleClassList ?? ['text-xs', 'font-semibold', 'opacity-60', 'truncate', 'cursor-default', 'text-zinc-700', 'dark:text-zinc-300'],
     properties: { innerText: providerName },
   };
   const customNameInput: TagElementProps = {
@@ -164,9 +168,11 @@ export function CardHead({
           // text section
           {
             tag: 'div',
-            classList: ['flex', 'flex-1', 'flex-col', 'xl:flex-row', 'xl:items-center', 'gap-2', 'min-w-10'],
+            // Cards with multi-row details (ChatGPT) get a tighter row gap so the head stays compact.
+            classList: ['flex', 'flex-1', 'flex-col', ...(details ? ['gap-1'] : ['gap-2', 'xl:flex-row', 'xl:items-center']), 'min-w-0'],
             children: [
               isCustom ? customNameInput : nameLabel,
+              ...(details ?? []),
               ...(isCustom ? [urlInput] : []),
               ...envKeys.map((key) => makeEnvInput(key, envValues[key] ?? '')),
             ],
@@ -179,6 +185,9 @@ export function CardHead({
               ButtonBase({
                 iconMarkup: Icons.Delete,
                 classList: [
+                  'inline-flex',
+                  'items-center',
+                  'justify-center',
                   'p-2',
                   'text-zinc-500',
                   'hover:text-red-600',
@@ -193,6 +202,10 @@ export function CardHead({
               ButtonBase({
                 iconMarkup: Icons.Chevron,
                 classList: [
+                  'provider-card-collapse',
+                  'inline-flex',
+                  'items-center',
+                  'justify-center',
                   'p-2',
                   'text-zinc-500',
                   'hover:text-black',

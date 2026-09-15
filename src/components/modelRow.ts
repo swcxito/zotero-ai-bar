@@ -19,14 +19,20 @@
 import { ButtonBase } from './buttons/buttonBase';
 import { Icons, modelRowDataMap } from './common';
 import { getString } from '../utils/locale';
+import { IconView } from './iconView';
 
 export interface CardModelRowProps {
   doc: Document;
   data?: { id?: string; name: string; enabled: boolean };
   onSelectModel?: () => void;
+  iconMarkup?: string;
+  removable?: boolean;
+  onEnabledChange?: (enabled: boolean) => void;
 }
 
-export function CardModelRow({ doc, data, onSelectModel }: CardModelRowProps) {
+export function CardModelRow({ doc, data, onSelectModel, iconMarkup, removable = true, onEnabledChange }: CardModelRowProps) {
+  // Without a selection handler the name is display-only text: no pointer cursor, no caret, no click action.
+  const nameSelectable = typeof onSelectModel === 'function';
   const row = ztoolkit.UI.createElement(doc, 'div', {
     tag: 'div',
     classList: [
@@ -67,24 +73,37 @@ export function CardModelRow({ doc, data, onSelectModel }: CardModelRowProps) {
         tag: 'div',
         classList: ['relative', 'flex-1', 'flex', 'items-center'],
         children: [
-          ButtonBase({
-            iconMarkup: Icons.QuickInput,
-            classList: [
-              'p-1.5',
-              'mr-2',
-              'rounded-md',
-              'transition-all',
-              'duration-200',
-              'shrink-0',
-              'text-gray-400',
-              'hover:text-rose-400',
-              'hover:bg-white',
-              'dark:hover:bg-zinc-700',
-              'cursor-pointer',
-            ],
-            title: getString('model-dialog-browse-model'),
-            onClick: () => onSelectModel?.(),
-          }),
+          ...(iconMarkup
+            ? [
+                {
+                  tag: 'span',
+                  classList: ['inline-flex', 'items-center', 'justify-center', 'p-1.5', 'mr-2', 'shrink-0'],
+                  children: [IconView({ iconMarkup, sizeRem: 1 })],
+                },
+              ]
+            : [
+                ButtonBase({
+                  iconMarkup: Icons.QuickInput,
+                  classList: [
+                    'inline-flex',
+                    'items-center',
+                    'justify-center',
+                    'p-1.5',
+                    'mr-2',
+                    'rounded-md',
+                    'transition-all',
+                    'duration-200',
+                    'shrink-0',
+                    'text-gray-400',
+                    'hover:text-rose-400',
+                    'hover:bg-white',
+                    'dark:hover:bg-zinc-700',
+                    'cursor-pointer',
+                  ],
+                  title: getString('model-dialog-browse-model'),
+                  onClick: () => onSelectModel?.(),
+                }),
+              ]),
           {
             tag: 'input',
             classList: [
@@ -94,13 +113,11 @@ export function CardModelRow({ doc, data, onSelectModel }: CardModelRowProps) {
               'px-0',
               'outline-none',
               'rounded',
-              'focus:ring-1',
-              'ring-rose-300',
+              ...(nameSelectable ? ['cursor-pointer', 'focus:ring-1', 'ring-rose-300'] : ['cursor-default', 'select-none', 'pointer-events-none']),
               'placeholder:text-gray-400',
               'transition-all',
               'duration-200',
               'font-semibold',
-              'cursor-pointer',
             ],
             properties: {
               type: 'text',
@@ -108,26 +125,48 @@ export function CardModelRow({ doc, data, onSelectModel }: CardModelRowProps) {
               value: data?.name || '',
               readOnly: true,
             },
-            listeners: [
-              {
-                type: 'click',
-                listener: () => onSelectModel?.(),
-              },
-            ],
+            ...(nameSelectable
+              ? {
+                  listeners: [
+                    {
+                      type: 'click',
+                      listener: () => onSelectModel?.(),
+                    },
+                  ],
+                }
+              : { attributes: { tabindex: '-1', 'aria-disabled': 'true' } }),
           },
         ],
       },
-      ButtonBase({
-        iconMarkup: Icons.Delete,
-        classList: ['p-2', 'text-gray-300', 'hover:text-red-500', 'transition-all', 'duration-200', 'rounded-lg', 'shrink-0'],
-        title: getString('model-dialog-delete-model'),
-        onClick: (e) => (e.currentTarget as HTMLElement).parentElement?.remove(),
-      }),
+      ...(removable
+        ? [
+            ButtonBase({
+              iconMarkup: Icons.Delete,
+              classList: [
+                'inline-flex',
+                'items-center',
+                'justify-center',
+                'p-2',
+                'text-gray-300',
+                'hover:text-red-500',
+                'transition-all',
+                'duration-200',
+                'rounded-lg',
+                'shrink-0',
+              ],
+              title: getString('model-dialog-delete-model'),
+              onClick: (e) => (e.currentTarget as HTMLElement).parentElement?.remove(),
+            }),
+          ]
+        : []),
     ],
   });
   if (data?.id) {
     (row as HTMLElement).dataset.modelId = data.id;
   }
+  const checkbox = row.querySelector('input[type="checkbox"]') as HTMLInputElement;
+  checkbox.setAttribute('aria-label', `显示 ${data?.name || '模型'}`);
+  checkbox.addEventListener('change', () => onEnabledChange?.(checkbox.checked));
   modelRowDataMap.set(row, () => {
     const nameValue = (row.querySelector('input[type="text"]') as HTMLInputElement).value;
     return {

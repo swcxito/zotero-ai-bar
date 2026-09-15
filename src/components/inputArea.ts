@@ -22,6 +22,7 @@ import { ImagePreview, createImageViewer } from './imagePreview';
 import { ModelInfo, registerModelInfoAnchor } from './modelInfo';
 import { getString } from '../utils/locale';
 import { getPref } from '../utils/prefs';
+import { codexEfforts } from '../modules/codex/settings';
 import type { ChatSessionKind } from '../modules/chatWorkspace';
 
 import { startCaptureMode } from '../modules/capture';
@@ -357,11 +358,11 @@ export function InputArea(
   thinkingBtn.style.position = 'relative';
 
   function updateThinkingBtnAppearance() {
-    const effort = session.thinkingEffort;
+    const effort = codexEfforts().length ? session.codexThinkingEffort || session.thinkingEffort : session.thinkingEffort;
     thinkingBtn.innerHTML = '';
     thinkingBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Brain, sizeRem: 0.875 })));
     const labelSpan = doc.createElement('span');
-    labelSpan.textContent = effortLabelMap[effort];
+    labelSpan.textContent = effortLabelMap[effort] || effort;
     thinkingBtn.appendChild(labelSpan);
 
     if (effort !== 'none') {
@@ -742,18 +743,20 @@ export function InputArea(
     );
     dropdown.appendChild(title);
 
-    for (const effort of effortOrder) {
+    const subscriptionEfforts = codexEfforts();
+    for (const effort of subscriptionEfforts.length ? subscriptionEfforts : effortOrder) {
       const item = doc.createElement('div');
-      item.textContent = effortLabelMap[effort];
+      item.textContent = effortLabelMap[effort] || effort;
       item.classList.add('thinking-effort-dropdown-item', 'py-[3px]', 'px-2.5', 'cursor-pointer', 'whitespace-nowrap', 'leading-[1.4]', 'text-left');
-      const isSelected = session.thinkingEffort === effort;
+      const isSelected = (subscriptionEfforts.length ? session.codexThinkingEffort || session.thinkingEffort : session.thinkingEffort) === effort;
       if (isSelected) {
         item.classList.add('is-selected', 'font-semibold');
       } else {
         item.classList.add('font-normal');
       }
       item.addEventListener('click', () => {
-        session.thinkingEffort = effort;
+        if (subscriptionEfforts.length) session.codexThinkingEffort = effort;
+        else session.thinkingEffort = effort as typeof session.thinkingEffort;
         updateThinkingBtnAppearance();
         removeThinkingDropdown();
       });

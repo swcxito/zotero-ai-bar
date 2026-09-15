@@ -1222,6 +1222,7 @@ function resolveTranslationThinkingEffort(
 
 function providerCanDisableThinking(selection: ModelSelect): boolean {
   const { providerId, modelId } = selection;
+  if (providerId === 'codex-subscription') throw new Error('Codex 订阅必须通过本地运行时连接，不能使用 API 后端。');
   if (providerId === 'google' || providerId.startsWith('google-vertex')) {
     const normalizedModelId = modelId.toLowerCase();
     // Gemini 3 and Gemini 2.5 Pro expose a minimum thinking level rather

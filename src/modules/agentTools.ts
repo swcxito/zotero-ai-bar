@@ -6,6 +6,7 @@
  */
 
 import { tool, asSchema } from 'ai';
+import type { z } from 'zod';
 import type { Session, AgentUserAnswer } from './chatManager';
 import { getItemFullText } from '../utils/itemContext';
 import { getZoteroItem, readItemText, searchLibraryItems, buildLibraryTree, getItemFullTextByPage } from '../utils/zoteroItemAccess';
@@ -52,15 +53,32 @@ function getSession(options: { experimental_context?: unknown }): Session | unde
   return options.experimental_context as Session | undefined;
 }
 
+interface SharedToolDefinition {
+  description: string;
+  inputSchema: z.ZodTypeAny;
+  execute: (input: any, options: any) => Promise<any>;
+}
+const sharedToolDefinitions = new Map<object, SharedToolDefinition>();
+function defineSharedTool(definition: SharedToolDefinition) {
+  const sdkTool = tool({ ...definition, inputSchema: asSchema(definition.inputSchema) });
+  sharedToolDefinitions.set(sdkTool, definition);
+  return sdkTool;
+}
+
+/** Both backends call the same handlers; Codex arguments are validated before any Zotero access. */
+export function getSharedToolDefinitions(): Record<string, SharedToolDefinition> {
+  return Object.fromEntries(Object.entries(buildTools()).map(([name, sdkTool]) => [name, sharedToolDefinitions.get(sdkTool)!]));
+}
+
 // ───────────────────────────────────────────────────────────────────────────
 // Tool definitions with execute functions. The AI SDK executes these
 // automatically inside ToolLoopAgent; ask_user pauses the loop until the
 // user answers in the chat UI.
 // ───────────────────────────────────────────────────────────────────────────
 
-export const askUserTool = tool({
+export const askUserTool = defineSharedTool({
   description: 'Ask the user one or more clarifying questions. Each question provides 2–5 options plus a custom text input.',
-  inputSchema: asSchema(askUserSchema),
+  inputSchema: askUserSchema,
   execute: async (input: AskUserPayload, options): Promise<AgentUserAnswer[]> => {
     const session = getSession(options);
     if (!session) {
@@ -74,10 +92,10 @@ export const askUserTool = tool({
   },
 });
 
-export const grepTool = tool({
+export const grepTool = defineSharedTool({
   description:
     'Search the full text of an article using a case-insensitive literal or regex pattern. Returns line numbers and PDF page numbers for each match. If itemId is omitted, the current document is searched. You may pass either a parent item ID or an attachment ID directly.',
-  inputSchema: asSchema(grepSchema),
+  inputSchema: grepSchema,
   execute: async (input: GrepPayload, options) => {
     const session = getSession(options);
     const itemId = input.itemId ?? session?.itemId;
@@ -120,10 +138,10 @@ export const grepTool = tool({
   },
 });
 
-export const readTool = tool({
+export const readTool = defineSharedTool({
   description:
     'Read metadata and text from a Zotero item by itemId. Supports page-based reading (pageNumber) or line-based reading (startLine/endLine) with surrounding context. If itemId is omitted, the current document is used. You may pass either a parent item ID (reads the first PDF attachment) or an attachment ID directly.',
-  inputSchema: asSchema(readSchema),
+  inputSchema: readSchema,
   execute: async (input: ReadPayload, options) => {
     const session = getSession(options);
     const itemId = input.itemId ?? session?.itemId;
@@ -138,9 +156,9 @@ export const readTool = tool({
   },
 });
 
-export const globTool = tool({
+export const globTool = defineSharedTool({
   description: 'Search the Zotero library for items matching the query. Returns itemId, key, title, and itemType.',
-  inputSchema: asSchema(globSchema),
+  inputSchema: globSchema,
   execute: async (input: GlobPayload) => {
     const result = await searchLibraryItems(input.query, {
       itemType: input.itemType,
@@ -154,10 +172,10 @@ export const globTool = tool({
   },
 });
 
-export const treeTool = tool({
+export const treeTool = defineSharedTool({
   description:
     'List the hierarchical structure of the Zotero library like the Linux tree command. Returns names and item metadata without collection keys to save tokens. To start from a visible subcollection, pass rootCollectionPath as an exact name path such as ["Parent", "Child"].',
-  inputSchema: asSchema(treeSchema),
+  inputSchema: treeSchema,
   execute: async (input: TreePayload) => {
     const result = await buildLibraryTree({
       rootCollectionPath: input.rootCollectionPath,
@@ -173,28 +191,28 @@ export const treeTool = tool({
   },
 });
 
-export const searchPapersTool = tool({
+export const searchPapersTool = defineSharedTool({
   description:
     'Search Crossref for papers by title and return DOI candidates with local title-similarity scores. This tool does not change the Zotero library. If highConfidence is true, you may immediately pass the recommended DOI and its exact candidate title to add_paper. If requiresConfirmation is true, use ask_user to let the user choose a candidate before adding anything. Never guess a DOI when there are no candidates.',
-  inputSchema: asSchema(searchPapersSchema),
+  inputSchema: searchPapersSchema,
   execute: async (input: SearchPapersPayload) => searchCrossrefPapers(input),
 });
 
-export const addPaperTool = tool({
+export const addPaperTool = defineSharedTool({
   description:
     'Add one paper to the Zotero user library from a DOI and the exact title returned by search_papers. The tool checks the whole library, including Trash, for a matching DOI or normalized title before making changes. A DUPLICATE_ITEM error is terminal: report the existing item and do not retry. Successful items are filed under the root collection “AI 下载文献”. Always report whether fullTextDownloaded is true; if warningCode is NO_FULL_TEXT_ATTACHMENT, explicitly tell the user that the item was added but no PDF/EPUB full-text attachment was downloaded.',
-  inputSchema: asSchema(addPaperSchema),
+  inputSchema: addPaperSchema,
   execute: async (input: AddPaperPayload) => addPaperToZotero(input),
 });
 
-export const translateTool = tool({
+export const translateTool = defineSharedTool({
   description: [
     'Present a translation result to the user in a structured, visually formatted card. Use this tool ONLY for single words and abbreviations.',
     'For `word`: top-level `pos` (e.g. "adj.") and `explanation` (the translated meaning only, no POS prefix) are REQUIRED. `otherMeanings` is an array of {pos, translatedText} objects.',
     'For `abbreviation`: `fullForm` is REQUIRED.',
     'After calling this tool, continue your response with one concise sentence that places the translation back into the original context (e.g., how the word is used in this sentence).',
   ].join(' '),
-  inputSchema: asSchema(translateSchema),
+  inputSchema: translateSchema,
   execute: async (input: TranslatePayload) => {
     if (input.textType === 'word') {
       if (!input.pos?.trim() || !input.explanation?.trim()) {
@@ -216,13 +234,13 @@ export const translateTool = tool({
   },
 });
 
-export const capturePageTool = tool({
+export const capturePageTool = defineSharedTool({
   description:
     'Capture a specific page of a PDF as an image and display it in the chat. Use this when the user wants to see or analyze a figure, table, diagram, or other visual content from a document. If no itemId is provided, the current document is used. If the target PDF is not open in a reader, it is opened automatically in a background tab without switching away from the current tab. The returned pageNumber can be used with read(pageNumber) or grep/read searches to inspect the same page, nearby caption, and in-text references before explaining the image. Note: this tool produces an image output and requires a vision-capable model. If the current model does not support image input, you should inform the user and handle the request using text-only tools (grep, read) instead, or ask the user to switch to a vision model.',
-  inputSchema: asSchema(capturePageSchema),
+  inputSchema: capturePageSchema,
   execute: async (input: CapturePagePayload, options) => {
     const session = getSession(options);
-    if (!checkModelSupportsImage()) {
+    if (!(options.imageSupport ?? checkModelSupportsImage())) {
       throw new Error(
         'The current model does not support image input, so capture_page cannot be used. Please handle the user request using text-based tools (grep, read) instead, or ask the user to switch to a vision-capable model and try again.'
       );

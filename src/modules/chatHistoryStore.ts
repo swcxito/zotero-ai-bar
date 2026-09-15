@@ -1,5 +1,6 @@
 import type { ModelMessage } from 'ai';
 import type { ContextCheckpoint } from './contextCompaction';
+import { sanitizeCodexBinding, type CodexBinding } from './codex/policy';
 
 export type ConversationScope = `article:${number}` | 'global-agent';
 
@@ -29,6 +30,7 @@ export interface PersistedConversation {
   turns: PersistedTurn[];
   contextMessages: ModelMessage[];
   checkpoint?: ContextCheckpoint;
+  codex?: CodexBinding;
 }
 
 export interface PersistedChatHistoryFile {
@@ -107,6 +109,7 @@ function sanitizeConversation(value: any): PersistedConversation | undefined {
     turns: favorite ? turns : turns.slice(-MAX_REGULAR_TURNS),
     contextMessages: Array.isArray(value.contextMessages) ? value.contextMessages.filter(isModelMessage) : [],
     checkpoint: sanitizeCheckpoint(value.checkpoint),
+    codex: sanitizeCodexBinding(value.codex),
   };
 }
 

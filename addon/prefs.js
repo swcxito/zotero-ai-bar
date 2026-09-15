@@ -1,5 +1,7 @@
 pref('llm.baseURL', 'https://api.openai.com/v1');
 pref('llm.apiKey', '');
+pref('codex.runtimePath', '');
+pref('codex.authSource', 'private');
 pref('llm.modelName', 'gpt-4o');
 pref('llm.temperature100', 50);
 pref('llm.temperatureEnabled', false);

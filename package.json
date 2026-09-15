@@ -28,6 +28,9 @@
     "lint:fix": "prettier --write . && eslint . --fix",
     "release": "zotero-plugin release",
     "test": "zotero-plugin test",
+    "test:codex": "node scripts/test-codex.mjs",
+    "test:codex-runtime": "node scripts/verify-codex-runtime.mjs",
+    "test:codex-zotero": "node scripts/test-codex-zotero.mjs",
     "update-deps": "npm update --save"
   },
   "dependencies": {

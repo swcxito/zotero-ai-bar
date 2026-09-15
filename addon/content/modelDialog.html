@@ -27,7 +27,14 @@
       <div class="mx-auto min-h-screen max-w-7xl px-8 py-8">
         <header id="provider-head" class="mb-10 flex items-center justify-between">
           <h2 class="text-xl font-semibold" data-l10n-id="model-dialog-title">Model Providers</h2>
-          <div id="add-provider-container">
+          <div id="add-provider-container" class="flex items-center gap-3">
+            <button
+              id="connect-chatgpt-button"
+              class="relative z-10 flex items-center gap-2 rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:bg-zinc-700 active:scale-95 dark:bg-zinc-100 dark:text-black dark:hover:bg-white"
+            >
+              <span id="connect-chatgpt-icon" class="h-4 w-4"></span>
+              <span>连接ChatGPT</span>
+            </button>
             <button
               id="add-provider-button"
               class="relative z-10 flex items-center gap-2 rounded-full bg-rose-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:bg-rose-400 active:scale-95"

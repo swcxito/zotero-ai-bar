@@ -203,6 +203,14 @@ async function updatePrefsUI() {
   }
 
   const useTranslateModelCheckbox = doc.querySelector(makeId('use-translate-model')) as XUL.Checkbox;
+  doc.defaultView?.addEventListener('focus', () => {
+    populateSelectorFromV2(modelSelector, doc);
+    setInitialSelectorValue(modelSelector, doc);
+    if (translateModelSelector) {
+      populateSelectorFromV2(translateModelSelector, doc, true);
+      translateModelSelector.value = getPref('translate.modelId');
+    }
+  });
   if (useTranslateModelCheckbox && translateModelSelector) {
     const syncTranslationModelState = (persist: boolean) => {
       let useAlternative = !!useTranslateModelCheckbox.checked;

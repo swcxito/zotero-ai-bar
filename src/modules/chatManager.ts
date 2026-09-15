@@ -31,7 +31,8 @@ import {
 import { checkModelSupportsImage, getActiveModelContextLimit } from '../utils/providers';
 import { ensureChatWindowReady, focusChatWindow } from '../utils/window';
 import { getString } from '../utils/locale';
-import { streamLLMV2, streamTranslationV2 } from './llm';
+import { streamChatBackend } from './chatBackend';
+import type { CodexBinding } from './codex/policy';
 import type { ModelMessage, SystemModelMessage, UserModelMessage } from 'ai';
 import { getItemIdFromTab } from './tabObserver';
 import { openSidePane } from './mainWindowSidePane';
@@ -77,6 +78,8 @@ export class Session {
   persistedTurns: PersistedTurn[] = [];
   persistedContextMessages: ModelMessage[] = [];
   contextCheckpoint?: ContextCheckpoint;
+  codex?: CodexBinding;
+  codexThinkingEffort?: string;
   sourceLabel?: string;
   chatMode: 'normal' | 'full-text' | 'agent' = 'normal';
   thinkingEffort: 'none' | 'low' | 'medium' | 'high' | 'xhigh' = 'none';
@@ -105,6 +108,7 @@ export class Session {
     lastRenderedLength?: number;
     // --- agent ---
     isAgentMode?: boolean;
+    codexRetry?: boolean;
     /** Messages already produced in the current Agent turn before an overflow retry. */
     agentResumeMessages?: ModelMessage[];
     toolCalls?: Map<string, AgentToolCall>;
@@ -155,6 +159,7 @@ export class Session {
     displayReferenceText?: string;
     displaySourceLabel?: string;
     persistedTurnId?: string;
+    codexBefore?: CodexBinding;
   };
   /**
    * Most recent assistant bubble element. Used to disable its Retry button
@@ -326,6 +331,7 @@ export class ChatManager {
   }
 
   private hydrateSession(session: Session, conversation?: PersistedConversation): void {
+    session.codex = conversation?.codex ? { ...conversation.codex } : undefined;
     if (!conversation) {
       session.conversationId = this.createConversationId();
       session.conversationTitle = undefined;
@@ -511,6 +517,7 @@ export class ChatManager {
       turns: session.favorite ? session.persistedTurns : session.persistedTurns.slice(-100),
       contextMessages: session.persistedContextMessages,
       checkpoint: session.contextCheckpoint,
+      codex: session.codex,
     };
     session.persistedTurns = conversation.turns.map((entry) => ({ ...entry }));
     this.historyStore.upsert(conversation);
@@ -539,6 +546,7 @@ export class ChatManager {
       ...existing,
       contextMessages: session.persistedContextMessages,
       checkpoint: session.contextCheckpoint,
+      codex: session.codex,
     });
   }
 
@@ -576,6 +584,7 @@ export class ChatManager {
       turns: session.persistedTurns,
       contextMessages: session.persistedContextMessages,
       checkpoint: session.contextCheckpoint,
+      codex: session.codex,
     });
   }
 
@@ -1124,13 +1133,12 @@ export class ChatManager {
 
     const AC = (typeof AbortController !== 'undefined' ? AbortController : (Zotero.getMainWindow() as any).AbortController) as typeof AbortController;
     session.pending.abortController = new AC();
+    session.pending.codexRetry = !!params.messagesOverride;
     this.notifyHistoryChanged();
     ztoolkit.log('[chat] sendChatRequest:stream-start', {
       sectionId: sessionId,
     });
-    const requestPromise = params.translationRequest
-      ? streamTranslationV2(messagesPromise, session, params.translationRequest)
-      : streamLLMV2(messagesPromise, session);
+    const requestPromise = streamChatBackend(messagesPromise, session, params.translationRequest);
     session.activeRequestPromise = requestPromise;
     try {
       await requestPromise;

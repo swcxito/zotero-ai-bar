@@ -9,6 +9,8 @@ declare namespace _ZoteroTypes {
     PluginPrefsMap: {
       "llm.baseURL": string;
       "llm.apiKey": string;
+      "codex.runtimePath": string;
+      "codex.authSource": string;
       "llm.modelName": string;
       "llm.temperature100": number;
       "llm.temperatureEnabled": boolean;

@@ -9,6 +9,8 @@ A beautiful and handy AI toolbar plugin for Zotero, putting an AI assistant righ
 
 You can visit the [**Project Homepage**](https://zotero.fukeke.com) for more information and detailed tutorials.
 
+Experimental [Codex subscription integration](docs/codex-integration.md) reuses an installed desktop/CLI runtime with isolated sign-in and Zotero tools. Only explicitly audited runtime versions are enabled; no runtime is bundled or downloaded.
+
 ## Support
 
 If you like this project, please give it a ⭐ on GitHub — it really helps!

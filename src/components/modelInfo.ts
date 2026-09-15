@@ -40,7 +40,7 @@ function resolveModelDisplayName(): string {
 function buildCurrentModelInfoChildren(): TagElementProps[] {
   const modelName = resolveModelDisplayName();
   const modelAnalysis = analyzeModelName(modelName);
-  const iconPath = getModelIconPath(modelAnalysis.family);
+  const iconPath = getModelIconPath(addon.data.userProviderConfigV2?.active?.providerId === 'codex-subscription' ? 'gpt' : modelAnalysis.family);
 
   const children: TagElementProps[] = [
     IconView({
@@ -162,7 +162,7 @@ function toggleModelDropdown(anchor: HTMLElement, dropUp = false) {
         holder.className = 'model-dropdown-icon-holder';
         ztoolkit.UI.appendElement(
           IconView({
-            iconMarkup: getModelIconPath(m.family),
+            iconMarkup: getModelIconPath(providerId === 'codex-subscription' ? 'gpt' : m.family),
             extraClasses: ['model-dropdown-icon'],
             sizeRem: 1.2,
           }),
