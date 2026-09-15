@@ -22,6 +22,61 @@ import { codexString } from './i18n';
 
 const handlers = new WeakMap<CodexRpc, Map<string, (message: RpcMessage) => Promise<unknown>>>();
 
+function reasoningSummaryText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (!Array.isArray(value)) return '';
+  return value
+    .map((part: any) => {
+      if (typeof part === 'string') return part;
+      if (typeof part?.text === 'string') return part.text;
+      if (typeof part?.content === 'string') return part.content;
+      return '';
+    })
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function compactCodexError(value: unknown): string {
+  if (typeof value === 'string') return redactCodexText(value).slice(0, 240);
+  if (typeof value === 'number') return String(value);
+  if (!value || typeof value !== 'object') return '';
+  const error = value as Record<string, unknown>;
+  const parts = [error.type, error.code, error.name, error.message, error.httpStatusCode]
+    .filter((part) => typeof part === 'string' || typeof part === 'number')
+    .map((part) => redactCodexText(String(part)));
+  return parts.join(' / ').slice(0, 240);
+}
+
+function redactCodexText(value: string): string {
+  return value
+    .trim()
+    .replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]')
+    .replace(/([?&](?:api[_-]?key|access[_-]?token|token|password|secret)=)[^&\s]+/gi, '$1[redacted]')
+    .replace(/\b(?:api[_-]?key|access[_-]?token|token|password|secret)\s*[:=]\s*[^\s,;]+/gi, '[redacted]');
+}
+
+function codexErrorInfoName(value: unknown): string {
+  const text = compactCodexError(value).toLowerCase().replaceAll('_', '');
+  return text;
+}
+
+function formatCodexRuntimeError(params: any): { message: string; usageLimit: boolean } {
+  const runtimeError = params?.error && typeof params.error === 'object' ? params.error : {};
+  const info = runtimeError.codexErrorInfo;
+  const detail = [compactCodexError(info), compactCodexError(runtimeError.message), compactCodexError(runtimeError.httpStatusCode)]
+    .filter(Boolean)
+    .filter((part, index, all) => all.indexOf(part) === index)
+    .join(' · ')
+    .slice(0, 420);
+  const usageLimit = /usagelimitexceeded|ratelimit|quota|usage.?limit/.test(`${codexErrorInfoName(info)} ${detail.toLowerCase()}`);
+  const retry = params?.willRetry === true ? ' Codex 将自动重试。' : ' 已停止等待，不会自动重发操作。';
+  if (usageLimit) return { message: `Codex 订阅额度不足或速率限制已触发${detail ? `（${detail}）` : ''}。${retry}`, usageLimit: true };
+  return {
+    message: `Codex 请求失败${detail ? `（${detail}）` : ''}。请检查账号、额度或 Zotero 网络代理。${retry}`,
+    usageLimit: false,
+  };
+}
+
 function routeRequests(rpc: CodexRpc) {
   let map = handlers.get(rpc);
   if (map) return map;
@@ -176,6 +231,7 @@ export async function streamCodex(
     let fullText = '';
     const textItems = new Map<string, string>();
     let reasoning = false;
+    let reasoningSummary = '';
     let toolCount = 0;
     let resolveDone!: () => void;
     let rejectDone!: (reason: Error) => void;
@@ -247,38 +303,79 @@ export async function streamCodex(
       }
       if (message.method === 'item/agentMessage/delta') {
         const key = params.itemId || 'agent';
-        textItems.set(key, (textItems.get(key) || '') + params.delta);
+        const text = (textItems.get(key) || '') + params.delta;
+        textItems.set(key, text);
         fullText = [...textItems.values()].join('\n\n');
         const snapshot = fullText;
         if (!translation) {
           renderQueue = renderQueue.then(() => {
-            if (active && !signal?.aborted) return onLLMStreamUpdateV2({ session, fullText: snapshot });
+            if (active && !signal?.aborted) return onLLMStreamUpdateV2({ session, fullText: snapshot, segmentText: text });
           });
           void renderQueue.catch(rejectDone);
         }
       } else if (message.method === 'item/completed' && params.item?.type === 'agentMessage') {
-        if (typeof params.item.text === 'string') textItems.set(params.item.id || 'agent', params.item.text);
+        const key = params.item.id || 'agent';
+        const text = typeof params.item.text === 'string' ? params.item.text : textItems.get(key) || '';
+        if (typeof params.item.text === 'string') textItems.set(key, params.item.text);
         fullText = [...textItems.values()].join('\n\n');
         const snapshot = fullText;
         if (!translation) {
           renderQueue = renderQueue.then(() => {
-            if (active && !signal?.aborted) return onLLMStreamUpdateV2({ session, fullText: snapshot });
+            if (active && !signal?.aborted) return onLLMStreamUpdateV2({ session, fullText: snapshot, segmentText: text });
           });
           void renderQueue.catch(rejectDone);
         }
       } else if (message.method === 'error') {
-        rejectDone(
-          new Error(
-            codexString('codex-error-request-connection', 'Codex 请求连接失败，请检查账号、额度或 Zotero 网络代理。已停止等待，不会自动重发操作。')
-          )
-        );
+        const diagnostic = formatCodexRuntimeError(params);
+        Zotero.debug?.(`[zaibar-codex] app-server error: ${diagnostic.message}`);
+        // App Server uses willRetry for transient transport/service failures.
+        // Keep the turn alive in that case; rejecting here made a recoverable
+        // retry look like a permanent account/network failure in Zotero.
+        if (!params.willRetry) rejectDone(new Error(diagnostic.message));
+      } else if (message.method === 'item/started' && params.item?.type === 'reasoning') {
+        reasoningSummary = '';
+        reasoning = true;
+        onReasoningStartV2(session);
+        const summary = reasoningSummaryText(params.item.summary);
+        if (summary) {
+          reasoningSummary = summary;
+          onReasoningDeltaV2(session, summary);
+        }
       } else if (message.method === 'item/reasoning/summaryTextDelta') {
         if (!reasoning) {
           reasoning = true;
           onReasoningStartV2(session);
         }
-        onReasoningDeltaV2(session, params.delta);
+        const delta = typeof params.delta === 'string' ? params.delta : '';
+        if (delta) {
+          const append = delta.startsWith(reasoningSummary) ? delta.slice(reasoningSummary.length) : delta === reasoningSummary ? '' : delta;
+          if (append) {
+            reasoningSummary += append;
+            onReasoningDeltaV2(session, append);
+          }
+        }
+      } else if (message.method === 'item/reasoning/summaryPartAdded') {
+        const summary = reasoningSummaryText(params.part);
+        if (summary && !reasoningSummary.endsWith(summary)) {
+          if (!reasoning) {
+            reasoning = true;
+            onReasoningStartV2(session);
+          }
+          const delta = summary.startsWith(reasoningSummary) ? summary.slice(reasoningSummary.length) : `\n\n${summary}`;
+          reasoningSummary += delta;
+          onReasoningDeltaV2(session, delta);
+        }
       } else if (message.method === 'item/completed' && params.item?.type === 'reasoning') {
+        const summary = reasoningSummaryText(params.item.summary);
+        if (summary && summary !== reasoningSummary) {
+          if (!reasoning) {
+            reasoning = true;
+            onReasoningStartV2(session);
+          }
+          const delta = summary.startsWith(reasoningSummary) ? summary.slice(reasoningSummary.length) : `\n\n${summary}`;
+          reasoningSummary += delta;
+          onReasoningDeltaV2(session, delta);
+        }
         onReasoningEndV2(session);
         reasoning = false;
       } else if (message.method === 'item/started' && params.item?.type === 'webSearch') {
@@ -290,14 +387,9 @@ export async function streamCodex(
         if (params.turn?.status === 'completed') resolveDone();
         else if (params.turn?.status === 'interrupted') rejectDone(new DOMException('Cancelled', 'AbortError'));
         else {
-          const info = params.turn?.error?.codexErrorInfo;
-          rejectDone(
-            new Error(
-              info === 'usageLimitExceeded'
-                ? codexString('codex-error-quota', 'Codex 订阅额度不足，请等待额度恢复。')
-                : codexString('codex-error-request-failed', 'Codex 请求失败。请检查登录、额度及网络；未自动重试。')
-            )
-          );
+          const diagnostic = formatCodexRuntimeError({ error: params.turn?.error });
+          Zotero.debug?.(`[zaibar-codex] turn failed: ${diagnostic.message}`);
+          rejectDone(new Error(diagnostic.message));
         }
       }
     };

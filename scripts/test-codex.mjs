@@ -20,7 +20,7 @@ await build({
       name: 'backend-host-fixture',
       setup(builder) {
         builder.onResolve({ filter: /^(\.\/runtime|\.\.\/(chatUI|agentTools))$/ }, (args) => {
-          if (args.importer.endsWith('/codex/backend.ts')) return { path: resolve('scripts/tests/backend-fixture.ts') };
+          if (args.importer.replaceAll('\\', '/').endsWith('/codex/backend.ts')) return { path: resolve('scripts/tests/backend-fixture.ts') };
         });
       },
     },

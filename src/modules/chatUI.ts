@@ -459,6 +459,7 @@ export function onLLMStreamStartV2(session: Session) {
 
     const contentEl = doc.createElement('div');
     contentEl.classList.add('chat-message-content');
+    contentEl.appendChild(createThinkingPlaceholder(doc));
     chatMessage.appendChild(contentEl);
     // Non-agent path: the single content element is the active text segment.
     session.pending.currentTextSegment = contentEl;
@@ -472,32 +473,65 @@ export function onLLMStreamStartV2(session: Session) {
   maybeAutoScroll(session);
 }
 
-export async function onLLMStreamUpdateV2(data: { session: Session; fullText: string; force?: boolean }) {
+function createThinkingPlaceholder(doc: Document): HTMLElement {
+  const placeholder = doc.createElement('div');
+  placeholder.classList.add('zaibar-thinking-placeholder');
+  placeholder.setAttribute('role', 'status');
+  placeholder.setAttribute('aria-live', 'polite');
+
+  const label = doc.createElement('span');
+  label.classList.add('zaibar-thinking-placeholder-label');
+  label.textContent = getString('thinking-card-title');
+  placeholder.appendChild(label);
+
+  const dots = doc.createElement('span');
+  dots.classList.add('zaibar-thinking-placeholder-dots');
+  dots.setAttribute('aria-hidden', 'true');
+  for (let index = 0; index < 3; index++) {
+    const dot = doc.createElement('span');
+    dot.classList.add('zaibar-thinking-placeholder-dot');
+    dot.textContent = '•';
+    dots.appendChild(dot);
+  }
+  placeholder.appendChild(dots);
+  return placeholder;
+}
+
+function removeThinkingPlaceholder(chatMessage: HTMLElement): void {
+  for (const placeholder of chatMessage.querySelectorAll('.zaibar-thinking-placeholder')) {
+    const content = placeholder.parentElement;
+    placeholder.remove();
+    if (content?.classList.contains('chat-message-content') && !content.innerHTML.trim()) content.remove();
+  }
+}
+
+export async function onLLMStreamUpdateV2(data: { session: Session; fullText: string; segmentText?: string; force?: boolean }) {
   const pop = data.session.pending.messagePop;
   if (!pop) return;
 
-  let chatMessage = pop.querySelector('.chat-message-content') as HTMLElement | null;
+  let chatMessage = data.session.pending.currentTextSegment as HTMLElement | null;
+  let createdTextSegment = false;
   // onReasoningStartV2 removes empty .chat-message-content placeholders to
   // keep the reasoning card in stream order. After reasoning ends, the first
   // text-delta arrives but the content div is gone — recreate it so the final
   // answer actually renders instead of being silently dropped.
-  if (!chatMessage) {
+  if (!chatMessage || !chatMessage.isConnected) {
     const messageEl = pop.querySelector('.chat-message') as HTMLElement | null;
     if (!messageEl) return;
-    chatMessage = data.session.pending.currentTextSegment as HTMLElement | null;
-    if (!chatMessage || !chatMessage.isConnected) {
-      chatMessage = messageEl.ownerDocument!.createElement('div');
-      chatMessage.classList.add('chat-message-content');
-      messageEl.appendChild(chatMessage);
-    }
+    chatMessage = messageEl.ownerDocument!.createElement('div');
+    chatMessage.classList.add('chat-message-content');
+    messageEl.appendChild(chatMessage);
     data.session.pending.currentTextSegment = chatMessage;
+    data.session.pending.lastRenderedLength = 0;
+    createdTextSegment = true;
   }
 
-  const newLen = data.fullText.length;
+  const renderedText = data.segmentText ?? data.fullText;
+  const newLen = renderedText.length;
   const prevLen = data.session.pending.lastRenderedLength ?? 0;
-  if (!data.force && newLen - prevLen < 20 && prevLen > 0) return;
+  if (!createdTextSegment && !data.force && newLen - prevLen < 20 && prevLen > 0) return;
 
-  chatMessage.innerHTML = await renderMarkdown(data.fullText, data.session.itemId);
+  chatMessage.innerHTML = await renderMarkdown(renderedText, data.session.itemId);
   attachCitationHandlers(chatMessage as HTMLElement);
   (pop as HTMLElement).dataset.markdown = data.fullText;
   data.session.pending.lastRenderedLength = newLen;
@@ -925,6 +959,15 @@ export function onToolCallStartV2(session: Session, toolCall: any) {
   if (!pop) return;
   const chatMessage = pop.querySelector('.chat-message') as HTMLElement | null;
   if (!chatMessage) return;
+  removeThinkingPlaceholder(chatMessage);
+
+  // Codex app-server streams the final agent message after hosted tools. End
+  // the current text segment before appending the tool card so the next text
+  // update is rendered below the card instead of overwriting the first one.
+  const currentText = session.pending.currentTextSegment;
+  if (currentText && !currentText.innerHTML.trim()) currentText.remove();
+  session.pending.currentTextSegment = null;
+  session.pending.lastRenderedLength = 0;
 
   const box = ToolCallBox({
     doc: pop.ownerDocument!,
@@ -1280,6 +1323,7 @@ export function onReasoningStartV2(session: Session) {
   if (!pop) return;
   const chatMessage = pop.querySelector('.chat-message') as HTMLElement | null;
   if (!chatMessage) return;
+  removeThinkingPlaceholder(chatMessage);
 
   const doc = pop.ownerDocument!;
   const reasoningText = doc.createElement('div');
@@ -1302,6 +1346,8 @@ export function onReasoningStartV2(session: Session) {
       div.remove();
     }
   }
+  session.pending.currentTextSegment = null;
+  session.pending.lastRenderedLength = 0;
   chatMessage.appendChild(box);
 
   session.pending.reasoningBox = box;

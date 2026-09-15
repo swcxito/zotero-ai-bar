@@ -109,6 +109,40 @@ describe('Codex chat backend', function () {
     assert.equal(state.writes, 0);
   });
 
+  it('Agent mode exposes the registered Zotero tools through the dynamic bridge', async function () {
+    const session = sessionFixture();
+    await streamCodex(messagesFor(session), session);
+    const names = state.server.requests.find((r: any) => r.method === 'thread/start').params.dynamicTools.map((t: any) => t.name);
+    assert.includeMembers(names, ['zotero_read', 'zotero_add_paper', 'zotero_capture_page']);
+  });
+
+  it('renders reasoning summaries before hosted web search and the final reply', async function () {
+    state.server.reasoningSummary = '先搜索相关信息，再整理答案。';
+    state.server.webSearch = true;
+    const session = sessionFixture();
+    await streamCodex(messagesFor(session), session);
+    assert.deepInclude(state.reasoning, { type: 'delta', text: '先搜索相关信息，再整理答案。' });
+    assert.equal(state.reasoning.at(-1).type, 'end');
+    assert.equal(state.calls[0].toolName, 'web_search');
+    assert.equal(state.updates.at(-1), 'Hello');
+  });
+
+  it('waits through transient app-server errors and exposes permanent diagnostics', async function () {
+    state.server.runtimeError = { error: { codexErrorInfo: 'networkError', message: 'temporary upstream failure' }, willRetry: true };
+    let session = sessionFixture();
+    await streamCodex(messagesFor(session), session);
+    assert.isEmpty(state.errors);
+    assert.equal(state.updates.at(-1), 'Hello');
+
+    state.errors.length = 0;
+    state.server.runtimeError = { error: { codexErrorInfo: 'invalidRequest', message: 'host is disabled', httpStatusCode: 400 } };
+    session = sessionFixture();
+    await streamCodex(messagesFor(session), session);
+    assert.include(state.errors[0], 'invalidRequest');
+    assert.include(state.errors[0], 'host is disabled');
+    assert.include(state.errors[0], '400');
+  });
+
   it('returns PDF page images through dynamic tool content, never a local path', async function () {
     state.server.tools = [{ tool: 'zotero_capture_page', args: { pageNumber: 1 } }];
     const session = sessionFixture();

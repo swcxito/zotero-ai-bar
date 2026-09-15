@@ -16,19 +16,25 @@ const features = [
   'hooks',
   'image_generation',
   'code_mode',
+  'code_mode_host',
 ]
   .map((name) => `${name} stable true`)
   .join('\n');
 
 describe('Codex components', function () {
   describe('Codex permission policy', function () {
-    it('disables every advertised runtime feature and only enables hosted web access', function () {
+    it('enables only the Code Mode bridge needed by Agent tools', function () {
       const policy = runtimePolicy('codex-cli 0.154.0-alpha.6.2\n', features);
-      for (const line of features.split('\n')) assert.strictEqual(policy[`features.${line.split(' ')[0]}`], false);
+      for (const line of features.split('\n')) {
+        const name = line.split(' ')[0];
+        assert.strictEqual(policy[`features.${name}`], name === 'code_mode' || name === 'code_mode_host');
+      }
       assert.equal(policy.web_search, 'live');
       assert.equal(policy.sandbox_mode, 'read-only');
       assert.equal(policy.cli_auth_credentials_store, 'file');
       assert.include(policyArguments(policy), 'features.shell_tool=false');
+      assert.include(policyArguments(policy), 'features.code_mode=true');
+      assert.include(policyArguments(policy), 'features.code_mode_host=true');
     });
 
     it('fails closed on unknown versions and malformed or incomplete capabilities', function () {
@@ -129,6 +135,7 @@ describe('Codex components', function () {
     let output: string;
     let system: string;
     let manual: string;
+    let environment: Record<string, string>;
 
     beforeEach(function () {
       originals = Object.fromEntries(names.map((name) => [name, g[name]]));
@@ -136,6 +143,7 @@ describe('Codex components', function () {
       output = '[]';
       system = '/usr/local/bin/codex';
       manual = '';
+      environment = { HOME: '/Users/Example User', PATH: '/usr/local/bin', SystemRoot: 'C:\\Windows' };
       g.Zotero = { isMac: true, isWin: false, Prefs: { get: () => manual } };
       g.PathUtils = {
         join: path.posix.join,
@@ -153,7 +161,7 @@ describe('Codex components', function () {
       g.ChromeUtils = {
         importESModule: () => ({
           Subprocess: {
-            getEnvironment: () => ({ HOME: '/Users/Example User', PATH: '/usr/local/bin', SystemRoot: 'C:\\Windows' }),
+            getEnvironment: () => environment,
             pathSearch: async () => {
               if (!system) throw new Error('missing');
               return system;
@@ -230,6 +238,41 @@ describe('Codex components', function () {
         ['desktop', 'system']
       );
       assert.isTrue(candidates.every((c) => c.path.endsWith('.exe')));
+    });
+
+    it('does not let an old npm shim hide a newer cached Windows runtime later in PATH', async function () {
+      g.Zotero.isMac = false;
+      g.Zotero.isWin = true;
+      g.PathUtils = {
+        ...g.PathUtils,
+        join: path.win32.join,
+        parent: path.win32.dirname,
+        filename: path.win32.basename,
+        isAbsolute: path.win32.isAbsolute,
+      };
+      const npm = 'C:\\Users\\Test User\\AppData\\Roaming\\npm';
+      const cached = 'C:\\Users\\Test User\\AppData\\Local\\OpenAI\\Codex\\bin\\audited';
+      const cachedBinary = path.win32.join(cached, 'codex.exe');
+      const shim = path.win32.join(npm, 'codex.ps1');
+      environment = {
+        PATH: [npm, cached].join(';'),
+        USERPROFILE: 'C:\\Users\\Test User',
+        LOCALAPPDATA: 'C:\\Users\\Test User\\AppData\\Local',
+        APPDATA: 'C:\\Users\\Test User\\AppData\\Roaming',
+        SystemRoot: 'C:\\Windows',
+      };
+      system = shim;
+      const stagedRoot = path.win32.join('C:\\Users\\Test User\\AppData\\Local', 'OpenAI', 'Codex', 'bin');
+      paths[stagedRoot] = [cached];
+      paths[cached] = [cachedBinary];
+      paths[cachedBinary] = [];
+      paths[shim] = [];
+      const candidates = await discoverCandidates();
+      assert.include(
+        candidates.map((candidate) => candidate.path),
+        cachedBinary
+      );
+      assert.equal(candidates.find((candidate) => candidate.path === cachedBinary)?.source, 'desktop');
     });
   });
 });

@@ -117,6 +117,11 @@ async function collect(pipe: any): Promise<string> {
   }
 }
 
+function environmentValue(environment: Record<string, string>, name: string): string | undefined {
+  const key = Object.keys(environment).find((candidate) => candidate.toLowerCase() === name.toLowerCase());
+  return key ? environment[key] : undefined;
+}
+
 export async function runLocal(command: string, args: string[], timeout = 6000): Promise<string> {
   const process = await subprocess().call({ command, arguments: args, environment: environment(), stderr: 'pipe', workdir: codexDirectory() });
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -137,65 +142,151 @@ export async function runLocal(command: string, args: string[], timeout = 6000):
 }
 
 /** Bounded traversal of known application/package subdirectories, never a whole-drive search. */
-async function findNativeWindowsRuntime(root: string, depth = 0): Promise<string[]> {
-  if (depth > 7 || !(await IOUtils.exists(root))) return [];
+async function findNativeWindowsRuntime(root: string, depth = 0, allowAnyDirectory = false, maxDepth = 7): Promise<string[]> {
+  if (depth > maxDepth || !(await IOUtils.exists(root).catch(() => false))) return [];
   const results: string[] = [];
   for (const child of await IOUtils.getChildren(root).catch(() => [] as string[])) {
     const name = PathUtils.filename(child);
     if (name.toLowerCase() === 'codex.exe') results.push(child);
     else if (
+      allowAnyDirectory ||
       /^(app|bin|resources|app\.asar\.unpacked|node_modules|@openai|codex[^/\\]*|vendor|[^/\\]*windows[^/\\]*|[^/\\]*mingw[^/\\]*|[^/\\]*msvc[^/\\]*)$/i.test(
         name
       )
     ) {
-      if ((await IOUtils.stat(child)).type === 'directory') results.push(...(await findNativeWindowsRuntime(child, depth + 1)));
+      if ((await IOUtils.stat(child).catch(() => ({ type: 'file' }))).type === 'directory')
+        results.push(...(await findNativeWindowsRuntime(child, depth + 1, allowAnyDirectory, maxDepth)));
     }
   }
   return results;
+}
+
+function addCandidate(candidates: RuntimeCandidate[], path: unknown, source: RuntimeCandidate['source']): void {
+  if (typeof path === 'string' && path) candidates.push({ path, source });
+}
+
+async function addExistingCandidate(candidates: RuntimeCandidate[], path: string, source: RuntimeCandidate['source']): Promise<void> {
+  if (await IOUtils.exists(path).catch(() => false)) addCandidate(candidates, path, source);
+}
+
+async function addWindowsPackageCandidates(candidates: RuntimeCandidate[], root: string, source: RuntimeCandidate['source']): Promise<void> {
+  // Direct paths matter for WindowsApps: the package can be executable while its
+  // directory is not listable by a non-elevated Zotero process.
+  for (const relative of [
+    ['app', 'resources', 'codex.exe'],
+    ['resources', 'codex.exe'],
+    ['app', 'bin', 'codex.exe'],
+    ['bin', 'codex.exe'],
+    ['app', 'codex.exe'],
+  ]) {
+    await addExistingCandidate(candidates, PathUtils.join(root, ...relative), source);
+  }
+  for (const path of await findNativeWindowsRuntime(root)) addCandidate(candidates, path, source);
+}
+
+async function addWindowsCliCandidates(candidates: RuntimeCandidate[], commandPath: string): Promise<void> {
+  if (/\.exe$/i.test(commandPath)) {
+    addCandidate(candidates, commandPath, 'system');
+    return;
+  }
+
+  // npm creates .cmd, .ps1 and extensionless shims. None can be passed to
+  // Gecko Subprocess as a native command, so resolve their bundled platform
+  // package instead of invoking a shell.
+  const parent = PathUtils.parent(commandPath);
+  if (!parent) return;
+  const grandparent = PathUtils.parent(parent);
+  const roots = [
+    PathUtils.join(parent, 'node_modules', '@openai'),
+    PathUtils.join(parent, 'node_modules'),
+    PathUtils.join(parent, '@openai'),
+    ...(grandparent ? [PathUtils.join(grandparent, '@openai')] : []),
+  ];
+  for (const root of roots) for (const path of await findNativeWindowsRuntime(root)) addCandidate(candidates, path, 'system');
+}
+
+async function addWindowsPathCandidates(candidates: RuntimeCandidate[], environment: Record<string, string>): Promise<void> {
+  const pathValue = environmentValue(environment, 'PATH') || environmentValue(environment, 'Path');
+  if (!pathValue) return;
+  // pathSearch() returns only one match. Enumerate the PATH entries as well so
+  // an old npm shim cannot hide a newer audited codex.exe later in PATH.
+  for (const directory of pathValue
+    .split(';')
+    .map((value) => value.trim())
+    .filter(Boolean)) {
+    for (const name of ['codex.exe', 'codex.cmd', 'codex.ps1', 'codex']) {
+      const path = PathUtils.join(directory, name);
+      if (await IOUtils.exists(path).catch(() => false)) await addWindowsCliCandidates(candidates, path);
+    }
+  }
 }
 
 export async function discoverCandidates(): Promise<RuntimeCandidate[]> {
   const candidates: RuntimeCandidate[] = [];
   const env = subprocess().getEnvironment();
   if (Zotero.isMac) {
-    const roots = ['/Applications', ...(env.HOME ? [PathUtils.join(env.HOME, 'Applications')] : [])];
+    const home = environmentValue(env, 'HOME');
+    const roots = ['/Applications', ...(home ? [PathUtils.join(home, 'Applications')] : [])];
     for (const root of roots)
       for (const app of ['Codex.app', 'ChatGPT.app']) {
-        candidates.push({ path: PathUtils.join(root, app, 'Contents', 'Resources', 'codex'), source: 'desktop' });
+        addCandidate(candidates, PathUtils.join(root, app, 'Contents', 'Resources', 'codex'), 'desktop');
       }
   } else if (Zotero.isWin) {
     // Discover both MSIX and regular installations using installed-app metadata.
-    const powershell = PathUtils.join(env.SystemRoot || env.WINDIR || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    const systemRoot = environmentValue(env, 'SystemRoot') || environmentValue(env, 'WINDIR') || 'C:\\Windows';
+    const powershell = PathUtils.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
     const query =
-      "$ErrorActionPreference='SilentlyContinue'; $locations=@(Get-AppxPackage | Where-Object { $_.Name -match 'OpenAI|ChatGPT|Codex' } | ForEach-Object { $_.InstallLocation }); foreach($key in @('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*')) { $locations+=@(Get-ItemProperty $key | Where-Object { $_.DisplayName -match '^(ChatGPT|Codex)( |$)' } | ForEach-Object { $_.InstallLocation }) }; ConvertTo-Json -Compress -InputObject @($locations | Where-Object { $_ } | Select-Object -Unique)";
+      "$ErrorActionPreference='SilentlyContinue'; $locations=@(Get-AppxPackage | Where-Object { $_.Name -match '(?i)OpenAI|ChatGPT|Codex' } | ForEach-Object { $_.InstallLocation }); foreach($key in @('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*')) { $locations+=@(Get-ItemProperty $key | Where-Object { $_.DisplayName -match '(?i)OpenAI|ChatGPT|Codex' } | ForEach-Object { $_.InstallLocation }) }; ConvertTo-Json -Compress -InputObject @($locations | Where-Object { $_ } | Select-Object -Unique)";
     try {
       const locations = JSON.parse(await runLocal(powershell, ['-NoProfile', '-NonInteractive', '-Command', query]));
       for (const location of Array.isArray(locations) ? locations : []) {
         if (typeof location !== 'string' || !PathUtils.isAbsolute(location)) continue;
-        for (const path of await findNativeWindowsRuntime(location)) candidates.push({ path, source: 'desktop' });
+        await addWindowsPackageCandidates(candidates, location, 'desktop');
       }
     } catch {
       /* System CLI detection remains available if app metadata is inaccessible. */
     }
+
+    // The desktop app stages its signed CLI outside WindowsApps so it can be
+    // started by other local clients. This is also the usable fallback when
+    // Windows denies direct execution from the protected MSIX directory.
+    const localAppData = environmentValue(env, 'LOCALAPPDATA');
+    const appData = environmentValue(env, 'APPDATA');
+    const userProfile = environmentValue(env, 'USERPROFILE');
+    const stagedRoots = [
+      ...(localAppData ? [PathUtils.join(localAppData, 'OpenAI', 'Codex', 'bin'), PathUtils.join(localAppData, 'OpenAI', 'ChatGPT', 'bin')] : []),
+      ...(appData ? [PathUtils.join(appData, 'OpenAI', 'Codex', 'bin'), PathUtils.join(appData, 'OpenAI', 'ChatGPT', 'bin')] : []),
+      ...(userProfile ? [PathUtils.join(userProfile, '.codex', 'bin')] : []),
+    ];
+    for (const root of stagedRoots) for (const path of await findNativeWindowsRuntime(root, 0, true, 3)) addCandidate(candidates, path, 'desktop');
   } else {
     throw new Error(codexString('codex-error-platform', 'Codex 订阅接入目前仅支持 macOS 和 Windows。'));
   }
-  try {
-    const path: string = await subprocess().pathSearch('codex');
-    if (Zotero.isWin && /\.(cmd|bat|ps1)$/i.test(path)) {
-      // npm shims are not native executables. Resolve the package's vendored exe, without invoking a shell.
-      const root = PathUtils.join(PathUtils.parent(path)!, 'node_modules', '@openai');
-      for (const native of await findNativeWindowsRuntime(root)) candidates.push({ path: native, source: 'system' });
-    } else candidates.push({ path, source: 'system' });
-  } catch {
-    /* Missing from the GUI application's PATH. Manual selection remains available. */
+  if (Zotero.isWin) {
+    try {
+      await addWindowsCliCandidates(candidates, await subprocess().pathSearch('codex'));
+    } catch {
+      /* Missing from the GUI application's PATH; inspect PATH entries below. */
+    }
+    await addWindowsPathCandidates(candidates, env);
+    const configured = environmentValue(env, 'CODEX_CLI_PATH');
+    if (configured && PathUtils.isAbsolute(configured)) await addWindowsCliCandidates(candidates, configured);
+  } else {
+    try {
+      addCandidate(candidates, await subprocess().pathSearch('codex'), 'system');
+    } catch {
+      /* Missing from the GUI application's PATH. Manual selection remains available. */
+    }
   }
   if (Zotero.isMac) {
     for (const path of ['/opt/homebrew/bin/codex', '/usr/local/bin/codex']) candidates.push({ path, source: 'system' });
   }
   const manual = getPref('codex.runtimePath');
-  if (manual) candidates.push({ path: manual, source: 'manual' });
-  return candidates.filter((entry, index, all) => all.findIndex((other) => other.path === entry.path) === index);
+  if (manual) addCandidate(candidates, manual, 'manual');
+  return candidates.filter(
+    (entry, index, all) =>
+      all.findIndex((other) => (Zotero.isWin ? other.path.toLowerCase() === entry.path.toLowerCase() : other.path === entry.path)) === index
+  );
 }
 
 class CodexRuntime {
@@ -241,7 +332,6 @@ class CodexRuntime {
       await prepareDirectories();
       for (const candidate of await discoverCandidates()) {
         if (this.stopped) return undefined;
-        if (!(await IOUtils.exists(candidate.path))) continue;
         try {
           const version = await runLocal(candidate.path, ['--version']);
           const features = await runLocal(candidate.path, ['features', 'list']);

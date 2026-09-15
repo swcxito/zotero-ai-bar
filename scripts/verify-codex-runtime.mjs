@@ -37,7 +37,8 @@ const environment = {
 const version = execFileSync(binary, ['--version'], { encoding: 'utf8', env: environment });
 const features = execFileSync(binary, ['features', 'list'], { encoding: 'utf8', env: environment });
 const policy = runtimePolicy(version, features);
-const allowedFunctions = new Set(['request_user_input', 'zotero_read']);
+const allowedFunctions = new Set(['request_user_input', 'wait', 'zotero_read']);
+const allowedCustomTools = new Set(['exec']);
 const observed = new Set();
 let requests = 0;
 let serverFailure;
@@ -50,6 +51,7 @@ const server = createServer(async (req, res) => {
     for (const tool of body.tools) {
       observed.add(tool.name || tool.type);
       if (tool.type === 'function') assert.ok(allowedFunctions.has(tool.name), `Unexpected native function: ${tool.name}`);
+      else if (tool.type === 'custom') assert.ok(allowedCustomTools.has(tool.name), `Unexpected Code Mode tool: ${tool.name}`);
       else assert.equal(tool.type, 'web_search', `Unexpected hosted tool: ${tool.type}`);
     }
     assert.ok(body.tools.some((tool) => tool.name === 'zotero_read'));

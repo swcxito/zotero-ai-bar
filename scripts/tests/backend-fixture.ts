@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { CodexRpc } from '../../src/modules/codex/protocol';
 
-export const state: any = { errors: [], ends: [], updates: [], calls: [], outputs: [], writes: 0 };
+export const state: any = { errors: [], ends: [], updates: [], calls: [], outputs: [], reasoning: [], writes: 0 };
 export function onLLMStreamStartV2(session: any) {
   session._text = '';
 }
@@ -18,9 +18,15 @@ export function onLLMStreamErrorV2({ session, error }: any) {
   state.errors.push(error);
   session.pending = {};
 }
-export function onReasoningStartV2() {}
-export function onReasoningDeltaV2() {}
-export function onReasoningEndV2() {}
+export function onReasoningStartV2() {
+  state.reasoning.push({ type: 'start' });
+}
+export function onReasoningDeltaV2(_session: any, text: string) {
+  state.reasoning.push({ type: 'delta', text });
+}
+export function onReasoningEndV2() {
+  state.reasoning.push({ type: 'end' });
+}
 export function onToolCallStartV2(_session: any, call: any) {
   state.calls.push(call);
 }
@@ -51,6 +57,9 @@ export class FakeServer {
   account: any = { type: 'chatgpt', email: 'test@example.org' };
   reply = 'Hello';
   finalOnly = false;
+  reasoningSummary?: string;
+  webSearch = false;
+  runtimeError?: { error: any; willRetry?: boolean };
   status = 'completed';
   disconnect = false;
   resumeFailure = false;
@@ -92,6 +101,18 @@ export class FakeServer {
       this.rpc.close();
       return;
     }
+    if (this.reasoningSummary) {
+      const item = { id: 'reasoning_1', type: 'reasoning', summary: [{ type: 'summary_text', text: this.reasoningSummary }] };
+      this.emit('item/started', { threadId, turnId, item });
+      this.emit('item/reasoning/summaryTextDelta', { threadId, turnId, itemId: item.id, delta: this.reasoningSummary });
+      this.emit('item/completed', { threadId, turnId, item });
+    }
+    if (this.webSearch) {
+      const item = { id: 'web_1', type: 'webSearch', action: { type: 'search', query: 'Codex' } };
+      this.emit('item/started', { threadId, turnId, item });
+      this.emit('item/completed', { threadId, turnId, item });
+    }
+    if (this.runtimeError) this.emit('error', { threadId, ...this.runtimeError });
     for (const [i, tool] of this.tools.entries()) {
       const id = `request_${i}`;
       const reply = new Promise((resolve) => this.serverRequests.set(id, resolve));
@@ -132,7 +153,17 @@ export function codexDirectory() {
 }
 
 export function resetFixture() {
-  Object.assign(state, { errors: [], ends: [], updates: [], calls: [], outputs: [], writes: 0, translation: undefined, server: new FakeServer() });
+  Object.assign(state, {
+    errors: [],
+    ends: [],
+    updates: [],
+    calls: [],
+    outputs: [],
+    reasoning: [],
+    writes: 0,
+    translation: undefined,
+    server: new FakeServer(),
+  });
   Object.assign(globalThis, {
     Zotero: { Prefs: { get: () => 'minimum' } },
     PathUtils: { join: (...parts: string[]) => parts.join('/') },

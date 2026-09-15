@@ -54,13 +54,30 @@ export function runtimePolicy(versionOutput: string, featureOutput: string): Rec
     .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => line.trim().split(/\s+/)[0]);
-  if (!['shell_tool', 'unified_exec', 'apps', 'plugins', 'view_image', 'browser_use', 'computer_use'].every((name) => names.includes(name))) {
+  const requiredFeatures = [
+    'shell_tool',
+    'unified_exec',
+    'apps',
+    'plugins',
+    'view_image',
+    'browser_use',
+    'computer_use',
+    // Agent-mode dynamic tools are routed through Codex Code Mode.
+    'code_mode',
+    'code_mode_host',
+  ];
+  if (!requiredFeatures.every((name) => names.includes(name))) {
     throw new Error(codexString('codex-error-features-incomplete', 'Codex 功能清单不完整，不能验证工具权限。'));
   }
   if (names.some((name) => !/^[a-z][a-z0-9_.]*$/.test(name)))
     throw new Error(codexString('codex-error-features-format', 'Codex 功能清单格式不兼容。'));
   return {
     ...Object.fromEntries(names.map((name) => [`features.${name}`, false])),
+    // The model catalog marks the current Agent models as code_mode_only. Keep
+    // the Code Mode bridge enabled so registered Zotero dynamic tools can be
+    // called, while all shell/browser/app features remain disabled above.
+    'features.code_mode': true,
+    'features.code_mode_host': true,
     'features.skip_host_skill_discovery': true,
     web_search: 'live',
     sandbox_mode: 'read-only',
