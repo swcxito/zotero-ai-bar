@@ -2,7 +2,7 @@ import { assert } from 'chai';
 import path from 'node:path';
 import { runtimePolicy, policyArguments, contextFingerprint, sanitizeCodexBinding } from '../../src/modules/codex/policy';
 import { CodexRpc } from '../../src/modules/codex/protocol';
-import { codexRuntime, discoverCandidates } from '../../src/modules/codex/runtime';
+import { codexRuntime, discoverCandidates, preferredUserHome } from '../../src/modules/codex/runtime';
 
 const features = [
   'shell_tool',
@@ -22,6 +22,22 @@ const features = [
   .join('\n');
 
 describe('Codex components', function () {
+  describe('Codex platform environment', function () {
+    it('prefers USERPROFILE over an unrelated HOME on Windows', function () {
+      const environment = {
+        HOME: 'C:\\Users\\Example\\AppData\\Roaming\\SPB_Data',
+        USERPROFILE: 'C:\\Users\\Example',
+      };
+      assert.equal(preferredUserHome(environment, true), 'C:\\Users\\Example');
+      assert.equal(preferredUserHome(environment, false), 'C:\\Users\\Example\\AppData\\Roaming\\SPB_Data');
+    });
+
+    it('keeps the other home variable as a platform fallback', function () {
+      assert.equal(preferredUserHome({ HOME: '/Users/example' }, true), '/Users/example');
+      assert.equal(preferredUserHome({ USERPROFILE: 'C:\\Users\\Example' }, false), 'C:\\Users\\Example');
+    });
+  });
+
   describe('Codex permission policy', function () {
     it('enables only the Code Mode bridge needed by Agent tools', function () {
       const policy = runtimePolicy('codex-cli 0.154.0-alpha.6.2\n', features);

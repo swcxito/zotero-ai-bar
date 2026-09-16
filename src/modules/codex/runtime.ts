@@ -39,6 +39,13 @@ async function prepareDirectories(): Promise<void> {
   await IOUtils.makeDirectory(PathUtils.join(codexDirectory(), 'workspace'), { permissions: 0o700, ignoreExisting: true });
 }
 
+/** Windows applications may inherit an unrelated POSIX-style HOME from other tools. */
+export function preferredUserHome(environment: Record<string, string>, isWindows: boolean): string | undefined {
+  const primary = environmentValue(environment, isWindows ? 'USERPROFILE' : 'HOME');
+  const fallback = environmentValue(environment, isWindows ? 'HOME' : 'USERPROFILE');
+  return primary || fallback;
+}
+
 /** Do not inherit API keys, desktop bridge sockets, provider overrides or proxy credentials. */
 function environment(sharedLogin = false): Record<string, string> {
   const inherited = subprocess().getEnvironment();
@@ -60,8 +67,9 @@ function environment(sharedLogin = false): Record<string, string> {
   ];
   const env = Object.fromEntries(allowed.filter((k) => inherited[k]).map((k) => [k, inherited[k]]));
   // A separate home also prevents discovery of the user's global skills/config.
-  const userHome = inherited.HOME || inherited.USERPROFILE;
-  const sharedHome = inherited.CODEX_HOME || (userHome ? PathUtils.join(userHome, '.codex') : undefined);
+  const userHome = preferredUserHome(inherited, Zotero.isWin);
+  const configuredHome = environmentValue(inherited, 'CODEX_HOME');
+  const sharedHome = configuredHome || (userHome ? PathUtils.join(userHome, '.codex') : undefined);
   return { ...env, HOME: codexDirectory(), CODEX_HOME: sharedLogin && sharedHome ? sharedHome : codexDirectory() };
 }
 
@@ -85,7 +93,7 @@ function installEnvironment(): Record<string, string> {
     'LC_ALL',
   ];
   const env = Object.fromEntries(allowed.filter((k) => inherited[k]).map((k) => [k, inherited[k]]));
-  const home = inherited.HOME || inherited.USERPROFILE;
+  const home = preferredUserHome(inherited, Zotero.isWin);
   if (home) env.HOME = home;
   return env;
 }
