@@ -240,6 +240,24 @@ describe('Codex components', function () {
       assert.isTrue(candidates.every((c) => c.path.endsWith('.exe')));
     });
 
+    it('asks for Codex CLI when only the protected Microsoft Store app is available', async function () {
+      g.Zotero.isMac = false;
+      g.Zotero.isWin = true;
+      g.PathUtils = {
+        ...g.PathUtils,
+        join: path.win32.join,
+        parent: path.win32.dirname,
+        filename: path.win32.basename,
+        isAbsolute: path.win32.isAbsolute,
+      };
+      output = JSON.stringify(['C:\\Program Files\\WindowsApps\\OpenAI.Codex_1']);
+      system = '';
+      const result = await codexRuntime.detect();
+      assert.isUndefined(result);
+      assert.include(codexRuntime.status, '微软商店版 ChatGPT');
+      assert.include(codexRuntime.status, 'Codex CLI');
+    });
+
     it('does not let an old npm shim hide a newer cached Windows runtime later in PATH', async function () {
       g.Zotero.isMac = false;
       g.Zotero.isWin = true;

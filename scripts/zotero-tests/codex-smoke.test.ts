@@ -63,6 +63,7 @@ describe('Codex in isolated Zotero', function () {
       const doc = dialog!.document;
       assert.equal(doc.getElementById('connect-chatgpt-button')?.nextElementSibling?.id, 'add-provider-button');
       assert.isNull(doc.getElementById('codex-provider-card'));
+      assert.isNotNull(doc.getElementById('codex-install-cli-button'));
       assert.equal(doc.getElementById('connect-chatgpt-label')?.getAttribute('data-state'), 'disconnected');
       addon.data.userProviderConfigV2!.addedProviders[CODEX_PROVIDER_ID] = { id: CODEX_PROVIDER_ID, name: 'Codex 订阅', env: [] };
       for (const listener of codexSettingsListeners) listener();

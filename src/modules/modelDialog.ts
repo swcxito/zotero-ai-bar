@@ -221,9 +221,10 @@ class ModelDialogV2 {
     const button = (label: string, action: () => void) => {
       const node = this.doc.createElement('button');
       node.textContent = label;
-      node.className = 'rounded-lg border border-gray-300 px-3 py-1 dark:border-zinc-600';
+      node.className = 'rounded-lg border border-gray-300 px-3 py-1 transition-colors hover:bg-gray-100 dark:border-zinc-600 dark:hover:bg-zinc-800';
       node.addEventListener('click', action);
       controls.append(node);
+      return node;
     };
     button(
       getString('codex-refresh-continue'),
@@ -245,20 +246,29 @@ class ModelDialogV2 {
           await codexRuntime.connectAccount();
         })
     );
-    for (const [label, url] of [
-      [getString('codex-install-chatgpt'), 'https://learn.chatgpt.com/docs/app'],
-      [getString('codex-install-cli'), 'https://learn.chatgpt.com/docs/cli'],
-    ]) {
-      const link = this.doc.createElement('a');
-      link.textContent = label;
-      link.href = url;
-      link.className = CONNECTION_PANEL_LINK_CLASS;
-      link.addEventListener('click', (event) => {
-        event.preventDefault();
-        Zotero.launchURL(url);
-      });
-      controls.append(link);
-    }
+    const installCliButton = button(
+      getString('codex-install-cli'),
+      () =>
+        void this.runCodexConnection(
+          async () => {
+            await codexRuntime.installCli();
+            await codexRuntime.detect();
+          },
+          true,
+          true
+        )
+    );
+    installCliButton.id = 'codex-install-cli-button';
+    const url = 'https://learn.chatgpt.com/docs/app';
+    const link = this.doc.createElement('a');
+    link.textContent = getString('codex-install-chatgpt');
+    link.href = url;
+    link.className = CONNECTION_PANEL_LINK_CLASS;
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      Zotero.launchURL(url);
+    });
+    controls.append(link);
     panel.append(status, path, controls);
     this.doc.getElementById('provider-block')?.before(panel);
   }
@@ -293,7 +303,7 @@ class ModelDialogV2 {
     }
   }
 
-  private async runCodexConnection(operation: () => Promise<unknown>, revealOnError = true) {
+  private async runCodexConnection(operation: () => Promise<unknown>, revealOnError = true, revealOnSuccess = false) {
     if (this.codexBusy) return;
     this.codexBusy = true;
     this.updateCodexConnectionControls();
@@ -310,7 +320,7 @@ class ModelDialogV2 {
     } finally {
       this.codexBusy = false;
       this.renderCodexCard();
-      if (failed && revealOnError) panel.hidden = false;
+      if ((failed && revealOnError) || (!failed && revealOnSuccess)) panel.hidden = false;
     }
   }
 

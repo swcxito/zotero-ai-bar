@@ -65,6 +65,31 @@ function environment(sharedLogin = false): Record<string, string> {
   return { ...env, HOME: codexDirectory(), CODEX_HOME: sharedLogin && sharedHome ? sharedHome : codexDirectory() };
 }
 
+/** Keep package-manager installation scoped to the user's normal Windows/npm environment. */
+function installEnvironment(): Record<string, string> {
+  const inherited = subprocess().getEnvironment();
+  const allowed = [
+    'PATH',
+    'Path',
+    'SystemRoot',
+    'WINDIR',
+    'COMSPEC',
+    'PATHEXT',
+    'USERPROFILE',
+    'LOCALAPPDATA',
+    'APPDATA',
+    'TEMP',
+    'TMP',
+    'TMPDIR',
+    'LANG',
+    'LC_ALL',
+  ];
+  const env = Object.fromEntries(allowed.filter((k) => inherited[k]).map((k) => [k, inherited[k]]));
+  const home = inherited.HOME || inherited.USERPROFILE;
+  if (home) env.HOME = home;
+  return env;
+}
+
 /** Child processes do not inherit Gecko/system proxy settings. Resolve them without reading credentials. */
 export async function runtimeNetworkEnvironment(): Promise<Record<string, string>> {
   const inherited = subprocess().getEnvironment();
@@ -122,6 +147,29 @@ function environmentValue(environment: Record<string, string>, name: string): st
   return key ? environment[key] : undefined;
 }
 
+async function findNpmCommand(): Promise<string | undefined> {
+  const environment = subprocess().getEnvironment();
+  if (Zotero.isWin) {
+    const pathValue = environmentValue(environment, 'PATH') || environmentValue(environment, 'Path');
+    if (pathValue) {
+      for (const directory of pathValue
+        .split(';')
+        .map((value) => value.trim().replace(/^"|"$/g, ''))
+        .filter(Boolean)) {
+        for (const name of ['npm.cmd', 'npm.exe', 'npm']) {
+          const path = PathUtils.join(directory, name);
+          if (await IOUtils.exists(path).catch(() => false)) return path;
+        }
+      }
+    }
+  }
+  try {
+    return await subprocess().pathSearch('npm');
+  } catch {
+    return undefined;
+  }
+}
+
 export async function runLocal(command: string, args: string[], timeout = 6000): Promise<string> {
   const process = await subprocess().call({ command, arguments: args, environment: environment(), stderr: 'pipe', workdir: codexDirectory() });
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -138,6 +186,36 @@ export async function runLocal(command: string, args: string[], timeout = 6000):
   } finally {
     clearTimeout(timer);
     await process.kill(1000).catch(() => undefined);
+  }
+}
+
+async function runCliInstall(command: string, args: string[]): Promise<void> {
+  const failure = () => new Error(codexString('codex-error-cli-install-failed', 'Codex CLI 安装失败，请检查 Node.js、npm 和网络设置后重试。'));
+  let child: any;
+  try {
+    child = await subprocess().call({ command, arguments: args, environment: installEnvironment(), stderr: 'pipe', workdir: codexDirectory() });
+  } catch {
+    throw failure();
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const result = await Promise.race([
+      Promise.all([collect(child.stdout), collect(child.stderr), child.wait()]).then(([, , exit]) => exit),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(failure()), 180000);
+      }),
+    ]);
+    if (result.exitCode !== 0) throw failure();
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === codexString('codex-error-cli-install-failed', 'Codex CLI 安装失败，请检查 Node.js、npm 和网络设置后重试。')
+    )
+      throw error;
+    throw failure();
+  } finally {
+    clearTimeout(timer);
+    await child.kill(1000).catch(() => undefined);
   }
 }
 
@@ -221,8 +299,11 @@ async function addWindowsPathCandidates(candidates: RuntimeCandidate[], environm
   }
 }
 
+let windowsStoreChatGPTDetected = false;
+
 export async function discoverCandidates(): Promise<RuntimeCandidate[]> {
   const candidates: RuntimeCandidate[] = [];
+  windowsStoreChatGPTDetected = false;
   const env = subprocess().getEnvironment();
   if (Zotero.isMac) {
     const home = environmentValue(env, 'HOME');
@@ -239,6 +320,9 @@ export async function discoverCandidates(): Promise<RuntimeCandidate[]> {
       "$ErrorActionPreference='SilentlyContinue'; $locations=@(Get-AppxPackage | Where-Object { $_.Name -match '(?i)OpenAI|ChatGPT|Codex' } | ForEach-Object { $_.InstallLocation }); foreach($key in @('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*')) { $locations+=@(Get-ItemProperty $key | Where-Object { $_.DisplayName -match '(?i)OpenAI|ChatGPT|Codex' } | ForEach-Object { $_.InstallLocation }) }; ConvertTo-Json -Compress -InputObject @($locations | Where-Object { $_ } | Select-Object -Unique)";
     try {
       const locations = JSON.parse(await runLocal(powershell, ['-NoProfile', '-NonInteractive', '-Command', query]));
+      windowsStoreChatGPTDetected = (Array.isArray(locations) ? locations : []).some(
+        (location) => typeof location === 'string' && /[\\/]WindowsApps[\\/]/i.test(location)
+      );
       for (const location of Array.isArray(locations) ? locations : []) {
         if (typeof location !== 'string' || !PathUtils.isAbsolute(location)) continue;
         await addWindowsPackageCandidates(candidates, location, 'desktop');
@@ -348,7 +432,9 @@ class CodexRuntime {
         }
       }
       this.info = undefined;
-      this.status = codexString('codex-status-no-compatible-runtime', '没有找到兼容的 Codex 运行时');
+      this.status = windowsStoreChatGPTDetected
+        ? codexString('codex-status-store-chatgpt-cli-required', '检测到微软商店版 ChatGPT，但当前无法直接访问其运行时，请安装 Codex CLI')
+        : codexString('codex-status-no-compatible-runtime', '没有找到兼容的 Codex 运行时');
       this.changed();
       return undefined;
     })()
@@ -584,6 +670,45 @@ class CodexRuntime {
     this.account = undefined;
     this.models = [];
     this.status = codexString('codex-status-private-logged-out', '已退出插件中的 Codex 登录');
+    this.changed();
+  }
+
+  async installCli(): Promise<void> {
+    await prepareDirectories();
+    const npm = await findNpmCommand();
+    if (!npm) {
+      const error = new Error(codexString('codex-error-npm-not-found', '未找到 npm，请先安装 Node.js 后重试。'));
+      this.status = error.message;
+      this.changed();
+      throw error;
+    }
+    this.status = codexString('codex-status-installing-cli', '正在安装 Codex CLI');
+    this.diagnostics = [];
+    this.changed();
+    try {
+      if (Zotero.isWin) {
+        const inherited = subprocess().getEnvironment();
+        const systemRoot = environmentValue(inherited, 'SystemRoot') || environmentValue(inherited, 'WINDIR') || 'C:\\Windows';
+        const powershell = PathUtils.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+        const escapedNpm = npm.replaceAll("'", "''");
+        await runCliInstall(powershell, [
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-Command',
+          `& '${escapedNpm}' install --global --no-audit --no-fund @openai/codex`,
+        ]);
+      } else {
+        await runCliInstall(npm, ['install', '--global', '--no-audit', '--no-fund', '@openai/codex']);
+      }
+    } catch (error) {
+      this.status = (error as Error).message;
+      this.changed();
+      throw error;
+    }
+    this.info = undefined;
+    this.status = codexString('codex-status-cli-installed', 'Codex CLI 安装完成，正在重新检测运行时');
     this.changed();
   }
 
