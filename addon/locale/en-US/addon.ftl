@@ -18,6 +18,7 @@ chat-turn-navigator-turn-label = Go to conversation { $index }
 chat-turn-navigator-generating = Generating response…
 chat-turn-navigator-image-message = Image message
 chat-turn-navigator-empty-user = User message
+chat-turn-navigator-translation = [Translate]: { $text }
 chat-turn-navigator-empty-assistant = No response
 
 reader-bar-explain = Explain

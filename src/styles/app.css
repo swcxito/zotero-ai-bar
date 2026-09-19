@@ -252,6 +252,13 @@
   -webkit-line-clamp: 2;
 }
 
+.chat-turn-navigator-preview-user[data-translation-preview='true'] {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .chat-turn-navigator-preview-assistant {
   margin-top: 9px;
   padding-top: 9px;

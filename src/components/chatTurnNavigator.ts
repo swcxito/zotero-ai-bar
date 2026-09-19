@@ -145,6 +145,10 @@ function collapseWhitespace(value: string): string {
 }
 
 function getUserPreview(turn: ChatTurnNodes): string {
+  const translation = turn.assistant?.dataset.chatTranslationPreview;
+  if (translation?.trim()) {
+    return getString('chat-turn-navigator-translation', { args: { text: collapseWhitespace(translation) } });
+  }
   const preview = turn.user?.dataset.chatPreviewText;
   if (preview?.trim()) return collapseWhitespace(preview);
   return getString('chat-turn-navigator-empty-user' as any);
@@ -165,6 +169,15 @@ export function captureAssistantPreviewSnapshot(assistant: HTMLElement): void {
   const clone = message.cloneNode(true) as HTMLElement;
   clone.querySelectorAll('.tool-call-box, .chat-source-label, .chat-actions').forEach((element) => element.remove());
   assistant.dataset.chatPreviewText = collapseWhitespace(renderedElementToPlainText(clone));
+}
+
+export function setChatTranslationPreview(assistant: HTMLElement, originalText?: string): void {
+  const normalized = originalText?.trim();
+  if (normalized) {
+    assistant.dataset.chatTranslationPreview = normalized;
+  } else {
+    delete assistant.dataset.chatTranslationPreview;
+  }
 }
 
 function getAnchorOffset(anchor: HTMLElement, container: HTMLElement): number {
@@ -255,6 +268,7 @@ export function createChatTurnNavigator(doc: Document, messageContainer: HTMLEle
     }
 
     userText.textContent = getUserPreview(turns[hoveredIndex]);
+    userText.dataset.translationPreview = String(Boolean(turns[hoveredIndex].assistant?.dataset.chatTranslationPreview?.trim()));
     assistantText.textContent = getAssistantPreview(turns[hoveredIndex]);
     preview.hidden = false;
     preview.style.width = `${Math.max(180, Math.min(360, shell.clientWidth - 54))}px`;

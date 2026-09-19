@@ -33,7 +33,7 @@ import { openCitation } from './citationAction';
 import { getItemFullTextByPage } from '../utils/zoteroItemAccess';
 import { normalizePartOfSpeech, type TranslationResult } from '../utils/translation';
 import { createUserMessageBubble } from '../components/userBubble';
-import { captureAssistantPreviewSnapshot } from '../components/chatTurnNavigator';
+import { captureAssistantPreviewSnapshot, setChatTranslationPreview } from '../components/chatTurnNavigator';
 
 Zotero.debug('[zaibar-chatUI] module loaded');
 
@@ -52,6 +52,7 @@ export async function renderPersistedTranscript(session: Session, container: HTM
       container.appendChild(createUserMessageBubble(container.ownerDocument, turn.userText, [], () => undefined, turn.referenceText));
     }
     const pop = ChatBox({ doc: container.ownerDocument, isUser: false }) as HTMLElement;
+    setChatTranslationPreview(pop, !turn.userText ? turn.referenceText : undefined);
     const chatMessage = pop.querySelector('.chat-message') as HTMLElement | null;
     if (chatMessage) {
       if (turn.sourceLabel) {
@@ -438,6 +439,7 @@ export function onLLMStreamStartV2(session: Session) {
     isUser: false,
     onRegenerate: () => addon.chatManager.regenerateLastResponse(session),
   }) as HTMLElement;
+  setChatTranslationPreview(pop, session.pending.translationRequest?.selectedText);
   // pop.setAttribute("data-request-id", data.requestId);
 
   const chatMessage = pop.querySelector('.chat-message') as HTMLElement | null;

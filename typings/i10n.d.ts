@@ -27,6 +27,7 @@ export type FluentMessageId =
   | 'chat-turn-navigator-generating'
   | 'chat-turn-navigator-image-message'
   | 'chat-turn-navigator-label'
+  | 'chat-turn-navigator-translation'
   | 'chat-turn-navigator-turn-label'
   | 'chat-window-open-tooltip'
   | 'codex-card-title'

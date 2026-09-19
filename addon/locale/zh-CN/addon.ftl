@@ -18,6 +18,7 @@ chat-turn-navigator-turn-label = 跳转到第 { $index } 轮对话
 chat-turn-navigator-generating = 正在生成回复…
 chat-turn-navigator-image-message = 图片消息
 chat-turn-navigator-empty-user = 用户消息
+chat-turn-navigator-translation = 【翻译】：{ $text }
 chat-turn-navigator-empty-assistant = 暂无回复
 
 reader-bar-explain = 解释
