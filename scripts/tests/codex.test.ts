@@ -1,8 +1,9 @@
 import { assert } from 'chai';
 import path from 'node:path';
-import { runtimePolicy, policyArguments, contextFingerprint, sanitizeCodexBinding } from '../../src/modules/codex/policy';
+import { runtimePolicy, policyArguments, contextFingerprint, sanitizeCodexBinding, isCodexVersionSupported } from '../../src/modules/codex/policy';
 import { CodexRpc } from '../../src/modules/codex/protocol';
 import { codexRuntime, discoverCandidates, preferredUserHome } from '../../src/modules/codex/runtime';
+import { askUserSchema } from '../../src/utils/agentSchemas';
 
 const features = [
   'shell_tool',
@@ -22,6 +23,46 @@ const features = [
   .join('\n');
 
 describe('Codex components', function () {
+  describe('ask_user schema', function () {
+    it('accepts Codex-style structured options with controlled free text', function () {
+      const parsed = askUserSchema.parse({
+        questions: [
+          {
+            question: 'Choose a scope',
+            options: [
+              { label: 'Current item', description: 'Only use the open Zotero item.' },
+              { label: 'Library', description: 'Search the whole Zotero library.' },
+            ],
+            isOther: true,
+          },
+        ],
+      });
+      assert.equal(parsed.questions[0].options?.[0].label, 'Current item');
+      assert.isTrue(parsed.questions[0].isOther);
+    });
+
+    it('accepts null options for a free-text-only question', function () {
+      const parsed = askUserSchema.parse({
+        questions: [{ question: 'What topic should I search?', options: null }],
+      });
+      assert.isNull(parsed.questions[0].options);
+      assert.isTrue(parsed.questions[0].isOther);
+    });
+
+    it('rejects legacy string options and too few structured choices', function () {
+      assert.throws(() =>
+        askUserSchema.parse({
+          questions: [{ question: 'Choose', options: ['One', 'Two'], isOther: false }],
+        })
+      );
+      assert.throws(() =>
+        askUserSchema.parse({
+          questions: [{ question: 'Choose', options: [{ label: 'One', description: 'Only one.' }], isOther: false }],
+        })
+      );
+    });
+  });
+
   describe('Codex platform environment', function () {
     it('prefers USERPROFILE over an unrelated HOME on Windows', function () {
       const environment = {
@@ -53,8 +94,17 @@ describe('Codex components', function () {
       assert.include(policyArguments(policy), 'features.code_mode_host=true');
     });
 
-    it('fails closed on unknown versions and malformed or incomplete capabilities', function () {
-      assert.throws(() => runtimePolicy('codex-cli 0.155.0', features), /尚未验证/);
+    it('accepts versions at or above the audited minimum and rejects older versions', function () {
+      assert.isTrue(isCodexVersionSupported('codex-cli 0.154.0-alpha.6.2'));
+      assert.isTrue(isCodexVersionSupported('codex-cli 0.155.0-alpha.9.2'));
+      assert.isTrue(isCodexVersionSupported('codex-cli 0.155.1'));
+      assert.isTrue(isCodexVersionSupported('codex-cli 0.160.0'));
+      assert.isFalse(isCodexVersionSupported('codex-cli 0.154.0-alpha.6.1'));
+      assert.isFalse(isCodexVersionSupported('codex-cli 0.153.9'));
+      assert.throws(() => runtimePolicy('codex-cli 0.153.9', features), /最低支持版本/);
+    });
+
+    it('fails closed on malformed or incomplete capabilities', function () {
       assert.throws(() => runtimePolicy('codex-cli 0.154.0-alpha.6.2', ''), /不完整/);
       assert.throws(() => runtimePolicy('codex-cli 0.154.0-alpha.6.2', features + '\nINVALID$ stable true'), /格式/);
     });
@@ -182,7 +232,8 @@ describe('Codex components', function () {
               if (!system) throw new Error('missing');
               return system;
             },
-            call: async () => {
+            call: async ({ command }: { command: string }) => {
+              if (!system && /(?:^|[\\/])codex(?:\.exe)?$/i.test(command) && !(command in paths)) throw new Error('missing');
               let read = false;
               return {
                 stdout: {

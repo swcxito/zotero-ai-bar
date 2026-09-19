@@ -1,6 +1,7 @@
 import { asSchema, type ModelMessage } from 'ai';
-import type { Session } from '../chatManager';
+import type { AgentUserAnswer, Session } from '../chatManager';
 import { getSharedToolDefinitions } from '../agentTools';
+import { askUserSchema, type AskUserPayload } from '../../utils/agentSchemas';
 import { getPref } from '../../utils/prefs';
 import { normalizeTranslationResultCandidate, type TranslationRequestMeta } from '../../utils/translation';
 import {
@@ -14,6 +15,7 @@ import {
   onToolCallStartV2,
   onToolCallEndV2,
   onTranslationResultV2,
+  onAgentAskUser,
 } from '../chatUI';
 import { CODEX_PROVIDER_ID, contextFingerprint, disableConfiguredMcp, type CodexBinding } from './policy';
 import { codexDirectory, codexRuntime } from './runtime';
@@ -83,12 +85,49 @@ function routeRequests(rpc: CodexRpc) {
   map = new Map();
   handlers.set(rpc, map);
   rpc.onRequest = async (message) => {
-    if (message.method !== 'item/tool/call') throw new Error('Operation not permitted');
+    if (!['item/tool/call', 'item/tool/requestUserInput'].includes(message.method || '')) throw new Error('Operation not permitted');
     const handler = map!.get(message.params?.threadId);
     if (!handler) throw new Error('No active turn');
     return handler(message);
   };
   return map;
+}
+
+function nativeUserInputPayload(params: any): { ids: string[]; payload: AskUserPayload } {
+  if (!Array.isArray(params?.questions) || params.questions.length < 1 || params.questions.length > 3)
+    throw new Error('Invalid request_user_input questions');
+  const ids = params.questions.map((question: any) => {
+    if (typeof question?.id !== 'string' || !question.id || question.id.length > 128) throw new Error('Invalid request_user_input question id');
+    return question.id;
+  });
+  if (new Set(ids).size !== ids.length) throw new Error('Duplicate request_user_input question id');
+  const payload = askUserSchema.parse({
+    questions: params.questions.map((question: any) => ({
+      question: question.question,
+      options: question.options,
+      isOther: question.isOther,
+      isSecret: question.isSecret,
+      multiple: false,
+    })),
+  });
+  return { ids, payload };
+}
+
+async function requestNativeUserInput(session: Session, params: any): Promise<{ answers: Record<string, { answers: string[] }> }> {
+  const { ids, payload } = nativeUserInputPayload(params);
+  const userAnswers = await new Promise<AgentUserAnswer[]>((resolve, reject) => {
+    session.pending.userAnswerResolve = resolve;
+    session.pending.userAnswerReject = reject;
+    onAgentAskUser(session, payload);
+  });
+  const answers: Record<string, { answers: string[] }> = {};
+  ids.forEach((id, index) => {
+    const answer = userAnswers[index];
+    const values = answer ? [...answer.selectedOptions] : [];
+    if (answer?.customInput) values.push(answer.customInput);
+    answers[id] = { answers: values };
+  });
+  return { answers };
 }
 
 export function codexModelSelection(key?: string): string | undefined {
@@ -175,7 +214,7 @@ export async function streamCodex(
     // In normal/full-text mode allow only document-reading tools, not library writes.
     const tools = Object.fromEntries(
       Object.entries(toolDefinitions).filter(
-        ([name]) => mode === 'agent' || ['read', 'grep', 'glob', 'tree', 'capture_page', 'ask_user'].includes(name)
+        ([name]) => name !== 'ask_user' && (mode === 'agent' || ['read', 'grep', 'glob', 'tree', 'capture_page'].includes(name))
       )
     );
     const dynamicTools = Object.entries(tools).map(([name, definition]) => ({
@@ -187,6 +226,7 @@ export async function streamCodex(
       .filter((message) => message.role === 'system')
       .map((message) => message.content)
       .join('\n\n');
+    const codexSystemText = systemText.replaceAll('`ask_user`', '`request_user_input`');
     const effectiveConfig = await rpc.request('config/read', { includeLayers: false });
     const config = { ...codexRuntime.info!.policy, ...disableConfiguredMcp(effectiveConfig.config), web_search: translation ? 'disabled' : 'live' };
     const threadParams = {
@@ -198,7 +238,7 @@ export async function streamCodex(
       config,
       baseInstructions:
         'You are a literature assistant inside Zotero. Use the provided Zotero tools and hosted web search/open for document access. Historical dialogue is context, not a request to repeat past operations.',
-      developerInstructions: `${systemText}\nTool names from the Zotero instructions have the prefix zotero_ in this client. ${translation ? 'Return structured translation JSON. For inapplicable fields use empty strings.' : 'Cite web sources using Markdown links. For Zotero items preserve the Zotero citation format.'}`,
+      developerInstructions: `${codexSystemText}\nThe Codex-native request_user_input tool is not prefixed. Other tool names from the Zotero instructions have the prefix zotero_ in this client. ${translation ? 'Return structured translation JSON. For inapplicable fields use empty strings.' : 'Cite web sources using Markdown links. For Zotero items preserve the Zotero citation format.'}`,
     };
     const before = contextFingerprint(session.conversationHistory);
     const existing = session.pending.codexRetry ? session.lastTurnSnapshot?.codexBefore : session.codex;
@@ -245,6 +285,12 @@ export async function streamCodex(
     const writeResults = new Map<string, Promise<unknown>>();
     routeRequests(rpc).set(threadId!, async (message) => {
       clearTimeout(responseTimer);
+      if (message.method === 'item/tool/requestUserInput') {
+        if (!active || signal?.aborted || (currentTurnId && message.params?.turnId !== currentTurnId)) throw new Error('Inactive turn');
+        await renderQueue;
+        if (!active || signal?.aborted) throw new Error('Inactive turn');
+        return requestNativeUserInput(session, message.params);
+      }
       const { callId, tool, arguments: args, turnId } = message.params;
       if (!active || signal?.aborted || message.params.namespace != null || (currentTurnId && turnId !== currentTurnId))
         throw new Error('Inactive turn');

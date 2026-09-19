@@ -77,7 +77,8 @@ export function getSharedToolDefinitions(): Record<string, SharedToolDefinition>
 // ───────────────────────────────────────────────────────────────────────────
 
 export const askUserTool = defineSharedTool({
-  description: 'Ask the user one or more clarifying questions. Each question provides 2–5 options plus a custom text input.',
+  description:
+    'Ask the user one or more clarifying questions. Options use label/description objects; set options to null for free text only. Free text alongside choices is enabled by default; set isOther to false to hide it.',
   inputSchema: askUserSchema,
   execute: async (input: AskUserPayload, options): Promise<AgentUserAnswer[]> => {
     const session = getSession(options);

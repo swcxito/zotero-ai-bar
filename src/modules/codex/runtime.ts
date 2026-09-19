@@ -420,14 +420,24 @@ class CodexRuntime {
     this.detecting = (async () => {
       this.status = codexString('codex-status-detecting', '正在检测运行时');
       this.diagnostics = [];
+      let policyRejected = false;
+      let runtimeDetected = false;
       this.changed();
       await prepareDirectories();
-      for (const candidate of await discoverCandidates()) {
+      const candidates = await discoverCandidates();
+      for (const candidate of candidates) {
         if (this.stopped) return undefined;
         try {
           const version = await runLocal(candidate.path, ['--version']);
+          runtimeDetected = true;
           const features = await runLocal(candidate.path, ['features', 'list']);
-          const policy = runtimePolicy(version, features);
+          let policy: Record<string, unknown>;
+          try {
+            policy = runtimePolicy(version, features);
+          } catch (error) {
+            policyRejected = true;
+            throw error;
+          }
           const help = await runLocal(candidate.path, ['app-server', '--help']);
           if (!help.includes('generate-json-schema'))
             throw new Error(codexString('codex-error-app-server-unsupported', '缺少 App Server 协议支持。'));
@@ -440,9 +450,13 @@ class CodexRuntime {
         }
       }
       this.info = undefined;
-      this.status = windowsStoreChatGPTDetected
-        ? codexString('codex-status-store-chatgpt-cli-required', '检测到微软商店版 ChatGPT，但当前无法直接访问其运行时，请安装 Codex CLI')
-        : codexString('codex-status-no-compatible-runtime', '没有找到兼容的 Codex 运行时');
+      this.status = policyRejected
+        ? codexString('codex-status-runtime-policy-rejected', '已找到 Codex 运行时，但当前版本或工具权限无法通过安全检查，请查看诊断信息。')
+        : runtimeDetected
+          ? codexString('codex-status-runtime-incompatible', '已找到 Codex 运行时，但无法启动或协议不兼容，请查看诊断信息。')
+          : windowsStoreChatGPTDetected
+            ? codexString('codex-status-store-chatgpt-cli-required', '检测到微软商店版 ChatGPT，但当前无法直接访问其运行时，请安装 Codex CLI')
+            : codexString('codex-status-no-compatible-runtime', '没有找到兼容的 Codex 运行时');
       this.changed();
       return undefined;
     })()

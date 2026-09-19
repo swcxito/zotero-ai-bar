@@ -104,6 +104,8 @@ codex-status-installing-cli = 正在安装 Codex CLI
 codex-status-cli-installed = Codex CLI 安装完成，正在重新检测运行时
 codex-status-ready = 运行时就绪
 codex-status-store-chatgpt-cli-required = 检测到微软商店版 ChatGPT，但当前无法直接访问其运行时，请安装 Codex CLI。
+codex-status-runtime-policy-rejected = 已找到 Codex 运行时，但当前版本或工具权限无法通过安全检查，请查看诊断信息。
+codex-status-runtime-incompatible = 已找到 Codex 运行时，但无法启动或协议不兼容，请查看诊断信息。
 codex-status-no-compatible-runtime = 没有找到兼容的 Codex 运行时
 codex-status-detect-failed = Codex 检测失败，请重新检测或手动选择
 codex-error-proxy-read = 无法读取 Zotero 网络代理，请检查网络设置后重试。
@@ -145,7 +147,7 @@ codex-error-response = Codex 错误 { $code }：请求失败。请检查登录�
 codex-error-event-handler = Codex 事件处理失败。
 codex-error-unsupported-request = Codex 不支持此操作。
 codex-error-connection-closed = Codex 连接已关闭。
-codex-error-version-unverified = Codex { $version } 尚未完成工具权限审计，已停用。已验证版本：{ $versions }
+codex-error-version-unverified = Codex { $version } 低于最低支持版本 { $minimum }，或版本格式无法识别，已停用。
 codex-error-features-incomplete = Codex 功能清单不完整，不能验证工具权限。
 codex-error-features-format = Codex 功能清单格式不兼容。
 codex-error-config-unreadable = 无法读取 Codex 的实际配置，已阻止创建会话。
@@ -198,6 +200,7 @@ thinking-card-title = 思考中
 thinking-card-done = 已思考
 
 tool-call-ask-user-custom-placeholder = 或输入自定义回答...
+tool-call-ask-user-input-placeholder = 请输入回答...
 tool-call-ask-user-submit = 提交
 
 agent-max-iterations-reached = Agent 已达到最大执行步数。您可以继续对话。

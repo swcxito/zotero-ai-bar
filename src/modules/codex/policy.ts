@@ -1,7 +1,11 @@
 import { codexString } from './i18n';
 
-/** Audited against a local mock Responses endpoint; never widen this to a semver range. */
-export const AUDITED_CODEX_VERSIONS = ['0.154.0-alpha.6.2'];
+/**
+ * Minimum version whose tool-permission contract has been audited against the
+ * local mock Responses endpoint. Newer versions must still expose the
+ * required feature set below, but do not need to be listed individually.
+ */
+export const MINIMUM_SUPPORTED_CODEX_VERSION = '0.154.0-alpha.6.2';
 export const CODEX_PROVIDER_ID = 'codex-subscription';
 
 export interface CodexBinding {
@@ -36,16 +40,66 @@ export function contextFingerprint(value: unknown): string {
   return `${text.length}:${hash >>> 0}`;
 }
 
+interface ParsedCodexVersion {
+  major: number;
+  minor: number;
+  patch: number;
+  prerelease: Array<number | string>;
+}
+
+function parseCodexVersion(value: string): ParsedCodexVersion | undefined {
+  const match = value.trim().match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/);
+  if (!match) return undefined;
+  const numbers = match.slice(1, 4).map(Number);
+  if (numbers.some((number) => !Number.isSafeInteger(number))) return undefined;
+  return {
+    major: numbers[0],
+    minor: numbers[1],
+    patch: numbers[2],
+    prerelease: match[4] ? match[4].split('.').map((part) => (/^\d+$/.test(part) ? Number(part) : part)) : [],
+  };
+}
+
+function compareCodexVersions(left: ParsedCodexVersion, right: ParsedCodexVersion): number {
+  for (const key of ['major', 'minor', 'patch'] as const) {
+    if (left[key] !== right[key]) return left[key] < right[key] ? -1 : 1;
+  }
+  if (!left.prerelease.length || !right.prerelease.length) {
+    if (!left.prerelease.length && !right.prerelease.length) return 0;
+    return left.prerelease.length ? -1 : 1;
+  }
+  const length = Math.max(left.prerelease.length, right.prerelease.length);
+  for (let i = 0; i < length; i++) {
+    if (i >= left.prerelease.length) return -1;
+    if (i >= right.prerelease.length) return 1;
+    const a = left.prerelease[i];
+    const b = right.prerelease[i];
+    if (a === b) continue;
+    if (typeof a === 'number' && typeof b === 'number') return a < b ? -1 : 1;
+    if (typeof a === 'number') return -1;
+    if (typeof b === 'number') return 1;
+    return a < b ? -1 : 1;
+  }
+  return 0;
+}
+
+export function isCodexVersionSupported(versionOutput: string): boolean {
+  const version = versionOutput.trim().replace(/^codex-cli\s+/, '');
+  const actual = parseCodexVersion(version);
+  const minimum = parseCodexVersion(MINIMUM_SUPPORTED_CODEX_VERSION);
+  return !!actual && !!minimum && compareCodexVersions(actual, minimum) >= 0;
+}
+
 export function runtimePolicy(versionOutput: string, featureOutput: string): Record<string, unknown> {
   const version = versionOutput.trim().replace(/^codex-cli\s+/, '');
-  if (!AUDITED_CODEX_VERSIONS.includes(version)) {
+  if (!isCodexVersionSupported(version)) {
     throw new Error(
       codexString(
         'codex-error-version-unverified',
-        `Codex ${version}: 此版本尚未验证工具权限，已停用。已验证版本：${AUDITED_CODEX_VERSIONS.join(', ')}`,
+        `Codex ${version}: 低于最低支持版本 ${MINIMUM_SUPPORTED_CODEX_VERSION}，或版本格式无法识别，已停用。`,
         {
           version,
-          versions: AUDITED_CODEX_VERSIONS.join(', '),
+          minimum: MINIMUM_SUPPORTED_CODEX_VERSION,
         }
       )
     );

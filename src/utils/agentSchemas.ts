@@ -7,9 +7,25 @@
 
 import { z } from 'zod';
 
+const askUserOptionSchema = z.object({
+  label: z.string().min(1).describe('Short label shown for this option.'),
+  description: z.string().describe('One short sentence explaining the option or its impact.'),
+});
+
 const askUserQuestionSchema = z.object({
   question: z.string().describe('The clarifying question to ask the user.'),
-  options: z.array(z.string()).min(2).max(5).describe('2–5 options for the user to choose from.'),
+  options: z
+    .array(askUserOptionSchema)
+    .min(2)
+    .max(5)
+    .nullable()
+    .describe('2–5 structured options, or null to request a free-text answer without showing choices.'),
+  isOther: z
+    .boolean()
+    .optional()
+    .default(true)
+    .describe('When options are present, whether to show an additional free-text answer. Defaults to true and is ignored when options is null.'),
+  isSecret: z.boolean().optional().default(false).describe('Whether free-text input should be masked while the user types.'),
   multiple: z.boolean().optional().describe('Whether the user can select multiple options.'),
 });
 

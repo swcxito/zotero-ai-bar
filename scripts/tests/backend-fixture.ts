@@ -37,9 +37,21 @@ export function onTranslationResultV2(session: any, output: any) {
   session._text = output.translatedText;
   state.translation = output;
 }
+export function onAgentAskUser(session: any, payload: any) {
+  state.userInputQuestions = payload.questions;
+  const answers =
+    state.userInputAnswers ||
+    payload.questions.map((question: any) => ({
+      question: question.question,
+      selectedOptions: question.options?.length ? [question.options[0].label] : [],
+      customInput: question.options === null ? 'Free-text answer' : undefined,
+    }));
+  queueMicrotask(() => session.pending.userAnswerResolve?.(answers));
+}
 
 export function getSharedToolDefinitions() {
   return {
+    ask_user: { description: 'Ask', inputSchema: z.object({}), execute: async () => [] },
     read: { description: 'Read', inputSchema: z.object({ itemId: z.number().int() }), execute: async () => ({ text: 'attachment text' }) },
     add_paper: { description: 'Add', inputSchema: z.object({ doi: z.string() }), execute: async () => ({ id: ++state.writes }) },
     capture_page: {
@@ -59,6 +71,8 @@ export class FakeServer {
   finalOnly = false;
   reasoningSummary?: string;
   webSearch = false;
+  userInputQuestions?: any[];
+  userInputResponse?: any;
   runtimeError?: { error: any; willRetry?: boolean };
   status = 'completed';
   disconnect = false;
@@ -113,6 +127,18 @@ export class FakeServer {
       this.emit('item/completed', { threadId, turnId, item });
     }
     if (this.runtimeError) this.emit('error', { threadId, ...this.runtimeError });
+    if (this.userInputQuestions) {
+      const id = 'request_user_input_1';
+      const reply = new Promise<any>((resolve) => this.serverRequests.set(id, resolve));
+      this.rpc.feed(
+        JSON.stringify({
+          id,
+          method: 'item/tool/requestUserInput',
+          params: { threadId, turnId, itemId: 'item_user_input_1', questions: this.userInputQuestions, isBlocking: true, autoResolutionMs: null },
+        }) + '\n'
+      );
+      this.userInputResponse = await reply;
+    }
     for (const [i, tool] of this.tools.entries()) {
       const id = `request_${i}`;
       const reply = new Promise((resolve) => this.serverRequests.set(id, resolve));
@@ -162,6 +188,8 @@ export function resetFixture() {
     reasoning: [],
     writes: 0,
     translation: undefined,
+    userInputAnswers: undefined,
+    userInputQuestions: undefined,
     server: new FakeServer(),
   });
   Object.assign(globalThis, {

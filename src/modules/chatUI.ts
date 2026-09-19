@@ -34,6 +34,7 @@ import { getItemFullTextByPage } from '../utils/zoteroItemAccess';
 import { normalizePartOfSpeech, type TranslationResult } from '../utils/translation';
 import { createUserMessageBubble } from '../components/userBubble';
 import { captureAssistantPreviewSnapshot, setChatTranslationPreview } from '../components/chatTurnNavigator';
+import type { AskUserPayload } from '../utils/agentSchemas';
 
 Zotero.debug('[zaibar-chatUI] module loaded');
 
@@ -1656,7 +1657,7 @@ export async function consumeAgentStream(
   };
 }
 
-export function onAgentAskUser(session: Session, payload: any) {
+export function onAgentAskUser(session: Session, payload: AskUserPayload) {
   Zotero.debug('[zaibar-chatui] onAgentAskUser questions=' + (payload.questions?.length || 0));
   const pop = session.pending.messagePop;
   if (!pop) {
@@ -1676,11 +1677,7 @@ export function onAgentAskUser(session: Session, payload: any) {
   }
 
   const doc = pop.ownerDocument!;
-  const questions: Array<{
-    question: string;
-    options: string[];
-    multiple?: boolean;
-  }> = payload.questions || [];
+  const questions = payload.questions || [];
 
   const wrapper = doc.createElement('div');
   wrapper.classList.add(
@@ -1706,26 +1703,29 @@ export function onAgentAskUser(session: Session, payload: any) {
     qTitle.textContent = q.question;
     qWrapper.appendChild(qTitle);
 
+    const options = q.options || [];
+    const hasOptions = q.options !== null;
     const inputType = q.multiple ? 'checkbox' : 'radio';
     const groupName = `agent-ask-${session.id}-${qIndex}`;
+    const customOptIndex = options.length; // virtual index for the custom input option
+    let customAnswerInput: HTMLInputElement | undefined;
 
-    const customOptIndex = q.options.length; // virtual index for the custom input option
-
-    q.options.forEach((option, optIndex) => {
+    options.forEach((option, optIndex) => {
       const label = doc.createElement('label');
-      label.classList.add('flex', 'items-center', 'gap-2', 'text-sm', 'text-slate-700', 'dark:text-zinc-200', 'mb-1', 'cursor-pointer');
+      label.classList.add('flex', 'items-start', 'gap-2', 'text-sm', 'text-slate-700', 'dark:text-zinc-200', 'mb-2', 'cursor-pointer');
 
-      const input = doc.createElement('input') as HTMLInputElement;
+      const input = ztoolkit.UI.createElement(doc, 'input', { namespace: 'html' }) as HTMLInputElement;
       input.type = inputType;
       input.name = groupName;
-      input.value = option;
+      input.value = option.label;
+      input.classList.add('mt-0.5', 'flex-shrink-0');
       input.addEventListener('change', () => {
         if (inputType === 'radio') {
           state[qIndex].selected.clear();
           state[qIndex].selected.add(optIndex);
           // clear custom input when a preset option is selected
           state[qIndex].customInput = '';
-          customInput.value = '';
+          if (customAnswerInput) customAnswerInput.value = '';
         } else {
           if (input.checked) {
             state[qIndex].selected.add(optIndex);
@@ -1736,69 +1736,82 @@ export function onAgentAskUser(session: Session, payload: any) {
       });
 
       label.appendChild(input);
-      label.appendChild(doc.createTextNode(option));
+      const optionText = doc.createElement('span');
+      optionText.classList.add('flex', 'min-w-0', 'flex-col');
+      const optionLabel = doc.createElement('span');
+      optionLabel.classList.add('font-medium');
+      optionLabel.textContent = option.label;
+      optionText.appendChild(optionLabel);
+      if (option.description) {
+        const optionDescription = doc.createElement('span');
+        optionDescription.classList.add('text-xs', 'text-slate-500', 'dark:text-zinc-400');
+        optionDescription.textContent = option.description;
+        optionText.appendChild(optionDescription);
+      }
+      label.appendChild(optionText);
       qWrapper.appendChild(label);
     });
 
-    // Always show custom input with a radio/checkbox before it
-    const customLabel = doc.createElement('label');
-    customLabel.classList.add('flex', 'items-center', 'gap-2', 'text-sm', 'text-slate-700', 'dark:text-zinc-200', 'mb-1', 'cursor-pointer');
+    if (!hasOptions || q.isOther) {
+      const customLabel = doc.createElement('label');
+      customLabel.classList.add('flex', 'items-center', 'gap-2', 'text-sm', 'text-slate-700', 'dark:text-zinc-200', 'mb-1');
 
-    const customRadio = doc.createElement('input') as HTMLInputElement;
-    customRadio.type = inputType;
-    customRadio.name = groupName;
-    customRadio.value = '__custom__';
+      let customSelector: HTMLInputElement | undefined;
+      if (hasOptions) {
+        customSelector = ztoolkit.UI.createElement(doc, 'input', { namespace: 'html' }) as HTMLInputElement;
+        customSelector.type = inputType;
+        customSelector.name = groupName;
+        customSelector.value = '__custom__';
+        customSelector.addEventListener('change', () => {
+          if (inputType === 'radio') {
+            state[qIndex].selected.clear();
+            state[qIndex].selected.add(customOptIndex);
+          } else if (customSelector!.checked) {
+            state[qIndex].selected.add(customOptIndex);
+          } else {
+            state[qIndex].selected.delete(customOptIndex);
+          }
+        });
+        customLabel.appendChild(customSelector);
+      }
 
-    const customInput = doc.createElement('input') as HTMLInputElement;
-    customInput.type = 'text';
-    customInput.classList.add(
-      'flex-1',
-      'px-2',
-      'py-1',
-      'text-sm',
-      'rounded',
-      'border',
-      'border-slate-300',
-      'dark:border-zinc-600',
-      'bg-white',
-      'dark:bg-zinc-900',
-      'text-slate-800',
-      'dark:text-zinc-100'
-    );
-    customInput.placeholder = getString('tool-call-ask-user-custom-placeholder');
+      const customInput = ztoolkit.UI.createElement(doc, 'input', { namespace: 'html' }) as HTMLInputElement;
+      customAnswerInput = customInput;
+      customInput.type = q.isSecret ? 'password' : 'text';
+      customInput.classList.add(
+        'flex-1',
+        'px-2',
+        'py-1',
+        'text-sm',
+        'rounded',
+        'border',
+        'border-slate-300',
+        'dark:border-zinc-600',
+        'bg-white',
+        'dark:bg-zinc-900',
+        'text-slate-800',
+        'dark:text-zinc-100'
+      );
+      customInput.placeholder = getString(hasOptions ? 'tool-call-ask-user-custom-placeholder' : 'tool-call-ask-user-input-placeholder');
 
-    customRadio.addEventListener('change', () => {
-      if (inputType === 'radio') {
-        state[qIndex].selected.clear();
-        state[qIndex].selected.add(customOptIndex);
-      } else {
-        if (customRadio.checked) {
-          state[qIndex].selected.add(customOptIndex);
-        } else {
-          state[qIndex].selected.delete(customOptIndex);
+      customInput.addEventListener('focus', () => {
+        if (customSelector && !customSelector.checked) {
+          customSelector.checked = true;
+          customSelector.dispatchEvent(new Event('change'));
         }
-      }
-    });
+      });
+      customInput.addEventListener('input', () => {
+        state[qIndex].customInput = customInput.value;
+      });
 
-    customInput.addEventListener('focus', () => {
-      // Auto-select the custom radio/checkbox when user starts typing
-      if (!customRadio.checked) {
-        customRadio.checked = true;
-        customRadio.dispatchEvent(new Event('change'));
-      }
-    });
-    customInput.addEventListener('input', () => {
-      state[qIndex].customInput = customInput.value;
-    });
-
-    customLabel.appendChild(customRadio);
-    customLabel.appendChild(customInput);
-    qWrapper.appendChild(customLabel);
+      customLabel.appendChild(customInput);
+      qWrapper.appendChild(customLabel);
+    }
 
     wrapper.appendChild(qWrapper);
   });
 
-  const submitBtn = doc.createElement('button');
+  const submitBtn = ztoolkit.UI.createElement(doc, 'button', { namespace: 'html' }) as HTMLButtonElement;
   submitBtn.textContent = getString('tool-call-ask-user-submit');
   submitBtn.classList.add(
     'px-3',
@@ -1821,9 +1834,10 @@ export function onAgentAskUser(session: Session, payload: any) {
     }
 
     const answers = questions.map((q, i) => {
+      const options = q.options || [];
       const selectedIndices = Array.from(state[i].selected).sort((a, b) => a - b);
-      const selectedOptions = selectedIndices.filter((idx) => idx < q.options.length).map((idx) => q.options[idx]);
-      const hasCustom = selectedIndices.includes(q.options.length);
+      const selectedOptions = selectedIndices.filter((idx) => idx < options.length).map((idx) => options[idx].label);
+      const hasCustom = q.options === null || (q.isOther && selectedIndices.includes(options.length));
       return {
         question: q.question,
         selectedOptions,

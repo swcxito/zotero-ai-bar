@@ -104,6 +104,8 @@ codex-status-installing-cli = Installing Codex CLI
 codex-status-cli-installed = Codex CLI installed; detecting runtime
 codex-status-ready = Runtime ready
 codex-status-store-chatgpt-cli-required = Microsoft Store ChatGPT was detected, but its runtime is not directly accessible. Install Codex CLI to continue.
+codex-status-runtime-policy-rejected = A Codex runtime was found, but its version or tool permissions failed the security check. See diagnostics for details.
+codex-status-runtime-incompatible = A Codex runtime was found, but it could not be started or its protocol was incompatible. See diagnostics for details.
 codex-status-no-compatible-runtime = No compatible Codex runtime found
 codex-status-detect-failed = Codex detection failed. Try again or choose a file manually.
 codex-error-proxy-read = Could not read Zotero's network proxy. Check your network settings and try again.
@@ -145,7 +147,7 @@ codex-error-response = Codex error { $code }. Check sign-in, model, and runtime 
 codex-error-event-handler = Codex event handling failed.
 codex-error-unsupported-request = This Codex operation is not supported.
 codex-error-connection-closed = Codex connection closed.
-codex-error-version-unverified = Codex { $version } has not been audited for tool permissions and was disabled. Audited versions: { $versions }
+codex-error-version-unverified = Codex { $version } is below the minimum supported version { $minimum }, or its version format is unrecognized, so it was disabled.
 codex-error-features-incomplete = The Codex feature list is incomplete, so permissions cannot be verified.
 codex-error-features-format = The Codex feature list has an incompatible format.
 codex-error-config-unreadable = Could not read the effective Codex configuration, so the session was blocked.
@@ -198,6 +200,7 @@ thinking-card-title = Thinking
 thinking-card-done = Thought
 
 tool-call-ask-user-custom-placeholder = Or type your own answer...
+tool-call-ask-user-input-placeholder = Type your answer...
 tool-call-ask-user-submit = Submit
 
 agent-max-iterations-reached = Agent reached the maximum number of steps. You may continue the conversation.

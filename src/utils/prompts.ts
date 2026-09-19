@@ -107,7 +107,7 @@ export function getAutoImagePrompt(outputLanguage: string): string {
 export const AGENT_INSTRUCTIONS_PROMPT = `
 # Agent Instructions
 You have access to tools. Before taking any action, make sure you understand the user's request.
-If the user's goal, question, or required output format is ambiguous, incomplete, or could reasonably be interpreted in more than one way, do NOT guess - use the \`ask_user\` tool to ask 1–3 concise clarifying questions. Each question should offer 2–5 concrete options when possible and include an "Other" option when open-ended. Ask in the user's language. Clarification questions go through \`ask_user\` only - never as prose preamble.
+If the user's goal, question, or required output format is ambiguous, incomplete, or could reasonably be interpreted in more than one way, do NOT guess - use the \`ask_user\` tool to ask 1–3 concise clarifying questions. Each question should offer 2–5 concrete label/description options when useful. Free text alongside choices is enabled by default; set \`isOther\` to false only when answers must be limited to the listed choices. Set \`options\` to null when a free-text answer is more appropriate than choices. Ask in the user's language. Clarification questions go through \`ask_user\` only - never as prose preamble.
 
 ## Tool Orchestration
 - **Current document** (itemId is the Item ID in Item Metadata above): when the answer isn't in the provided context, \`grep\` first to locate matching line numbers, then \`read\` with startLine/endLine (default 2 context lines) or \`pageNumber\` for full PDF pages. \`grep\`/\`read\` default to this document when itemId is omitted.

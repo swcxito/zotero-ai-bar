@@ -112,8 +112,51 @@ describe('Codex chat backend', function () {
   it('Agent mode exposes the registered Zotero tools through the dynamic bridge', async function () {
     const session = sessionFixture();
     await streamCodex(messagesFor(session), session);
-    const names = state.server.requests.find((r: any) => r.method === 'thread/start').params.dynamicTools.map((t: any) => t.name);
+    const start = state.server.requests.find((r: any) => r.method === 'thread/start');
+    const names = start.params.dynamicTools.map((t: any) => t.name);
     assert.includeMembers(names, ['zotero_read', 'zotero_add_paper', 'zotero_capture_page']);
+    assert.notInclude(names, 'zotero_ask_user');
+    assert.include(start.params.developerInstructions, 'Codex-native request_user_input tool is not prefixed');
+  });
+
+  it('handles native request_user_input with choices and free text', async function () {
+    state.server.userInputQuestions = [
+      {
+        id: 'scope',
+        header: 'Scope',
+        question: 'Which scope should be used?',
+        options: [
+          { label: 'Current item', description: 'Use only the open item.' },
+          { label: 'Library', description: 'Search the whole library.' },
+        ],
+        isOther: true,
+        isSecret: false,
+      },
+      {
+        id: 'topic',
+        header: 'Topic',
+        question: 'What topic should be searched?',
+        options: null,
+        isOther: false,
+        isSecret: false,
+      },
+    ];
+    state.userInputAnswers = [
+      { question: 'Which scope should be used?', selectedOptions: ['Library'] },
+      { question: 'What topic should be searched?', selectedOptions: [], customInput: 'Memory consolidation' },
+    ];
+    const session = sessionFixture();
+    await streamCodex(messagesFor(session), session);
+    assert.deepEqual(state.userInputQuestions[0].options[1], {
+      label: 'Library',
+      description: 'Search the whole library.',
+    });
+    assert.deepEqual(state.server.userInputResponse.result, {
+      answers: {
+        scope: { answers: ['Library'] },
+        topic: { answers: ['Memory consolidation'] },
+      },
+    });
   });
 
   it('renders reasoning summaries before hosted web search and the final reply', async function () {
