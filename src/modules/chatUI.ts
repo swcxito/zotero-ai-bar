@@ -1207,9 +1207,7 @@ export function buildTranslateDetails(doc: Document, output: TranslationResult |
               ? meaning.translatedText.filter((text: any) => typeof text === 'string' && Boolean(text.trim()))
               : [],
           }))
-          .filter((meaning: any): meaning is { pos: string; translatedText: string[] } =>
-            Boolean(meaning.pos && meaning.translatedText.length > 0)
-          )
+          .filter((meaning: any): meaning is { pos: string; translatedText: string[] } => Boolean(meaning.pos && meaning.translatedText.length > 0))
       : [];
     if (validOtherMeanings.length > 0) {
       const divider = doc.createElement('div');

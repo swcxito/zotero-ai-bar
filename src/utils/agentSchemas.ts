@@ -135,10 +135,7 @@ export type AddPaperPayload = z.infer<typeof addPaperSchema>;
 
 const otherMeaningSchema = z.object({
   pos: z.string().describe('Part of speech ONLY, e.g. "adj.", "n.", "v.". No definition text here.'),
-  translatedText: z
-    .array(z.string().min(1))
-    .min(1)
-    .describe('One or more translated meanings ONLY, with no part-of-speech prefix.'),
+  translatedText: z.array(z.string().min(1)).min(1).describe('One or more translated meanings ONLY, with no part-of-speech prefix.'),
 });
 
 export const translateSchema = z.object({

@@ -2,10 +2,7 @@ import { z } from 'zod';
 
 const otherMeaningSchema = z.object({
   pos: z.string().min(1).describe('English part-of-speech abbreviation, such as n., v., adj., or adv.'),
-  translatedText: z
-    .array(z.string().min(1))
-    .min(1)
-    .describe('One or more concise alternative meanings written in the requested target language.'),
+  translatedText: z.array(z.string().min(1)).min(1).describe('One or more concise alternative meanings written in the requested target language.'),
 });
 
 const translationBaseSchema = z.object({
