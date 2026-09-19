@@ -1,6 +1,7 @@
 import { assert } from 'chai';
 import {
   buildQwenMtPrompt,
+  classifyTranslationStreamPrefix,
   isJsonResponseFormatCompatibilityError,
   isQwenMtModel,
   mergeQwenMtStreamChunks,
@@ -38,6 +39,16 @@ describe('LLM compatibility helpers', function () {
 
     it('does not hide unrelated provider errors', function () {
       assert.isFalse(isJsonResponseFormatCompatibilityError(new Error('Authentication failed')));
+    });
+
+    it('distinguishes plain translations from structured output before previewing them', function () {
+      assert.equal(classifyTranslationStreamPrefix(''), 'pending');
+      assert.equal(classifyTranslationStreamPrefix('   '), 'pending');
+      assert.equal(classifyTranslationStreamPrefix('{"textType":"text"'), 'structured');
+      assert.equal(classifyTranslationStreamPrefix('```j'), 'pending');
+      assert.equal(classifyTranslationStreamPrefix('```json\n{'), 'structured');
+      assert.equal(classifyTranslationStreamPrefix('这是流式译文'), 'plain');
+      assert.equal(classifyTranslationStreamPrefix('Translated text'), 'plain');
     });
   });
 

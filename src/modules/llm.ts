@@ -31,7 +31,6 @@ import {
   onReasoningEndV2,
   onTranslationResultV2,
   onTranslationPartialV2,
-  clearTranslationPreviewV2,
 } from './chatUI';
 import { ensureWebStreamsGlobals } from '../utils/webStreamsGlobals';
 import {
@@ -462,6 +461,7 @@ export async function streamLLMV2(
 type TranslationAttempt = {
   output?: TranslationResult;
   rawText: string;
+  plainText: boolean;
   partialTranslatedText?: string;
   partialOutput?: Record<string, any>;
   usage?: any;
@@ -535,6 +535,19 @@ export async function streamTranslationV2(
       return;
     }
 
+    const firstPlainText = first.plainText ? extractTranslationFallback(first.rawText) : undefined;
+    if (firstPlainText) {
+      logTranslationDebug('using-first-attempt-plain-text', { fallbackLength: firstPlainText.length });
+      onTranslationResultV2(session, {
+        textType: 'text',
+        originalText: request.selectedText,
+        targetLanguage: request.targetLanguage,
+        translatedText: firstPlainText,
+      });
+      onLLMStreamEndV2(session, first.usage);
+      return;
+    }
+
     Zotero.debug('[zaibar-llm] structured translation invalid; retrying once');
     const second = await runTranslationAttempt({
       model,
@@ -579,8 +592,12 @@ export async function streamTranslationV2(
       throw new Error('The model did not return a usable translation.');
     }
     logTranslationDebug('using-plain-text-fallback', { fallbackLength: fallback.length });
-    clearTranslationPreviewV2(session);
-    await onLLMStreamUpdateV2({ session, fullText: fallback, force: true });
+    onTranslationResultV2(session, {
+      textType: 'text',
+      originalText: request.selectedText,
+      targetLanguage: request.targetLanguage,
+      translatedText: fallback,
+    });
     onLLMStreamEndV2(session, second.usage ?? first.usage);
   } catch (error: any) {
     if (isTranslationAbort(session, error)) {
@@ -636,11 +653,14 @@ async function streamQwenMtTranslation(params: {
           break;
         case 'text-delta':
           consumeQwenMtStreamChunk(streamState, part.text);
-          // Do not render until the first two meaningful chunks tell us
-          // whether this endpoint appends deltas or replaces with a
-          // cumulative prefix. This avoids showing a duplicated preview while
-          // the stream mode is still unknown.
-          if (streamState.mode) await onLLMStreamUpdateV2({ session: params.session, fullText: streamState.text });
+          if (streamState.text.trim()) {
+            onTranslationPartialV2(params.session, {
+              textType: 'text',
+              originalText: params.selectedText,
+              targetLanguage: params.targetLanguage,
+              translatedText: streamState.text,
+            });
+          }
           break;
         case 'error':
           streamError = (part as any).error ?? part;
@@ -754,6 +774,7 @@ async function runSchemaTranslationAttempt(params: {
   });
 
   let rawText = '';
+  let plainText = false;
   let partialTranslatedText: string | undefined;
   let partialOutput: Record<string, any> | undefined;
   let reasoningActive = false;
@@ -784,6 +805,11 @@ async function runSchemaTranslationAttempt(params: {
         break;
       case 'text-delta': {
         rawText += part.text;
+        if (!plainText && classifyTranslationStreamPrefix(rawText) === 'plain') plainText = true;
+        if (plainText) {
+          renderPlainTranslationPreview(params.session, params.selectedText, rawText);
+          break;
+        }
         const objectStart = rawText.indexOf('{');
         const partialSource = objectStart >= 0 ? rawText.slice(objectStart) : rawText;
         const partial = await parsePartialJson(partialSource);
@@ -847,7 +873,7 @@ async function runSchemaTranslationAttempt(params: {
       warnings: previewTranslationRawText(safeStringify(warnings)),
     });
   }
-  const attempt = { output, rawText, partialTranslatedText, partialOutput, usage };
+  const attempt = { output, rawText, plainText, partialTranslatedText, partialOutput, usage };
   logTranslationDebug('response-format-attempt-complete', {
     strict: params.strict,
     partialUpdateCount,
@@ -893,6 +919,7 @@ async function runJsonTextTranslationAttempt(params: {
   });
 
   let rawText = '';
+  let plainText = false;
   let partialTranslatedText: string | undefined;
   let partialOutput: Record<string, any> | undefined;
   for await (const part of result.fullStream) {
@@ -929,6 +956,11 @@ async function runJsonTextTranslationAttempt(params: {
       logTranslationDebug('json-text-first-delta', { strict: params.strict, deltaLength: part.text.length });
     }
     rawText += part.text;
+    if (!plainText && classifyTranslationStreamPrefix(rawText) === 'plain') plainText = true;
+    if (plainText) {
+      renderPlainTranslationPreview(params.session, params.selectedText, rawText);
+      continue;
+    }
     const objectStart = rawText.indexOf('{');
     const partialSource = objectStart >= 0 ? rawText.slice(objectStart) : rawText;
     const partial = await parsePartialJson(partialSource);
@@ -954,7 +986,7 @@ async function runJsonTextTranslationAttempt(params: {
   } catch {
     // Usage is optional.
   }
-  const attempt = { output: repairTranslationResult(rawText), rawText, partialTranslatedText, partialOutput, usage };
+  const attempt = { output: repairTranslationResult(rawText), rawText, plainText, partialTranslatedText, partialOutput, usage };
   logTranslationDebug('json-text-attempt-complete', {
     strict: params.strict,
     textDeltaCount,
@@ -981,11 +1013,38 @@ function logTranslationAttempt(event: string, attempt: TranslationAttempt, resol
 function describeTranslationAttempt(attempt: TranslationAttempt): Record<string, unknown> {
   return {
     hasValidatedOutput: Boolean(attempt.output),
+    plainText: attempt.plainText,
     rawTextLength: attempt.rawText.length,
     rawTextPreview: previewTranslationRawText(attempt.rawText),
     partialTranslatedTextLength: attempt.partialTranslatedText?.length ?? 0,
     partialKeys: attempt.partialOutput ? Object.keys(attempt.partialOutput) : [],
   };
+}
+
+export type TranslationStreamPrefixKind = 'pending' | 'structured' | 'plain';
+
+/** Classify a streamed translation locally before exposing any raw JSON. */
+export function classifyTranslationStreamPrefix(rawText: string): TranslationStreamPrefixKind {
+  const value = rawText.trimStart();
+  if (!value) return 'pending';
+  if (value.startsWith('{') || value.startsWith('[')) return 'structured';
+
+  // Wait while a possible Markdown JSON fence is still incomplete. Once the
+  // opening fence is known, keep it hidden and let the JSON repair path parse it.
+  const lower = value.toLowerCase();
+  if ('```json'.startsWith(lower)) return 'pending';
+  if (lower.startsWith('```')) return 'structured';
+  return 'plain';
+}
+
+function renderPlainTranslationPreview(session: Session, selectedText: string, rawText: string): void {
+  const translatedText = rawText.trimStart();
+  if (!translatedText) return;
+  onTranslationPartialV2(session, {
+    textType: 'text',
+    originalText: selectedText,
+    translatedText,
+  });
 }
 
 function previewTranslationRawText(rawText: string): string {
