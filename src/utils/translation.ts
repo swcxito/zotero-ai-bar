@@ -113,6 +113,74 @@ export interface TranslationRequestMeta {
   modelKey?: string;
 }
 
+const CJK_WORD_RE = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{M}々〆ヵヶー]+$/u;
+const LEXICAL_WORD_RE = /^[\p{L}\p{M}\p{N}]+(?:['’ʼ\-‐‑][\p{L}\p{M}\p{N}]+)*$/u;
+const DICTIONARY_SEGMENTATION_SCRIPTS: ReadonlyArray<[RegExp, string, number]> = [
+  [/\p{Script=Thai}/u, 'th', 8],
+  [/\p{Script=Lao}/u, 'lo', 8],
+  [/\p{Script=Khmer}/u, 'km', 12],
+  [/\p{Script=Myanmar}/u, 'my', 9],
+];
+
+/**
+ * Determine whether a selection is one lexical word without consulting a model.
+ *
+ * Space-delimited writing systems use a Unicode-aware token rule. CJK text and
+ * scripts that normally omit spaces need their own branches: CJK accepts one
+ * local word segment (plus compact four-character compounds), while Southeast
+ * Asian scripts use the runtime's locale dictionary segmenter.
+ */
+export function isSingleWordSelection(text: string): boolean {
+  const value = text.trim().normalize('NFC');
+  if (!value || /\s/u.test(value) || !/\p{L}/u.test(value)) return false;
+
+  if (CJK_WORD_RE.test(value)) {
+    const segmentCount = countWordSegments(value, /\p{Script=Hiragana}|\p{Script=Katakana}/u.test(value) ? 'ja' : 'zh');
+    return segmentCount === 1 || Array.from(value).length <= 4;
+  }
+
+  // Reject sentence punctuation and symbols before dictionary segmentation;
+  // Intl.Segmenter intentionally ignores them when reporting word-like parts.
+  if (!LEXICAL_WORD_RE.test(value)) return false;
+
+  for (const [script, locale, compactWordLimit] of DICTIONARY_SEGMENTATION_SCRIPTS) {
+    if (script.test(value)) {
+      // Firefox/ICU versions differ in which dictionaries they ship. Keep a
+      // conservative script-specific fallback for common compact words.
+      return countWordSegments(value, locale) === 1 || Array.from(value).length <= compactWordLimit;
+    }
+  }
+
+  return true;
+}
+
+function countWordSegments(text: string, locale: string): number {
+  const Segmenter = (
+    Intl as typeof Intl & {
+      Segmenter?: new (
+        locale: string,
+        options: { granularity: 'word' }
+      ) => {
+        segment(input: string): Iterable<{ isWordLike?: boolean }>;
+      };
+    }
+  ).Segmenter;
+  if (!Segmenter) return 0;
+  return Array.from(new Segmenter(locale, { granularity: 'word' }).segment(text)).filter((segment) => segment.isWordLike).length;
+}
+
+/** Resolve the per-request model override from deterministic settings and text classification. */
+export function getTranslationModelKey(params: {
+  selectedText: string;
+  useAlternativeModel: boolean;
+  useModelForWords: boolean;
+  modelKey: string;
+}): string | undefined {
+  if (!params.useAlternativeModel || !params.modelKey) return undefined;
+  if (!params.useModelForWords && isSingleWordSelection(params.selectedText)) return undefined;
+  return params.modelKey;
+}
+
 export const TRANSLATION_SYSTEM_PROMPT = 'You are a dedicated translation engine.';
 
 export function buildStructuredTranslationPrompt(targetLanguage: string): string {

@@ -39,6 +39,7 @@ declare namespace _ZoteroTypes {
       "translate.enableAuto": boolean;
       "translate.extendContext": string;
       "translate.useAlternativeModel": boolean;
+      "translate.useModelForWords": boolean;
       "translate.modelId": string;
       "translate.targetLanguage": string;
       "translate.thinkingDepth": string;

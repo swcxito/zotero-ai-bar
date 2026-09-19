@@ -234,6 +234,7 @@ export type FluentMessageId =
   | 'pref-translate-thinking-depth-minimum'
   | 'pref-ui'
   | 'pref-use-translate-model'
+  | 'pref-use-translate-model-for-words'
   | 'prefs-title'
   | 'reader-bar-ask-placeholder'
   | 'reader-bar-expand'

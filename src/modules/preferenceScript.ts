@@ -203,6 +203,7 @@ async function updatePrefsUI() {
   }
 
   const useTranslateModelCheckbox = doc.querySelector(makeId('use-translate-model')) as XUL.Checkbox;
+  const useTranslateModelForWordsCheckbox = doc.querySelector(makeId('use-translate-model-for-words')) as XUL.Checkbox;
   doc.defaultView?.addEventListener('focus', () => {
     populateSelectorFromV2(modelSelector, doc);
     setInitialSelectorValue(modelSelector, doc);
@@ -222,6 +223,7 @@ async function updatePrefsUI() {
       }
       useTranslateModelCheckbox.disabled = !hasAlternativeModels;
       translateModelSelector.disabled = !useAlternative;
+      if (useTranslateModelForWordsCheckbox) useTranslateModelForWordsCheckbox.disabled = !useAlternative;
       if (useAlternative && !translateModelSelector.value && translateModelSelector.options.length > 1) {
         translateModelSelector.selectedIndex = 1;
         setPref('translate.modelId', translateModelSelector.value);

@@ -37,7 +37,12 @@ import type { ModelMessage, SystemModelMessage, UserModelMessage } from 'ai';
 import { getItemIdFromTab } from './tabObserver';
 import { openSidePane } from './mainWindowSidePane';
 import type { ItemMetadata } from '../utils/itemContext';
-import { buildStructuredTranslationPrompt, TRANSLATION_SYSTEM_PROMPT, type TranslationRequestMeta } from '../utils/translation';
+import {
+  buildStructuredTranslationPrompt,
+  getTranslationModelKey,
+  TRANSLATION_SYSTEM_PROMPT,
+  type TranslationRequestMeta,
+} from '../utils/translation';
 import {
   getSessionKind,
   getTranslationRoute,
@@ -712,7 +717,12 @@ export class ChatManager {
       translationRequest: {
         selectedText,
         targetLanguage: params.targetLanguage,
-        modelKey: getPref('translate.useAlternativeModel') ? getPref('translate.modelId') || undefined : undefined,
+        modelKey: getTranslationModelKey({
+          selectedText,
+          useAlternativeModel: getPref('translate.useAlternativeModel'),
+          useModelForWords: getPref('translate.useModelForWords'),
+          modelKey: getPref('translate.modelId'),
+        }),
       },
     });
   }
