@@ -173,8 +173,20 @@ const translationSchema = {
     explanation: { type: 'string' },
     pos: { type: 'string' },
     pronunciation: { type: 'string' },
+    otherMeanings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          pos: { type: 'string' },
+          translatedText: { type: 'array', items: { type: 'string' }, minItems: 1 },
+        },
+        required: ['pos', 'translatedText'],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ['textType', 'translatedText', 'originalText', 'fullForm', 'explanation', 'pos', 'pronunciation'],
+  required: ['textType', 'translatedText', 'originalText', 'fullForm', 'explanation', 'pos', 'pronunciation', 'otherMeanings'],
   additionalProperties: false,
 };
 
@@ -238,7 +250,7 @@ export async function streamCodex(
       config,
       baseInstructions:
         'You are a literature assistant inside Zotero. Use the provided Zotero tools and hosted web search/open for document access. Historical dialogue is context, not a request to repeat past operations.',
-      developerInstructions: `${codexSystemText}\nThe Codex-native request_user_input tool is not prefixed. Other tool names from the Zotero instructions have the prefix zotero_ in this client. ${translation ? 'Return structured translation JSON. For inapplicable fields use empty strings.' : 'Cite web sources using Markdown links. For Zotero items preserve the Zotero citation format.'}`,
+      developerInstructions: `${codexSystemText}\nThe Codex-native request_user_input tool is not prefixed. Other tool names from the Zotero instructions have the prefix zotero_ in this client. ${translation ? 'Return structured translation JSON. For inapplicable scalar fields use empty strings; use an empty array for inapplicable "otherMeanings".' : 'Cite web sources using Markdown links. For Zotero items preserve the Zotero citation format.'}`,
     };
     const before = contextFingerprint(session.conversationHistory);
     const existing = session.pending.codexRetry ? session.lastTurnSnapshot?.codexBefore : session.codex;

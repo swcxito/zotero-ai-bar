@@ -1199,11 +1199,16 @@ export function buildTranslateDetails(doc: Document, output: TranslationResult |
       container.appendChild(explanationEl);
     }
 
-    const validOtherMeanings: Array<{ pos: string; translatedText: string }> = Array.isArray(output.otherMeanings)
+    const validOtherMeanings: Array<{ pos: string; translatedText: string[] }> = Array.isArray(output.otherMeanings)
       ? output.otherMeanings
-          .map((meaning: any) => ({ pos: normalizePartOfSpeech(meaning?.pos), translatedText: meaning?.translatedText }))
-          .filter((meaning: any): meaning is { pos: string; translatedText: string } =>
-            Boolean(meaning.pos && typeof meaning.translatedText === 'string' && meaning.translatedText.trim())
+          .map((meaning: any) => ({
+            pos: normalizePartOfSpeech(meaning?.pos),
+            translatedText: Array.isArray(meaning?.translatedText)
+              ? meaning.translatedText.filter((text: any) => typeof text === 'string' && Boolean(text.trim()))
+              : [],
+          }))
+          .filter((meaning: any): meaning is { pos: string; translatedText: string[] } =>
+            Boolean(meaning.pos && meaning.translatedText.length > 0)
           )
       : [];
     if (validOtherMeanings.length > 0) {
@@ -1220,7 +1225,7 @@ export function buildTranslateDetails(doc: Document, output: TranslationResult |
         posSpan.style.fontStyle = 'italic';
         posSpan.textContent = m.pos;
         otherEl.appendChild(posSpan);
-        otherEl.appendChild(doc.createTextNode(m.translatedText));
+        otherEl.appendChild(doc.createTextNode(m.translatedText.join('；')));
         container.appendChild(otherEl);
       }
     }

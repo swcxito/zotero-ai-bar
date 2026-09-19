@@ -2,7 +2,10 @@ import { z } from 'zod';
 
 const otherMeaningSchema = z.object({
   pos: z.string().min(1).describe('English part-of-speech abbreviation, such as n., v., adj., or adv.'),
-  translatedText: z.string().min(1).describe('A concise alternative meaning written in the requested target language.'),
+  translatedText: z
+    .array(z.string().min(1))
+    .min(1)
+    .describe('One or more concise alternative meanings written in the requested target language.'),
 });
 
 const translationBaseSchema = z.object({
@@ -230,19 +233,21 @@ export function normalizeTranslationResultCandidate(value: unknown, originalText
   }
 
   if (Array.isArray(candidate.otherMeanings)) {
-    const validMeanings = candidate.otherMeanings.filter((meaning): meaning is { pos: string; translatedText: string } =>
-      Boolean(
-        meaning &&
-        typeof meaning === 'object' &&
-        typeof (meaning as any).pos === 'string' &&
-        (meaning as any).pos.trim() &&
-        typeof (meaning as any).translatedText === 'string' &&
-        (meaning as any).translatedText.trim()
-      )
-    );
+    const validMeanings = candidate.otherMeanings
+      .map((meaning) => {
+        if (!meaning || typeof meaning !== 'object') return undefined;
+        const pos = typeof (meaning as any).pos === 'string' ? (meaning as any).pos.trim() : '';
+        const translatedText = Array.isArray((meaning as any).translatedText)
+          ? (meaning as any).translatedText
+              .filter((text: unknown): text is string => typeof text === 'string' && Boolean(text.trim()))
+              .map((text: string) => text.trim())
+          : [];
+        return pos && translatedText.length > 0 ? { pos, translatedText } : undefined;
+      })
+      .filter((meaning): meaning is { pos: string; translatedText: string[] } => Boolean(meaning));
     const normalizedMeanings = validMeanings
       .map((meaning) => ({ ...meaning, pos: normalizePartOfSpeech(meaning.pos) }))
-      .filter((meaning): meaning is { pos: string; translatedText: string } => Boolean(meaning.pos));
+      .filter((meaning): meaning is { pos: string; translatedText: string[] } => Boolean(meaning.pos));
     if (normalizedMeanings.length > 0) candidate.otherMeanings = normalizedMeanings;
     else delete candidate.otherMeanings;
   } else {

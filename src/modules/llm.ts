@@ -1098,7 +1098,7 @@ function buildDedicatedTranslationPrompt(messages: ModelMessage[], strict: boole
     'For "word", include the source-language "pronunciation" and English-abbreviated "pos" when available.',
     'For "word", include "explanation" only when the meaning is specialized, technical, domain-specific, idiomatic, non-literal, or cannot be adequately conveyed by "translatedText" alone. Omit "explanation" for ordinary dictionary meanings and avoid boilerplate such as "in this context".',
     'Every "pos" must use a conventional English abbreviation such as "n.", "v.", "vt.", "vi.", "adj.", "adv.", "prep.", "pron.", or "conj."; never use a full word or a translated label.',
-    'If present, "otherMeanings" must be an array of objects shaped exactly as {"pos":"...","translatedText":"..."}; never return a string or an array of strings.',
+    'If present, "otherMeanings" must be an array of objects shaped exactly as {"pos":"...","translatedText":["..."]}; "translatedText" must be a non-empty array of strings.',
     'For "abbreviation", both "fullForm" and "explanation" are required. Keep "fullForm" in its source language and write "translatedText" and "explanation" in the requested target language.',
     'For "text", return a fluent, accurate, academic translation and omit dictionary-only fields.',
     'If the source is or may be a list (for example, it contains bullets such as •, ◦, □, ■, , or ; numbering; repeated short items; or a heading followed by items), preserve it as Markdown in "translatedText" instead of merging it into prose.',

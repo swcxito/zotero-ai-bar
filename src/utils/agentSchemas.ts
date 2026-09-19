@@ -135,7 +135,10 @@ export type AddPaperPayload = z.infer<typeof addPaperSchema>;
 
 const otherMeaningSchema = z.object({
   pos: z.string().describe('Part of speech ONLY, e.g. "adj.", "n.", "v.". No definition text here.'),
-  translatedText: z.string().describe('The translated meaning ONLY, no part-of-speech prefix.'),
+  translatedText: z
+    .array(z.string().min(1))
+    .min(1)
+    .describe('One or more translated meanings ONLY, with no part-of-speech prefix.'),
 });
 
 export const translateSchema = z.object({
@@ -161,7 +164,7 @@ export const translateSchema = z.object({
     .array(otherMeaningSchema)
     .optional()
     .describe(
-      'Other common meanings (for words only). Array of {pos, translatedText} objects. Example: [{"pos":"v.","translatedText":"制造；捏造"}].'
+      'Other common meanings (for words only). Array of {pos, translatedText} objects, where translatedText is an array of strings. Example: [{"pos":"v.","translatedText":["制造","捏造"]}].'
     ),
   fullForm: z.string().optional().describe('Full form in English (for abbreviations only).'),
   targetLanguage: z.string().optional().describe('Target language name.'),

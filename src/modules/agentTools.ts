@@ -209,7 +209,7 @@ export const addPaperTool = defineSharedTool({
 export const translateTool = defineSharedTool({
   description: [
     'Present a translation result to the user in a structured, visually formatted card. Use this tool ONLY for single words and abbreviations.',
-    'For `word`: top-level `pos` (e.g. "adj.") and `explanation` (the translated meaning only, no POS prefix) are REQUIRED. `otherMeanings` is an array of {pos, translatedText} objects.',
+    'For `word`: top-level `pos` (e.g. "adj.") and `explanation` (the translated meaning only, no POS prefix) are REQUIRED. `otherMeanings` is an array of {pos, translatedText} objects, where translatedText is an array of strings.',
     'For `abbreviation`: `fullForm` is REQUIRED.',
     'After calling this tool, continue your response with one concise sentence that places the translation back into the original context (e.g., how the word is used in this sentence).',
   ].join(' '),
