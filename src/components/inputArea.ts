@@ -31,6 +31,7 @@ import { scrollToBottom as doScrollToBottom, setSendBtnEnabled } from '../module
 import { checkModelSupportsImage, promptModelImageUnsupported } from '../utils/providers';
 import { createUserMessageBubble } from './userBubble';
 import { readChatTextDraft, writeChatTextDraft } from '../utils/chatDraft';
+import { applyChatInputFontSize } from '../utils/chatFontSize';
 
 export interface InputAreaContext {
   sessionId: string;
@@ -320,6 +321,7 @@ export function InputArea(
   textarea.setAttribute('contenteditable', 'true');
   // max-height approximately 5 lines, overflow scrolls
   textarea.style.maxHeight = '7rem';
+  applyChatInputFontSize(wrapper);
 
   // ── thinking effort button (right of textarea) ────────────────────────────
 

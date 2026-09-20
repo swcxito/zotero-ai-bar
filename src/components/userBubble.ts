@@ -18,6 +18,7 @@
 
 import { ChatBox } from './chatBox';
 import { getString } from '../utils/locale';
+import { applyChatAuxiliaryFontSize } from '../utils/chatFontSize';
 import { Icons } from './common';
 import { IconView } from './iconView';
 
@@ -97,6 +98,7 @@ function createReferenceCard(doc: Document, referenceText: string): HTMLElement 
   content.append(body, toggle);
   contentRow.append(icon, content);
   card.appendChild(contentRow);
+  applyChatAuxiliaryFontSize(card);
 
   let measurementAttempts = 0;
   const revealToggleIfNeeded = () => {
