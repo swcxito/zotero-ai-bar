@@ -73,6 +73,7 @@ class ModelDialogV2 {
   private readonly root: HTMLElement | null;
   private readonly overlay: HTMLElement | null;
   private readonly addProviderButton: HTMLElement | null;
+  private readonly toggleProviderCardsButton: HTMLButtonElement | null;
   private readonly searchInput: HTMLInputElement | null;
   private readonly providerList: HTMLElement | null;
   private readonly customButtonContainer: HTMLElement | null;
@@ -96,6 +97,7 @@ class ModelDialogV2 {
     this.root = this.doc.querySelector('#root');
     this.overlay = this.doc.querySelector('#add-provider-overlay');
     this.addProviderButton = this.doc.querySelector('#add-provider-button');
+    this.toggleProviderCardsButton = this.doc.querySelector('#toggle-provider-cards');
     this.searchInput = this.doc.querySelector('#provider-search-input');
     this.providerList = this.doc.querySelector('#add-provider-list');
     this.customButtonContainer = this.doc.querySelector('#add-provider-custom');
@@ -133,6 +135,8 @@ class ModelDialogV2 {
     this.bindPopupShowHide();
     this.renderProviders();
     this.addCards();
+    this.toggleProviderCardsButton?.addEventListener('click', () => this.toggleProviderCards());
+    this.updateProviderCardsToggle();
     const connectButton = this.doc.getElementById('connect-chatgpt-button');
     const icon = this.doc.getElementById('connect-chatgpt-icon');
     if (icon) ztoolkit.UI.appendElement(IconView({ iconMarkup: getModelIconPath('gpt'), sizeRem: 1 }), icon);
@@ -190,6 +194,39 @@ class ModelDialogV2 {
   }
 
   // ---- Card rendering ----
+
+  private getProviderCards(): HTMLElement[] {
+    const container = this.root?.querySelector('#provider-block');
+    return container ? Array.from(container.querySelectorAll<HTMLElement>(':scope > .provider-card')) : [];
+  }
+
+  private updateProviderCardsToggle() {
+    const button = this.toggleProviderCardsButton;
+    if (!button) return;
+
+    const cards = this.getProviderCards();
+    const allCollapsed = cards.length > 0 && cards.every((card) => card.dataset.collapsed === 'true');
+    const label = getString(allCollapsed ? 'model-dialog-expand-cards' : 'model-dialog-collapse-cards');
+    button.textContent = label;
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    button.disabled = cards.length === 0;
+  }
+
+  private toggleProviderCards() {
+    const cards = this.getProviderCards();
+    if (cards.length === 0) return;
+
+    const allCollapsed = cards.every((card) => card.dataset.collapsed === 'true');
+    const shouldCollapse = !allCollapsed;
+    cards.forEach((card) => {
+      const collapsed = card.dataset.collapsed === 'true';
+      if (collapsed !== shouldCollapse) {
+        (card.querySelector('.provider-card-collapse') as HTMLButtonElement | null)?.click();
+      }
+    });
+    this.updateProviderCardsToggle();
+  }
 
   private addCards() {
     const container = this.root?.querySelector('#provider-block');
@@ -332,6 +369,7 @@ class ModelDialogV2 {
     // Saved provider metadata alone is not evidence of a current login.
     if (!container || !codexRuntime.accountKey || !v2?.addedProviders[CODEX_PROVIDER_ID]) {
       card?.remove();
+      this.updateProviderCardsToggle();
       return;
     }
     const panel = this.doc.getElementById('codex-connection-panel');
@@ -340,6 +378,7 @@ class ModelDialogV2 {
     // Update the mounted card in place: rebuilding it on every publish makes the list blink out.
     if (card) this.syncCodexCard(card, models, v2, codexRuntime.accountKey);
     else container.prepend(this.createCodexCard(models, v2, codexRuntime.accountKey));
+    this.updateProviderCardsToggle();
   }
 
   private codexHeadDetails(accountKey: string) {
@@ -380,8 +419,10 @@ class ModelDialogV2 {
       models: [],
       doc: this.doc,
       modelListContent: content,
+      onCollapseChange: () => this.updateProviderCardsToggle(),
       onDelete: () => {
         this.codexCollapsed = false;
+        this.updateProviderCardsToggle();
         void disconnectCodex().catch(() => this.renderCodexCard());
       },
     }) as HTMLElement;
@@ -482,10 +523,15 @@ class ModelDialogV2 {
       onAddModel: (cb: (id: string, name: string) => void) => {
         this.openModelSelect(providerId, cb);
       },
-      onDelete: () => this.renderProviders(),
+      onCollapseChange: () => this.updateProviderCardsToggle(),
+      onDelete: () => {
+        this.renderProviders();
+        this.updateProviderCardsToggle();
+      },
     });
 
     target.appendChild(card);
+    this.updateProviderCardsToggle();
   }
 
   // ---- Add Provider popup ----

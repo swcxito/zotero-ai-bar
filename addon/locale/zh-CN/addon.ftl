@@ -64,6 +64,8 @@ history-empty-favorite = 暂无收藏的对话
 history-default-title = 新对话
 
 model-dialog-title = 模型提供商
+model-dialog-collapse-cards = 折叠卡片
+model-dialog-expand-cards = 展开卡片
 model-dialog-add-provider = 添加提供商
 model-dialog-search-providers = 搜索提供商...
 model-dialog-search-models = 搜索模型、或输入模型ID后回车...

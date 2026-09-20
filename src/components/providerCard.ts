@@ -33,6 +33,7 @@ export interface ProviderCardV2Props {
   doc: Document;
   onAddModel?: (cb: (id: string, name: string) => void) => void;
   onDelete?: () => void;
+  onCollapseChange?: (collapsed: boolean) => void;
   content?: Node;
   headerDetails?: CardHeadProps['details'];
   titleClassList?: string[];
@@ -51,6 +52,7 @@ export function ProviderCard({
   doc,
   onAddModel,
   onDelete = () => {},
+  onCollapseChange = () => {},
   content,
   headerDetails,
   titleClassList,
@@ -74,6 +76,7 @@ export function ProviderCard({
       'provider-card',
     ],
   });
+  (card as HTMLElement).dataset.collapsed = 'false';
 
   function onDeleteClicked() {
     card.remove();
@@ -170,6 +173,8 @@ export function ProviderCard({
       }
     }
     isCollapsed = !isCollapsed;
+    (card as HTMLElement).dataset.collapsed = String(isCollapsed);
+    onCollapseChange(isCollapsed);
   }
 
   cardDataMap.set(card, () => {

@@ -64,6 +64,8 @@ history-empty-favorite = No favorite conversations yet
 history-default-title = New conversation
 
 model-dialog-title = Model Providers
+model-dialog-collapse-cards = Collapse Cards
+model-dialog-expand-cards = Expand Cards
 model-dialog-add-provider = Add Provider
 model-dialog-search-providers = Search providers...
 model-dialog-search-models = Search models, or type model ID and press Enter...
