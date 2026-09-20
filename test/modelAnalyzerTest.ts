@@ -56,11 +56,29 @@ const testCases = [
     in: 'x-ai/grok-code-fast-1',
     out: { family: 'grok', type: 'fast', version: '1' },
   },
+  {
+    in: 'Qwen3-ASR-Flash',
+    out: { family: 'qwen', type: 'flash', version: '3', variantParts: ['ASR'], typeParts: ['Flash'] },
+  },
+  {
+    in: 'Qwen3-Omni-Flash-Realtime',
+    out: { family: 'qwen', type: 'flash', version: '3', variantParts: ['Omni'], typeParts: ['Flash', 'Realtime'] },
+  },
+  {
+    in: 'Qwen3-Mega-Flash',
+    out: { family: 'qwen', type: 'flash', version: '3', variantParts: ['Mega'], typeParts: ['Flash'] },
+  },
 ];
 
 testCases.forEach((test) => {
   const result = analyzeModelName(test.in);
-  const passed = result.family === test.out.family && result.type === test.out.type && result.version === test.out.version;
+  const expected = test.out as typeof test.out & { variantParts?: string[]; typeParts?: string[] };
+  const passed =
+    result.family === expected.family &&
+    result.type === expected.type &&
+    result.version === expected.version &&
+    (!expected.variantParts || JSON.stringify(result.variantParts) === JSON.stringify(expected.variantParts)) &&
+    (!expected.typeParts || JSON.stringify(result.typeParts) === JSON.stringify(expected.typeParts));
 
   console.log(`Input: ${test.in}`);
   console.log(`Expected: ${JSON.stringify(test.out)}`);

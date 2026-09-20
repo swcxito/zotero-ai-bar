@@ -37,10 +37,27 @@ function resolveModelDisplayName(): string {
   return active.modelId;
 }
 
+function formatModelInfoPart(part: string): string {
+  const value = part.trim();
+  if (!value) return '';
+
+  // Preserve source tokens that are written as acronyms, such as ASR, VL, or MT.
+  if (/^[A-Z0-9]+$/.test(value) && /[A-Z]/.test(value)) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
 function buildCurrentModelInfoChildren(): TagElementProps[] {
   const modelName = resolveModelDisplayName();
   const modelAnalysis = analyzeModelName(modelName);
   const iconPath = getModelIconPath(addon.data.userProviderConfigV2?.active?.providerId === 'codex-subscription' ? 'gpt' : modelAnalysis.family);
+
+  const displayVersion = [formatModelInfoPart(modelAnalysis.version), ...modelAnalysis.variantParts.map(formatModelInfoPart)]
+    .filter(Boolean)
+    .join(' ');
+  const displayType = (modelAnalysis.typeParts.length > 0 ? modelAnalysis.typeParts : [modelAnalysis.type])
+    .map(formatModelInfoPart)
+    .filter(Boolean)
+    .join(' ');
 
   const children: TagElementProps[] = [
     IconView({
@@ -50,19 +67,19 @@ function buildCurrentModelInfoChildren(): TagElementProps[] {
     }),
   ];
 
-  if (modelAnalysis.version) {
+  if (displayVersion) {
     children.push({
       tag: 'span',
       classList: ['model-info-version'],
-      properties: { textContent: modelAnalysis.version },
+      properties: { textContent: displayVersion },
     });
   }
 
-  if (modelAnalysis.type) {
+  if (displayType) {
     children.push({
       tag: 'span',
       classList: ['model-info-type'],
-      properties: { textContent: modelAnalysis.type },
+      properties: { textContent: displayType },
     });
   }
 

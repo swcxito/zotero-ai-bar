@@ -7,6 +7,10 @@ export interface ModelAnalysisResult {
   family: string;
   type: string;
   version: string;
+  /** Tokens between the model version and its final type suffix, kept for display. */
+  variantParts: string[];
+  /** The final type suffix and any trailing modifiers, kept in source order for display. */
+  typeParts: string[];
 }
 
 const TYPE_KEYWORDS = new Set([
@@ -38,6 +42,12 @@ const TYPE_KEYWORDS = new Set([
   'code',
   'flashx',
   'highspeed',
+  'fable',
+  'astra',
+  'sol',
+  'terra',
+  'luna',
+  'ocr',
 ]);
 
 const IGNORED_KEYWORDS = new Set([
@@ -55,48 +65,74 @@ const IGNORED_KEYWORDS = new Set([
   'experiment',
   'experimental',
   'free',
+  'exp',
 ]);
+
+interface ModelToken {
+  value: string;
+  label: string;
+}
+
+function isSizeToken(token: string): boolean {
+  return /^\d+(\.\d+)?[bB]$/.test(token);
+}
+
+function getVersionPart(token: string): string | undefined {
+  const vMatch = token.match(/^v(\d+(\.\d+)*)$/);
+  if (vMatch) return vMatch[1];
+
+  if (/^\d+(\.\d+)*$/.test(token)) {
+    const numVal = parseFloat(token);
+    // Large integers are usually dates or provider identifiers rather than versions.
+    if (token.includes('.') || numVal < 100) return token;
+    return undefined;
+  }
+
+  if (/^[a-z]\d+(\.\d+)*$/.test(token)) return token;
+  return undefined;
+}
 
 export function analyzeModelName(modelName: string | undefined | null): ModelAnalysisResult {
   const safeModelName = typeof modelName === 'string' ? modelName.trim() : '';
   if (!safeModelName) {
-    return { family: 'custom', type: '', version: '' };
+    return { family: 'custom', type: '', version: '', variantParts: [], typeParts: [] };
   }
 
   // 0. Remove prefix (everything before last /)
   const baseId = safeModelName.split('/').pop() || safeModelName;
 
-  // 1. Normalization
-  const normalizedId = baseId.toLowerCase();
-
   // 2. Splitting (split by -, _, :, space). EXCLUDE dot.
-  const rawTokens = normalizedId.split(/[-_: ]+/).filter(Boolean);
+  const rawTokens = baseId.split(/[-_: ]+/).filter(Boolean);
 
   // Refine tokens to handle dots and sizes
-  const tokens: string[] = [];
-  for (const token of rawTokens) {
+  const tokens: ModelToken[] = [];
+  const pushToken = (value: string, label: string) => tokens.push({ value: value.toLowerCase(), label });
+
+  for (const rawToken of rawTokens) {
+    const token = rawToken.toLowerCase();
     // Size pattern: 7b, 1.2b. Keep whole to ignore later
     if (/^\d+(\.\d+)?[bB]$/.test(token)) {
-      tokens.push(token);
+      pushToken(token, rawToken);
       continue;
     }
 
     // Version patterns: Keep whole
     if (/^\d+(\.\d+)*$/.test(token) || /^v\d+(\.\d+)*$/.test(token) || /^[a-z]\d+(\.\d+)*$/.test(token)) {
-      tokens.push(token);
+      pushToken(token, rawToken);
     } else if (token.includes('.')) {
       // Split by dot if it doesn't look like a version/size
-      tokens.push(...token.split('.'));
+      rawToken.split('.').forEach((part) => pushToken(part, part));
     } else {
-      tokens.push(token);
+      pushToken(token, rawToken);
     }
   }
 
   // 3. Extract Family
   // Heuristic: First token is family.
   // Check if it ends in a number (e.g. qwen3, gpt4)
-  let family = tokens[0];
+  let family = tokens[0].value;
   const versionParts: string[] = [];
+  const versionTokenIndices = new Set<number>();
 
   // Try to extract version from family name if it ends with digits (e.g. qwen3 -> qwen, 3)
   // But check that matches generic pattern name+number.
@@ -106,65 +142,64 @@ export function analyzeModelName(modelName: string | undefined | null): ModelAna
     family = familyMatch[1];
     if (familyMatch[2]) {
       versionParts.push(familyMatch[2]);
+      versionTokenIndices.add(0);
     }
   }
 
-  let type = '';
-
-  // 4. Process remaining tokens
+  // 4. Collect version tokens before classifying the remaining fields. This lets
+  // us distinguish `claude-opus-4-6` from `qwen3-coder-flash` without knowing
+  // anything about a particular model family.
   for (let i = 1; i < tokens.length; i++) {
-    const token = tokens[i];
+    const token = tokens[i].value;
+    if (IGNORED_KEYWORDS.has(token) || isSizeToken(token)) continue;
 
-    // Check for Ignored
-    if (IGNORED_KEYWORDS.has(token)) {
-      continue;
+    const versionPart = getVersionPart(token);
+    if (versionPart !== undefined) {
+      versionParts.push(versionPart);
+      versionTokenIndices.add(i);
     }
+  }
 
-    // Check for Size (ignore) e.g. 7b, 1.2b
-    if (/^\d+(\.\d+)?[bB]$/.test(token)) {
-      continue;
+  // The last known type keyword is the classic suffix. Everything between the
+  // version and that suffix is retained as a family-agnostic variant, so new
+  // fields such as `ASR`, `VL`, or `Omni` do not need to be added to a list.
+  const typeCandidateIndices: number[] = [];
+  for (let i = 1; i < tokens.length; i++) {
+    const token = tokens[i].value;
+    if (!IGNORED_KEYWORDS.has(token) && !isSizeToken(token) && !versionTokenIndices.has(i) && TYPE_KEYWORDS.has(token)) {
+      typeCandidateIndices.push(i);
     }
+  }
 
-    // Check for Type
-    if (TYPE_KEYWORDS.has(token)) {
-      // Prefer the first found type or overwrite?
-      // In names like "flash-lite", maybe we want "flash" or "lite"?
-      // Let's assume the most significant type is usually explicitly part of the name.
-      // Overwriting allows capturing "pro" in "gemini-1.5-pro".
-      type = token;
-      continue;
+  const primaryTypeIndex = typeCandidateIndices.at(-1);
+  const type = primaryTypeIndex === undefined ? '' : tokens[primaryTypeIndex].value;
+  const variantStartIndex = versionTokenIndices.size > 0 ? Math.max(...versionTokenIndices) + 1 : 1;
+  const variantParts: string[] = [];
+  const typeParts: string[] = [];
+
+  for (let i = variantStartIndex; i < tokens.length; i++) {
+    const token = tokens[i].value;
+    if (IGNORED_KEYWORDS.has(token) || isSizeToken(token) || versionTokenIndices.has(i)) continue;
+
+    if (primaryTypeIndex === undefined || i < primaryTypeIndex) {
+      variantParts.push(tokens[i].label);
+    } else {
+      typeParts.push(tokens[i].label);
     }
+  }
 
-    // Check for Version patterns
-
-    // Pattern: v2, v3.5 (split might separate 5)
-    const vMatch = token.match(/^v(\d+(\.\d+)*)$/);
-    if (vMatch) {
-      versionParts.push(vMatch[1]);
-      continue;
-    }
-
-    // Pattern: number (integer or float)
-    if (/^\d+(\.\d+)*$/.test(token)) {
-      const numVal = parseFloat(token);
-      // Heuristic: Large integers are dates/identifiers, skip.
-      // Integers < 100 or numbers with decimals are versions.
-      if (token.includes('.') || numVal < 100) {
-        versionParts.push(token);
-      }
-      continue;
-    }
-
-    // Pattern: Letter + Number (common in versions like k2.5, m2, r1)
-    if (/^[a-z]\d+(\.\d+)*$/.test(token)) {
-      versionParts.push(token);
-    }
+  // A type that appears before an explicit numeric version (e.g. `claude-opus-4`)
+  // still belongs to the type display even though it is outside the loop above.
+  if (primaryTypeIndex !== undefined && typeParts.length === 0) {
+    typeParts.push(tokens[primaryTypeIndex].label);
+  } else if (primaryTypeIndex !== undefined && primaryTypeIndex < variantStartIndex) {
+    typeParts.unshift(tokens[primaryTypeIndex].label);
   }
 
   // 5. Construct Version
   const version = versionParts.join('.');
 
-  return { family, type, version };
+  return { family, type, version, variantParts, typeParts };
 }
 
 /**
