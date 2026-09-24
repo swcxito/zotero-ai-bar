@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link href="chrome://__addonRef__/content/styles/skins.css" rel="stylesheet" />
     <title>Screenshot Preview</title>
     <style>
       * {
@@ -138,6 +139,7 @@
 
     <script>
       window.addEventListener('load', () => {
+        window.arguments?.[0]?.onBodyLoaded?.(window);
         const images = window.arguments?.[0]?.images;
         const startIndex = window.arguments?.[0]?.startIndex || 0;
         const img = document.getElementById('captured-image');

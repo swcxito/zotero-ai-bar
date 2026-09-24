@@ -3,12 +3,21 @@
   <html:link rel="localization" href="__addonRef__-addon.ftl" />
 </linkset>
 <html:style>
-  button { justify-content: center; } #__addonRef__-prompt-table-container tbody tr:nth-child(even):not(.selected),
-  #__addonRef__-prompt-table-container .row:nth-child(even):not(.selected), #__addonRef__-prompt-table-container
+  @import url("chrome://__addonRef__/content/styles/skins.css"); button { justify-content: center; } #__addonRef__-prompt-table-container tbody
+  tr:nth-child(even):not(.selected), #__addonRef__-prompt-table-container .row:nth-child(even):not(.selected), #__addonRef__-prompt-table-container
   [role="row"]:nth-child(even):not([aria-selected="true"]), #__addonRef__-prompt-table-container .virtualized-table-body >
-  div:nth-child(even):not(.selected) { background-color: rgba(0, 0, 0, 0.03); } .pref-warning-text { color: #b45309; }
+  div:nth-child(even):not(.selected) { background-color: rgba(0, 0, 0, 0.03); } .pref-warning-text { color: #b45309; } #__addonRef__-chat-skin {
+  display: flex; gap: 8px; width: 100%; min-width: 0; padding: 5px 4px 9px; box-sizing: border-box; } #__addonRef__-chat-skin .zaibar-skin-choice {
+  position: relative; display: inline-flex; flex: 1 1 0; min-width: 0; align-items: center; justify-content: center; min-height: 38px; padding: 6px
+  8px; box-sizing: border-box; white-space: nowrap; cursor: pointer; user-select: none; font: 600 12px var(--font); color: var(--accent-soft-ink);
+  background: var(--accent-soft); border: var(--weight) solid var(--line); border-radius: var(--radius); box-shadow: var(--card-shadow); transition:
+  border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease; } #__addonRef__-chat-skin .zaibar-skin-choice:hover { border-color:
+  var(--accent); transform: translateY(-1px); } #__addonRef__-chat-skin .zaibar-skin-choice[data-selected="true"] { border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft), var(--card-shadow); } #__addonRef__-chat-skin .zaibar-skin-choice:focus-within { outline: 2px solid
+  var(--accent); outline-offset: 2px; } #__addonRef__-chat-skin .zaibar-skin-choice-input { position: absolute; width: 1px; height: 1px; margin: 0;
+  opacity: 0; pointer-events: none; } @media (prefers-reduced-motion: reduce) { #__addonRef__-chat-skin .zaibar-skin-choice { transition: none; } }
 </html:style>
-<groupbox onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })">
+<groupbox id="__addonRef__-prefs-root" onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })">
   <hbox align="center" style="margin-bottom: 12px">
     <html:a
       id="__addonRef__-docs-link"
@@ -93,6 +102,35 @@
     <label>
       <html:h2 data-l10n-id="pref-ui" />
     </label>
+    <vbox style="margin-top: 10px; min-width: 0">
+      <html:label id="__addonRef__-chat-skin-label" data-l10n-id="pref-chat-skin" style="font-weight: 700" />
+      <html:div id="__addonRef__-chat-skin" role="radiogroup" aria-labelledby="__addonRef__-chat-skin-label">
+        <html:label class="zaibar-skin-choice" data-zaibar-skin="rose"
+          ><html:input class="zaibar-skin-choice-input" type="radio" name="__addonRef__-chat-skin" value="rose" /><html:span
+            data-l10n-id="pref-chat-skin-rose"
+        /></html:label>
+        <html:label class="zaibar-skin-choice" data-zaibar-skin="paper"
+          ><html:input class="zaibar-skin-choice-input" type="radio" name="__addonRef__-chat-skin" value="paper" /><html:span
+            data-l10n-id="pref-chat-skin-paper"
+        /></html:label>
+        <html:label class="zaibar-skin-choice" data-zaibar-skin="abyss"
+          ><html:input class="zaibar-skin-choice-input" type="radio" name="__addonRef__-chat-skin" value="abyss" /><html:span
+            data-l10n-id="pref-chat-skin-abyss"
+        /></html:label>
+        <html:label class="zaibar-skin-choice" data-zaibar-skin="moss"
+          ><html:input class="zaibar-skin-choice-input" type="radio" name="__addonRef__-chat-skin" value="moss" /><html:span
+            data-l10n-id="pref-chat-skin-moss"
+        /></html:label>
+        <html:label class="zaibar-skin-choice" data-zaibar-skin="tactical"
+          ><html:input class="zaibar-skin-choice-input" type="radio" name="__addonRef__-chat-skin" value="tactical" /><html:span
+            data-l10n-id="pref-chat-skin-tactical"
+        /></html:label>
+        <html:label class="zaibar-skin-choice" data-zaibar-skin="bw"
+          ><html:input class="zaibar-skin-choice-input" type="radio" name="__addonRef__-chat-skin" value="bw" /><html:span
+            data-l10n-id="pref-chat-skin-bw"
+        /></html:label>
+      </html:div>
+    </vbox>
     <hbox align="center">
       <html:label data-l10n-id="pref-stream-update-speed" flex="1" />
       <html:select class="select" id="__addonRef__-stream-update-speed-selector" preference="llm.streamUpdateSpeed">

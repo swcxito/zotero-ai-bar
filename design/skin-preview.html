@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN" data-skin="rose" data-mode="light" data-width="wide">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Zotero AI Bar · 六套皮肤预览</title>
+  <style>
+    /* Standalone visual prototype. This stylesheet is not loaded by the add-on. */
+    *,*::before,*::after{box-sizing:border-box}
+    html{min-width:320px}
+    body{margin:0;font-family:var(--font);color:var(--text);background:var(--backdrop)}
+    button,input,textarea{font:inherit}
+    button{cursor:pointer}
+    button:disabled{cursor:not-allowed}
+    :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+    [data-skin=rose]{--font:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif;--title-font:var(--font);--radius:18px;--small-radius:10px;--weight:1px;--shadow:0 18px 48px #33415520;--card-shadow:0 6px 20px #33415512;--backdrop:#eef1f5;--page:#fff;--surface:#fff;--raised:#f8fafc;--soft:#f1f5f9;--text:#1e293b;--muted:#475569;--faint:#94a3b8;--line:#e2e8f0;--accent:#e11d48;--accent-hover:#be123c;--accent-ink:#fff;--accent-soft:#ffe4e6;--accent-soft-ink:#9f1239;--user:#e11d48;--user-ink:#fff;--code:#18181b;--code-ink:#f4f4f5;--success:#166534;--glow:radial-gradient(circle at 85% 0,#fda4af1f,transparent 48%)}
+    [data-skin=rose][data-mode=dark]{--shadow:0 20px 48px #0008;--card-shadow:0 6px 20px #0004;--backdrop:#09090b;--page:#18181b;--surface:#27272a;--raised:#18181b;--soft:#3f3f46;--text:#f4f4f5;--muted:#d4d4d8;--faint:#a1a1aa;--line:#52525b;--accent:#fb7185;--accent-hover:#fda4af;--accent-ink:#18181b;--accent-soft:#4c1827;--accent-soft-ink:#fda4af;--user:#e11d48;--user-ink:#fff;--code:#09090b;--code-ink:#f4f4f5;--success:#86efac;--glow:radial-gradient(circle at 85% 0,#e11d4812,transparent 48%)}
+    [data-skin=paper]{--font:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif;--title-font:Georgia,"Noto Serif SC",serif;--radius:5px;--small-radius:3px;--weight:1px;--shadow:0 10px 28px #343c4010;--card-shadow:0 5px 14px #6a514014;--backdrop:#f2ede6;--page:#fdf9f3;--surface:#fffdfa;--raised:#fffefa;--soft:#f3ede4;--text:#303941;--muted:#526273;--faint:#9aa7ae;--line:#e1dfda;--accent:#78657f;--accent-hover:#5f4a66;--accent-ink:#fff;--accent-soft:#e9ddec;--accent-soft-ink:#614c68;--user:#e9ddd0;--user-ink:#303941;--code:#303941;--code-ink:#f1f4f3;--success:#416955;--glow:linear-gradient(#fff8ee70,#f2ede600)}
+    [data-skin=paper][data-mode=dark]{--shadow:0 13px 30px #0004;--card-shadow:0 7px 18px #0004;--backdrop:#171a1c;--page:#202325;--surface:#282c2d;--raised:#303536;--soft:#323839;--text:#eeede8;--muted:#b2bdc2;--faint:#879196;--line:#4b5557;--accent:#c1a8c6;--accent-hover:#d8c3dc;--accent-ink:#302333;--accent-soft:#58435d;--accent-soft-ink:#e0c7e3;--user:#414b4e;--user-ink:#f5f4ef;--code:#161d20;--code-ink:#e9f0f1;--success:#a4c6b1;--glow:linear-gradient(#30343648,#1d202200)}
+    [data-skin=abyss]{--font:"Segoe UI","Noto Sans SC",sans-serif;--title-font:var(--font);--radius:11px;--small-radius:6px;--weight:1px;--shadow:0 18px 45px #254f8426;--card-shadow:0 6px 18px #24679a12;--backdrop:#e1eaf4;--page:#f2f7fc;--surface:#fff;--raised:#f7faff;--soft:#e7f0fb;--text:#23394e;--muted:#48627a;--faint:#91a5b7;--line:#cadbea;--accent:#1f679e;--accent-hover:#195786;--accent-ink:#fff;--accent-soft:#dcecff;--accent-soft-ink:#1b5c91;--user:#2475ae;--user-ink:#fff;--code:#102a43;--code-ink:#e7f1ff;--success:#326d98;--glow:linear-gradient(145deg,#428de02b,transparent 48%)}
+    [data-skin=abyss][data-mode=dark]{--shadow:0 20px 48px #0009;--card-shadow:0 6px 18px #0004;--backdrop:#020611;--page:#050f1e;--surface:#0b1b30;--raised:#122842;--soft:#11263f;--text:#eaf3ff;--muted:#b1c9e4;--faint:#829fb9;--line:#335272;--accent:#78bcff;--accent-hover:#a5d4ff;--accent-ink:#0b2744;--accent-soft:#1b4268;--accent-soft-ink:#add8ff;--user:#245f9b;--user-ink:#fff;--code:#030c19;--code-ink:#dcecff;--success:#8bbcf1;--glow:linear-gradient(145deg,#428de01d,transparent 48%)}
+    [data-skin=moss]{--font:-apple-system,BlinkMacSystemFont,"Noto Sans SC",sans-serif;--title-font:Georgia,"Noto Serif SC",serif;--radius:24px;--small-radius:14px;--weight:1px;--shadow:0 20px 50px #435d3d24;--card-shadow:0 7px 20px #59704817;--backdrop:#e5e9de;--page:#f3f5ed;--surface:#fcfdf8;--raised:#f8faf3;--soft:#eaf0e4;--text:#2d3a2d;--muted:#4b654e;--faint:#93a08c;--line:#d6dfd1;--accent:#3f6745;--accent-hover:#315438;--accent-ink:#fff;--accent-soft:#e0ecdc;--accent-soft-ink:#406b47;--user:#4d754f;--user-ink:#fff;--code:#28382d;--code-ink:#eff7e9;--success:#2c684b;--glow:radial-gradient(circle at 85% 0,#b0cfa443,transparent 48%)}
+    [data-skin=moss][data-mode=dark]{--shadow:0 20px 48px #0009;--card-shadow:0 7px 20px #0004;--backdrop:#0c120d;--page:#141d16;--surface:#1d2820;--raised:#263428;--soft:#2a392d;--text:#eef4e9;--muted:#b8cbb5;--faint:#839780;--line:#405544;--accent:#a5d9a2;--accent-hover:#c2e9bb;--accent-ink:#1d3822;--accent-soft:#304b35;--accent-soft-ink:#c1ecba;--user:#517654;--user-ink:#fff;--code:#101b13;--code-ink:#e8f4e3;--success:#96d6ae;--glow:radial-gradient(circle at 85% 0,#5d9a5923,transparent 48%)}
+    [data-skin=abyss]{--page-gradient:radial-gradient(ellipse 95% 80% at 94% 6%,#fbfdff 0%,#d8e8f7 100%)}
+    [data-skin=abyss][data-mode=dark]{--page-gradient:radial-gradient(ellipse 115% 90% at 94% 6%,#102643 0%,#050f1e 100%)}
+    [data-skin=moss]{--page-gradient:radial-gradient(ellipse 95% 80% at 90% 4%,#fbfcf7 0%,#dce9d4 100%)}
+    [data-skin=moss][data-mode=dark]{--page-gradient:radial-gradient(ellipse 115% 90% at 90% 6%,#233428 0%,#141d16 100%)}
+    [data-skin=abyss][data-mode=light]{--cite-bg:#b8d4f1;--cite-hover-bg:#a7c8eb;--cite-ink:#174e7c;--cite-border:#5586b2}
+    [data-skin=moss][data-mode=light]{--cite-bg:#bdd8b8;--cite-hover-bg:#accfa7;--cite-ink:#285a34;--cite-border:#628d65}
+    [data-skin=tactical]{--font:"Segoe UI","Noto Sans SC",sans-serif;--title-font:Impact,"Arial Narrow","Noto Sans SC",sans-serif;--radius:0px;--small-radius:0px;--weight:1.5px;--shadow:8px 8px 0 #3030302e;--card-shadow:3px 3px 0 #30303026;--backdrop:#d0d1ce;--page:#e8e8e5;--surface:#f5f5f2;--raised:#fff;--soft:#e1e2de;--text:#292b2d;--muted:#4c5052;--faint:#898e8e;--line:#a1a4a2;--accent:#a64118;--accent-hover:#883312;--accent-ink:#fff;--accent-soft:#f4dccd;--accent-soft-ink:#963c17;--user:#383a3b;--user-ink:#fff;--code:#202325;--code-ink:#f0f0ed;--success:#286b53;--glow:repeating-linear-gradient(135deg,#30303008 0 2px,transparent 2px 12px)}
+    [data-skin=tactical][data-mode=dark]{--shadow:8px 8px 0 #0008;--card-shadow:3px 3px 0 #0006;--backdrop:#111314;--page:#191b1c;--surface:#242728;--raised:#2c3031;--soft:#34383a;--text:#f0f0ed;--muted:#c3c6c7;--faint:#979e9f;--line:#686e70;--accent:#ff8b4c;--accent-hover:#ffb17e;--accent-ink:#28170f;--accent-soft:#5c3b2a;--accent-soft-ink:#ffb17e;--user:#b9582b;--user-ink:#fff;--code:#121415;--code-ink:#f0f0ed;--success:#91c9aa;--glow:repeating-linear-gradient(135deg,#ffffff08 0 2px,transparent 2px 12px)}
+    [data-skin=bw]{--font:"Cascadia Code",Consolas,"Noto Sans SC",monospace;--title-font:var(--font);--radius:0px;--small-radius:0px;--weight:1px;--shadow:4px 4px 0 #0003;--card-shadow:2px 2px 0 #0002;--backdrop:#c9c9c9;--page:#e6e6e6;--surface:#efefef;--raised:#f6f6f6;--soft:#d8d8d8;--text:#202020;--muted:#555;--faint:#767676;--line:#777;--accent:#1b1b1b;--accent-hover:#383838;--accent-ink:#fff;--accent-soft:#d2d2d2;--accent-soft-ink:#282828;--user:#333;--user-ink:#fff;--code:#171717;--code-ink:#f3f3f3;--success:#4b4b4b;--glow:repeating-linear-gradient(0deg,#00000008 0 1px,transparent 1px 24px)}
+    [data-skin=bw][data-mode=dark]{--shadow:4px 4px 0 #000b;--card-shadow:2px 2px 0 #0009;--backdrop:#111;--page:#1b1b1b;--surface:#242424;--raised:#292929;--soft:#303030;--text:#ededed;--muted:#bdbdbd;--faint:#919191;--line:#4a4a4a;--accent:#e8e8e8;--accent-hover:#fff;--accent-ink:#161616;--accent-soft:#383838;--accent-soft-ink:#eee;--user:#3b3b3b;--user-ink:#f6f6f6;--code:#303030;--code-ink:#f1f1f1;--success:#ccc;--glow:linear-gradient(#ffffff08,transparent 55%)}
+    /* Readable text and control colors for WCAG 2.2 AA. */
+    :root[data-mode=light]{--control-line:#666}
+    :root[data-mode=dark]{--control-line:#aaa}
+    .studio{min-height:100vh;padding:27px clamp(15px,3vw,48px) 45px;background:var(--glow),var(--backdrop)}
+    [data-skin=abyss] .stage,[data-skin=moss] .stage{background:var(--page-gradient)}
+    .topbar,.themes,.workspace{max-width:1480px;margin-inline:auto}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:18px}
+    .eyebrow,.section-kicker,.stage-kicker{font:700 10px/1.4 Consolas,monospace;letter-spacing:.14em;color:var(--accent)}
+    h1{margin:5px 0;font:700 clamp(24px,2.5vw,34px)/1.2 var(--title-font);letter-spacing:-.025em}
+    .intro{margin:0;color:var(--muted);font-size:12px;line-height:1.6}
+    .preview-label{display:inline-block;margin-top:8px;color:var(--muted);font-size:11px}
+    .preview-label::before{content:"";display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:var(--accent)}
+    .switches{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end}
+    .segmented{display:flex;gap:3px;padding:4px;border:var(--weight) solid var(--line);border-radius:var(--small-radius);background:var(--surface);box-shadow:var(--card-shadow)}
+    .segmented button{border:0;border-radius:var(--small-radius);padding:8px 10px;background:transparent;color:var(--muted);font-size:11px;font-weight:700;white-space:nowrap}
+    .segmented button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+    .segmented button:not([aria-pressed=true]):hover{background:var(--soft);color:var(--text)}
+    .themes{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin-bottom:17px}
+    .theme{min-width:0;padding:11px;text-align:left;background:var(--surface);color:var(--text);border:var(--weight) solid var(--line);border-radius:var(--small-radius);box-shadow:var(--card-shadow)}
+    .theme:hover{border-color:var(--accent);transform:translateY(-2px)}
+    .theme[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent),var(--card-shadow)}
+    .swatches{display:flex;gap:3px;margin-bottom:7px}.swatches i{width:18px;height:9px;border:1px solid #7773;background:var(--sw)}
+    .theme strong,.theme small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.theme strong{font-size:12px}.theme small{margin-top:3px;color:var(--muted);font-size:10px}
+    .workspace{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:17px;align-items:start}
+    .stage{min-width:0;padding:24px;border:var(--weight) solid var(--line);border-radius:calc(var(--radius) + 4px);background:var(--soft);box-shadow:var(--shadow)}
+    .stage-top{display:flex;justify-content:space-between;gap:10px;margin-bottom:15px;color:var(--muted);font-size:11px}.stage-top b{color:var(--text)}
+    .chat{width:100%;min-height:690px;margin:auto;display:flex;flex-direction:column;overflow:hidden;border:var(--weight) solid var(--line);border-radius:var(--radius);background:var(--page-gradient,var(--page));box-shadow:var(--card-shadow);transition:width .2s}
+    [data-width=narrow] .chat{width:min(100%,360px)}
+    .chat-head{padding:13px 19px 9px;border-bottom:1px solid var(--line);background:var(--surface)}
+    .chat-brand{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px}.logo{display:grid;place-items:center;width:24px;height:24px;border-radius:var(--small-radius);background:var(--accent);color:var(--accent-ink);font-size:15px;font-weight:800}
+    .online{margin-left:auto;color:var(--muted);font-size:10px;white-space:nowrap}.online::before{content:"";display:inline-block;width:6px;height:6px;margin-right:5px;border-radius:50%;background:var(--success)}
+    .tabs{display:flex;gap:3px;overflow:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}.tab{flex:none;border:0;border-radius:var(--small-radius) var(--small-radius) 0 0;padding:7px 10px;background:transparent;color:var(--muted);font-size:11px}.tab.active{background:var(--soft);color:var(--accent-soft-ink);font-weight:700}
+    .chat-body{flex:1;padding:20px clamp(14px,4%,32px) 22px}.source{display:flex;gap:7px;align-items:center;margin-bottom:18px;color:var(--muted);font-size:10px}.source-pill{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 8px;border:1px solid var(--line);border-radius:var(--small-radius);background:var(--surface);color:var(--text)}
+    .turn{margin-bottom:21px}.turn-label{display:flex;align-items:center;gap:6px;margin-bottom:8px;color:var(--muted);font-size:10px;font-weight:700}.avatar{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--accent-soft);color:var(--accent-soft-ink)}
+    .user-turn{display:flex;flex-direction:column;align-items:end}.user-turn .turn-label{flex-direction:row-reverse}.bubble{max-width:88%;padding:12px 15px;border-radius:var(--radius) var(--small-radius) var(--small-radius) var(--radius);background:var(--user);color:var(--user-ink);box-shadow:var(--card-shadow);font-size:12px;line-height:1.7}
+    .answer{font-size:12px;line-height:1.85}.answer p{margin:0 0 10px}.answer h2{margin:16px 0 7px;font:700 15px/1.4 var(--title-font)}.cite{display:inline-block;padding:1px 5px;border:1px solid var(--cite-border,var(--line));border-radius:var(--small-radius);background:var(--cite-bg,var(--accent-soft));color:var(--cite-ink,var(--accent-soft-ink));font:700 10px/1.5 var(--font);text-decoration:none;white-space:nowrap}.cite:hover{border-color:var(--accent);background:var(--cite-hover-bg,var(--accent-soft))}
+    .tool{margin:11px 0 15px;border:1px solid var(--line);border-radius:var(--small-radius);background:var(--surface);box-shadow:var(--card-shadow)}.tool summary{display:flex;gap:7px;align-items:center;padding:9px 10px;list-style:none;cursor:pointer;font-size:10px}.tool summary::-webkit-details-marker{display:none}.tool-mark{color:var(--accent);font-weight:800}.tool-result{margin-left:auto;color:var(--success);white-space:nowrap}.tool-detail{padding:8px 10px;border-top:1px solid var(--line);color:var(--muted);font:10px/1.5 Consolas,monospace}
+    blockquote{margin:12px 0;padding:7px 11px;border-left:3px solid var(--accent);background:var(--soft);color:var(--muted)}
+    .code{margin:13px 0;overflow:hidden;border-radius:var(--small-radius);background:var(--code);color:var(--code-ink)}.code-head{display:flex;justify-content:space-between;padding:7px 11px;border-bottom:1px solid #ffffff25;font:10px Consolas,monospace;opacity:.8}.code pre{margin:0;padding:10px 12px;overflow:auto;font:11px/1.6 Consolas,"Noto Sans SC",monospace}
+    .answer-actions{display:flex;gap:4px;margin-top:12px}.icon-btn{padding:5px 7px;border:0;border-radius:var(--small-radius);background:transparent;color:var(--muted);font-size:10px}.icon-btn:hover{background:var(--soft);color:var(--accent)}
+    .input-area{padding:10px 15px 13px;border-top:1px solid var(--line);background:var(--surface)}.context{padding:6px 9px;border:1px solid var(--line);border-bottom:0;border-radius:var(--small-radius) var(--small-radius) 0 0;background:var(--soft);color:var(--muted);font-size:10px}.composer{border:var(--weight) solid var(--line);border-radius:0 0 var(--small-radius) var(--small-radius);background:var(--raised)}.composer:focus-within{border-color:var(--accent)}.composer textarea{display:block;width:100%;min-height:46px;resize:vertical;padding:10px 10px 3px;border:0;outline:0;background:transparent;color:var(--text);font-size:11px}.composer textarea::placeholder{color:var(--faint)}.composer-bottom{display:flex;align-items:center;gap:5px;padding:3px 6px 6px}.chip-btn{padding:5px 6px;border:0;border-radius:var(--small-radius);background:transparent;color:var(--muted);font-size:10px}.chip-btn:hover{background:var(--soft)}.spacer{flex:1}.send{width:27px;height:25px;border:0;border-radius:var(--small-radius);background:var(--accent);color:var(--accent-ink)}.send:hover{background:var(--accent-hover)}.disclaimer{margin:7px 0 0;text-align:center;color:var(--faint);font-size:9px}
+    .board{display:flex;flex-direction:column;gap:13px}.board-card{padding:17px;border:var(--weight) solid var(--line);border-radius:var(--radius);background:var(--surface);box-shadow:var(--card-shadow)}.board-card h3{margin:5px 0 13px;font:700 17px/1.3 var(--title-font)}.board-card p{margin:0;color:var(--muted);font-size:11px;line-height:1.65}.palette{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:15px}.palette i{display:block;height:28px;border:1px solid var(--line);border-radius:var(--small-radius)}.palette span{display:block;margin-top:4px;color:var(--muted);font:9px Consolas,monospace;overflow:hidden}
+    .row-label{margin:16px 0 7px;color:var(--muted);font-size:10px;font-weight:700}.button-row,.tag-row{display:flex;gap:6px;flex-wrap:wrap}.demo-btn{padding:7px 9px;border:1px solid var(--line);border-radius:var(--small-radius);background:var(--surface);color:var(--text);font-size:10px;font-weight:700}.demo-btn.primary{border-color:var(--accent);background:var(--accent);color:var(--accent-ink)}.demo-btn.secondary{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-soft-ink)}.demo-btn.ghost{border-color:transparent;color:var(--accent-soft-ink)}.demo-btn:disabled{opacity:.4}.tag{padding:4px 7px;border:1px solid var(--line);border-radius:var(--small-radius);background:var(--soft);color:var(--muted);font-size:10px}.tag.selected{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-soft-ink)}.tag.success{color:var(--success)}.demo-input{display:block;width:100%;margin-top:7px;padding:9px;border:1px solid var(--line);border-radius:var(--small-radius);outline:0;background:var(--raised);color:var(--text);font-size:11px}.demo-input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}.demo-input::placeholder{color:var(--faint)}.demo-input:disabled{opacity:.45}.board-note{padding:11px 13px;border-left:3px solid var(--accent);background:var(--soft);color:var(--muted);font-size:11px;line-height:1.6}.board-note strong{color:var(--text)}
+    .toast{position:fixed;left:50%;bottom:20px;transform:translate(-50%,12px);padding:9px 13px;border:1px solid var(--line);border-radius:var(--small-radius);background:var(--surface);color:var(--text);box-shadow:var(--shadow);font-size:11px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}.toast.show{opacity:1;transform:translate(-50%,0)}
+    [data-skin=paper] .answer{letter-spacing:.006em}[data-skin=paper] .chat-head,[data-skin=paper] .input-area{background:var(--page)}[data-skin=paper] .cite{border:1px dotted #94739b}[data-skin=paper] .bubble{border:1px solid #c6b8a8;box-shadow:2px 3px 0 #d8cec2}
+    [data-skin=paper][data-mode=dark] .cite{border-color:#a88cad}[data-skin=paper][data-mode=dark] .bubble{border-color:#687276;box-shadow:2px 3px 0 #15191a}
+    [data-skin=paper] .chat{position:relative;box-shadow:3px 3px 0 #ded2c2,0 14px 30px #6a51401f}[data-skin=paper][data-mode=dark] .chat{box-shadow:3px 3px 0 #171a1b,0 14px 30px #0006}
+    [data-skin=paper] .chat::before{content:"";position:absolute;z-index:2;top:-1px;right:-1px;width:17px;height:17px;background:var(--soft);clip-path:polygon(0 0,100% 0,100% 100%);pointer-events:none}[data-skin=paper] .chat::after{content:"";position:absolute;z-index:3;top:8px;right:0;width:21px;height:1px;background:var(--line);transform:rotate(45deg);pointer-events:none}
+    [data-skin=paper] :is(.source-pill,.cite,.tab.active,.tag.selected,.demo-btn.primary,.demo-btn.secondary,.send,.context,.theme[aria-pressed=true]){clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,0 100%)}
+    [data-skin=paper] .cite{clip-path:polygon(0 0,calc(100% - 4px) 0,100% 4px,100% 100%,0 100%)}
+    [data-skin=paper] :is(.tool,.board-card){position:relative}[data-skin=paper] .tool{--cut-backdrop:var(--page)}[data-skin=paper] .board-card{--cut-backdrop:var(--backdrop)}[data-skin=paper] .tool summary{padding-right:20px}
+    [data-skin=paper] :is(.tool,.board-card)::before{content:"";position:absolute;z-index:2;top:-1px;right:-1px;width:13px;height:13px;background:var(--cut-backdrop);clip-path:polygon(0 0,100% 0,100% 100%);pointer-events:none}[data-skin=paper] :is(.tool,.board-card)::after{content:"";position:absolute;z-index:3;top:6px;right:0;width:17px;height:1px;background:var(--line);transform:rotate(45deg);pointer-events:none}
+    [data-skin=moss] .bubble,[data-skin=rose] .bubble{border-radius:26px;padding-inline:20px}
+
+    [data-skin=paper] .stage{border-radius:var(--radius)}[data-skin=paper] .avatar,[data-skin=paper] .online::before,[data-skin=paper] .preview-label::before{border-radius:var(--small-radius)}
+    [data-skin=tactical] .stage,[data-skin=tactical] .logo,[data-skin=tactical] .avatar,[data-skin=tactical] .online::before,[data-skin=tactical] .preview-label::before{border-radius:0}[data-skin=tactical] .tab.active{box-shadow:inset 0 -3px var(--accent)}
+    [data-skin=bw] .swatches i{filter:grayscale(1)}
+    [data-skin=bw] .stage,[data-skin=bw] .avatar,[data-skin=bw] .online::before,[data-skin=bw] .preview-label::before{border-radius:0}
+    [data-skin=bw] .chat-head{border-bottom:2px solid var(--line)}[data-skin=bw] .tool summary{background:var(--soft)}[data-skin=bw] .stage-kicker,[data-skin=bw] .turn-label{letter-spacing:.08em}
+    .disclaimer,.composer textarea::placeholder,.demo-input::placeholder{color:var(--muted)}
+    [data-skin=tactical][data-mode=light] .eyebrow{color:#8a2f10}
+    [data-skin=rose][data-mode=light] .eyebrow,[data-skin=rose][data-mode=light] .stage-kicker{color:#be123c}
+    [data-skin=rose][data-mode=dark] .stage-kicker{color:#fda4af}
+    .theme,.segmented,.tool,.cite,.composer,.demo-input,.demo-btn{border-color:var(--control-line)}
+    .tab.active{border-bottom:2px solid var(--accent)}
+    [data-width=narrow] .chat-head{padding-inline:11px}[data-width=narrow] .chat-body{padding-inline:15px}[data-width=narrow] .input-area{padding-inline:10px}[data-width=narrow] .source>span:first-child{display:none}
+    @media(max-width:1050px){.workspace{grid-template-columns:1fr}.board{display:grid;grid-template-columns:1fr 1fr}.board-note{grid-column:1/-1}}
+    @media(max-width:760px){.topbar{display:block}.switches{justify-content:flex-start;margin-top:15px}.themes{grid-template-columns:repeat(3,1fr)}.stage{padding:13px}.studio{padding-top:19px}}
+    @media(max-width:530px){.themes{grid-template-columns:repeat(2,1fr)}.board{grid-template-columns:1fr}.board-note{grid-column:auto}.stage-top{flex-wrap:wrap}.chat{min-height:750px}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important}}
+  </style>
+</head>
+<body>
+<main class="studio">
+  <header class="topbar">
+    <div><div class="eyebrow">ZOTERO AI BAR / VISUAL STUDY 01</div><h1>六套皮肤，同一段对话</h1><p class="intro">比较阅读、引用、工具状态与输入控件的视觉语言。所有主题展示完全相同的内容。</p><span class="preview-label">独立 HTML 视觉预览，不连接 Zotero 或 AI 服务</span></div>
+    <div class="switches" aria-label="预览设置">
+      <div class="segmented" role="group" aria-label="明暗模式"><button type="button" data-mode-choice="light" aria-pressed="true">☀ 浅色</button><button type="button" data-mode-choice="dark" aria-pressed="false">◐ 深色</button></div>
+      <div class="segmented" role="group" aria-label="预览宽度"><button type="button" data-width-choice="wide" aria-pressed="true">▣ 独立窗口</button><button type="button" data-width-choice="narrow" aria-pressed="false">▥ 窄侧栏</button></div>
+    </div>
+  </header>
+  <nav class="themes" aria-label="选择皮肤">
+    <button class="theme" type="button" data-skin-choice="rose" aria-pressed="true"><span class="swatches"><i style="--sw:#fff"></i><i style="--sw:#e11d48"></i><i style="--sw:#18181b"></i></span><strong>01 经典 Rose</strong><small>现有配色 · 玫红点缀</small></button>
+    <button class="theme" type="button" data-skin-choice="paper" aria-pressed="false"><span class="swatches"><i style="--sw:#fdf9f3"></i><i style="--sw:#78657f"></i><i style="--sw:#303941"></i></span><strong>02 纸页 Paper</strong><small>暖纸页 · 烟紫标记</small></button>
+    <button class="theme" type="button" data-skin-choice="abyss" aria-pressed="false"><span class="swatches"><i style="--sw:#f2f7fc"></i><i style="--sw:#1f679e"></i><i style="--sw:#102a43"></i></span><strong>03 深海 Abyss</strong><small>精密工具 · 海蓝信号</small></button>
+    <button class="theme" type="button" data-skin-choice="moss" aria-pressed="false"><span class="swatches"><i style="--sw:#f3f5ed"></i><i style="--sw:#3f6745"></i><i style="--sw:#28382d"></i></span><strong>04 苔绿 Moss</strong><small>安静自然 · 柔软轮廓</small></button>
+    <button class="theme" type="button" data-skin-choice="tactical" aria-pressed="false"><span class="swatches"><i style="--sw:#e8e8e5"></i><i style="--sw:#a64118"></i><i style="--sw:#202325"></i></span><strong>05 机能 Tactical</strong><small>工业设备 · 信号橙</small></button>
+    <button class="theme" type="button" data-skin-choice="bw" aria-pressed="false"><span class="swatches"><i style="--sw:#e6e6e6"></i><i style="--sw:#1b1b1b"></i><i style="--sw:#777"></i></span><strong>06 黑白 B&amp;W</strong><small>设备灰 · 紧凑状态</small></button>
+  </nav>
+  <div class="workspace">
+    <section class="stage" aria-label="聊天界面预览">
+      <div class="stage-top"><span><span class="stage-kicker">LIVE PREVIEW</span> / <b id="skin-name">经典 Rose</b></span><span id="width-name">独立窗口 · 适合完整阅读</span></div>
+      <div class="chat">
+        <div class="chat-head"><div class="chat-brand"><span class="logo">✦</span><strong>Zotero AI Bar</strong><span class="online">已连接 · GPT-4.1</span></div><div class="tabs" role="tablist" aria-label="会话类型"><button class="tab active" type="button" role="tab" aria-selected="true">▣ 论文问答</button><button class="tab" type="button" role="tab" aria-selected="false">文献翻译</button><button class="tab" type="button" role="tab" aria-selected="false">全局助手</button></div></div>
+        <div class="chat-body">
+          <div class="source"><span>当前文献</span><span class="source-pill">▤ Attention Is All You Need · Vaswani et al., 2017</span></div>
+          <div class="turn user-turn"><div class="turn-label"><span class="avatar">你</span><span>你 · 10:42</span></div><div class="bubble">Transformer 为什么不需要循环结构？请结合论文解释它处理长距离依赖的优势，并给我一个直观例子。</div></div>
+          <div class="turn"><div class="turn-label"><span class="avatar">✦</span><span>AI Bar · 基于当前文献</span></div>
+            <div class="answer">
+              <p>Transformer 用<strong>自注意力机制</strong>让序列中的每个位置直接读取其他位置的信息，因此不必像循环网络那样沿时间步逐个传递状态。论文将这一结构概括为“完全基于注意力” <a class="cite" href="#reference">[1, p. 1]</a>。</p>
+              <details class="tool" open><summary><span class="tool-mark">⌕</span><b>检索当前 PDF</b><span>定位长距离依赖</span><span class="tool-result">✓ 3 处匹配</span></summary><div class="tool-detail">文献定位：第 2 页 · 第 3.2 节 · 第 6 页</div></details>
+              <h2>为什么长距离依赖更容易建模？</h2>
+              <p>在循环网络中，句首信息要经过许多步才能影响句尾；自注意力则让两个位置在一次注意力计算中建立联系。论文指出，这缩短了依赖路径，也允许不同位置并行计算 <a class="cite" href="#reference">[1, p. 2]</a>。</p>
+              <blockquote>直观地说，RNN 像排队传话；自注意力更像一张可同时查阅的索引表。</blockquote>
+              <p>例如在“<strong>那篇去年发表、被广泛引用的论文</strong>提出了新架构”中，“论文”和“提出”相隔较远。注意力层仍可直接比较这两个词，并分配较高权重。</p>
+              <div class="code"><div class="code-head"><span>conceptual-example.py</span><span>示意代码</span></div><pre><code>score = query["提出"] @ key["论文"]
+attention = softmax(score)
+context = attention @ value["论文"]</code></pre></div>
+              <p id="reference">需要注意，直接连接并不等于模型总能正确理解长文本；注意力分布仍取决于训练和上下文 <a class="cite" href="#reference">[1, p. 6]</a>。</p>
+            </div>
+            <div class="answer-actions"><button class="icon-btn" type="button" data-demo="已复制回答（预览）">▢ 复制</button><button class="icon-btn" type="button" data-demo="重新生成仅作视觉预览">↻ 重试</button><button class="icon-btn" type="button" data-demo="已加入文献笔记（预览）">♧ 保存</button></div>
+          </div>
+        </div>
+        <div class="input-area"><div class="context">▤ 已附加当前文献 · 可结合全文回答</div><div class="composer"><textarea aria-label="输入问题" placeholder="继续提问，或选中 PDF 文本进行追问……"></textarea><div class="composer-bottom"><button class="chip-btn" type="button" data-demo="附件控件仅作视觉预览">＋ 附件</button><button class="chip-btn" type="button" data-demo="模式控件仅作视觉预览">◇ 全文模式</button><span class="spacer"></span><button class="chip-btn" type="button" data-demo="模型控件仅作视觉预览">GPT-4.1⌄</button><button class="send" type="button" aria-label="发送" data-demo="发送控件仅作视觉预览">➤</button></div></div><p class="disclaimer">AI 可能出错，请核对引用与原文。</p></div>
+      </div>
+    </section>
+    <aside class="board" aria-label="主要 UI 元素预览">
+      <div class="board-card"><div class="section-kicker">01 / DESIGN LANGUAGE</div><h3 id="style-title">经典界面</h3><p id="style-description">接近现有界面的白色、Slate 浅灰与 Zinc 深灰，Rose 集中用于气泡和交互状态。</p><div class="palette"><div><i style="background:var(--page)"></i><span>PAGE</span></div><div><i style="background:var(--surface)"></i><span>SURFACE</span></div><div><i style="background:var(--accent)"></i><span>ACCENT</span></div><div><i style="background:var(--soft)"></i><span>SOFT</span></div><div><i style="background:var(--code)"></i><span>CODE</span></div></div></div>
+      <div class="board-card"><div class="section-kicker" id="controls-kicker">02 / CONTROLS</div><h3>主要控件</h3><div class="row-label">操作按钮</div><div class="button-row"><button class="demo-btn primary" type="button" data-demo="主操作仅作视觉预览">主操作</button><button class="demo-btn secondary" type="button" data-demo="次操作仅作视觉预览">次操作</button><button class="demo-btn ghost" type="button" data-demo="文字按钮仅作视觉预览">文字按钮</button><button class="demo-btn" type="button" disabled>不可用</button></div><div class="row-label">状态与标签</div><div class="tag-row"><span class="tag selected">已选中</span><span class="tag success">● 已完成</span><span class="tag">引用 [1]</span><span class="tag">思考中…</span></div><div class="row-label">输入与焦点</div><input class="demo-input" aria-label="示例输入框" placeholder="输入关键词搜索模型…"><input class="demo-input" aria-label="禁用输入框" placeholder="禁用状态" disabled></div>
+      <div class="board-note"><strong>预览范围</strong><br>颜色、字体气质、圆角、边框与阴影随皮肤变化；聊天内容、功能布局和操作位置保持一致。</div>
+    </aside>
+  </div>
+</main>
+<div class="toast" role="status" aria-live="polite"></div>
+<script>
+  (() => {
+    const root = document.documentElement;
+    const names = {rose:"经典 Rose",paper:"纸页 Paper",abyss:"深海 Abyss",moss:"苔绿 Moss",tactical:"机能 Tactical",bw:"黑白 B&W"};
+    const styles = {
+      rose:["经典界面","接近现有界面的白色、Slate 浅灰与 Zinc 深灰，Rose 集中用于气泡和交互状态。"],
+      paper:["暖纸页","暖纸底色、深米色消息与烟紫引用分层；细分隔线保留纸页质感。"],
+      abyss:["精密工具","深海蓝与清晰边界让引用和工具状态更易扫读。"],
+      moss:["安静自然","低饱和绿、温和圆角与轻柔层次，适合长时间阅读。"],
+      tactical:["工业机能","炭灰、信号橙、直角描边与实体阴影，突出操作与状态。"],
+      bw:["仪器面板","设备灰、等宽标签和实体阴影，突出操作与状态。"]
+    };
+    const toast = document.querySelector(".toast");
+    let timer;
+    function setChoice(kind,value) {
+      root.setAttribute("data-"+kind,value);
+      document.querySelectorAll("[data-"+kind+"-choice]").forEach(button => button.setAttribute("aria-pressed",String(button.getAttribute("data-"+kind+"-choice")===value)));
+      if(kind==="skin") {
+        document.querySelector("#skin-name").textContent = names[value];
+        document.querySelector("#style-title").textContent = styles[value][0];
+        document.querySelector("#style-description").textContent = styles[value][1];
+      }
+      if(kind==="width") document.querySelector("#width-name").textContent = value==="narrow" ? "窄侧栏 · 360 px" : "独立窗口 · 适合完整阅读";
+    }
+    document.querySelectorAll("[data-skin-choice],[data-mode-choice],[data-width-choice]").forEach(button => button.addEventListener("click",() => {
+      for(const kind of ["skin","mode","width"]) if(button.hasAttribute("data-"+kind+"-choice")) setChoice(kind,button.getAttribute("data-"+kind+"-choice"));
+    }));
+    document.querySelectorAll("[data-demo],.tab:not(.active)").forEach(button => button.addEventListener("click",() => {
+      toast.textContent = button.dataset.demo || "页签仅作视觉预览；聊天内容保持不变";
+      toast.classList.add("show"); clearTimeout(timer); timer=setTimeout(() => toast.classList.remove("show"),2200);
+    }));
+  })();
+</script>
+</body>
+</html>

@@ -31,6 +31,8 @@ declare namespace _ZoteroTypes {
       "chat.contextRounds": number;
       "chat.defaultMode": string;
       "chat.fontSize": number;
+      "chat.skin": string;
+      "poem.token": string;
       "chat.startConversationMode": string;
       "chat.autoAttachItemData": boolean;
       "chat.openOnStartup": boolean;

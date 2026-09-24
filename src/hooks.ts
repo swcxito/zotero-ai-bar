@@ -13,6 +13,7 @@ import { preloadLLMRuntime } from './modules/llm';
 import { convertLegacyLLMConfigByKey, ensureCommonProviders, initIconCache, loadV2Config, saveV2Config } from './utils/providers';
 import { isReaderZoteroTab, updateSelectedZoteroTab } from './modules/chatWorkspace';
 import { codexRuntime } from './modules/codex/runtime';
+import { startChatSkinSync, stopChatSkinSync } from './utils/chatSkin';
 
 function zaibarDump(msg: string) {
   try {
@@ -32,6 +33,7 @@ async function onStartup() {
     zaibarDump('Zotero promises resolved');
 
     initLocale();
+    startChatSkinSync();
     void codexRuntime.detect();
     Zotero.debug(`${label} locale initialized`);
     zaibarDump('locale initialized');
@@ -164,6 +166,7 @@ async function onMainWindowUnload(win: Window): Promise<void> {
 }
 
 async function onShutdown(): Promise<void> {
+  stopChatSkinSync();
   await codexRuntime.stop(true);
   await addon.chatManager.flushHistory();
   ztoolkit.unregisterAll();

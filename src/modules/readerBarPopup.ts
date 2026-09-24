@@ -17,6 +17,7 @@
  */
 
 import { config } from '../../package.json';
+import { registerChatSkinRoot } from '../utils/chatSkin';
 import { getSelectionContext } from '../utils/selectionContext';
 import { getString } from '../utils/locale';
 import { getPref } from '../utils/prefs';
@@ -103,6 +104,14 @@ export function registerAIBarStyleSheet(win: _ZoteroTypes.MainWindow) {
     },
   });
   doc.documentElement?.appendChild(styles);
+  const skinStyles = ztoolkit.UI.createElement(doc, 'link', {
+    properties: {
+      type: 'text/css',
+      rel: 'stylesheet',
+      href: `chrome://${addon.data.config.addonRef}/content/styles/skins.css`,
+    },
+  });
+  doc.documentElement?.appendChild(skinStyles);
 }
 
 /**
@@ -288,6 +297,16 @@ function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 
       },
     });
     doc.head?.appendChild(styles);
+  }
+  if (!doc.querySelector(`link[href="chrome://${addon.data.config.addonRef}/content/styles/skins.css"]`)) {
+    const skinStyles = ztoolkit.UI.createElement(doc, 'link', {
+      properties: {
+        type: 'text/css',
+        rel: 'stylesheet',
+        href: `chrome://${addon.data.config.addonRef}/content/styles/skins.css`,
+      },
+    });
+    doc.head?.appendChild(skinStyles);
   }
 
   async function handleAction(input: string) {
@@ -485,6 +504,7 @@ function renderAIBar(doc: Document, reader: _ZoteroTypes.ReaderInstance<'pdf' | 
     ],
   });
   const container = fragment.querySelector('.ai-bar-container') as HTMLElement;
+  registerChatSkinRoot(container);
   const modelInfoEl = fragment.querySelector('#ai-bar-model-info') as HTMLElement | null;
   if (modelInfoEl) registerModelInfoAnchor(modelInfoEl);
   // Mark the textarea as contenteditable so Zotero reader's isTextBox() check

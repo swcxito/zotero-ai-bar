@@ -17,6 +17,7 @@
  */
 
 import { config } from '../../package.json';
+import { registerChatSkinRoot } from '../utils/chatSkin';
 import { ProviderLogoButton } from '../components/buttons/providerLogoButton';
 import { ProviderCard } from '../components/providerCard';
 import { getString } from '../utils/locale';
@@ -946,5 +947,6 @@ class ModelDialogV2 {
 }
 
 export async function onModelDialogLoad(window: Window) {
+  registerChatSkinRoot(window.document.documentElement);
   await new ModelDialogV2(window).init();
 }

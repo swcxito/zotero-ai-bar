@@ -45,6 +45,13 @@ pref-extend-selection-unit = words
 # Advanced Options
 pref-advanced = Advanced Settings
 pref-ui = Interface Settings
+pref-chat-skin = Interface skin
+pref-chat-skin-rose = Rose
+pref-chat-skin-paper = Paper
+pref-chat-skin-abyss = Abyss
+pref-chat-skin-moss = Moss
+pref-chat-skin-tactical = Tactical
+pref-chat-skin-bw = B&W
 pref-formula-optimization =
     .label = Enable Formula Block Optimization
 

@@ -52,6 +52,7 @@ import { config } from '../../package.json';
 import { InputArea, type InputAreaAPI } from '../components/inputArea';
 import { ChatHistoryPanel } from '../components/chatHistoryPanel';
 import { createChatTurnNavigator, disposeChatTurnNavigatorHost, setChatTurnNavigatorHost } from '../components/chatTurnNavigator';
+import { mountChatEmptyState, resetChatEmptyState, syncChatEmptyState } from '../components/chatEmptyState';
 import { getString } from '../utils/locale';
 import { getPref, setPref } from '../utils/prefs';
 import { installChatSelectionCopyHandler, registerChatSelectionCopyContainer, uninstallChatSelectionCopyHandler } from '../utils/chatSelectionCopy';
@@ -60,6 +61,9 @@ import { Icons } from '../components/common';
 import { getReaderSourceLabel } from './readerBarPopup';
 import { renderPersistedTranscript } from './chatUI';
 import { applyChatFontSize } from '../utils/chatFontSize';
+import { registerChatSkinRoot } from '../utils/chatSkin';
+import { disposeChatTabHighlight, syncChatTabHighlight } from '../utils/chatTabHighlight';
+import { createSkinPreview } from '../components/skinPreview';
 import type { Session } from './chatManager';
 import {
   GLOBAL_AGENT_SESSION_ID,
@@ -82,6 +86,7 @@ const TOOLBAR_STYLE_ID = 'zaibar-tb-sidepane-toggle-style';
 const CHAT_ROOT_ID = 'ai-bar-chat-root';
 const SHARED_INPUT_HOST_ID = 'zaibar-sidepane-shared-input';
 const SESSION_ID_ATTR = 'data-session-id';
+const SKIN_PREVIEW_SESSION_ID = '__skin-preview__';
 const HISTORY_HOST_ID = 'zaibar-sidepane-history';
 const HISTORY_BUTTON_ID = 'zaibar-sidepane-history-button';
 const NEW_CHAT_BUTTON_ID = 'zaibar-sidepane-new-chat-button';
@@ -94,6 +99,7 @@ let unsubscribeWorkspace: (() => void) | undefined;
 let readerReadyTimer: number | undefined;
 let pendingReaderTabId: string | undefined;
 let sidePaneHistoryVisible = false;
+let sidePaneSkinPreviewVisible = false;
 let sidePaneUserWidth = DEFAULT_WIDTH;
 let sidePaneRenderedWidth = DEFAULT_WIDTH;
 let sidePaneHistoryTransition = 0;
@@ -390,10 +396,12 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
   const splitter = createXUL('box');
   splitter.id = SPLITTER_ID;
   splitter.setAttribute('orient', 'horizontal');
+  registerChatSkinRoot(splitter);
 
   // ── Pane ──────────────────────────────────────────────────────────────
   const pane = createXUL('vbox');
   pane.id = PANE_ID;
+  registerChatSkinRoot(pane);
   const savedWidth = getPref('sidepane.width');
   sidePaneUserWidth = savedWidth && savedWidth >= MIN_WIDTH ? savedWidth : DEFAULT_WIDTH;
   sidePaneRenderedWidth = sidePaneUserWidth;
@@ -467,6 +475,7 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
   injectCSS(inputShadow, 'atom-one.css');
   injectCSS(inputShadow, `../app.css`);
   injectCSS(inputShadow, `../zoteroAIBar.css`);
+  injectCSS(inputShadow, 'skins.css');
   const sharedInput = InputArea(doc, GLOBAL_AGENT_SESSION_ID, {
     sessionKind: 'global-agent',
     chatModeAdjustable: false,
@@ -475,6 +484,7 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
     draftId: SHARED_CHAT_DRAFT_ID,
     resolveMessageContainer: getSessionMessageContainer,
   });
+  registerChatSkinRoot(sharedInput);
   inputShadow.appendChild(sharedInput);
   addon.data.sharedInputAreas.add(sharedInput);
 
@@ -597,6 +607,7 @@ export function unregisterMainWindowSidePane(win?: Window, options: { removeTool
   if (doc) uninstallChatSelectionCopyHandler(doc);
   if (options.removeToolbar !== false) unregisterChatToolbarButton(win);
   if (!els) return;
+  disposeChatTabHighlight(els.tabs);
   cancelReaderReadyCheck();
   sidePaneResizeCleanup?.();
   sidePaneBoundsCleanup?.();
@@ -614,6 +625,7 @@ export function unregisterMainWindowSidePane(win?: Window, options: { removeTool
   addon.data.sidePaneElements = undefined;
   addon.data.sidePaneBodyMap?.clear();
   sidePaneHistoryVisible = false;
+  sidePaneSkinPreviewVisible = false;
   sidePaneHistoryTransition = 0;
   sidePaneHistoryAnimating = false;
   sidePaneCollapsed = false;
@@ -800,6 +812,7 @@ function clearCurrentTabHistory(): void {
     (messageContainer as HTMLElement).innerHTML = '';
   }
   addon.chatManager.clearSectionHistory(sessionId);
+  resetChatEmptyState(session);
 }
 
 function startNewSidePaneConversation(): void {
@@ -976,9 +989,45 @@ function refreshSidePaneWorkspace(): void {
 
   els.tabs.innerHTML = '';
   for (const kind of kinds) {
-    const tab = createWorkspaceTab(els.tabs.ownerDocument, kind, kind === 'article' ? articleLabel : undefined, snapshot.activeKind === kind);
-    tab.addEventListener('click', () => selectWorkspaceKind(kind, sourceTabId));
+    const tab = createWorkspaceTab(
+      els.tabs.ownerDocument,
+      kind,
+      kind === 'article' ? articleLabel : undefined,
+      !sidePaneSkinPreviewVisible && snapshot.activeKind === kind
+    );
+    tab.addEventListener('click', () => {
+      sidePaneSkinPreviewVisible = false;
+      selectWorkspaceKind(kind, sourceTabId);
+      refreshSidePaneWorkspace();
+    });
     els.tabs.appendChild(tab);
+  }
+
+  if (__env__ !== 'production') {
+    const previewTab = ztoolkit.UI.createElement(els.tabs.ownerDocument, 'button', { namespace: 'html' }) as HTMLButtonElement;
+    previewTab.type = 'button';
+    previewTab.classList.add('zaibar-workspace-tab');
+    previewTab.dataset.active = String(sidePaneSkinPreviewVisible);
+    previewTab.textContent = '皮肤预览';
+    previewTab.addEventListener('click', () => {
+      sidePaneSkinPreviewVisible = true;
+      sidePaneHistoryVisible = false;
+      refreshSidePaneWorkspace();
+    });
+    els.tabs.appendChild(previewTab);
+  }
+  syncChatTabHighlight(els.tabs);
+
+  if (__env__ !== 'production' && sidePaneSkinPreviewVisible) {
+    const previewPage = ensureSidePanePage(SKIN_PREVIEW_SESSION_ID);
+    const previewContainer = getSessionMessageContainer(SKIN_PREVIEW_SESSION_ID);
+    if (previewContainer && !previewContainer.firstElementChild) previewContainer.appendChild(createSkinPreview(previewContainer.ownerDocument));
+    selectSidePanePage(els.deck, previewPage);
+    const inputHost = els.pane.querySelector(`#${SHARED_INPUT_HOST_ID}`) as HTMLElement | null;
+    const historyHost = els.pane.querySelector(`#${HISTORY_HOST_ID}`) as HTMLElement | null;
+    if (inputHost) inputHost.style.display = 'none';
+    if (historyHost) historyHost.style.display = 'none';
+    return;
   }
 
   const sessionId = getSessionId(snapshot.activeKind, sourceTabId) ?? GLOBAL_AGENT_SESSION_ID;
@@ -996,7 +1045,10 @@ function refreshSidePaneWorkspace(): void {
     itemId: snapshot.activeKind === 'global-agent' ? undefined : reader?.itemID,
   });
   const messageContainer = getSessionMessageContainer(sessionId);
-  if (messageContainer) void renderPersistedTranscript(session, messageContainer);
+  if (messageContainer) {
+    syncChatEmptyState(session, messageContainer);
+    void renderPersistedTranscript(session, messageContainer);
+  }
   updateSidePaneHistoryView(session, page);
   sharedInput?._inputAreaAPI?.setContext({
     sessionId,
@@ -1144,6 +1196,7 @@ function ensureSidePanePage(sessionId: string): HTMLElement {
 
   const root = doc.createElement('div');
   root.id = CHAT_ROOT_ID;
+  registerChatSkinRoot(root);
   root.setAttribute(
     'style',
     'flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; gap: 8px; padding-top: 8px; width: 100%; contain: inline-size;'
@@ -1158,15 +1211,22 @@ function ensureSidePanePage(sessionId: string): HTMLElement {
   // with the reader popup). Inject so the reused ModelInfo component
   // renders correctly inside the sidebar's Shadow DOM.
   injectCSS(shadowRoot, `../zoteroAIBar.css`);
+  injectCSS(shadowRoot, 'skins.css');
 
   const messageContainer = doc.createElement('div');
   messageContainer.classList.add('message-container', 'flex', 'flex-col', 'flex-1', 'overflow-y-auto', 'overflow-x-auto', 'min-w-0', 'pb-7');
   messageContainer.style.userSelect = 'text';
+  registerChatSkinRoot(messageContainer);
   applyChatFontSize(messageContainer);
   registerChatSelectionCopyContainer(messageContainer);
   const navigator = createChatTurnNavigator(doc, messageContainer);
+  registerChatSkinRoot(navigator.shell);
+  const disposeEmptyState = mountChatEmptyState(doc, messageContainer, navigator.shell);
   shadowRoot.appendChild(navigator.shell);
-  setChatTurnNavigatorHost(page, navigator.dispose);
+  setChatTurnNavigatorHost(page, () => {
+    disposeEmptyState();
+    navigator.dispose();
+  });
 
   deck.appendChild(page);
   addon.data.sidePaneBodyMap!.set(sessionId, page);

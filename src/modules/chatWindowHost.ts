@@ -3,6 +3,7 @@ import { Icons } from '../components/common';
 import { InputArea, type InputAreaAPI } from '../components/inputArea';
 import { ChatHistoryPanel } from '../components/chatHistoryPanel';
 import { createChatTurnNavigator, disposeChatTurnNavigatorHost, setChatTurnNavigatorHost } from '../components/chatTurnNavigator';
+import { mountChatEmptyState, resetChatEmptyState, syncChatEmptyState } from '../components/chatEmptyState';
 import { renderMarkdown } from '../utils/markdown';
 import { getString } from '../utils/locale';
 import { installChatSelectionCopyHandler, registerChatSelectionCopyContainer, uninstallChatSelectionCopyHandler } from '../utils/chatSelectionCopy';
@@ -10,6 +11,9 @@ import { SHARED_CHAT_DRAFT_ID } from '../utils/chatDraft';
 import { getReaderSourceLabel } from './readerBarPopup';
 import { attachCitationHandlers, renderPersistedTranscript } from './chatUI';
 import { applyChatFontSize } from '../utils/chatFontSize';
+import { registerChatSkinRoot } from '../utils/chatSkin';
+import { disposeChatTabHighlight, syncChatTabHighlight } from '../utils/chatTabHighlight';
+import { createSkinPreview } from '../components/skinPreview';
 import type { Session } from './chatManager';
 import {
   GLOBAL_AGENT_SESSION_ID,
@@ -24,6 +28,7 @@ import {
 const WINDOW_ROOT_ID = 'ai-bar-window-root';
 const WINDOW_DECK_CLASS = 'zaibar-window-deck';
 const SESSION_ID_ATTR = 'data-session-id';
+const SKIN_PREVIEW_SESSION_ID = '__skin-preview__';
 const WINDOW_HISTORY_CLASS = 'zaibar-window-history';
 const WINDOW_HOST_SWITCH_CLASS = 'zaibar-window-host-switch';
 
@@ -57,7 +62,7 @@ function renderWindowTabs(doc: Document, tabs: HTMLElement): void {
     const tab = doc.createElement('button');
     tab.type = 'button';
     tab.classList.add('zaibar-window-tab');
-    tab.dataset.active = String(snapshot.activeKind === kind);
+    tab.dataset.active = String(tabs.closest(`#${WINDOW_ROOT_ID}`)?.getAttribute('data-skin-preview') !== 'true' && snapshot.activeKind === kind);
     const disabled = kind === 'article' && !sourceTabId;
     tab.disabled = disabled;
     tab.title = kind === 'article' ? articleLabel : getString(`workspace-${kind}` as any);
@@ -77,7 +82,12 @@ function renderWindowTabs(doc: Document, tabs: HTMLElement): void {
     label.classList.add('zaibar-window-tab-label');
     label.textContent = kind === 'article' ? articleLabel : getString(`workspace-${kind}` as any);
     tab.append(icon, label);
-    tab.addEventListener('click', () => selectWorkspaceKind(kind, sourceTabId));
+    tab.addEventListener('click', () => {
+      const root = tabs.closest(`#${WINDOW_ROOT_ID}`) as HTMLElement | null;
+      if (root) root.dataset.skinPreview = 'false';
+      selectWorkspaceKind(kind, sourceTabId);
+      refreshChatWindowWorkspace(doc);
+    });
 
     if (kind === 'translation') {
       const close = doc.createElement('span');
@@ -92,6 +102,23 @@ function renderWindowTabs(doc: Document, tabs: HTMLElement): void {
     }
     tabs.appendChild(tab);
   }
+  if (__env__ !== 'production') {
+    const previewTab = doc.createElement('button');
+    previewTab.type = 'button';
+    previewTab.classList.add('zaibar-window-tab');
+    previewTab.dataset.active = String(tabs.closest(`#${WINDOW_ROOT_ID}`)?.getAttribute('data-skin-preview') === 'true');
+    previewTab.textContent = '皮肤预览';
+    previewTab.addEventListener('click', () => {
+      const root = tabs.closest(`#${WINDOW_ROOT_ID}`) as HTMLElement | null;
+      if (root) {
+        root.dataset.skinPreview = 'true';
+        root.dataset.historyVisible = 'false';
+      }
+      refreshChatWindowWorkspace(doc);
+    });
+    tabs.appendChild(previewTab);
+  }
+  syncChatTabHighlight(tabs);
 }
 
 function createWindowSessionPage(doc: Document, sessionId: string): HTMLElement {
@@ -122,8 +149,13 @@ function createWindowSessionPage(doc: Document, sessionId: string): HTMLElement 
   registerChatSelectionCopyContainer(messageContainer);
 
   const navigator = createChatTurnNavigator(doc, messageContainer);
+  registerChatSkinRoot(navigator.shell);
+  const disposeEmptyState = mountChatEmptyState(doc, messageContainer, navigator.shell);
   page.appendChild(navigator.shell);
-  setChatTurnNavigatorHost(page, navigator.dispose);
+  setChatTurnNavigatorHost(page, () => {
+    disposeEmptyState();
+    navigator.dispose();
+  });
   return page;
 }
 
@@ -153,6 +185,17 @@ export function refreshChatWindowWorkspace(doc: Document): void {
   }
 
   renderWindowTabs(doc, tabs);
+  if (__env__ !== 'production' && root.dataset.skinPreview === 'true') {
+    const previewPage = ensureWindowSessionPage(doc, deck, SKIN_PREVIEW_SESSION_ID);
+    const previewContainer = previewPage.querySelector('.message-container') as HTMLElement | null;
+    if (previewContainer && !previewContainer.firstElementChild) previewContainer.appendChild(createSkinPreview(doc));
+    selectWindowSessionPage(deck, previewPage);
+    const inputHost = root.querySelector('.zaibar-window-shared-input') as HTMLElement | null;
+    const historyHost = root.querySelector(`.${WINDOW_HISTORY_CLASS}`) as HTMLElement | null;
+    if (inputHost) inputHost.style.display = 'none';
+    if (historyHost) historyHost.style.display = 'none';
+    return;
+  }
   const snapshot = getWorkspaceSnapshot('window');
   const sessionId = getSessionId(snapshot.activeKind, snapshot.sourceTabId) ?? GLOBAL_AGENT_SESSION_ID;
   const page = ensureWindowSessionPage(doc, deck, sessionId);
@@ -169,7 +212,10 @@ export function refreshChatWindowWorkspace(doc: Document): void {
     itemId: snapshot.activeKind === 'global-agent' ? undefined : reader?.itemID,
   });
   const messageContainer = getWindowMessageContainer(sessionId);
-  if (messageContainer) void renderPersistedTranscript(session, messageContainer);
+  if (messageContainer) {
+    syncChatEmptyState(session, messageContainer);
+    void renderPersistedTranscript(session, messageContainer);
+  }
   updateWindowHistoryView(doc, session, page);
   sharedInput?._inputAreaAPI?.setContext({
     sessionId,
@@ -226,6 +272,7 @@ function clearActiveWindowHistory(doc: Document): void {
   const messageContainer = page?.querySelector('.message-container') as HTMLElement | null;
   if (messageContainer) messageContainer.innerHTML = '';
   addon.chatManager.clearSectionHistory(sessionId);
+  resetChatEmptyState(session);
 }
 
 function startNewWindowConversation(doc: Document): void {
@@ -377,6 +424,7 @@ function updateWindowHistoryView(doc: Document, session: Session, page: HTMLElem
 }
 
 export function ensureChatWindowUI(doc: Document) {
+  registerChatSkinRoot(doc.documentElement);
   const root = doc.getElementById(WINDOW_ROOT_ID) as WorkspaceRoot | null;
   if (!root) return;
 
@@ -478,6 +526,8 @@ export function onChatWindowLoad(window: Window) {
     uninstallChatSelectionCopyHandler(window.document);
     window.removeEventListener('beforeunload', preventCloseWhileStreaming);
     const root = window.document.getElementById(WINDOW_ROOT_ID) as WorkspaceRoot | null;
+    const tabs = root?.querySelector('.zaibar-window-tabs') as HTMLElement | null;
+    if (tabs) disposeChatTabHighlight(tabs);
     root?._workspaceUnsubscribe?.();
     const sharedInput = root?.querySelector('.zaibar-window-shared-input .input-area-wrapper') as HTMLElement | null;
     if (sharedInput) addon.data.sharedInputAreas.delete(sharedInput);

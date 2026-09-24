@@ -45,6 +45,13 @@ pref-order = 排序
 # 高级选项
 pref-advanced = 高级设置
 pref-ui = 界面设置
+pref-chat-skin = 界面皮肤
+pref-chat-skin-rose = 经典
+pref-chat-skin-paper = 纸页
+pref-chat-skin-abyss = 深海
+pref-chat-skin-moss = 苔绿
+pref-chat-skin-tactical = 机能
+pref-chat-skin-bw = 黑白
 pref-formula-optimization =
     .label = 启用公式块优化
 

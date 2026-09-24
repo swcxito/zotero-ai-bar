@@ -3,6 +3,7 @@ import { InlineButton } from '../components/buttons/inlineButton';
 import { UserPrompt } from '../types';
 import { setPref } from '../utils/prefs';
 import { getLocaleID } from '../utils/locale';
+import { registerChatSkinRoot } from '../utils/chatSkin';
 
 export async function openPromptEditor(onClosed: () => void = () => {}) {
   const windowArgs = {
@@ -327,6 +328,7 @@ export class PromptEditor {
 }
 
 export async function onPromptEditorLoad(window: Window) {
+  registerChatSkinRoot(window.document.documentElement);
   await (window.document as any).l10n?.translateFragment(window.document.documentElement);
   new PromptEditor(window).init();
 }

@@ -167,12 +167,13 @@ async function resolveLineToPage(itemId: number, line: number): Promise<number |
  * streaming) and removed on mouseleave. Position is fixed-viewport
  * anchored above/below the pill with horizontal flip if it would overflow.
  *
- * Styles are applied inline (not via class) because the sidebar chat lives
- * inside a Shadow DOM whose CSS does not leak to `doc.body`, where the
- * tooltip is appended to escape overflow clipping.
+ * Styles are applied inline because the sidebar chat lives inside a Shadow
+ * DOM whose CSS does not leak to `doc.body`, where the tooltip is appended.
+ * Read the active skin tokens from the citation before leaving the shadow root.
  */
 function attachCitationTooltip(span: HTMLElement): void {
   const doc = span.ownerDocument!;
+  const skinToken = (name: string, fallback: string): string => doc.defaultView?.getComputedStyle(span)?.getPropertyValue(name).trim() || fallback;
   let tooltip: HTMLElement | null = null;
   let showTimer: number | undefined;
   let hideTimer: number | undefined;
@@ -183,12 +184,12 @@ function attachCitationTooltip(span: HTMLElement): void {
     tip.style.maxWidth = '360px';
     tip.style.minWidth = '200px';
     tip.style.padding = '8px 10px';
-    tip.style.borderRadius = '8px';
-    tip.style.boxShadow = dark ? '0 4px 16px rgba(0,0,0,0.5)' : '0 4px 16px rgba(0,0,0,0.18)';
-    tip.style.border = dark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e5e7eb';
-    tip.style.backgroundColor = dark ? 'rgba(45,45,48,0.98)' : '#ffffff';
-    tip.style.color = dark ? '#f3f4f6' : '#1f2937';
-    tip.style.fontFamily = 'inherit';
+    tip.style.borderRadius = skinToken('--small-radius', '8px');
+    tip.style.boxShadow = skinToken('--shadow', dark ? '0 4px 16px rgba(0,0,0,0.5)' : '0 4px 16px rgba(0,0,0,0.18)');
+    tip.style.border = `1px solid ${skinToken('--line', dark ? 'rgba(255,255,255,0.1)' : '#e5e7eb')}`;
+    tip.style.backgroundColor = skinToken('--surface', dark ? 'rgba(45,45,48,0.98)' : '#ffffff');
+    tip.style.color = skinToken('--text', dark ? '#f3f4f6' : '#1f2937');
+    tip.style.fontFamily = skinToken('--font', 'inherit');
     tip.style.fontSize = '12px';
     tip.style.lineHeight = '1.45';
     tip.style.fontWeight = '400';
@@ -208,8 +209,8 @@ function attachCitationTooltip(span: HTMLElement): void {
     const lineRangeText = span.getAttribute('data-line-range');
     const info = buildCitationMetadata(itemId);
     const dark = doc.defaultView?.matchMedia('(prefers-color-scheme: dark)')?.matches ?? false;
-    const secondary = dark ? '#cbd5e1' : '#6b7280';
-    const tertiary = dark ? '#9ca3af' : '#4b5563';
+    const secondary = skinToken('--muted', dark ? '#cbd5e1' : '#6b7280');
+    const tertiary = skinToken('--faint', dark ? '#9ca3af' : '#4b5563');
 
     const tip = doc.createElement('div');
     applyBaseStyles(tip, dark);

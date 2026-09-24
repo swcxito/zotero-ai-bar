@@ -1,0 +1,11 @@
+/* moss skin, mirrored from design/skin-preview.html. */
+[data-zaibar-skin="moss"]{--font:-apple-system,BlinkMacSystemFont,"Noto Sans SC",sans-serif;--title-font:Georgia,"Noto Serif SC",serif;--radius:24px;--small-radius:14px;--weight:1px;--shadow:0 20px 50px #435d3d24;--card-shadow:0 7px 20px #59704817;--backdrop:#e5e9de;--page:#f3f5ed;--surface:#fcfdf8;--raised:#f8faf3;--soft:#eaf0e4;--text:#2d3a2d;--muted:#4b654e;--faint:#93a08c;--line:#d6dfd1;--accent:#3f6745;--accent-hover:#315438;--accent-ink:#fff;--accent-soft:#e0ecdc;--accent-soft-ink:#406b47;--user:#4d754f;--user-ink:#fff;--code:#28382d;--code-ink:#eff7e9;--success:#2c684b;--glow:radial-gradient(circle at 85% 0,#b0cfa443,transparent 48%)}
+[data-zaibar-skin="moss"]{--page-gradient:radial-gradient(ellipse 95% 80% at 90% 4%,#fbfcf7 0%,#dce9d4 100%)}
+[data-zaibar-skin="moss"]{--connect-bg:#304536;--connect-ink:#fff;--connect-hover:#405c47;--connect-ok-bg:#315a3a;--connect-ok-ink:#fff}
+@media (prefers-color-scheme: light) {[data-zaibar-skin="moss"]{--cite-bg:#bdd8b8;--cite-hover-bg:#accfa7;--cite-ink:#285a34;--cite-border:#628d65}}
+@media (prefers-color-scheme: dark) {
+[data-zaibar-skin="moss"]{--shadow:0 20px 48px #0009;--card-shadow:0 7px 20px #0004;--backdrop:#0c120d;--page:#141d16;--surface:#1d2820;--raised:#263428;--soft:#2a392d;--text:#eef4e9;--muted:#b8cbb5;--faint:#839780;--line:#405544;--accent:#a5d9a2;--accent-hover:#c2e9bb;--accent-ink:#1d3822;--accent-soft:#304b35;--accent-soft-ink:#c1ecba;--user:#517654;--user-ink:#fff;--code:#101b13;--code-ink:#e8f4e3;--success:#96d6ae;--glow:radial-gradient(circle at 85% 0,#5d9a5923,transparent 48%)}
+[data-zaibar-skin="moss"]{--page-gradient:radial-gradient(ellipse 115% 90% at 90% 6%,#233428 0%,#141d16 100%)}
+[data-zaibar-skin="moss"]{--connect-bg:#e6eee2;--connect-ink:#1b2b1d;--connect-hover:#fff;--connect-ok-bg:#cde9c8;--connect-ok-ink:#204928}
+}
+[data-zaibar-skin="moss"]{--user-radius:26px}

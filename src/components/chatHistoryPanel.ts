@@ -199,6 +199,7 @@ export function ChatHistoryPanel(doc: Document, session: Session, options: ChatH
     for (const conversation of conversations) {
       const row = doc.createElement('div');
       row.dataset.conversationId = conversation.id;
+      row.dataset.current = String(conversation.id === session.conversationId);
       row.style.cssText =
         'display:grid;grid-template-columns:28px minmax(0,1fr) 28px 28px;align-items:center;min-width:0;width:100%;max-width:100%;box-sizing:border-box;gap:3px;padding:7px 5px;border:1px solid var(--color-border,#d9dfe3);border-radius:9px;';
       row.style.transition = `grid-template-columns ${deleteTransitionDuration} cubic-bezier(.22,1,.36,1)`;
@@ -212,13 +213,13 @@ export function ChatHistoryPanel(doc: Document, session: Session, options: ChatH
       favorite.disabled = busy;
       setIconButtonStyle(favorite);
       setButtonIcon(favorite, conversation.favorite ? 'star-filled.svg' : 'star.svg');
-      favorite.style.color = conversation.favorite ? '#e11d48' : 'var(--fill-secondary,currentColor)';
+      favorite.style.color = conversation.favorite ? 'var(--accent,#e11d48)' : 'var(--muted,var(--fill-secondary,currentColor))';
       favorite.addEventListener('click', () => {
         suppressNextHistoryRefresh = true;
         const isFavorite = addon.chatManager.toggleFavorite(conversation.id);
         favorite.title = getString((isFavorite ? 'history-unfavorite' : 'history-favorite') as any);
         favorite.setAttribute('aria-label', favorite.title);
-        favorite.style.color = isFavorite ? '#e11d48' : 'var(--fill-secondary,currentColor)';
+        favorite.style.color = isFavorite ? 'var(--accent,#e11d48)' : 'var(--muted,var(--fill-secondary,currentColor))';
         setButtonIcon(favorite, isFavorite ? 'star-filled.svg' : 'star.svg');
         const target = filter === 'favorite' && !isFavorite ? row : favorite;
         const animation = animateElement(

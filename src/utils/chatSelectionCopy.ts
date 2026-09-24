@@ -6,6 +6,7 @@
  */
 
 import { getString } from './locale';
+import { registerChatSkinRoot } from './chatSkin';
 
 const STATE_PROPERTY = '__zaibarChatSelectionCopyState';
 
@@ -208,15 +209,13 @@ function hideSelectionPopover(state: ChatSelectionCopyState, animated = false): 
 function showCopySuccess(doc: Document, state: ChatSelectionCopyState, popover: HTMLElement, button: HTMLButtonElement): void {
   if (state.popover !== popover) return;
 
-  const darkMode = doc.defaultView?.matchMedia?.('(prefers-color-scheme: dark)')?.matches ?? false;
   for (const item of Array.from(popover.querySelectorAll('button'))) {
     (item as HTMLButtonElement).disabled = true;
     (item as HTMLElement).style.cursor = 'default';
     (item as HTMLElement).style.opacity = item === button ? '1' : '.42';
   }
   button.textContent = `✓ ${getString('chat-selection-copy-copied')}`;
-  button.style.background = darkMode ? 'rgba(34,197,94,.24)' : 'rgba(22,163,74,.14)';
-  button.style.color = darkMode ? '#86efac' : '#15803d';
+  button.dataset.copied = 'true';
   popover.setAttribute('role', 'status');
   popover.setAttribute('aria-live', 'polite');
   popover.setAttribute('aria-label', getString('chat-selection-copy-copied'));
@@ -424,11 +423,21 @@ function showSelectionPopover(doc: Document, state: ChatSelectionCopyState): voi
   hideSelectionPopover(state);
   if (!content) return;
 
+  // The popover escapes the chat ShadowRoot, so its scoped skin stylesheet
+  // must also be available in the Zotero document that receives it.
+  const skinHref = `chrome://${addon.data.config.addonRef}/content/styles/skins.css`;
+  if (doc.head && !Array.from(doc.querySelectorAll('link[rel="stylesheet"]')).some((link) => link.getAttribute('href') === skinHref)) {
+    const skinStyles = ztoolkit.UI.createElement(doc, 'link', {
+      properties: { rel: 'stylesheet', type: 'text/css', href: skinHref },
+    });
+    doc.head.appendChild(skinStyles);
+  }
+
   const popover = doc.createElement('div');
   popover.classList.add('chat-selection-copy-popover');
+  registerChatSkinRoot(popover);
   popover.setAttribute('role', 'toolbar');
   popover.setAttribute('aria-label', getString('chat-selection-copy-actions'));
-  const darkMode = doc.defaultView?.matchMedia?.('(prefers-color-scheme: dark)')?.matches ?? false;
   popover.style.cssText = [
     'position:fixed',
     'z-index:2147483647',
@@ -436,11 +445,11 @@ function showSelectionPopover(doc: Document, state: ChatSelectionCopyState): voi
     'align-items:center',
     'gap:2px',
     'padding:4px',
-    `border:1px solid ${darkMode ? 'rgba(255,255,255,.16)' : 'rgba(15,23,42,.16)'}`,
-    'border-radius:9999px',
-    `background:${darkMode ? 'rgba(39,39,42,.98)' : 'rgba(255,255,255,.98)'}`,
-    `color:${darkMode ? '#f4f4f5' : '#334155'}`,
-    `box-shadow:${darkMode ? '0 8px 24px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.3)' : '0 8px 24px rgba(15,23,42,.2),0 2px 6px rgba(15,23,42,.12)'}`,
+    'border:1px solid var(--za-control-line)',
+    'border-radius:var(--small-radius)',
+    'background:var(--surface)',
+    'color:var(--text)',
+    'box-shadow:var(--shadow)',
     'backdrop-filter:blur(12px)',
     'user-select:none',
     'pointer-events:auto',

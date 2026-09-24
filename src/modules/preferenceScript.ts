@@ -25,8 +25,10 @@ import { openPromptEditor } from './promptEditor';
 import { getLocaleID, getString } from '../utils/locale';
 import { setSeparateTranslationEnabled } from './chatWorkspace';
 import { CHAT_FONT_SIZE_LEVELS, getChatFontSizeValue, normalizeChatFontSizeIndex, refreshChatFontSize } from '../utils/chatFontSize';
+import { normalizeChatSkin } from '../utils/chatSkin';
 
 export async function registerPrefsScripts(_window: Window) {
+  _window.document.getElementById(`${config.addonRef}-prefs-root`)?.removeAttribute('data-zaibar-skin');
   if (!addon.data.prefs) {
     addon.data.prefs = {
       window: _window,
@@ -191,6 +193,26 @@ async function updatePrefsUI() {
     chatFontSizeInput.value = String(normalizeChatFontSizeIndex(getPref('chat.fontSize')));
     chatFontSizeInput.addEventListener('input', () => syncChatFontSize(true));
     syncChatFontSize(false);
+  }
+
+  const chatSkinInputs = Array.from(doc.querySelectorAll<HTMLInputElement>(`${makeId('chat-skin')} input[type="radio"]`));
+  if (chatSkinInputs.length) {
+    const syncChatSkinOptions = () => {
+      const selected = normalizeChatSkin(getPref('chat.skin'));
+      for (const input of chatSkinInputs) {
+        const active = input.value === selected;
+        input.checked = active;
+        (input.closest('.zaibar-skin-choice') as HTMLElement).dataset.selected = String(active);
+      }
+    };
+    for (const input of chatSkinInputs) {
+      input.addEventListener('change', () => {
+        if (!input.checked) return;
+        setPref('chat.skin', normalizeChatSkin(input.value));
+        syncChatSkinOptions();
+      });
+    }
+    syncChatSkinOptions();
   }
 
   const translateModelSelector = doc.querySelector(makeId('translate-model-selector')) as HTMLSelectElement;

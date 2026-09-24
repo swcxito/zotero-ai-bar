@@ -17,6 +17,7 @@
  */
 
 import { config } from '../../package.json';
+import { registerChatSkinRoot } from '../utils/chatSkin';
 import { getString } from '../utils/locale';
 
 interface Point {
@@ -137,6 +138,13 @@ function findScrollContainer(viewer: HTMLElement): HTMLElement {
 
 function createOverlay(viewer: HTMLElement): void {
   const doc = viewer.ownerDocument;
+  const skinHref = `chrome://${addon.data.config.addonRef}/content/styles/skins.css`;
+  if (doc.head && !Array.from(doc.querySelectorAll('link[rel="stylesheet"]')).some((link) => link.getAttribute('href') === skinHref)) {
+    const skinStyles = ztoolkit.UI.createElement(doc, 'link', {
+      properties: { rel: 'stylesheet', type: 'text/css', href: skinHref },
+    });
+    doc.head.appendChild(skinStyles);
+  }
 
   const overlay = doc.createElement('div');
   overlay.className = 'capture-overlay';
@@ -154,6 +162,7 @@ function createOverlay(viewer: HTMLElement): void {
 
   const tooltip = doc.createElement('div');
   tooltip.className = 'capture-tooltip';
+  registerChatSkinRoot(tooltip);
   tooltip.textContent = getString('capture-drag-hint');
   tooltip.style.cssText = `
     position: fixed;
@@ -203,6 +212,7 @@ function handleMouseDown(e: MouseEvent): void {
   const doc = (e.target as Node | null)?.ownerDocument || document;
   const selectionEl = doc.createElement('div');
   selectionEl.className = 'capture-selection';
+  registerChatSkinRoot(selectionEl);
   selectionEl.style.cssText = `
     position: fixed;
     border: 2px solid #3b82f6;
@@ -738,7 +748,7 @@ function waitForPDFReader(attachmentId: number, timeoutMs: number): Promise<_Zot
 }
 
 export function openCapturePreview(images: string[], startIndex: number): void {
-  const windowArgs = { images, startIndex };
+  const windowArgs = { images, startIndex, onBodyLoaded: (window: Window) => registerChatSkinRoot(window.document.documentElement) };
 
   const dialogWindow = Zotero.getMainWindow().openDialog(
     `chrome://${config.addonRef}/content/captureWindow.html`,

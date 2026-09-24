@@ -189,6 +189,7 @@ export function InputArea(
     hintBar.style.visibility = 'visible';
     hintBar.style.opacity = '1';
     hintBar.style.transform = 'translateY(-100%)';
+    wrapper.dataset.selectionHintVisible = 'true';
     // The floating hint owns the merged shape's top outline. Keep the input
     // border width for stable geometry, but hide its top color so focus-within
     // does not draw a second horizontal line at the seam.
@@ -200,6 +201,7 @@ export function InputArea(
   function hideSelectionHint() {
     const sequence = ++hintAnimationSequence;
     hintBar.style.transform = 'translateY(0)';
+    wrapper.dataset.selectionHintVisible = 'false';
     // Border width and element height stay constant; only non-layout visual
     // properties change while the floating bar is hidden.
     container.style.borderTopColor = '';
