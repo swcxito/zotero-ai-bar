@@ -1,7 +1,9 @@
 /* tactical skin, mirrored from design/skin-preview.html. */
+[data-zaibar-skin="tactical"]{--za-page-highlight:#e8e8e5;--za-page-base:#e8e8e5}
 [data-zaibar-skin="tactical"]{--font:"Segoe UI","Noto Sans SC",sans-serif;--title-font:Impact,"Arial Narrow","Noto Sans SC",sans-serif;--radius:0px;--small-radius:0px;--weight:1.5px;--shadow:8px 8px 0 #3030302e;--card-shadow:3px 3px 0 #30303026;--backdrop:#d0d1ce;--page:#e8e8e5;--surface:#f5f5f2;--raised:#fff;--soft:#e1e2de;--text:#292b2d;--muted:#4c5052;--faint:#898e8e;--line:#a1a4a2;--accent:#a64118;--accent-hover:#883312;--accent-ink:#fff;--accent-soft:#f4dccd;--accent-soft-ink:#963c17;--user:#383a3b;--user-ink:#fff;--code:#202325;--code-ink:#f0f0ed;--success:#286b53;--glow:repeating-linear-gradient(135deg,#30303008 0 2px,transparent 2px 12px)}
 [data-zaibar-skin="tactical"]{--connect-bg:#303337;--connect-ink:#fff;--connect-hover:#4b4e52;--connect-ok-bg:#2b6049;--connect-ok-ink:#fff}
 @media (prefers-color-scheme: dark) {
+[data-zaibar-skin="tactical"]{--za-page-highlight:#191b1c;--za-page-base:#191b1c}
 [data-zaibar-skin="tactical"]{--shadow:8px 8px 0 #0008;--card-shadow:3px 3px 0 #0006;--backdrop:#111314;--page:#191b1c;--surface:#242728;--raised:#2c3031;--soft:#34383a;--text:#f0f0ed;--muted:#c3c6c7;--faint:#979e9f;--line:#686e70;--accent:#ff8b4c;--accent-hover:#ffb17e;--accent-ink:#28170f;--accent-soft:#5c3b2a;--accent-soft-ink:#ffb17e;--user:#b9582b;--user-ink:#fff;--code:#121415;--code-ink:#f0f0ed;--success:#91c9aa;--glow:repeating-linear-gradient(135deg,#ffffff08 0 2px,transparent 2px 12px)}
 [data-zaibar-skin="tactical"]{--connect-bg:#e7e6df;--connect-ink:#1d2021;--connect-hover:#fff;--connect-ok-bg:#cce8d2;--connect-ok-ink:#1d5333}
 }

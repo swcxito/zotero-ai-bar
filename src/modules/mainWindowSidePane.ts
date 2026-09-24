@@ -407,6 +407,7 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
   sidePaneRenderedWidth = sidePaneUserWidth;
   lockSidePaneWidth(pane, sidePaneRenderedWidth);
   pane.style.paddingLeft = '6px';
+  pane.style.paddingRight = '6px';
   pane.style.boxSizing = 'border-box';
   pane.style.overflow = 'hidden';
 

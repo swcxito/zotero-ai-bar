@@ -6,7 +6,25 @@
 @import url("./skins/bw.css");
 /* Shared component styling for plugin-owned surfaces. */
 /* Tokens and selectors apply only to plugin-owned roots. */
-[data-zaibar-skin]{--za-control-line:#666;font-family:var(--font);color:var(--text)}
+@property --za-page-highlight { syntax: '<color>'; inherits: true; initial-value: #ffffff; }
+@property --za-page-base { syntax: '<color>'; inherits: true; initial-value: #ffffff; }
+@property --za-page-width { syntax: '<percentage>'; inherits: true; initial-value: 95%; }
+@property --za-page-height { syntax: '<percentage>'; inherits: true; initial-value: 80%; }
+@property --za-page-x { syntax: '<percentage>'; inherits: true; initial-value: 94%; }
+@property --za-page-y { syntax: '<percentage>'; inherits: true; initial-value: 6%; }
+@media (prefers-reduced-motion: no-preference) {
+  [data-zaibar-skin][data-zaibar-skin-transition],
+  [data-zaibar-skin][data-zaibar-skin-transition] *,
+  [data-zaibar-skin][data-zaibar-skin-transition]::before,
+  [data-zaibar-skin][data-zaibar-skin-transition]::after,
+  [data-zaibar-skin][data-zaibar-skin-transition] *::before,
+  [data-zaibar-skin][data-zaibar-skin-transition] *::after {
+    transition-property: --za-page-highlight, --za-page-base, --za-page-width, --za-page-height, --za-page-x, --za-page-y, background-color, color, border-color, outline-color, box-shadow, border-radius, fill, stroke, text-decoration-color, opacity !important;
+    transition-duration: 320ms !important;
+    transition-timing-function: ease !important;
+  }
+}
+[data-zaibar-skin]{--za-control-line:#666;--page-gradient:radial-gradient(ellipse var(--za-page-width) var(--za-page-height) at var(--za-page-x) var(--za-page-y),var(--za-page-highlight) 0%,var(--za-page-base) 100%);font-family:var(--font);color:var(--text)}
 @media(prefers-color-scheme:dark){[data-zaibar-skin]{--za-control-line:#aaa}}
 [data-zaibar-skin] :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 html[data-zaibar-skin] body,html[data-zaibar-skin] #root,[data-zaibar-skin].message-container,[data-zaibar-skin] .message-container,[data-zaibar-skin] .zaibar-history-panel{background:var(--page-gradient,var(--page))!important;color:var(--text)!important;font-family:var(--font)}

@@ -185,7 +185,7 @@
   position: absolute;
   border-top: 2px solid var(--accent, #e11d48);
   border-left: 2px solid var(--accent, #e11d48);
-  border-radius: 0;
+  border-top-left-radius: var(--poem-corner-radius, 0);
   pointer-events: none;
   content: '';
   transform-origin: center;
@@ -203,10 +203,16 @@
 }
 
 .chat-empty-poem::after {
-  top: 0.08rem;
-  left: 0.08rem;
-  width: 0.62rem;
-  height: 0.62rem;
+  top: var(--poem-inner-top, 0.08rem);
+  left: var(--poem-inner-left, 0.08rem);
+  width: var(--poem-inner-size, 0.62rem);
+  height: var(--poem-inner-size, 0.62rem);
+  border-top: var(--poem-inner-stroke, 2px solid var(--accent, #e11d48));
+  border-left: var(--poem-inner-stroke, 2px solid var(--accent, #e11d48));
+  border-right: var(--poem-inner-side, 0);
+  border-bottom: var(--poem-inner-side, 0);
+  border-radius: var(--poem-inner-radius, 0);
+  background: var(--poem-inner-fill, transparent);
   opacity: 0.55;
 }
 

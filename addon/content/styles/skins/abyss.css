@@ -1,10 +1,11 @@
 /* abyss skin, mirrored from design/skin-preview.html. */
+[data-zaibar-skin="abyss"]{--poem-corner-radius:10px;--poem-inner-top:.08rem;--poem-inner-left:.08rem;--poem-inner-size:.42rem;--poem-inner-stroke:0;--poem-inner-fill:var(--accent);--poem-inner-radius:50%}
 [data-zaibar-skin="abyss"]{--font:"Segoe UI","Noto Sans SC",sans-serif;--title-font:var(--font);--radius:11px;--small-radius:6px;--weight:1px;--shadow:0 18px 45px #254f8426;--card-shadow:0 6px 18px #24679a12;--backdrop:#e1eaf4;--page:#f2f7fc;--surface:#fff;--raised:#f7faff;--soft:#e7f0fb;--text:#23394e;--muted:#48627a;--faint:#91a5b7;--line:#cadbea;--accent:#1f679e;--accent-hover:#195786;--accent-ink:#fff;--accent-soft:#dcecff;--accent-soft-ink:#1b5c91;--user:#2475ae;--user-ink:#fff;--code:#102a43;--code-ink:#e7f1ff;--success:#326d98;--glow:linear-gradient(145deg,#428de02b,transparent 48%)}
-[data-zaibar-skin="abyss"]{--page-gradient:radial-gradient(ellipse 95% 80% at 94% 6%,#fbfdff 0%,#d8e8f7 100%)}
+[data-zaibar-skin="abyss"]{--za-page-highlight:#fbfdff;--za-page-base:#d8e8f7;--za-page-width:95%;--za-page-height:80%;--za-page-x:94%;--za-page-y:6%}
 [data-zaibar-skin="abyss"]{--connect-bg:#203d5a;--connect-ink:#fff;--connect-hover:#2c5277;--connect-ok-bg:#1f6453;--connect-ok-ink:#fff}
 @media (prefers-color-scheme: light) {[data-zaibar-skin="abyss"]{--cite-bg:#b8d4f1;--cite-hover-bg:#a7c8eb;--cite-ink:#174e7c;--cite-border:#5586b2}}
 @media (prefers-color-scheme: dark) {
 [data-zaibar-skin="abyss"]{--shadow:0 20px 48px #0009;--card-shadow:0 6px 18px #0004;--backdrop:#020611;--page:#050f1e;--surface:#0b1b30;--raised:#122842;--soft:#11263f;--text:#eaf3ff;--muted:#b1c9e4;--faint:#829fb9;--line:#335272;--accent:#78bcff;--accent-hover:#a5d4ff;--accent-ink:#0b2744;--accent-soft:#1b4268;--accent-soft-ink:#add8ff;--user:#245f9b;--user-ink:#fff;--code:#030c19;--code-ink:#dcecff;--success:#8bbcf1;--glow:linear-gradient(145deg,#428de01d,transparent 48%)}
-[data-zaibar-skin="abyss"]{--page-gradient:radial-gradient(ellipse 115% 90% at 94% 6%,#102643 0%,#050f1e 100%)}
+[data-zaibar-skin="abyss"]{--za-page-highlight:#102643;--za-page-base:#050f1e;--za-page-width:115%;--za-page-height:90%;--za-page-x:94%;--za-page-y:6%}
 [data-zaibar-skin="abyss"]{--connect-bg:#e0eaf5;--connect-ink:#112338;--connect-hover:#fff;--connect-ok-bg:#c8eade;--connect-ok-ink:#1b5141}
 }
