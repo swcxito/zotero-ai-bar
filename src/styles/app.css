@@ -176,19 +176,32 @@
   font-family: 'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'Songti SC', serif;
 }
 
+.chat-empty-poem-segment {
+  display: inline-block;
+  white-space: nowrap;
+  transform-origin: top left;
+}
+
 .chat-empty-poem--single-line {
   white-space: nowrap;
 }
 
 .chat-empty-poem--punctuation-break {
-  white-space: pre;
+  white-space: nowrap;
 }
 
 .chat-empty-poem--punctuation-wrap {
-  white-space: pre-line;
+  white-space: normal;
+}
+
+.chat-empty-poem--punctuation-wrap .chat-empty-poem-segment {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .chat-empty-poem-ending {
+  display: inline-block;
   white-space: nowrap;
 }
 
@@ -203,7 +216,8 @@
   transform-origin: center;
   transition:
     border-color 180ms ease,
-    opacity 180ms ease;
+    opacity 180ms ease,
+    filter 180ms ease;
 }
 
 .chat-empty-poem::before {
@@ -226,6 +240,8 @@
   border-radius: var(--poem-inner-radius, 0);
   background: var(--poem-inner-fill, transparent);
   opacity: 0.55;
+  will-change: opacity;
+  animation: chat-empty-corner-breathe 4.3s ease-in-out infinite;
 }
 
 .chat-empty-poem:hover {
@@ -233,14 +249,22 @@
   transform: translateY(-2px);
 }
 
-.chat-empty-poem:hover::before,
-.chat-empty-poem:hover::after {
+.chat-empty-poem:hover::before {
   opacity: 1;
 }
 
-.chat-empty-poem[data-corner-bounce='true']::before,
-.chat-empty-poem[data-corner-bounce='true']::after {
+.chat-empty-poem:hover::after {
+  filter: brightness(1.2);
+}
+
+.chat-empty-poem[data-corner-bounce='true']::before {
   animation: chat-empty-corner-bounce 620ms both;
+}
+
+.chat-empty-poem[data-corner-bounce='true']::after {
+  animation:
+    chat-empty-corner-bounce 620ms both,
+    chat-empty-corner-breathe 4.3s ease-in-out infinite;
 }
 
 .chat-empty-poem[data-corner-bounce='true'] .chat-empty-poem-text {
@@ -341,6 +365,16 @@
   }
 }
 
+@keyframes chat-empty-corner-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
 @keyframes chat-empty-cursor-double-blink {
   0%,
   69%,
@@ -360,10 +394,12 @@
   from {
     opacity: 0;
     filter: blur(6px);
+    top: 6px;
   }
   to {
     opacity: 1;
     filter: blur(0);
+    top: 0;
   }
 }
 
@@ -428,6 +464,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .chat-empty-cursor {
+    animation: none;
+  }
+  .chat-empty-poem::after {
     animation: none;
   }
   .chat-empty-state[data-poem-transition='reveal'] .chat-empty-poem-text,

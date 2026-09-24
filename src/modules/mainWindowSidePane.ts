@@ -92,7 +92,7 @@ const HISTORY_BUTTON_ID = 'zaibar-sidepane-history-button';
 const NEW_CHAT_BUTTON_ID = 'zaibar-sidepane-new-chat-button';
 const HOST_SWITCH_BUTTON_ID = 'zaibar-sidepane-host-switch-button';
 const DEFAULT_WIDTH = 340;
-const MIN_WIDTH = 240;
+const MIN_WIDTH = 280;
 const MIN_MAIN_CONTENT_WIDTH = 320;
 
 let unsubscribeWorkspace: (() => void) | undefined;
@@ -403,7 +403,7 @@ export function registerMainWindowSidePane(win: _ZoteroTypes.MainWindow): void {
   pane.id = PANE_ID;
   registerChatSkinRoot(pane);
   const savedWidth = getPref('sidepane.width');
-  sidePaneUserWidth = savedWidth && savedWidth >= MIN_WIDTH ? savedWidth : DEFAULT_WIDTH;
+  sidePaneUserWidth = savedWidth > 0 ? Math.max(MIN_WIDTH, savedWidth) : DEFAULT_WIDTH;
   sidePaneRenderedWidth = sidePaneUserWidth;
   lockSidePaneWidth(pane, sidePaneRenderedWidth);
   pane.style.paddingLeft = '6px';

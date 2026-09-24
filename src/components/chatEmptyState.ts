@@ -36,7 +36,7 @@ const REQUEST_GAP_MS = 650;
 const REQUEST_TIMEOUT_MS = 5000;
 const POEM_MORPH_MS = 260;
 const MIN_POEM_FONT_SIZE_PX = 20;
-const POEM_BREAK_MARKS = new Set(['，', ',', '。', '.']);
+const POEM_BREAK_MARKS = new Set(['，', ',', '。', '.', '？', '?']);
 let nextRequestAt = 0;
 let tokenRequest: Promise<string> | undefined;
 
@@ -215,8 +215,9 @@ class ChatEmptyState {
   private readonly greeting: HTMLParagraphElement;
   private readonly poemButton: HTMLButtonElement;
   private readonly poemText: HTMLSpanElement;
-  private readonly poemLead: Text;
-  private readonly poemTail: Text;
+  private readonly poemIcon: HTMLImageElement;
+  private poemSegments: HTMLSpanElement[] = [];
+  private poemBreaks: HTMLBRElement[] = [];
   private readonly sourceRow: HTMLDivElement;
   private readonly sourceText: HTMLSpanElement;
   private readonly sourceLink: HTMLAnchorElement;
@@ -224,6 +225,8 @@ class ChatEmptyState {
   private readonly resizeObserver?: ResizeObserver;
   private displayedPoemText = '';
   private displayedAttribution = '';
+  private renderedLineCount = 0;
+  private layoutAnimations: Animation[] = [];
   private transitionTarget?: string;
   private seenRevision = 0;
   private exitTimer?: ReturnType<typeof setTimeout>;
@@ -249,20 +252,14 @@ class ChatEmptyState {
     }) as HTMLButtonElement;
     this.poemText = doc.createElement('span');
     this.poemText.className = 'chat-empty-poem-text';
-    this.poemLead = doc.createTextNode('');
-    this.poemTail = doc.createTextNode('');
-    const poemEnding = doc.createElement('span');
-    poemEnding.className = 'chat-empty-poem-ending';
-    const icon = ztoolkit.UI.createElement(
+    this.poemIcon = ztoolkit.UI.createElement(
       doc,
       'img',
       IconView({ iconMarkup: `chrome://${config.addonRef}/content/icons/favicon.svg`, sizeRem: 1, extraClasses: ['chat-empty-cursor'] })
     ) as HTMLImageElement;
-    icon.style.width = '0.7em';
-    icon.style.height = 'auto';
-    icon.setAttribute('aria-hidden', 'true');
-    poemEnding.append(this.poemTail, icon);
-    this.poemText.append(this.poemLead, poemEnding);
+    this.poemIcon.style.width = '0.7em';
+    this.poemIcon.style.height = 'auto';
+    this.poemIcon.setAttribute('aria-hidden', 'true');
     this.poemButton.append(this.poemText);
     this.poemButton.addEventListener('click', () => requestPoem(this.key, true));
 
@@ -288,9 +285,63 @@ class ChatEmptyState {
     this.observer = MutationObserverCtor ? new MutationObserverCtor(() => this.updateVisibility()) : undefined;
     this.observer?.observe(container, { childList: true });
     const ResizeObserverCtor = (doc.defaultView as any)?.ResizeObserver as typeof ResizeObserver | undefined;
-    this.resizeObserver = ResizeObserverCtor ? new ResizeObserverCtor(() => this.fitLayout()) : undefined;
+    this.resizeObserver = ResizeObserverCtor ? new ResizeObserverCtor(() => this.fitLayout(true)) : undefined;
     this.resizeObserver?.observe(this.root);
     views.add(this);
+  }
+
+  private setPoemSegments(text: string): void {
+    this.poemSegments = [];
+    this.poemBreaks = [];
+    this.poemText.replaceChildren();
+    if (!text) return;
+
+    const characters = Array.from(text);
+    let start = 0;
+    const parts: string[] = [];
+    for (let i = 0; i < characters.length - 1; i++) {
+      if (i <= start || !POEM_BREAK_MARKS.has(characters[i]) || POEM_BREAK_MARKS.has(characters[i + 1])) continue;
+      parts.push(characters.slice(start, i + 1).join(''));
+      start = i + 1;
+    }
+    parts.push(characters.slice(start).join(''));
+    const doc = this.root.ownerDocument;
+    for (let i = 0; i < parts.length; i++) {
+      const segment = doc.createElement('span');
+      segment.className = 'chat-empty-poem-segment';
+      if (i === parts.length - 1) {
+        const lastCharacters = Array.from(parts[i]);
+        segment.textContent = lastCharacters.slice(0, -2).join('');
+        const ending = doc.createElement('span');
+        ending.className = 'chat-empty-poem-ending';
+        ending.textContent = lastCharacters.slice(-2).join('');
+        ending.append(this.poemIcon);
+        segment.append(ending);
+      } else {
+        segment.textContent = parts[i];
+      }
+      this.poemSegments.push(segment);
+      this.poemText.append(segment);
+      if (i < parts.length - 1) {
+        const lineBreak = doc.createElement('br');
+        lineBreak.hidden = true;
+        this.poemBreaks.push(lineBreak);
+        this.poemText.append(lineBreak);
+      }
+    }
+  }
+
+  private setPoemBreaks(indices: number[]): void {
+    const breaks = new Set(indices);
+    for (let i = 0; i < this.poemBreaks.length; i++) this.poemBreaks[i].hidden = !breaks.has(i);
+  }
+
+  private poemLineCount(): number {
+    if (!this.poemSegments.length) return 0;
+    const buttonStyle = this.root.ownerDocument.defaultView?.getComputedStyle(this.poemButton);
+    const lineHeight = parseFloat(buttonStyle?.lineHeight || '0');
+    const verticalPadding = parseFloat(buttonStyle?.paddingTop || '0') + parseFloat(buttonStyle?.paddingBottom || '0');
+    return lineHeight ? Math.max(1, Math.round((this.poemButton.offsetHeight - verticalPadding) / lineHeight)) : 1;
   }
 
   private fitPoem(): void {
@@ -311,9 +362,7 @@ class ChatEmptyState {
     this.content.style.width = previousWidth;
     this.content.style.transition = previousTransition;
 
-    const characters = Array.from(this.displayedPoemText);
-    const leadCharacters = characters.slice(0, -2);
-    this.poemLead.data = leadCharacters.join('');
+    this.setPoemBreaks([]);
     this.poemButton.style.removeProperty('font-size');
     this.poemButton.classList.remove('chat-empty-poem--punctuation-break', 'chat-empty-poem--punctuation-wrap');
     this.poemButton.classList.add('chat-empty-poem--single-line');
@@ -325,8 +374,16 @@ class ChatEmptyState {
     const padding = parseFloat(buttonStyle.paddingLeft) + parseFloat(buttonStyle.paddingRight);
     const baseSize = parseFloat(buttonStyle.fontSize);
     const fittedSize = () => {
-      const textWidth = this.poemText.getBoundingClientRect().width;
-      return textWidth ? (baseSize * (availableWidth - padding - 2)) / textWidth : 0;
+      let lineWidth = 0;
+      let maxWidth = 0;
+      for (let i = 0; i < this.poemSegments.length; i++) {
+        lineWidth += this.poemSegments[i].offsetWidth;
+        if (this.poemBreaks[i]?.hidden === false || i === this.poemSegments.length - 1) {
+          maxWidth = Math.max(maxWidth, lineWidth);
+          lineWidth = 0;
+        }
+      }
+      return maxWidth ? (baseSize * (availableWidth - padding - 2)) / maxWidth : 0;
     };
     const singleLineSize = fittedSize();
 
@@ -336,50 +393,48 @@ class ChatEmptyState {
     }
 
     this.poemButton.classList.remove('chat-empty-poem--single-line');
-    const marks: number[] = [];
-    for (let i = 0; i < leadCharacters.length; i++) {
-      if (i > 0 && POEM_BREAK_MARKS.has(leadCharacters[i])) marks.push(i);
+    if (!this.poemBreaks.length) {
+      this.poemButton.style.fontSize = `${MIN_POEM_FONT_SIZE_PX}px`;
+      this.poemButton.classList.add('chat-empty-poem--punctuation-wrap');
+      return;
     }
-    if (!marks.length) return;
 
-    const breakAfter = (indices: number[]) => {
-      const lines: string[] = [];
-      let start = 0;
-      for (const index of indices) {
-        lines.push(leadCharacters.slice(start, index + 1).join(''));
-        start = index + 1;
-      }
-      lines.push(leadCharacters.slice(start).join(''));
-      this.poemLead.data = lines.join('\n');
-    };
     this.poemButton.classList.add('chat-empty-poem--punctuation-break');
-    for (let i = marks.length - 1; i >= 0; i--) {
-      breakAfter([marks[i]]);
+    for (let i = this.poemBreaks.length - 1; i >= 0; i--) {
+      this.setPoemBreaks([i]);
       const twoLineSize = fittedSize();
       if (twoLineSize < MIN_POEM_FONT_SIZE_PX) continue;
       if (twoLineSize < baseSize) this.poemButton.style.fontSize = `${twoLineSize}px`;
       return;
     }
 
-    let breakIndices: number[] = [];
+    let breakIndices: number[] = [this.poemBreaks.length - 1];
     let bestScore = Infinity;
-    for (let i = 0; i < marks.length; i++) {
-      for (let j = i + 1; j < marks.length; j++) {
-        if (marks[j] <= marks[i] + 1) continue;
-        const score = Math.abs(marks[i] + 1 - characters.length / 3) + Math.abs(marks[j] + 1 - (2 * characters.length) / 3);
+    let bestSize = 0;
+    const boundaries: number[] = [];
+    let length = 0;
+    for (const segment of this.poemSegments) {
+      length += Array.from(segment.textContent || '').length;
+      boundaries.push(length);
+    }
+    for (let i = 0; i < this.poemBreaks.length; i++) {
+      for (let j = i + 1; j < this.poemBreaks.length; j++) {
+        this.setPoemBreaks([i, j]);
+        const size = fittedSize();
+        const score = Math.abs(boundaries[i] - length / 3) + Math.abs(boundaries[j] - (2 * length) / 3);
+        if (size >= MIN_POEM_FONT_SIZE_PX && bestSize < MIN_POEM_FONT_SIZE_PX) {
+          bestScore = Infinity;
+        }
+        if (size < MIN_POEM_FONT_SIZE_PX && bestSize >= MIN_POEM_FONT_SIZE_PX) continue;
         if (score < bestScore) {
           bestScore = score;
-          breakIndices = [marks[i], marks[j]];
+          bestSize = size;
+          breakIndices = [i, j];
         }
       }
     }
-    if (!breakIndices.length) {
-      breakIndices = [
-        marks.reduce((best, mark) => (Math.abs(mark + 1 - characters.length / 2) < Math.abs(best + 1 - characters.length / 2) ? mark : best)),
-      ];
-    }
 
-    breakAfter(breakIndices);
+    this.setPoemBreaks(breakIndices);
     const punctuationLineSize = fittedSize();
     if (punctuationLineSize >= MIN_POEM_FONT_SIZE_PX) {
       if (punctuationLineSize < baseSize) this.poemButton.style.fontSize = `${punctuationLineSize}px`;
@@ -413,12 +468,83 @@ class ChatEmptyState {
     this.sourceRow.classList.add('chat-empty-source--author-break');
   }
 
-  private fitLayout(): void {
+  private fitLayout(animateLineChange = false): void {
+    const previousLineCount = this.renderedLineCount;
+    const previousBreaks = this.poemBreaks.map((lineBreak) => !lineBreak.hidden).join(',');
+    const previousContent = this.content.getBoundingClientRect();
+    const previousSource = this.sourceRow.getBoundingClientRect();
+    const previousSegments = this.poemSegments.map((segment) => segment.getBoundingClientRect());
+    const view = this.root.ownerDocument.defaultView;
+    const canAnimate =
+      animateLineChange &&
+      previousLineCount > 0 &&
+      !this.root.hidden &&
+      !this.poemButton.hidden &&
+      !!this.displayedPoemText &&
+      !this.transitionTarget &&
+      !view?.matchMedia('(prefers-reduced-motion: reduce)')?.matches &&
+      typeof this.content.animate === 'function';
     this.fitPoem();
     this.fitAttribution();
+    if (this.root.hidden || this.poemButton.hidden || !this.displayedPoemText) {
+      for (const animation of this.layoutAnimations) animation.cancel();
+      this.layoutAnimations = [];
+      this.renderedLineCount = 0;
+      return;
+    }
+
+    const nextBreaks = this.poemBreaks.map((lineBreak) => !lineBreak.hidden).join(',');
+    this.renderedLineCount = this.poemLineCount();
+    if (!canAnimate) {
+      for (const animation of this.layoutAnimations) animation.cancel();
+      this.layoutAnimations = [];
+      return;
+    }
+    if (previousLineCount === this.renderedLineCount && previousBreaks === nextBreaks) return;
+
+    for (const animation of this.layoutAnimations) animation.cancel();
+    this.layoutAnimations = [];
+    const timing: KeyframeAnimationOptions = { duration: 180, easing: 'ease-in-out' };
+    const nextContent = this.content.getBoundingClientRect();
+    const nextSource = this.sourceRow.getBoundingClientRect();
+    const nextSegments = this.poemSegments.map((segment) => segment.getBoundingClientRect());
+    const contentShiftX = previousContent.left - nextContent.left;
+    const contentShiftY = previousContent.top - nextContent.top;
+    this.layoutAnimations.push(
+      this.content.animate([{ transform: `translate(${contentShiftX}px, ${contentShiftY}px)` }, { transform: 'translate(0, 0)' }], timing)
+    );
+    for (let i = 0; i < this.poemSegments.length; i++) {
+      const before = previousSegments[i];
+      if (!before) continue;
+      const after = nextSegments[i];
+      const shiftX = before.left - after.left - contentShiftX;
+      const shiftY = before.top - after.top - contentShiftY;
+      const scale = after.width ? Math.max(0.5, Math.min(2, before.width / after.width)) : 1;
+      if (Math.abs(shiftX) < 0.5 && Math.abs(shiftY) < 0.5 && Math.abs(scale - 1) < 0.005) continue;
+      this.layoutAnimations.push(
+        this.poemSegments[i].animate(
+          [{ transform: `translate(${shiftX}px, ${shiftY}px) scale(${scale})` }, { transform: 'translate(0, 0) scale(1)' }],
+          timing
+        )
+      );
+    }
+    if (!this.sourceRow.hidden) {
+      const shiftX = previousSource.left - nextSource.left - contentShiftX;
+      const shiftY = previousSource.top - nextSource.top - contentShiftY;
+      this.layoutAnimations.push(
+        this.sourceRow.animate([{ transform: `translate(${shiftX}px, ${shiftY}px)` }, { transform: 'translate(0, 0)' }], timing)
+      );
+    }
+    const animations = this.layoutAnimations;
+    void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+      if (this.layoutAnimations === animations) this.layoutAnimations = [];
+    });
   }
 
   private stopTransition(): void {
+    for (const animation of this.layoutAnimations) animation.cancel();
+    this.layoutAnimations = [];
+    this.poemText.style.removeProperty('opacity');
     if (this.exitTimer) clearTimeout(this.exitTimer);
     if (this.morphTimer) clearTimeout(this.morphTimer);
     if (this.finishTimer) clearTimeout(this.finishTimer);
@@ -434,11 +560,10 @@ class ChatEmptyState {
   }
 
   private applyPoem(poem?: Poem): void {
-    const characters = Array.from(poem?.text || '');
+    const text = poem?.text || '';
+    if (text !== this.displayedPoemText) this.setPoemSegments(text);
     this.displayedPoemText = poem?.text || '';
     this.displayedAttribution = poem?.attribution || '';
-    this.poemLead.data = characters.slice(0, -2).join('');
-    this.poemTail.data = characters.slice(-2).join('');
     const label = getString(poem ? 'chat-empty-next-poem' : 'chat-empty-retry-poem');
     this.poemButton.title = label;
     this.poemButton.setAttribute('aria-label', label);
