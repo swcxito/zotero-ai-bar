@@ -31,10 +31,12 @@ class PoemApiError extends Error {
 const poems = new Map<string, PoemState>();
 const views = new Set<ChatEmptyState>();
 const MAX_CACHED_CONVERSATIONS = 64;
-const MAX_TODAY_REQUESTS = 3;
+const MAX_TODAY_REQUESTS = 5;
 const REQUEST_GAP_MS = 650;
 const REQUEST_TIMEOUT_MS = 5000;
 const POEM_MORPH_MS = 260;
+const MIN_POEM_FONT_SIZE_PX = 20;
+const POEM_BREAK_MARKS = new Set(['，', ',', '。', '.']);
 let nextRequestAt = 0;
 let tokenRequest: Promise<string> | undefined;
 
@@ -219,6 +221,9 @@ class ChatEmptyState {
   private readonly sourceText: HTMLSpanElement;
   private readonly sourceLink: HTMLAnchorElement;
   private readonly observer?: MutationObserver;
+  private readonly resizeObserver?: ResizeObserver;
+  private displayedPoemText = '';
+  private displayedAttribution = '';
   private transitionTarget?: string;
   private seenRevision = 0;
   private exitTimer?: ReturnType<typeof setTimeout>;
@@ -282,7 +287,135 @@ class ChatEmptyState {
     const MutationObserverCtor = doc.defaultView?.MutationObserver;
     this.observer = MutationObserverCtor ? new MutationObserverCtor(() => this.updateVisibility()) : undefined;
     this.observer?.observe(container, { childList: true });
+    const ResizeObserverCtor = (doc.defaultView as any)?.ResizeObserver as typeof ResizeObserver | undefined;
+    this.resizeObserver = ResizeObserverCtor ? new ResizeObserverCtor(() => this.fitLayout()) : undefined;
+    this.resizeObserver?.observe(this.root);
     views.add(this);
+  }
+
+  private fitPoem(): void {
+    if (this.root.hidden || this.poemButton.hidden) return;
+    if (!this.displayedPoemText) {
+      this.poemButton.style.removeProperty('font-size');
+      this.poemButton.classList.remove('chat-empty-poem--single-line', 'chat-empty-poem--punctuation-break', 'chat-empty-poem--punctuation-wrap');
+      return;
+    }
+
+    const view = this.root.ownerDocument.defaultView;
+    if (!view) return;
+    const previousWidth = this.content.style.width;
+    const previousTransition = this.content.style.transition;
+    this.content.style.transition = 'none';
+    this.content.style.width = '100%';
+    const availableWidth = this.content.getBoundingClientRect().width;
+    this.content.style.width = previousWidth;
+    this.content.style.transition = previousTransition;
+
+    const characters = Array.from(this.displayedPoemText);
+    const leadCharacters = characters.slice(0, -2);
+    this.poemLead.data = leadCharacters.join('');
+    this.poemButton.style.removeProperty('font-size');
+    this.poemButton.classList.remove('chat-empty-poem--punctuation-break', 'chat-empty-poem--punctuation-wrap');
+    this.poemButton.classList.add('chat-empty-poem--single-line');
+    const buttonStyle = view.getComputedStyle(this.poemButton);
+    if (!buttonStyle || !availableWidth) {
+      this.poemButton.classList.remove('chat-empty-poem--single-line');
+      return;
+    }
+    const padding = parseFloat(buttonStyle.paddingLeft) + parseFloat(buttonStyle.paddingRight);
+    const baseSize = parseFloat(buttonStyle.fontSize);
+    const fittedSize = () => {
+      const textWidth = this.poemText.getBoundingClientRect().width;
+      return textWidth ? (baseSize * (availableWidth - padding - 2)) / textWidth : 0;
+    };
+    const singleLineSize = fittedSize();
+
+    if (singleLineSize >= MIN_POEM_FONT_SIZE_PX) {
+      if (singleLineSize < baseSize) this.poemButton.style.fontSize = `${singleLineSize}px`;
+      return;
+    }
+
+    this.poemButton.classList.remove('chat-empty-poem--single-line');
+    const marks: number[] = [];
+    for (let i = 0; i < leadCharacters.length; i++) {
+      if (i > 0 && POEM_BREAK_MARKS.has(leadCharacters[i])) marks.push(i);
+    }
+    if (!marks.length) return;
+
+    const breakAfter = (indices: number[]) => {
+      const lines: string[] = [];
+      let start = 0;
+      for (const index of indices) {
+        lines.push(leadCharacters.slice(start, index + 1).join(''));
+        start = index + 1;
+      }
+      lines.push(leadCharacters.slice(start).join(''));
+      this.poemLead.data = lines.join('\n');
+    };
+    this.poemButton.classList.add('chat-empty-poem--punctuation-break');
+    for (let i = marks.length - 1; i >= 0; i--) {
+      breakAfter([marks[i]]);
+      const twoLineSize = fittedSize();
+      if (twoLineSize < MIN_POEM_FONT_SIZE_PX) continue;
+      if (twoLineSize < baseSize) this.poemButton.style.fontSize = `${twoLineSize}px`;
+      return;
+    }
+
+    let breakIndices: number[] = [];
+    let bestScore = Infinity;
+    for (let i = 0; i < marks.length; i++) {
+      for (let j = i + 1; j < marks.length; j++) {
+        if (marks[j] <= marks[i] + 1) continue;
+        const score = Math.abs(marks[i] + 1 - characters.length / 3) + Math.abs(marks[j] + 1 - (2 * characters.length) / 3);
+        if (score < bestScore) {
+          bestScore = score;
+          breakIndices = [marks[i], marks[j]];
+        }
+      }
+    }
+    if (!breakIndices.length) {
+      breakIndices = [
+        marks.reduce((best, mark) => (Math.abs(mark + 1 - characters.length / 2) < Math.abs(best + 1 - characters.length / 2) ? mark : best)),
+      ];
+    }
+
+    breakAfter(breakIndices);
+    const punctuationLineSize = fittedSize();
+    if (punctuationLineSize >= MIN_POEM_FONT_SIZE_PX) {
+      if (punctuationLineSize < baseSize) this.poemButton.style.fontSize = `${punctuationLineSize}px`;
+    } else {
+      this.poemButton.style.fontSize = `${MIN_POEM_FONT_SIZE_PX}px`;
+      this.poemButton.classList.replace('chat-empty-poem--punctuation-break', 'chat-empty-poem--punctuation-wrap');
+    }
+  }
+
+  private fitAttribution(): void {
+    if (this.root.hidden || this.sourceRow.hidden) return;
+    const text = this.sourceLink.hidden ? this.sourceText : this.sourceLink;
+    text.textContent = this.displayedAttribution;
+    this.sourceRow.classList.remove('chat-empty-source--author-break');
+    if (!this.displayedAttribution) return;
+
+    const view = this.root.ownerDocument.defaultView;
+    if (!view) return;
+    const rowStyle = view.getComputedStyle(this.sourceRow);
+    if (!rowStyle) return;
+    const availableWidth = this.sourceRow.clientWidth - parseFloat(rowStyle.paddingLeft) - parseFloat(rowStyle.paddingRight);
+    const previousWhiteSpace = text.style.whiteSpace;
+    text.style.whiteSpace = 'nowrap';
+    const textWidth = text.getBoundingClientRect().width;
+    text.style.whiteSpace = previousWhiteSpace;
+    if (textWidth <= availableWidth) return;
+
+    const titleStart = this.displayedAttribution.indexOf('「');
+    if (titleStart <= 0) return;
+    text.textContent = `${this.displayedAttribution.slice(0, titleStart)}\n${this.displayedAttribution.slice(titleStart)}`;
+    this.sourceRow.classList.add('chat-empty-source--author-break');
+  }
+
+  private fitLayout(): void {
+    this.fitPoem();
+    this.fitAttribution();
   }
 
   private stopTransition(): void {
@@ -302,6 +435,8 @@ class ChatEmptyState {
 
   private applyPoem(poem?: Poem): void {
     const characters = Array.from(poem?.text || '');
+    this.displayedPoemText = poem?.text || '';
+    this.displayedAttribution = poem?.attribution || '';
     this.poemLead.data = characters.slice(0, -2).join('');
     this.poemTail.data = characters.slice(-2).join('');
     const label = getString(poem ? 'chat-empty-next-poem' : 'chat-empty-retry-poem');
@@ -318,6 +453,7 @@ class ChatEmptyState {
       this.sourceLink.removeAttribute('href');
       this.sourceText.textContent = poem?.attribution || '';
     }
+    this.fitLayout();
   }
 
   private transitionToPoem(poem: Poem, bounceCorner: boolean): void {
@@ -397,7 +533,7 @@ class ChatEmptyState {
 
     const state = getPoemState(this.key);
     const poem = state.poem;
-    const previousText = this.poemLead.data + this.poemTail.data;
+    const previousText = this.displayedPoemText;
     const changedByRequest = state.revision > this.seenRevision;
     if (changedByRequest) this.seenRevision = state.revision;
     this.poemButton.disabled = !!state.pending || !!this.transitionTarget;
@@ -413,6 +549,7 @@ class ChatEmptyState {
   dispose(): void {
     this.stopTransition();
     this.observer?.disconnect();
+    this.resizeObserver?.disconnect();
     views.delete(this);
     this.root.remove();
   }

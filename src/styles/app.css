@@ -176,6 +176,18 @@
   font-family: 'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'Songti SC', serif;
 }
 
+.chat-empty-poem--single-line {
+  white-space: nowrap;
+}
+
+.chat-empty-poem--punctuation-break {
+  white-space: pre;
+}
+
+.chat-empty-poem--punctuation-wrap {
+  white-space: pre-line;
+}
+
 .chat-empty-poem-ending {
   white-space: nowrap;
 }
@@ -264,6 +276,10 @@
   text-align: left;
   overflow-wrap: anywhere;
   user-select: none;
+}
+
+.chat-empty-source--author-break {
+  white-space: pre-line;
 }
 
 .chat-empty-state[data-poem-transition='exit'] .chat-empty-poem-text,
