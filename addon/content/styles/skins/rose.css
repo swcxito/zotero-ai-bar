@@ -1,9 +1,9 @@
 /* rose skin, mirrored from design/skin-preview.html. */
-[data-zaibar-skin="rose"]{--za-page-highlight:#fff;--za-page-base:#fff}
+[data-zaibar-skin="rose"]{--za-page-highlight:#fff0f4;--za-page-base:#fff;--za-page-width:70%;--za-page-height:58%;--za-page-x:95%;--za-page-y:5%}
 [data-zaibar-skin="rose"]{--font:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif;--title-font:var(--font);--radius:18px;--small-radius:10px;--weight:1px;--shadow:0 18px 48px #33415520;--card-shadow:0 6px 20px #33415512;--backdrop:#eef1f5;--page:#fff;--surface:#fff;--raised:#f8fafc;--soft:#f1f5f9;--text:#1e293b;--muted:#475569;--faint:#94a3b8;--line:#e2e8f0;--accent:#e11d48;--accent-hover:#be123c;--accent-ink:#fff;--accent-soft:#ffe4e6;--accent-soft-ink:#9f1239;--user:#e11d48;--user-ink:#fff;--code:#18181b;--code-ink:#f4f4f5;--success:#166534;--glow:radial-gradient(circle at 85% 0,#fda4af1f,transparent 48%)}
 [data-zaibar-skin="rose"]{--connect-bg:#27272a;--connect-ink:#fafafa;--connect-hover:#3f3f46;--connect-ok-bg:#27272a;--connect-ok-ink:#9ae6ad}
 @media (prefers-color-scheme: dark) {
-[data-zaibar-skin="rose"]{--za-page-highlight:#18181b;--za-page-base:#18181b}
+[data-zaibar-skin="rose"]{--za-page-highlight:#281c22;--za-page-base:#18181b;--za-page-width:70%;--za-page-height:58%;--za-page-x:95%;--za-page-y:5%}
 [data-zaibar-skin="rose"]{--shadow:0 20px 48px #0008;--card-shadow:0 6px 20px #0004;--backdrop:#09090b;--page:#18181b;--surface:#27272a;--raised:#18181b;--soft:#3f3f46;--text:#f4f4f5;--muted:#d4d4d8;--faint:#a1a1aa;--line:#52525b;--accent:#fb7185;--accent-hover:#fda4af;--accent-ink:#18181b;--accent-soft:#4c1827;--accent-soft-ink:#fda4af;--user:#e11d48;--user-ink:#fff;--code:#09090b;--code-ink:#f4f4f5;--success:#86efac;--glow:radial-gradient(circle at 85% 0,#e11d4812,transparent 48%)}
 [data-zaibar-skin="rose"]{--connect-bg:#e9e9ec;--connect-ink:#202024;--connect-hover:#fff;--connect-ok-bg:#d9f1df;--connect-ok-ink:#1d6638}
 }
