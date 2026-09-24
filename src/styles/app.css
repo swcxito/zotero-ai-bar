@@ -210,7 +210,7 @@
   opacity: 0.55;
 }
 
-.chat-empty-poem:hover:not(:disabled) {
+.chat-empty-poem:hover {
   color: var(--accent, #e11d48);
   transform: translateY(-2px);
 }
