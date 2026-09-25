@@ -35,8 +35,9 @@ const MAX_TODAY_REQUESTS = 5;
 const REQUEST_GAP_MS = 650;
 const REQUEST_TIMEOUT_MS = 5000;
 const POEM_MORPH_MS = 260;
-const MIN_POEM_FONT_SIZE_PX = 20;
+const MIN_POEM_FONT_SIZE_PX = 22;
 const POEM_BREAK_MARKS = new Set(['，', ',', '。', '.', '？', '?']);
+const POEM_END_MARKS = new Set(['，', ',', '。', '.', '？', '?', '！', '!', '；', ';', '…']);
 let nextRequestAt = 0;
 let tokenRequest: Promise<string> | undefined;
 
@@ -70,7 +71,7 @@ function parseJinrishici(result: unknown): Poem | undefined {
   const response = result as Record<string, unknown>;
   if (response.status !== 'success' || !response.data || typeof response.data !== 'object') return undefined;
   const data = response.data as Record<string, unknown>;
-  const text = trimmed(data.content, 240).replace(/。+$/u, '');
+  const text = trimmed(data.content, 240);
   if (!text) return undefined;
   const origin = data.origin && typeof data.origin === 'object' ? (data.origin as Record<string, unknown>) : {};
   const dynasty = trimmed(origin.dynasty, 24);
@@ -136,7 +137,7 @@ async function loadTodayPoem(): Promise<Poem> {
 
 async function loadLegacyJinrishiciPoem(): Promise<Poem> {
   const data = (await requestJson('https://v1.jinrishici.com/all.json')) as Record<string, unknown>;
-  const text = trimmed(data.content, 240).replace(/。+$/u, '');
+  const text = trimmed(data.content, 240);
   if (!text) throw new Error('旧版今日诗词未返回有效诗句');
   const author = trimmed(data.author, 60);
   const title = trimmed(data.origin, 80);
@@ -145,7 +146,7 @@ async function loadLegacyJinrishiciPoem(): Promise<Poem> {
 
 async function loadHitokotoPoem(): Promise<Poem> {
   const data = (await requestJson('https://v1.hitokoto.cn/?c=i&encode=json&max_length=40')) as Record<string, unknown>;
-  const text = trimmed(data.hitokoto, 240).replace(/。+$/u, '');
+  const text = trimmed(data.hitokoto, 240);
   if (!text || (data.type && data.type !== 'i')) throw new Error('一言接口未返回诗词');
   const author = trimmed(data.from_who, 60);
   const source = trimmed(data.from, 80);
@@ -311,10 +312,14 @@ class ChatEmptyState {
       segment.className = 'chat-empty-poem-segment';
       if (i === parts.length - 1) {
         const lastCharacters = Array.from(parts[i]);
-        segment.textContent = lastCharacters.slice(0, -2).join('');
+        let punctuationStart = lastCharacters.length;
+        while (punctuationStart > 0 && POEM_END_MARKS.has(lastCharacters[punctuationStart - 1])) punctuationStart--;
+        const body = lastCharacters.slice(0, punctuationStart);
+        segment.textContent = body.slice(0, -2).join('');
         const ending = doc.createElement('span');
         ending.className = 'chat-empty-poem-ending';
-        ending.textContent = lastCharacters.slice(-2).join('');
+        ending.textContent = body.slice(-2).join('') + lastCharacters.slice(punctuationStart).join('');
+        this.poemIcon.classList.toggle('chat-empty-cursor--overlap-punctuation', punctuationStart < lastCharacters.length);
         ending.append(this.poemIcon);
         segment.append(ending);
       } else {
@@ -400,7 +405,9 @@ class ChatEmptyState {
     }
 
     this.poemButton.classList.add('chat-empty-poem--punctuation-break');
-    for (let i = this.poemBreaks.length - 1; i >= 0; i--) {
+    // For three segments, go from AB/C directly to A/B/C as width shrinks.
+    const earliestTwoLineBreak = this.poemBreaks.length === 2 ? 1 : 0;
+    for (let i = this.poemBreaks.length - 1; i >= earliestTwoLineBreak; i--) {
       this.setPoemBreaks([i]);
       const twoLineSize = fittedSize();
       if (twoLineSize < MIN_POEM_FONT_SIZE_PX) continue;
