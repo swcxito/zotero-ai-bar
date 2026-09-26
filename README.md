@@ -1,159 +1,64 @@
 # Zotero AI Bar
 
-[![zotero target version](https://img.shields.io/badge/Zotero-7--9-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
-[![Release](https://img.shields.io/github/release/swcxito/zotero-ai-bar?style=flat-square)](https://github.com/swcxito/zotero-ai-bar/releases)
+[![Zotero 7–10](https://img.shields.io/badge/Zotero-7%E2%80%9310-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
+[![Latest beta](https://img.shields.io/github/v/release/swcxito/zotero-ai-bar?include_prereleases&label=Latest%20beta&style=flat-square)](https://github.com/swcxito/zotero-ai-bar/releases)
+[![License: AGPL-3.0-or-later](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue?style=flat-square)](LICENSE)
 
 **English** | [简体中文](docs/README_zh-CN.md)
 
-A beautiful and handy AI toolbar plugin for Zotero, putting an AI assistant right at your fingertips.
+An AI reading companion for Zotero. Select text in a paper to explain, translate, summarize, or ask a question—then bring in more context when you need it.
 
-You can visit the [**Project Homepage**](https://zotero.fukeke.com) for more information and detailed tutorials.
+[Project website](https://zotero.fukeke.com) · [Documentation](https://zotero.fukeke.com/en/guides/install) · [Download the latest beta](https://github.com/swcxito/zotero-ai-bar/releases/latest/download/zotero-ai-bar.xpi) · [All releases](https://github.com/swcxito/zotero-ai-bar/releases)
 
-Experimental [Codex subscription integration](docs/codex-integration.md) reuses an installed desktop/CLI runtime with isolated sign-in and Zotero tools. Only explicitly audited runtime versions are enabled; no runtime is bundled or downloaded.
+> **Beta:** Zotero AI Bar is actively developed. The latest release is a pre-release; review its release notes before installing it in a primary Zotero profile.
 
-## Support
+![The Zotero AI Bar selection toolbar in the reader](docs/assets/fun-bar.gif)
 
-If you like this project, please give it a ⭐ on GitHub — it really helps!
+## What you can do
 
-If you find this project helpful, please consider supporting its development and maintenance:
+- **Read in context.** Select text for quick actions, or chat in Normal, Full Text, and Agent modes. Full Text includes the current document; Agent can search and read the document or Zotero library and capture PDF pages for visual questions.
+- **Choose how you work.** Use the reader sidebar or a separate chat window, switch models in the input bar, and organize repeat tasks with built-in or custom prompts.
+- **Connect your model.** Browse supported providers and models, or configure a compatible custom endpoint. Image input, Markdown, code, tables, and math rendering are supported.
+- **Track each response.** Retry the latest answer, set reasoning effort where supported, and see per-response token usage; known context windows also show current usage.
+- **Make it yours.** Adjust the interface and choose from the available visual styles.
 
-[<img alt="&quot;Buy Me A Coffee&quot;" height="60px" src="docs/assets/red-button.png"/>](https://www.buymeacoffee.com/fukeke)
-[<img alt="Afdian" src="docs/assets/afdian-btn-en.png" height="60px"/>](https://afdian.com/a/fukeke)
+![Provider and model configuration](docs/assets/providers.png)
 
-## What's New in v1.3
+## Install and get started
 
-### Agent / Tool Calling
+1. Download the `.xpi` file from [the latest beta release](https://github.com/swcxito/zotero-ai-bar/releases/latest/download/zotero-ai-bar.xpi). Keep the file compressed.
+2. In Zotero, open **Tools → Add-ons**, select the gear menu, and choose **Install Add-on From File…**.
+3. Open **Edit → Settings → AI Bar**, add a provider, and configure its API key and model.
+4. Open a paper, select text, and choose an action from the AI toolbar.
 
-- **Autonomous agent mode**: The AI can now call tools to search the document, read pages/lines, search your library, find papers online by title, add DOI metadata and available full text to the dedicated `AI 下载文献` collection, capture PDF pages as images, ask you clarifying questions, and more — no need to manually feed context.
-- **Tool call cards**: Each tool invocation renders as a collapsible card showing inputs and outputs inline, interleaved with the reply text in stream order.
+See the [installation guide](https://zotero.fukeke.com/en/guides/install) and [model setup guide](https://zotero.fukeke.com/en/guides/addmodel) for details. Provider usage is billed by the provider under your account terms.
 
-### Thinking Effort Control
+## Experimental: Codex subscription integration
 
-- A new **thinking effort** selector on the input bar lets you pick reasoning depth (`none / low / medium / high / xhigh`) per session.
-- A **default thinking effort** setting is available in the preferences (defaults to `none`).
-- Translate actions automatically bypass reasoning for speed.
+On supported macOS and Windows setups, the beta can connect to an installed Codex runtime and use an eligible ChatGPT sign-in. This integration is experimental, has a restricted audited runtime allowlist, and does not bundle or automatically download a runtime. Read the [Codex integration notes](docs/codex-integration.md) before enabling it.
 
-### Token Usage Display
+## Screenshots
 
-- Each AI reply shows a **per-request token badge** (input ↑ / output ↓) next to the action buttons.
-- A **context token indicator** next to the disclaimer shows current context usage and the percentage of the model's context window (when known).
+| Reader actions | Context controls | Rich responses |
+| --- | --- | --- |
+| ![Reader toolbar](docs/assets/fun-bar.gif) | ![Context enabled](docs/assets/fun-context-use.png) | ![Markdown and math rendering](docs/assets/fun-style.png) |
 
-### Other Improvements
+## Compatibility and support
 
-- **Smarter auto-scroll**: The chat now auto-scrolls only until your message scrolls out of view, so you can freely scroll up to read earlier replies while generation continues.
-- **Thinking card auto-scroll**: Reasoning content stays in view as it streams in.
-- **Selection-aware prompts**: When no text is selected, the model is explicitly told so — no more "you selected..." hallucinations.
-- **Animated thinking-effort dropdown** with a "Thinking depth" title.
-- Various UI polish and bug fixes.
+- Supports Zotero 7 through 10.
+- Get installation help in the [documentation](https://zotero.fukeke.com), report bugs or request features in [GitHub Issues](https://github.com/swcxito/zotero-ai-bar/issues), and review changes in [GitHub Releases](https://github.com/swcxito/zotero-ai-bar/releases).
+- Contributions are welcome. See [CONTRIBUTING](CONTRIBUTING.md) ([中文](docs/CONTRIBUTING_zh-CN.md)).
 
-## What's New in v1.2
+## Support development
 
-### New Provider & Model Architecture
+If Zotero AI Bar helps your work, a GitHub star or a contribution helps keep it maintained.
 
-- Out-of-the-box support for **27 providers** and **763+ models**.
-- **Native SDK dispatch**: Adapt native AI SDKs for major providers, improving compatibility and resolving past provider issues.
-- **Multi-env support **: Providers with multiple environment variables (e.g., Azure) show separate input fields in the configuration dialog.
-- **Provider & model browser**: Browse providers and models with search, quickly add models without tedious manual entry.
-- **Image input support**: You can screenshot or paste images, no fear of not understanding charts!
-  ![img-input.png](docs/assets/img-input.png)
-
-### Other Improvements
-
-- **Custom prompt management**: Dedicated prompt editor page with drag-to-reorder support.
-- **Smart copy** feature.
-- **Standalone chat window** with host mode integration.
-- **Formula/Code/Table block optimization** to prevent overflow and interface distortion.
-
-## Features
-
-**Leave the complex work to us, keep the simple operations for yourself.**
-
-### Quick Model Configuration
-
-Easily add and manage AI models through a simple configuration interface, supporting a variety of providers and model choices:
-![img.png](docs/assets/providers.png)
-
-A model selector on the toolbar lets you switch models without opening the settings page.
-![model-sel.png](docs/assets/model-sel.png)
-
-### Selection Toolbar
-
-Swipe, click, and let the AI assistant handle it for you:
-![function click](docs/assets/fun-bar.gif)
-
-### Context Extraction
-
-Automatically extract key information from literature for more accurate answers.
-
-Enable extraction:
-
-![img.png](docs/assets/fun-context-use.png)
-
-Disable extraction:
-
-![img.png](docs/assets/fun-context-unuse.png)
-
-### Beautiful Rich Text
-
-Headings, **bold**, _italics_, ~~strikethrough~~, `code blocks`, [links](https://github.com/swcxito/zotero-ai-bar/), blockquotes, lists...
-
-Basic `Markdown` rendering that looks great:
-
-![function](docs/assets/fun-style.png)
-
-Of course, math formulas are also supported:
-![img.png](docs/assets/fun-math.png)
-
-### Modern Interface Design
-
-Smooth and fluid animations, with more on the way!
-![export-1770358524964.gif](docs/assets/fun-animate.gif)
-
-Switch between Dark Mode and Light Mode at will:
-![function dark mode](docs/assets/fun-dark.gif)
-
-## Usage
-
-Here is a quick tutorial. For detailed instructions, please click and visit the project [homepage](https://zotero.fukeke.com)
-
-1. Install the plugin.
-2. Open the model settings.
-3. Add a provider, enter your API Key and select a model.
-4. Close the settings page; configurations are saved automatically.
-5. Start using it!
-
-## Roadmap
-
-- [x] ~~Basic Features~~
-- [x] ~~Beautiful Rich Text~~
-- [x] ~~Modern Interface Design~~
-- [x] ~~Multi-language Support (English/Chinese)~~
-- [x] ~~Basic Settings~~
-- [x] ~~Documentation~~
-- [x] Beautify Toolbar
-- [x] ~~Custom Prompts~~
-- [x] ~~Standalone Window Option~~
-- [x] Continuous Conversation
-- [x] New Chat Session
-- [x] Agent / Tool Calling
-- [x] Thinking Effort Control
-- [x] Token Usage Display
-- [ ] Regenerate Response
-- [ ] Attachment Support
-- And more...
-
-## Contribution
-
-Contributions of any kind are welcome! Whether it's code, documentation, testing, suggestions, or feedback. See [CONTRIBUTING](CONTRIBUTING.md) ([中文](docs/CONTRIBUTING_zh-CN.md)) for details.
+[![Afdian](docs/assets/afdian-btn-en.png)](https://afdian.com/a/fukeke) [![Buy Me a Coffee](docs/assets/red-button.png)](https://www.buymeacoffee.com/fukeke)
 
 ## Acknowledgements
 
-This project is built based on:<br/>
-[![Zotero](https://img.shields.io/badge/Zotero-CC2936?style=flat&logo=zotero)](https://www.zotero.org) [![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat&logo=github)](https://github.com/windingwind/zotero-plugin-template) [![GitHub Repo](https://img.shields.io/badge/GitHub-models.dev-blue?logo=github)](https://github.com/anomalyco/models.dev) [![GitHub Repo](https://img.shields.io/badge/GitHub-AI%20SDK-blue?logo=github)](https://github.com/anomalyco/models.dev)
-
-Inspired by parts of the implementation from:<br/>
-[![GitHub Repo stars](https://img.shields.io/github/stars/windingwind/zotero-pdf-translate?label=zotero-pdf-translate&style=flat&logo=github)](https://github.com/windingwind/zotero-pdf-translate) [![GitHub Repo stars](https://img.shields.io/github/stars/guaguastandup/zotero-pdf2zh?label=Zotero%20PDF2zh&style=flat&logo=github)](https://github.com/guaguastandup/zotero-pdf2zh)
+Built with [Zotero](https://www.zotero.org), [Zotero Plugin Template](https://github.com/windingwind/zotero-plugin-template), [Vercel AI SDK](https://github.com/vercel/ai), and [models.dev](https://github.com/anomalyco/models.dev). Parts of the implementation were inspired by [Zotero PDF Translate](https://github.com/windingwind/zotero-pdf-translate) and [Zotero PDF2zh](https://github.com/guaguastandup/zotero-pdf2zh).
 
 ## License
 
-This project is licensed under the AGPL3.0 License. See the [LICENSE](LICENSE) file for details.
+Zotero AI Bar is licensed under [AGPL-3.0-or-later](LICENSE).
