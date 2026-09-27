@@ -13,7 +13,6 @@ interface Poem {
 interface PoemState {
   poem?: Poem;
   attempted: boolean;
-  todayRequests: number;
   lastRequestClicked: boolean;
   revision: number;
   pending?: Promise<void>;
@@ -38,6 +37,8 @@ const POEM_MORPH_MS = 260;
 const MIN_POEM_FONT_SIZE_PX = 22;
 const POEM_BREAK_MARKS = new Set(['，', ',', '。', '.', '？', '?']);
 const POEM_END_MARKS = new Set(['，', ',', '。', '.', '？', '?', '！', '!', '；', ';', '…']);
+// Count first loads and manual refreshes across every tab in this plugin session.
+let todayRequests = 0;
 let nextRequestAt = 0;
 let tokenRequest: Promise<string> | undefined;
 
@@ -52,7 +53,7 @@ function trimmed(value: unknown, maxLength: number): string {
 function getPoemState(key: string): PoemState {
   let state = poems.get(key);
   if (!state) {
-    state = { attempted: false, todayRequests: 0, lastRequestClicked: false, revision: 0 };
+    state = { attempted: false, lastRequestClicked: false, revision: 0 };
     poems.set(key, state);
     if (poems.size > MAX_CACHED_CONVERSATIONS) poems.delete(poems.keys().next().value!);
   }
@@ -176,8 +177,8 @@ function requestPoem(key: string, clicked: boolean): void {
   state.attempted = true;
   state.lastRequestClicked = clicked;
   state.pending = (async () => {
-    if (state.todayRequests < MAX_TODAY_REQUESTS) {
-      state.todayRequests++;
+    if (todayRequests < MAX_TODAY_REQUESTS) {
+      todayRequests++;
       try {
         await waitForRequestSlot();
         storePoem(state, await loadTodayPoem());
