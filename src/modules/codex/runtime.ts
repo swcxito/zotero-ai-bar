@@ -320,6 +320,14 @@ export async function discoverCandidates(): Promise<RuntimeCandidate[]> {
       for (const app of ['Codex.app', 'ChatGPT.app']) {
         addCandidate(candidates, PathUtils.join(root, app, 'Contents', 'Resources', 'codex'), 'desktop');
       }
+    // Recent ChatGPT bundles keep the CLI in its own nested app bundle.
+    for (const root of roots) {
+      addCandidate(
+        candidates,
+        PathUtils.join(root, 'ChatGPT.app', 'Contents', 'Resources', 'codex-cli', 'CodexCLI.app', 'Contents', 'MacOS', 'codex'),
+        'desktop'
+      );
+    }
   } else if (Zotero.isWin) {
     // Discover both MSIX and regular installations using installed-app metadata.
     const systemRoot = environmentValue(env, 'SystemRoot') || environmentValue(env, 'WINDIR') || 'C:\\Windows';
