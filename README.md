@@ -39,8 +39,8 @@ On supported macOS and Windows setups, the beta can connect to an installed Code
 
 ## Screenshots
 
-| Reader actions | Context controls | Rich responses |
-| --- | --- | --- |
+| Reader actions                             | Context controls                                    | Rich responses                                            |
+| ------------------------------------------ | --------------------------------------------------- | --------------------------------------------------------- |
 | ![Reader toolbar](docs/assets/fun-bar.gif) | ![Context enabled](docs/assets/fun-context-use.png) | ![Markdown and math rendering](docs/assets/fun-style.png) |
 
 ## Compatibility and support
