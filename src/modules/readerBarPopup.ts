@@ -42,6 +42,31 @@ export function formatPopupActionLabel(label: string, locale: string = Zotero.lo
 // (for example while scrolling). Keep at most one lifecycle watcher per
 // reader so an older popup cannot later clear the state of a newer one.
 const selectionPopupWatchers = new Map<object, () => void>();
+const autoTranslations = new Map<object, { key: string; cancel?: () => void }>();
+
+function getReaderSelectionPosition(reader: any): unknown {
+  try {
+    const internal = reader._internalReader;
+    if (typeof internal?.getSelectionPosition !== 'function') return undefined;
+    return internal.getSelectionPosition();
+  } catch {
+    return undefined;
+  }
+}
+
+function clearAutoTranslation(reader: object) {
+  autoTranslations.get(reader)?.cancel?.();
+  autoTranslations.delete(reader);
+}
+
+function clearReaderSelection(reader: object) {
+  clearAutoTranslation(reader);
+  if (addon.data.selection.currentReader !== reader) return;
+  addon.data.selection.text = undefined;
+  addon.data.selection.contextPromise = undefined;
+  addon.data.selection.currentAnnotation = undefined;
+  refreshSelectionHints();
+}
 
 // TODO 支持其它格式
 
@@ -135,6 +160,13 @@ export function registerKaTeXFontSheet(win: _ZoteroTypes.MainWindow) {
 // entry point for reader popup
 export function registerReaderInitializer() {
   const handler = ({ reader, doc, params, append }: any) => {
+    // React can render the old popup while clearing the reader selection.
+    // Its annotation text is a snapshot, not proof of a live selection.
+    if (getReaderSelectionPosition(reader) === null || !params.annotation?.text?.trim()) {
+      selectionPopupWatchers.get(reader)?.();
+      clearReaderSelection(reader);
+      return;
+    }
     // addon.hooks.onReaderPopupShow(event);
     addon.data.selection.text = params.annotation.text?.trim();
     ztoolkit.log(addon.data.selection.text, 'selected');
@@ -176,19 +208,16 @@ export function registerReaderInitializer() {
         const ownerDoc = doc;
         const view = ownerDoc.defaultView;
         const annotation = params.annotation;
-        const internal: any = reader._internalReader;
         const isSelectionStillOpen = (): boolean | undefined => {
-          try {
-            const fn = internal?.getSelectionPosition;
-            if (typeof fn !== 'function') return undefined;
-            return !!fn.call(internal);
-          } catch {
-            return undefined;
-          }
+          const position = getReaderSelectionPosition(reader);
+          return position === undefined ? undefined : position !== null;
         };
         let timer: number | undefined;
         let stopped = false;
-        const onDocumentUnload = () => stop();
+        const onDocumentUnload = () => {
+          stop();
+          clearReaderSelection(reader);
+        };
         function stop() {
           if (stopped) return;
           stopped = true;
@@ -200,14 +229,11 @@ export function registerReaderInitializer() {
         }
         const onPopupGone = () => {
           stop();
+          clearAutoTranslation(reader);
           // Selecting new text re-renders the popup: a newer selection has
           // already overwritten the cached state — leave it alone.
           if (addon.data.selection.currentAnnotation !== annotation) return;
-          addon.data.selection.text = undefined;
-          addon.data.selection.contextPromise = undefined;
-          addon.data.selection.currentAnnotation = undefined;
-          // Collapse the selection hint bar in every input area.
-          refreshSelectionHints();
+          clearReaderSelection(reader);
         };
         if (view) {
           selectionPopupWatchers.set(readerKey, stop);
@@ -232,7 +258,7 @@ export function registerReaderInitializer() {
           }, 400);
         }
       }
-      smartAutoTranslate(reader, params);
+      smartAutoTranslate(reader, params, container);
     }
   };
   addon.data._readerPopupHandler = handler;
@@ -242,6 +268,7 @@ export function registerReaderInitializer() {
 export function unregisterReaderInitializer() {
   for (const stop of [...selectionPopupWatchers.values()]) stop();
   selectionPopupWatchers.clear();
+  for (const reader of autoTranslations.keys()) clearAutoTranslation(reader);
   if (addon.data._readerPopupHandler) {
     Zotero.Reader.unregisterEventListener('renderTextSelectionPopup', addon.data._readerPopupHandler);
   }
@@ -249,9 +276,18 @@ export function unregisterReaderInitializer() {
 
 function smartAutoTranslate(
   reader: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>,
-  params: { annotation: _ZoteroTypes.Annotations.AnnotationJson }
+  params: { annotation: _ZoteroTypes.Annotations.AnnotationJson },
+  container: HTMLElement | null
 ) {
-  if (getPref('translate.enableAuto')) {
+  const selectedText = params.annotation.text?.trim();
+  const view = container?.ownerDocument.defaultView;
+  if (getPref('translate.enableAuto') && selectedText && container && view) {
+    // Annotation objects are recreated on popup renders. Compare the text
+    // and document position so scrolling/dismissal cannot translate twice.
+    const key = JSON.stringify([selectedText, params.annotation.position]);
+    const previous = autoTranslations.get(reader);
+    if (previous?.key === key && !previous.cancel) return;
+    clearAutoTranslation(reader);
     const autoTranslateContext = getPref('translate.extendContext');
     const isExtendContextEnabled = getPref('extend-selection-context');
     const followContextSetting =
@@ -263,7 +299,23 @@ function smartAutoTranslate(
       : autoTranslateContext === 'always'
         ? getSelectionContext(reader, params)
         : Promise.resolve(undefined);
-    void sendStructuredTranslation(reader, selectionContextPromise);
+    const pending: { key: string; cancel?: () => void } = { key };
+    autoTranslations.set(reader, pending);
+    // Wait until React has committed the popup before checking its lifetime.
+    const timer = view.setTimeout(() => {
+      pending.cancel = undefined;
+      if (autoTranslations.get(reader) !== pending) return;
+      if (getReaderSelectionPosition(reader) === null) {
+        clearReaderSelection(reader);
+        return;
+      }
+      if (!container.isConnected || !getPref('translate.enableAuto')) {
+        clearAutoTranslation(reader);
+        return;
+      }
+      void sendStructuredTranslation(reader, selectionContextPromise, selectedText);
+    }, 0);
+    pending.cancel = () => view.clearTimeout(timer);
   }
 }
 
