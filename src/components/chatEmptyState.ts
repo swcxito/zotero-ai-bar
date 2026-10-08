@@ -37,7 +37,7 @@ const POEM_MORPH_MS = 260;
 const MIN_POEM_FONT_SIZE_PX = 22;
 const POEM_BREAK_MARKS = new Set(['，', ',', '。', '.', '？', '?']);
 const POEM_END_MARKS = new Set(['，', ',', '。', '.', '？', '?', '！', '!', '；', ';', '…']);
-// Count first loads and manual refreshes across every tab in this plugin session.
+// Count first loads and manual refreshes across global-assistant conversations in this plugin session.
 let todayRequests = 0;
 let nextRequestAt = 0;
 let tokenRequest: Promise<string> | undefined;
@@ -263,7 +263,9 @@ class ChatEmptyState {
     this.poemIcon.style.height = 'auto';
     this.poemIcon.setAttribute('aria-hidden', 'true');
     this.poemButton.append(this.poemText);
-    this.poemButton.addEventListener('click', () => requestPoem(this.key, true));
+    this.poemButton.addEventListener('click', () => {
+      if (this.shouldShowPoem()) requestPoem(this.key, true);
+    });
 
     this.sourceRow = doc.createElement('div');
     this.sourceRow.className = 'chat-empty-source';
@@ -635,11 +637,15 @@ class ChatEmptyState {
   setSession(session: Session): void {
     const nextKey = session.conversationId || session.id;
     if (this.key && this.key !== nextKey) this.stopTransition();
-    const revision = getPoemState(nextKey).revision;
+    const revision = poems.get(nextKey)?.revision ?? 0;
     if (this.key !== nextKey || revision < this.seenRevision) this.seenRevision = revision;
     this.session = session;
     this.key = nextKey;
     this.updateVisibility();
+  }
+
+  private shouldShowPoem(): boolean {
+    return this.session?.kind === 'global-agent' && isChineseLocale();
   }
 
   private updateVisibility(): void {
@@ -651,15 +657,16 @@ class ChatEmptyState {
       return;
     }
     this.render();
-    if (isChineseLocale()) requestPoem(this.key, false);
+    if (this.shouldShowPoem()) requestPoem(this.key, false);
   }
 
   render(): void {
     if (this.root.hidden) return;
-    const chinese = isChineseLocale();
-    this.greeting.hidden = chinese;
-    this.poemButton.hidden = !chinese;
-    if (!chinese) {
+    const showPoem = this.shouldShowPoem();
+    this.greeting.hidden = showPoem;
+    this.poemButton.hidden = !showPoem;
+    if (!showPoem) {
+      this.stopTransition();
       this.sourceRow.hidden = true;
       return;
     }
@@ -703,7 +710,7 @@ export function syncChatEmptyState(session: Session, container: HTMLElement): vo
   mounted.get(container)?.setSession(session);
 }
 
-/** Translation sessions have no conversation ID, so clearing one needs a fresh poem. */
+/** Reset the empty view and discard any cached poem for the cleared conversation. */
 export function resetChatEmptyState(session: Session): void {
   const key = session.conversationId || session.id;
   poems.delete(key);
