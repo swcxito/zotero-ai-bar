@@ -168,7 +168,7 @@ function storePoem(state: PoemState, poem: Poem): void {
   state.poem = poem;
 }
 
-function requestPoem(key: string, clicked: boolean): void {
+function requestPoem(key: string, clicked: boolean, kind: Session['kind']): void {
   const state = getPoemState(key);
   if (state.pending) return;
   if (!clicked && state.attempted) {
@@ -177,7 +177,7 @@ function requestPoem(key: string, clicked: boolean): void {
   state.attempted = true;
   state.lastRequestClicked = clicked;
   state.pending = (async () => {
-    if (todayRequests < MAX_TODAY_REQUESTS) {
+    if (kind === 'global-agent' && todayRequests < MAX_TODAY_REQUESTS) {
       todayRequests++;
       try {
         await waitForRequestSlot();
@@ -264,7 +264,7 @@ class ChatEmptyState {
     this.poemIcon.setAttribute('aria-hidden', 'true');
     this.poemButton.append(this.poemText);
     this.poemButton.addEventListener('click', () => {
-      if (this.shouldShowPoem()) requestPoem(this.key, true);
+      if (this.session && this.shouldShowPoem()) requestPoem(this.key, true, this.session.kind);
     });
 
     this.sourceRow = doc.createElement('div');
@@ -645,7 +645,7 @@ class ChatEmptyState {
   }
 
   private shouldShowPoem(): boolean {
-    return this.session?.kind === 'global-agent' && isChineseLocale();
+    return !!this.session && isChineseLocale();
   }
 
   private updateVisibility(): void {
@@ -657,7 +657,7 @@ class ChatEmptyState {
       return;
     }
     this.render();
-    if (this.shouldShowPoem()) requestPoem(this.key, false);
+    if (session && this.shouldShowPoem()) requestPoem(this.key, false, session.kind);
   }
 
   render(): void {
