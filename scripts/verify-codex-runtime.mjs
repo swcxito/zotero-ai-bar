@@ -69,7 +69,12 @@ const server = createServer(async (req, res) => {
     event({ type: 'response.output_item.done', output_index: 0, item });
     event({
       type: 'response.completed',
-      response: { id: responseId, status: 'completed', output: [item], usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } },
+      response: {
+        id: responseId,
+        status: 'completed',
+        output: [item],
+        usage: { input_tokens: requests === 1 ? 100 : 150, output_tokens: requests === 1 ? 20 : 30, total_tokens: requests === 1 ? 120 : 180 },
+      },
     });
     res.end();
   } catch (error) {
@@ -105,6 +110,10 @@ child.stderr.on('data', (chunk) => {
 });
 child.on('exit', () => rpc.close());
 let toolCalls = 0;
+const tokenUpdates = [];
+rpc.listeners.add((message) => {
+  if (message.method === 'thread/tokenUsage/updated') tokenUpdates.push(message.params);
+});
 rpc.onRequest = async (message) => {
   assert.equal(message.method, 'item/tool/call');
   assert.equal(message.params.tool, 'zotero_read');
@@ -162,6 +171,11 @@ try {
   if (serverFailure) throw serverFailure;
   assert.equal(toolCalls, 1);
   assert.equal(requests, 2);
+  const reportedUsage = tokenUpdates.at(-1).tokenUsage;
+  assert.equal(reportedUsage.total.inputTokens, 250);
+  assert.equal(reportedUsage.total.outputTokens, 50);
+  assert.equal(reportedUsage.total.totalTokens, 300);
+  assert.equal(reportedUsage.last.totalTokens, 180);
   assert.equal(
     await access(marker).then(
       () => true,

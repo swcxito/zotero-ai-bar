@@ -270,6 +270,7 @@ export type FluentMessageId =
   | 'token-usage-context'
   | 'token-usage-context-window'
   | 'token-usage-context-window-unknown'
+  | 'token-usage-cumulative'
   | 'token-usage-input'
   | 'token-usage-output'
   | 'token-usage-total'

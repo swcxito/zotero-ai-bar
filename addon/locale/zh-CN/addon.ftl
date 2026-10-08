@@ -216,5 +216,6 @@ token-usage-input = 输入
 token-usage-output = 输出
 token-usage-total = 合计
 token-usage-context = 上下文
+token-usage-cumulative = 累计消耗
 token-usage-context-window = 上下文窗口
 token-usage-context-window-unknown = 当前模型的上下文窗口大小未知

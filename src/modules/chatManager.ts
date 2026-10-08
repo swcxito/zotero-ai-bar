@@ -103,6 +103,10 @@ export class Session {
   lastSentSelectionText?: string;
   /** Token usage returned by the most recent request (persists across pending resets). */
   lastUsage?: TokenUsage;
+  /** Last server cumulative counters, used to calculate a whole Codex turn's usage. */
+  codexTokenTotal?: { threadId: string; usage: TokenCounts };
+  /** Conversation consumption includes stopped/retried turns across remote threads. */
+  codexConsumption?: TokenCounts;
   pending: {
     shouldAutoScroll?: boolean;
     messagePop?: Element;
@@ -208,10 +212,15 @@ export type AgentUserAnswer = {
   customInput?: string;
 };
 
-export interface TokenUsage {
+export interface TokenCounts {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+}
+
+export interface TokenUsage extends TokenCounts {
+  /** Codex thread's cumulative consumption, separate from context occupancy. */
+  cumulative?: TokenCounts;
 }
 
 type ChatRequestParams = (
@@ -337,6 +346,9 @@ export class ChatManager {
   }
 
   private hydrateSession(session: Session, conversation?: PersistedConversation): void {
+    session.lastUsage = undefined;
+    session.codexTokenTotal = undefined;
+    session.codexConsumption = undefined;
     session.codex = conversation?.codex ? { ...conversation.codex } : undefined;
     if (!conversation) {
       session.conversationId = this.createConversationId();

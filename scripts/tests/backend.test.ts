@@ -3,6 +3,14 @@ import { streamCodex } from '../../src/modules/codex/backend';
 import { messagesFor, prepareTurn, resetFixture, sessionFixture, state, codexRuntime } from './backend-fixture';
 
 describe('Codex chat backend', function () {
+  const counters = (inputTokens: number, outputTokens: number) => ({
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    cachedInputTokens: 20,
+    reasoningOutputTokens: 10,
+  });
+
   beforeEach(function () {
     resetFixture();
   });
@@ -27,6 +35,82 @@ describe('Codex chat backend', function () {
     state.server.reply = '';
     await streamCodex(messagesFor(sessionFixture()), sessionFixture());
     assert.include(state.errors[0], '没有返回文字');
+  });
+
+  it('reports cumulative consumption and counts all model steps once per turn', async function () {
+    const session = sessionFixture();
+    const first = { total: counters(100, 30), last: counters(100, 30), modelContextWindow: 200000 };
+    state.server.tokenUsageUpdates = [first, first];
+    await streamCodex(messagesFor(session), session);
+    assert.deepEqual(state.ends[0].usage, {
+      promptTokens: 100,
+      completionTokens: 30,
+      totalTokens: 130,
+      cumulative: { promptTokens: 100, completionTokens: 30, totalTokens: 130 },
+    });
+    prepareTurn(session);
+    state.server.tokenUsageUpdates = [
+      { total: counters(250, 70), last: counters(150, 40) },
+      { total: counters(450, 120), last: counters(200, 50) },
+    ];
+    await streamCodex(messagesFor(session), session);
+    assert.deepEqual(state.ends[1].usage, {
+      promptTokens: 350,
+      completionTokens: 90,
+      totalTokens: 440,
+      cumulative: { promptTokens: 450, completionTokens: 120, totalTokens: 570 },
+    });
+    assert.deepEqual(session.lastUsage, state.ends[1].usage);
+  });
+
+  it('establishes a resumed thread baseline and ignores unrelated or invalid usage', async function () {
+    const session = sessionFixture();
+    await streamCodex(messagesFor(session), session);
+    prepareTurn(session);
+    state.server.onTurn = () => {
+      state.server.emit('thread/tokenUsage/updated', { threadId: 'other', turnId: 'turn_2', tokenUsage: { total: counters(9999, 9999) } });
+      state.server.emit('thread/tokenUsage/updated', { threadId: 'thread_1', turnId: 'turn_1', tokenUsage: { total: counters(9999, 9999) } });
+    };
+    state.server.tokenUsageUpdates = [
+      { total: counters(500, 100), last: counters(200, 40) },
+      { total: counters(600, 120), last: counters(100, 20) },
+      { total: { totalTokens: -10 } },
+      { total: { totalTokens: Infinity } },
+      null,
+    ];
+    await streamCodex(messagesFor(session), session);
+    assert.deepEqual(state.ends[1].usage, {
+      promptTokens: 300,
+      completionTokens: 60,
+      totalTokens: 360,
+      cumulative: { promptTokens: 600, completionTokens: 120, totalTokens: 720 },
+    });
+  });
+
+  it('retains reported consumption on Stop and ignores late usage updates', async function () {
+    const session = sessionFixture();
+    const controller = session.pending.abortController;
+    state.server.onTurn = () => {
+      state.server.emit('thread/tokenUsage/updated', {
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        tokenUsage: { total: counters(100, 20), last: counters(100, 20) },
+      });
+      assert.equal(session.lastUsage.cumulative.totalTokens, 120, 'Update before completion');
+      controller.abort();
+      state.server.emit('thread/tokenUsage/updated', { threadId: 'thread_1', turnId: 'turn_1', tokenUsage: { total: counters(999, 999) } });
+    };
+    await streamCodex(messagesFor(session), session);
+    assert.isTrue(state.ends[0].aborted);
+    assert.equal(state.ends[0].usage.cumulative.totalTokens, 120);
+    assert.equal(session.lastUsage.cumulative.totalTokens, 120);
+    assert.isEmpty(session.conversationHistory);
+    state.server.onTurn = undefined;
+    state.server.tokenUsageUpdates = [{ total: counters(50, 10), last: counters(50, 10) }];
+    prepareTurn(session);
+    await streamCodex(messagesFor(session), session);
+    assert.equal(state.ends[1].usage.totalTokens, 60);
+    assert.equal(state.ends[1].usage.cumulative.totalTokens, 180, 'A new remote thread must retain consumption from the stopped turn');
   });
 
   it('streams and persists a binding, then resumes without replaying history', async function () {

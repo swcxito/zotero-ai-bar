@@ -30,6 +30,7 @@ import { createImageViewer } from '../components/imagePreview';
 import { getReaderByTabId } from './tabObserver';
 import { buildErrorMessage } from './llm';
 import { getActiveModelContextLimit } from '../utils/providers';
+import { contextTokenInfo, formatTokenCount, normalizeUsage } from '../utils/tokenUsage';
 import { openCitation } from './citationAction';
 import { getItemFullTextByPage } from '../utils/zoteroItemAccess';
 import { normalizePartOfSpeech, type TranslationResult } from '../utils/translation';
@@ -781,31 +782,13 @@ export function onLLMStreamEndV2(session: Session, usage?: TokenUsage, aborted?:
   updateSectionInputArea(session.id, false);
   cleanupRequestData(session);
   if (usage) {
-    session.lastUsage = normalizeUsage(usage);
-    updateContextTokenIndicator(session.id, session.lastUsage);
+    onTokenUsageUpdateV2(session, usage);
   }
 }
 
-function normalizeUsage(raw: any): TokenUsage {
-  if (!raw || typeof raw !== 'object') return {};
-  const promptTokens = typeof raw.inputTokens === 'number' ? raw.inputTokens : typeof raw.promptTokens === 'number' ? raw.promptTokens : undefined;
-  const completionTokens =
-    typeof raw.outputTokens === 'number' ? raw.outputTokens : typeof raw.completionTokens === 'number' ? raw.completionTokens : undefined;
-  const totalTokens =
-    typeof raw.totalTokens === 'number'
-      ? raw.totalTokens
-      : promptTokens !== undefined && completionTokens !== undefined
-        ? promptTokens + completionTokens
-        : undefined;
-  return { promptTokens, completionTokens, totalTokens };
-}
-
-function formatTokenCount(n: number | undefined): string {
-  if (n === undefined || Number.isNaN(n)) return '—';
-  if (n < 1000) return String(n);
-  if (n < 100000) return (n / 1000).toFixed(1) + 'K';
-  if (n < 1000000) return Math.round(n / 1000) + 'K';
-  return (n / 1000000).toFixed(1) + 'M';
+export function onTokenUsageUpdateV2(session: Session, usage: TokenUsage): void {
+  session.lastUsage = normalizeUsage(usage);
+  updateContextTokenIndicator(session.id, session.lastUsage);
 }
 
 function appendUsageBadge(actions: HTMLElement, usage: any): void {
@@ -845,22 +828,7 @@ function appendUsageBadge(actions: HTMLElement, usage: any): void {
 
 function updateContextTokenIndicator(sessionId: string, usage: TokenUsage): void {
   // Total context = previous turn's input + output (what the next request would carry).
-  const contextTokens = usage.totalTokens ?? usage.promptTokens;
-  const contextLimit = getActiveModelContextLimit();
-  const ctxStr = formatTokenCount(contextTokens);
-  let text: string;
-  if (contextLimit && contextLimit > 0 && contextTokens !== undefined) {
-    const pct = Math.min(100, (contextTokens / contextLimit) * 100);
-    const pctStr = pct < 1 ? pct.toFixed(1) : Math.round(pct).toString();
-    text = `${getString('token-usage-context')}: ${ctxStr} / ${formatTokenCount(contextLimit)} · ${pctStr}%`;
-  } else if (contextTokens !== undefined) {
-    text = `${getString('token-usage-context')}: ${ctxStr}`;
-  } else {
-    text = `${getString('token-usage-context')}: —`;
-  }
-  const title = contextLimit
-    ? `${getString('token-usage-context-window')}: ${contextLimit.toLocaleString()}`
-    : getString('token-usage-context-window-unknown');
+  const { text, title } = contextTokenInfo(usage, getActiveModelContextLimit());
   for (const wrapper of addon.data.sharedInputAreas) {
     (wrapper as any)._inputAreaAPI?.setContextTokens?.(sessionId, text, title);
   }

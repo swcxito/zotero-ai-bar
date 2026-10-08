@@ -9,9 +9,12 @@ export async function onLLMStreamUpdateV2({ session, fullText }: any) {
   session._text = fullText;
   state.updates.push(fullText);
 }
-export function onLLMStreamEndV2(session: any, _usage?: any, aborted?: boolean) {
+export function onTokenUsageUpdateV2(session: any, usage: any) {
+  session.lastUsage = usage;
+}
+export function onLLMStreamEndV2(session: any, usage?: any, aborted?: boolean) {
   if (!aborted) session.conversationHistory.push(session.pending.userMessage, { role: 'assistant', content: session._text });
-  state.ends.push({ aborted });
+  state.ends.push({ aborted, usage });
   session.pending = {};
 }
 export function onLLMStreamErrorV2({ session, error }: any) {
@@ -78,6 +81,7 @@ export class FakeServer {
   disconnect = false;
   resumeFailure = false;
   onTurn?: () => void;
+  tokenUsageUpdates: any[] = [];
   private threads = 0;
   private turns = 0;
   private serverRequests = new Map<string, (message: any) => void>();
@@ -153,6 +157,7 @@ export class FakeServer {
     }
     if (!this.finalOnly) this.emit('item/agentMessage/delta', { threadId, turnId, itemId: 'answer', delta: this.reply });
     this.emit('item/completed', { threadId, turnId, item: { id: 'answer', type: 'agentMessage', text: this.reply } });
+    for (const tokenUsage of this.tokenUsageUpdates) this.emit('thread/tokenUsage/updated', { threadId, turnId, tokenUsage });
     this.emit('turn/completed', {
       threadId,
       turn: { id: turnId, status: this.status, error: this.status === 'failed' ? { codexErrorInfo: 'usageLimitExceeded' } : null },

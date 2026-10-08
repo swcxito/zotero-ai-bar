@@ -216,5 +216,6 @@ token-usage-input = Input
 token-usage-output = Output
 token-usage-total = Total
 token-usage-context = Context
+token-usage-cumulative = Total consumed
 token-usage-context-window = Context window
 token-usage-context-window-unknown = Context window size unknown for this model

@@ -28,7 +28,8 @@ import type { ChatSessionKind } from '../modules/chatWorkspace';
 import { startCaptureMode } from '../modules/capture';
 import { getReaderByTabId } from '../modules/tabObserver';
 import { scrollToBottom as doScrollToBottom, setSendBtnEnabled } from '../modules/mainWindowSidePane';
-import { checkModelSupportsImage, promptModelImageUnsupported } from '../utils/providers';
+import { checkModelSupportsImage, getActiveModelContextLimit, promptModelImageUnsupported } from '../utils/providers';
+import { contextTokenInfo } from '../utils/tokenUsage';
 import { createUserMessageBubble } from './userBubble';
 import { readChatTextDraft, writeChatTextDraft } from '../utils/chatDraft';
 import { applyChatInputFontSize } from '../utils/chatFontSize';
@@ -1021,7 +1022,6 @@ export function InputArea(
   });
 
   const streamingBySession = new Map<string, boolean>();
-  const tokenInfoBySession = new Map<string, { text: string; title: string }>();
 
   function setCapabilityVisible(button: HTMLElement, visible: boolean, animate: boolean = true) {
     button.style.overflow = 'hidden';
@@ -1080,9 +1080,9 @@ export function InputArea(
       chatModeBtn.style.overflow = 'visible';
       setCapabilityVisible(screenshotBtn, allowScreenshot);
       updateSelectionHint(addon.data.selection.text, (addon.data.selection.currentReader as any)?.tabID);
-      const tokenInfo = tokenInfoBySession.get(activeSectionId);
-      contextTokens.textContent = tokenInfo?.text ?? '';
-      contextTokens.title = tokenInfo?.title ?? '';
+      const tokenInfo = contextTokenInfo(session.lastUsage, getActiveModelContextLimit());
+      contextTokens.textContent = tokenInfo.text;
+      contextTokens.title = tokenInfo.title;
       renderSendState(streamingBySession.get(activeSectionId) ?? !!session.pending.userMessage);
     },
     setStreaming(sessionId, isStreaming) {
@@ -1090,7 +1090,6 @@ export function InputArea(
       if (sessionId === activeSectionId) renderSendState(isStreaming);
     },
     setContextTokens(sessionId, text, title) {
-      tokenInfoBySession.set(sessionId, { text, title });
       if (sessionId === activeSectionId) {
         contextTokens.textContent = text;
         contextTokens.title = title;

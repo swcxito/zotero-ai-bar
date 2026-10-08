@@ -1,8 +1,9 @@
 import { asSchema, type ModelMessage } from 'ai';
-import type { AgentUserAnswer, Session } from '../chatManager';
+import type { AgentUserAnswer, Session, TokenCounts, TokenUsage } from '../chatManager';
 import { getSharedToolDefinitions } from '../agentTools';
 import { askUserSchema, type AskUserPayload } from '../../utils/agentSchemas';
 import { getPref } from '../../utils/prefs';
+import { normalizeTokenCounts } from '../../utils/tokenUsage';
 import { normalizeTranslationResultCandidate, type TranslationRequestMeta } from '../../utils/translation';
 import {
   onLLMStreamStartV2,
@@ -16,6 +17,7 @@ import {
   onToolCallEndV2,
   onTranslationResultV2,
   onAgentAskUser,
+  onTokenUsageUpdateV2,
 } from '../chatUI';
 import { CODEX_PROVIDER_ID, contextFingerprint, disableConfiguredMcp, type CodexBinding } from './policy';
 import { codexDirectory, codexRuntime } from './runtime';
@@ -208,6 +210,9 @@ export async function streamCodex(
   let renderQueue = Promise.resolve();
   let currentTurnId: string | undefined;
   let turnStarted = false;
+  let turnUsage: TokenUsage | undefined;
+  let usageBaseline: TokenCounts | undefined;
+  const consumptionBefore = session.codexConsumption;
   try {
     onLLMStreamStartV2(session);
     const messages = await messagesPromise;
@@ -275,6 +280,12 @@ export async function streamCodex(
     }
     if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
     binding = { threadId: threadId!, account, model: model.model, mode, context: before };
+    usageBaseline =
+      session.codexTokenTotal?.threadId === threadId
+        ? session.codexTokenTotal!.usage
+        : resumed
+          ? undefined
+          : { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
     // Invalidate BEFORE starting a turn. A crash/abort must never resume a remote partial turn.
     if (!translation) {
       session.codex = undefined;
@@ -353,6 +364,40 @@ export async function streamCodex(
         return;
       }
       if (params.threadId !== threadId) return;
+      if (message.method === 'thread/tokenUsage/updated') {
+        if (currentTurnId && params.turnId !== currentTurnId) return;
+        const total = normalizeTokenCounts(params.tokenUsage?.total);
+        if (total.totalTokens === undefined) return;
+        const last = normalizeTokenCounts(params.tokenUsage?.last);
+        const difference = (value: number | undefined, before: number | undefined) =>
+          value !== undefined && before !== undefined ? Math.max(0, value - before) : undefined;
+        // A resumed/forked thread may already have usage. Establish its baseline
+        // from the first model request, then count every tool-loop step in this turn.
+        usageBaseline ??= {
+          promptTokens: difference(total.promptTokens, last.promptTokens),
+          completionTokens: difference(total.completionTokens, last.completionTokens),
+          totalTokens: difference(total.totalTokens, last.totalTokens),
+        };
+        turnUsage = {
+          promptTokens: difference(total.promptTokens, usageBaseline.promptTokens),
+          completionTokens: difference(total.completionTokens, usageBaseline.completionTokens),
+          totalTokens: difference(total.totalTokens, usageBaseline.totalTokens),
+          cumulative: total,
+        };
+        if (consumptionBefore) {
+          const add = (before: number | undefined, value: number | undefined) =>
+            before !== undefined && value !== undefined ? before + value : undefined;
+          turnUsage.cumulative = {
+            promptTokens: add(consumptionBefore.promptTokens, turnUsage.promptTokens),
+            completionTokens: add(consumptionBefore.completionTokens, turnUsage.completionTokens),
+            totalTokens: add(consumptionBefore.totalTokens, turnUsage.totalTokens),
+          };
+        }
+        session.codexTokenTotal = { threadId: threadId!, usage: total };
+        session.codexConsumption = turnUsage.cumulative;
+        onTokenUsageUpdateV2(session, turnUsage);
+        return;
+      }
       if (['item/agentMessage/delta', 'item/reasoning/summaryTextDelta', 'item/completed'].includes(message.method || ''))
         clearTimeout(responseTimer);
       if (message.method === 'turn/started') {
@@ -519,14 +564,14 @@ export async function streamCodex(
       session.codex = binding;
     }
     completed = true;
-    onLLMStreamEndV2(session);
+    onLLMStreamEndV2(session, turnUsage);
   } catch (error) {
     active = false;
     session.pending.userAnswerReject?.(new DOMException('Cancelled', 'AbortError'));
     if (turnStarted && rpc && currentTurnId) void rpc.request('turn/interrupt', { threadId, turnId: currentTurnId }).catch(() => undefined);
     await renderQueue.catch(() => undefined);
     if (signal?.aborted || (error as Error).name === 'AbortError' || (error as Error).name === 'FullTextRequestCancelledError')
-      onLLMStreamEndV2(session, undefined, true);
+      onLLMStreamEndV2(session, turnUsage, true);
     else onLLMStreamErrorV2({ session, error: (error as Error).message });
   } finally {
     active = false;

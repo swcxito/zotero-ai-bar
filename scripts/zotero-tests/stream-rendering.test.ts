@@ -1,6 +1,8 @@
 import { assert } from 'chai';
 import { Session } from '../../src/modules/chatManager';
-import { consumeAgentStream, onLLMStreamEndV2, onLLMStreamUpdateV2, onReasoningStartV2 } from '../../src/modules/chatUI';
+import { consumeAgentStream, onLLMStreamEndV2, onLLMStreamUpdateV2, onReasoningStartV2, onTokenUsageUpdateV2 } from '../../src/modules/chatUI';
+import { contextTokenInfo } from '../../src/utils/tokenUsage';
+import { getString } from '../../src/utils/locale';
 import { renderMarkdown, type MarkdownRenderContext } from '../../src/utils/markdown';
 
 describe('API text streaming in isolated Zotero', function () {
@@ -46,6 +48,34 @@ describe('API text streaming in isolated Zotero', function () {
     await onLLMStreamUpdateV2({ session, fullText: '答', force: true });
     await onLLMStreamUpdateV2({ session, fullText: '答案', force: true });
     assert.equal(pop.querySelector('.chat-message-content')!.textContent!.trim(), '答案');
+  });
+
+  it('updates cumulative consumption while streaming and keeps reply usage separate', function () {
+    const indicator = pop.ownerDocument!.createElement('span');
+    indicator.classList.add('input-context-tokens');
+    wrapper.appendChild(indicator);
+    const actions = pop.ownerDocument!.createElement('div');
+    actions.classList.add('chat-actions');
+    pop.appendChild(actions);
+    const usage = {
+      promptTokens: 350,
+      completionTokens: 90,
+      totalTokens: 440,
+      cumulative: { promptTokens: 450, completionTokens: 120, totalTokens: 570 },
+    };
+    onTokenUsageUpdateV2(session, usage);
+    assert.equal(indicator.textContent, `${getString('token-usage-cumulative')}: 570`);
+    assert.notInclude(indicator.textContent!, '%');
+    assert.include(indicator.title, '450');
+    onLLMStreamEndV2(session, usage);
+    assert.equal(pop.querySelector('.chat-token-usage')!.textContent, '↑350 ↓90');
+    assert.equal(session.lastUsage!.cumulative!.totalTokens, 570);
+    assert.equal(contextTokenInfo(session.lastUsage, 1000).text, indicator.textContent, 'Remounted inputs restore the session usage');
+  });
+
+  it('keeps API context occupancy formatting and clears empty sessions', function () {
+    assert.include(contextTokenInfo({ totalTokens: 500 }, 1000).text, '500 / 1.0K · 50%');
+    assert.deepEqual(contextTokenInfo(undefined), { text: '', title: '' });
   });
 
   it('retains identical text on both sides of a tool boundary and saves the final tail', async function () {
