@@ -33,6 +33,8 @@ import {
   onTranslationPartialV2,
 } from './chatUI';
 import { ensureWebStreamsGlobals } from '../utils/webStreamsGlobals';
+import { createStreamRenderer } from '../utils/streamRenderer';
+import type { MarkdownRenderContext } from '../utils/markdown';
 import {
   findModelMetadata,
   getActiveModelContextLimit,
@@ -198,12 +200,7 @@ async function compactRequestMessages(params: {
   return [...systemMessages, checkpointMessage, ...plan.tail];
 }
 
-export async function streamLLMV2(
-  messagesOrPromise: ModelMessage[] | Promise<ModelMessage[]>,
-  session: Session,
-  // externalController?: InstanceType<typeof AbortController>,
-  refreshRate: number = getRefreshRateFromPref()
-) {
+export async function streamLLMV2(messagesOrPromise: ModelMessage[] | Promise<ModelMessage[]>, session: Session) {
   Zotero.debug('[zaibar-llm] streamLLMV2 started, session=' + session.id);
   let streamErrorHandled = false;
 
@@ -316,7 +313,7 @@ export async function streamLLMV2(
           messages: agentInputMessages,
           abortSignal: session.pending.abortController?.signal,
         });
-        const outcome = await consumeAgentStream(session, result, refreshRate, { deferContextOverflow: attempt === 0 });
+        const outcome = await consumeAgentStream(session, result, { deferContextOverflow: attempt === 0 });
         if (attempt === 0 && outcome.contextOverflowBeforeOutput) {
           Zotero.debug('[zaibar-compaction] Agent provider overflow before output; compacting and retrying once');
           retryHistory = session.conversationHistory.map((message) => ({ ...message })) as ModelMessage[];
@@ -355,7 +352,8 @@ export async function streamLLMV2(
         let callbackError: unknown;
         let streamError: unknown;
         let fullText = '';
-        let count = 0;
+        const renderContext: MarkdownRenderContext = new Map();
+        const textRenderer = createStreamRenderer((text) => onLLMStreamUpdateV2({ session, fullText: text, force: true, renderContext }));
         const result = streamTextFn!({
           model: model,
           messages: messages,
@@ -374,6 +372,7 @@ export async function streamLLMV2(
           for await (const part of result.fullStream) {
             switch (part.type) {
               case 'reasoning-start':
+                await textRenderer.flush();
                 onReasoningStartV2(session);
                 break;
               case 'reasoning-delta':
@@ -384,8 +383,8 @@ export async function streamLLMV2(
                 break;
               case 'text-delta':
                 fullText += part.text;
-                count++;
-                if (count % refreshRate === 0) await onLLMStreamUpdateV2({ session, fullText });
+                if (session.pending.messagePop) (session.pending.messagePop as HTMLElement).dataset.markdown = fullText;
+                textRenderer.update(fullText);
                 break;
               case 'error':
                 streamError = (part as any)?.error ?? part;
@@ -397,6 +396,13 @@ export async function streamLLMV2(
           }
         } catch (error) {
           streamError = error;
+        } finally {
+          try {
+            await textRenderer.flush(fullText || undefined);
+          } catch (error) {
+            streamError ??= error;
+          }
+          textRenderer.dispose();
         }
 
         const failure = streamError ?? callbackError;
@@ -422,7 +428,6 @@ export async function streamLLMV2(
           break;
         }
 
-        await onLLMStreamUpdateV2({ session, fullText, force: true });
         let usage: any;
         try {
           usage = await result.usage;
@@ -1622,20 +1627,4 @@ export async function createModel(selection: ModelSelect = resolveModelSelection
   });
   Zotero.debug('[zaibar-llm] createModel done');
   return model;
-}
-
-function getRefreshRateFromPref() {
-  const speed = getPref('llm.streamUpdateSpeed');
-  switch (speed) {
-    case 'realtime':
-      return 1;
-    case 'default':
-      return 2;
-    case 'slow':
-      return 4;
-    case 'performance':
-      return 8;
-    default:
-      return 2;
-  }
 }

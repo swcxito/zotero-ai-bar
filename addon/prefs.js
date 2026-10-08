@@ -7,7 +7,6 @@ pref('llm.temperature100', 50);
 pref('llm.temperatureEnabled', false);
 pref('llm.maxTokensEnabled', false);
 pref('llm.maxTokens', 3000);
-pref('llm.streamUpdateSpeed', 'default');
 pref('chat.location', 'sidebar');
 pref('chat.windowAlwaysOnTop', false);
 pref('sidepane.width', 340);

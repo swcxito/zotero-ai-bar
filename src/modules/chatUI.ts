@@ -18,7 +18,8 @@
 
 import { ChatBox } from '../components/chatBox';
 import { ToolCallBox, updateToolCallBox } from '../components/toolCallBox';
-import { escapeHtml, renderMarkdown } from '../utils/markdown';
+import { escapeHtml, renderMarkdown, type MarkdownRenderContext } from '../utils/markdown';
+import { createStreamRenderer } from '../utils/streamRenderer';
 import { scrollToBottom, setSendBtnEnabled } from './mainWindowSidePane';
 import type { Session, TokenUsage } from './chatManager';
 import { isContextOverflowError } from './contextCompaction';
@@ -509,7 +510,13 @@ function removeThinkingPlaceholder(chatMessage: HTMLElement): void {
   }
 }
 
-export async function onLLMStreamUpdateV2(data: { session: Session; fullText: string; segmentText?: string; force?: boolean }) {
+export async function onLLMStreamUpdateV2(data: {
+  session: Session;
+  fullText: string;
+  segmentText?: string;
+  force?: boolean;
+  renderContext?: MarkdownRenderContext;
+}) {
   const pop = data.session.pending.messagePop;
   if (!pop) return;
 
@@ -535,7 +542,7 @@ export async function onLLMStreamUpdateV2(data: { session: Session; fullText: st
   const prevLen = data.session.pending.lastRenderedLength ?? 0;
   if (!createdTextSegment && !data.force && newLen - prevLen < 20 && prevLen > 0) return;
 
-  chatMessage.innerHTML = await renderMarkdown(renderedText, data.session.itemId);
+  chatMessage.innerHTML = await renderMarkdown(renderedText, data.session.itemId, data.renderContext);
   attachCitationHandlers(chatMessage as HTMLElement);
   (pop as HTMLElement).dataset.markdown = data.fullText;
   data.session.pending.lastRenderedLength = newLen;
@@ -1410,7 +1417,6 @@ export function onReasoningEndV2(session: Session) {
 export async function consumeAgentStream(
   session: Session,
   result: any,
-  refreshRate: number,
   options?: { deferContextOverflow?: boolean }
 ): Promise<{ failed: boolean; error?: unknown; hadText: boolean; contextOverflowBeforeOutput: boolean }> {
   const pop = session.pending.messagePop as HTMLElement | undefined;
@@ -1427,11 +1433,20 @@ export async function consumeAgentStream(
   let firstText = true;
 
   let textBuffer = '';
-  let textChunkCount = 0;
   let aborted = false;
   let streamFailure: unknown;
   let contextOverflowBeforeOutput = false;
   let fullMarkdownBuffer = ''; // accumulate raw markdown for copy
+  const renderContext: MarkdownRenderContext = new Map();
+  function createTextRenderer() {
+    return createStreamRenderer(async (text) => {
+      const seg = ensureTextSegment();
+      seg.innerHTML = await renderMarkdown(text, session.itemId, renderContext);
+      attachCitationHandlers(seg);
+      maybeAutoScroll(session);
+    });
+  }
+  let textRenderer = createTextRenderer();
 
   function ensureTextSegment(): HTMLElement {
     if (!currentTextSegment) {
@@ -1455,16 +1470,14 @@ export async function consumeAgentStream(
   // between segments via startNewTextSegment().
   async function flushTextBuffer(): Promise<void> {
     if (!textBuffer) return;
-    const seg = ensureTextSegment();
-    seg.innerHTML = await renderMarkdown(textBuffer, session.itemId);
-    attachCitationHandlers(seg);
-    textChunkCount = 0;
+    await textRenderer.flush(textBuffer);
   }
 
   function startNewTextSegment(): void {
+    textRenderer.dispose();
+    textRenderer = createTextRenderer();
     currentTextSegment = null;
     textBuffer = '';
-    textChunkCount = 0;
     session.pending.currentTextSegment = null;
   }
 
@@ -1483,13 +1496,14 @@ export async function consumeAgentStream(
 
       switch (part.type) {
         case 'reasoning-start': {
+          await flushTextBuffer();
           // If the current text segment is an empty placeholder, drop it so
           // the reasoning card is appended in true stream order and the next
           // text-delta creates a fresh segment after the reasoning card.
           if (currentTextSegment && !currentTextSegment.innerHTML.trim()) {
             currentTextSegment.remove();
-            currentTextSegment = null;
           }
+          startNewTextSegment();
           // Reasoning is interim content, not the final answer — treat like
           // tool phase (always follow) so the reasoning card stays in view.
           enterToolPhase();
@@ -1505,9 +1519,8 @@ export async function consumeAgentStream(
           break;
         }
         case 'text-delta': {
-          // Text deltas mean we've left the tool phase. Ensure the active
-          // segment ref is synced even on non-flush chunks so maybeAutoScroll
-          // can run the 6px check against the right element.
+          // Text deltas mean we've left the tool phase. Keep the active
+          // segment in sync before the scheduled render and auto-scroll.
           if (session.pending.inToolPhase) {
             session.pending.inToolPhase = false;
             session.pending.scrollLengthPaused = false;
@@ -1519,11 +1532,8 @@ export async function consumeAgentStream(
           if (!currentTextSegment) ensureTextSegment();
           textBuffer += part.text; // AI SDK v6: field is `text`, not `textDelta`
           fullMarkdownBuffer += part.text;
-          textChunkCount++;
-          if (textChunkCount % refreshRate === 0) {
-            ensureTextSegment();
-            await flushTextBuffer();
-          }
+          (pop as HTMLElement).dataset.markdown = fullMarkdownBuffer;
+          textRenderer.update(textBuffer);
           break;
         }
         case 'tool-call':
@@ -1574,6 +1584,7 @@ export async function consumeAgentStream(
           break;
         }
         case 'error': {
+          await flushTextBuffer();
           ztoolkit.log('[chatUI] agent stream error part:', part);
           const errObj = (part as any)?.error ?? part;
           streamFailure = errObj;
@@ -1583,17 +1594,20 @@ export async function consumeAgentStream(
             break;
           }
           const errMsg = buildErrorMessage(errObj);
+          textRenderer.dispose();
           onLLMStreamErrorV2({ session, error: errMsg });
           aborted = true;
           break;
         }
       }
 
-      if (session.pending.shouldAutoScroll) {
+      // Text scrolls after the scheduled DOM render, not on every received token.
+      if (part.type !== 'text-delta' && session.pending.shouldAutoScroll) {
         maybeAutoScroll(session);
       }
     }
   } catch (e: any) {
+    await textRenderer.flush(textBuffer || undefined).catch(() => undefined);
     if (e?.name === 'AbortError') {
       aborted = true;
     } else {
@@ -1604,6 +1618,7 @@ export async function consumeAgentStream(
         aborted = true;
       } else {
         const errMsg = buildErrorMessage(e);
+        textRenderer.dispose();
         onLLMStreamErrorV2({ session, error: errMsg });
         aborted = true;
       }
@@ -1611,13 +1626,15 @@ export async function consumeAgentStream(
   }
 
   if (contextOverflowBeforeOutput) {
+    textRenderer.dispose();
     return { failed: true, error: streamFailure, hadText: false, contextOverflowBeforeOutput: true };
   }
 
   // Flush remaining text (skip if buffer is empty to avoid creating an empty segment)
-  if (textBuffer) {
-    ensureTextSegment();
-    await flushTextBuffer();
+  try {
+    if (textBuffer) await flushTextBuffer();
+  } finally {
+    textRenderer.dispose();
   }
 
   // Collect raw markdown for copy/regenerate

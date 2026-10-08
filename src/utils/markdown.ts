@@ -22,7 +22,10 @@ import markedKatex from 'marked-katex-extension';
 import hljs from 'highlight.js';
 import { markedXhtml } from 'marked-xhtml';
 import { getPref } from './prefs';
-import { getItemFullTextByPage } from './zoteroItemAccess';
+import { getItemFullTextByPage, type PageTextResult } from './zoteroItemAccess';
+
+/** Per-stream cache; a new response can see newly indexed or changed PDFs. */
+export type MarkdownRenderContext = Map<number, Promise<PageTextResult['lineToPage'] | undefined>>;
 
 export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -179,7 +182,7 @@ function optimizeFormulas(text: string): string {
  * @param markdown 源文本
  * @returns 渲染后的 HTML 字符串
  */
-export async function renderMarkdown(markdown: string, currentItemId?: number): Promise<string> {
+export async function renderMarkdown(markdown: string, currentItemId?: number, context?: MarkdownRenderContext): Promise<string> {
   try {
     let text = markdown;
 
@@ -222,7 +225,7 @@ export async function renderMarkdown(markdown: string, currentItemId?: number): 
     //  2. Remaining placeholders become inline pill spans.
     // Both element types carry the same `zaibar-cite` class + data attributes
     // so the click + tooltip handlers in chatUI.ts treat them uniformly.
-    html = await restoreCiteMarkers(html, citeTokens, currentItemId);
+    html = await restoreCiteMarkers(html, citeTokens, currentItemId, context);
 
     return html;
   } catch (error) {
@@ -452,7 +455,11 @@ function renderCiteBody(
  *
  * Returns a `Map<string, number | undefined>` keyed by `"${itemId}:${line}"`.
  */
-async function resolveLineCites(citeTokens: string[], currentItemId?: number): Promise<Map<string, number | undefined>> {
+async function resolveLineCites(
+  citeTokens: string[],
+  currentItemId?: number,
+  context?: MarkdownRenderContext
+): Promise<Map<string, number | undefined>> {
   const result = new Map<string, number | undefined>();
   // Collect unique (itemId, line) pairs from line cite bodies.
   const itemLines = new Map<number, Set<number>>();
@@ -479,15 +486,18 @@ async function resolveLineCites(citeTokens: string[], currentItemId?: number): P
   }
   // Fetch each item's lineToPage map once, resolve all its lines.
   for (const [itemId, lines] of itemLines) {
-    let pageResult;
-    try {
-      pageResult = await getItemFullTextByPage(itemId);
-    } catch {
-      pageResult = undefined;
+    let pageMapPromise = context?.get(itemId);
+    if (!pageMapPromise) {
+      pageMapPromise = getItemFullTextByPage(itemId).then(
+        (result) => result?.lineToPage,
+        () => undefined
+      );
+      context?.set(itemId, pageMapPromise);
     }
+    const pageMap = await pageMapPromise;
     for (const line of lines) {
       // lineToPage maps 0-based line index -> 1-based page number.
-      result.set(`${itemId}:${line}`, pageResult?.lineToPage.get(line - 1));
+      result.set(`${itemId}:${line}`, pageMap?.get(line - 1));
     }
   }
   return result;
@@ -506,8 +516,8 @@ async function resolveLineCites(citeTokens: string[], currentItemId?: number): P
  * `[cite:<itemId>:L<line>]` cross-doc) require a `lineToPage` lookup to
  * resolve the line to a page before rendering.
  */
-async function restoreCiteMarkers(html: string, citeTokens: string[], currentItemId?: number): Promise<string> {
-  const linePageMap = await resolveLineCites(citeTokens, currentItemId);
+async function restoreCiteMarkers(html: string, citeTokens: string[], currentItemId?: number, context?: MarkdownRenderContext): Promise<string> {
+  const linePageMap = await resolveLineCites(citeTokens, currentItemId, context);
   const placeholderRe = new RegExp(`${CITE_PLACEHOLDER_PREFIX}(\\d{6})`, 'g');
   const headerRe = new RegExp(`<p>\\s*(${CITE_PLACEHOLDER_PREFIX}\\d{6})\\s*</p>`, 'g');
 
