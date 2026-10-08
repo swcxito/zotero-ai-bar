@@ -1,7 +1,7 @@
 import { config } from '../../package.json';
 import { getPref } from './prefs';
 
-export const CHAT_SKINS = ['rose', 'paper', 'abyss', 'moss', 'tactical', 'bw'] as const;
+export const CHAT_SKINS = ['rose', 'paper', 'neumorphism', 'moss', 'tactical', 'bw'] as const;
 export type ChatSkin = (typeof CHAT_SKINS)[number];
 
 const roots = new Set<WeakRef<Element>>();
@@ -11,6 +11,8 @@ let knownRoots = new WeakSet<Element>();
 let observer: symbol | undefined;
 
 export function normalizeChatSkin(value: unknown): ChatSkin {
+  // Preserve the selected slot when upgrading from the former Abyss palette.
+  if (value === 'abyss') return 'neumorphism';
   return typeof value === 'string' && CHAT_SKINS.includes(value as ChatSkin) ? (value as ChatSkin) : 'rose';
 }
 

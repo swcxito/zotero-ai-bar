@@ -1,0 +1,110 @@
+/* Soft relief, with explicit borders and readable text in both color schemes. */
+[data-zaibar-skin='neumorphism'] {
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+  --title-font: var(--font);
+  --radius: 20px;
+  --small-radius: 10px;
+  --weight: 1px;
+  --za-page-highlight: #e9eef5;
+  --za-page-base: #e9eef5;
+  --za-page-width: 95%;
+  --za-page-height: 80%;
+  --za-page-x: 94%;
+  --za-page-y: 6%;
+  --backdrop: #dfe6ef;
+  --page: #e9eef5;
+  --surface: #e9eef5;
+  --raised: #e5ebf3;
+  --soft: #dce4ef;
+  --text: #25364b;
+  --muted: #50627a;
+  --faint: #62738a;
+  --line: #aebed0;
+  --accent: #386394;
+  --accent-hover: #2b507c;
+  --accent-ink: #fff;
+  --accent-soft: #d6e3f3;
+  --accent-soft-ink: #284e7a;
+  --user: #d9e5f4;
+  --user-ink: #253f61;
+  --user-radius: 20px;
+  --code: #25364b;
+  --code-ink: #edf3fb;
+  --success: #28604c;
+  --connect-bg: #386394;
+  --connect-ink: #fff;
+  --connect-hover: #2b507c;
+  --connect-ok-bg: #d4e7dc;
+  --connect-ok-ink: #24543d;
+  --glow: linear-gradient(145deg, #ffffff30, transparent 65%);
+  --za-neu-light: #ffffffb3;
+  --za-neu-shade: #a4b3c366;
+  --shadow: 9px 9px 24px var(--za-neu-shade), -9px -9px 24px var(--za-neu-light);
+  --card-shadow: 4px 4px 10px var(--za-neu-shade), -4px -4px 10px var(--za-neu-light);
+  --za-neu-inset: inset 3px 3px 7px var(--za-neu-shade), inset -3px -3px 7px var(--za-neu-light);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-zaibar-skin='neumorphism'] {
+    --za-page-highlight: #242e3b;
+    --za-page-base: #242e3b;
+    --backdrop: #1c2530;
+    --page: #242e3b;
+    --surface: #242e3b;
+    --raised: #222c38;
+    --soft: #303e50;
+    --text: #e8eef7;
+    --muted: #b5c3d6;
+    --faint: #95a8c0;
+    --line: #52677e;
+    --accent: #a8c9f1;
+    --accent-hover: #c4ddfb;
+    --accent-ink: #213750;
+    --accent-soft: #334b68;
+    --accent-soft-ink: #c3ddfc;
+    --user: #334861;
+    --user-ink: #edf4ff;
+    --code: #16202c;
+    --code-ink: #e7effb;
+    --success: #a0d9bc;
+    --connect-bg: #a8c9f1;
+    --connect-ink: #213750;
+    --connect-hover: #c4ddfb;
+    --connect-ok-bg: #2d4b3e;
+    --connect-ok-ink: #b3e5c7;
+    --glow: linear-gradient(145deg, #ffffff06, transparent 65%);
+    --za-neu-light: #4c5d704d;
+    --za-neu-shade: #0c131bcc;
+  }
+}
+
+/* Extra root specificity keeps material styling above shared component rules. */
+[data-zaibar-skin='neumorphism'][data-zaibar-skin] :is(.provider-card, .prompt-row, .tool-call-box, .zaibar-history-panel [data-conversation-id]) {
+  box-shadow: var(--card-shadow) !important;
+}
+
+[data-zaibar-skin='neumorphism'][data-zaibar-skin] :is(.input-area, .input-group),
+[data-zaibar-skin='neumorphism'][data-zaibar-skin]
+  :is(input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea):not(.input-area textarea):not(.input-group textarea) {
+  background: var(--raised) !important;
+  box-shadow: var(--za-neu-inset) !important;
+}
+
+[data-zaibar-skin='neumorphism'][data-zaibar-skin] :is(.input-send-btn, .input-chat-mode-btn, .zaibar-image-viewer-button, #toolbar button) {
+  box-shadow: var(--card-shadow) !important;
+}
+
+[data-zaibar-skin='neumorphism'][data-zaibar-skin]
+  :is(.input-send-btn, .input-chat-mode-btn, .zaibar-image-viewer-button, #toolbar button):hover:not(:disabled) {
+  border-color: var(--accent) !important;
+}
+
+[data-zaibar-skin='neumorphism'][data-zaibar-skin]
+  :is(.input-send-btn, .input-chat-mode-btn, .zaibar-image-viewer-button, #toolbar button):active:not(:disabled),
+[data-zaibar-skin='neumorphism'][data-zaibar-skin] :is(.zaibar-window-tabs, .zaibar-workspace-tabs)::before {
+  box-shadow: var(--za-neu-inset) !important;
+}
+
+[data-zaibar-skin='neumorphism'][data-zaibar-skin] :is(.input-send-btn, .input-chat-mode-btn, .zaibar-image-viewer-button, #toolbar button):disabled {
+  box-shadow: none !important;
+}

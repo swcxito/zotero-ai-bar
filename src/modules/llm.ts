@@ -486,9 +486,9 @@ export async function streamTranslationV2(
   try {
     await preloadLLMRuntime();
     onLLMStreamStartV2(session);
+    const messages = await messagesOrPromise;
     const modelSelection = resolveModelSelection(request.modelKey);
     const model = await createModel(modelSelection);
-    const messages = await messagesOrPromise;
     const chatThinkingEffort = session.pending.thinkingEffortOverride ?? session.thinkingEffort;
     const translationThinkingDepth = getPref('translate.thinkingDepth') === 'follow-chat' ? 'follow-chat' : 'minimum';
     const effectiveEffort = resolveTranslationThinkingEffort(translationThinkingDepth, chatThinkingEffort, modelSelection);

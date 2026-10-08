@@ -63,6 +63,7 @@ import { createUserMessageBubble } from '../components/userBubble';
 import { disposeChatTurnNavigatorHost } from '../components/chatTurnNavigator';
 import { calculateContextBudget, createCheckpointMessage, type ContextCheckpoint } from './contextCompaction';
 import { buildDocumentSnapshot, createDocumentFingerprint } from '../utils/documentSnapshot';
+import { waitForSelectionContext } from '../utils/selectionContext';
 
 Zotero.debug('[zaibar-chatManager] module loaded');
 
@@ -931,6 +932,9 @@ export class ChatManager {
       session.pending.abortController.abort();
       session.pending.abortController = undefined;
     }
+    const AC = (typeof AbortController !== 'undefined' ? AbortController : (Zotero.getMainWindow() as any).AbortController) as typeof AbortController;
+    const abortController = new AC();
+    session.pending.abortController = abortController;
     const messagesPromise: Promise<ModelMessage[]> = (async () => {
       // Retry path: replay the snapshotted messages verbatim. Skip context
       // resolution / selectionBlock / lastSentSelectionText so the retried
@@ -954,18 +958,11 @@ export class ChatManager {
         return session.conversationHistory.length > 0 ? [systemMsg, ...session.conversationHistory, userMsg] : [systemMsg, userMsg];
       }
       // get selection context
-      let selectionContext: Array<string> | undefined;
-      try {
-        if (params.selectionSnapshot !== undefined) {
-          selectionContext = await params.selectionSnapshot.contextPromise;
-        } else if (params.contextPromise) {
-          selectionContext = await params.contextPromise;
-        } else if (canUseCurrentSelection && addon.data.selection.contextPromise) {
-          selectionContext = await addon.data.selection.contextPromise;
-        }
-      } catch (e) {
-        ztoolkit.log('Get selection context failed:', e);
-      }
+      const contextPromise =
+        params.selectionSnapshot !== undefined
+          ? params.selectionSnapshot.contextPromise
+          : (params.contextPromise ?? (canUseCurrentSelection ? addon.data.selection.contextPromise : undefined));
+      const selectionContext = await waitForSelectionContext(contextPromise, { signal: abortController.signal });
 
       ztoolkit.log('[chat] sendChatRequest:selection-context', {
         hasSelectionContext: Boolean(selectionContext),
@@ -1089,6 +1086,9 @@ export class ChatManager {
       }
       return [systemMsg, userMsg];
     })();
+    // The host may still be mounting when cancellation rejects the message
+    // builder. The backend below remains responsible for displaying errors.
+    void messagesPromise.catch(() => undefined);
 
     session.sourceLabel = params.sourceLabel ?? session.sourceLabel;
     session.pending.thinkingEffortOverride = params.thinkingEffort;
@@ -1141,8 +1141,6 @@ export class ChatManager {
       }
     }
 
-    const AC = (typeof AbortController !== 'undefined' ? AbortController : (Zotero.getMainWindow() as any).AbortController) as typeof AbortController;
-    session.pending.abortController = new AC();
     session.pending.codexRetry = !!params.messagesOverride;
     this.notifyHistoryChanged();
     ztoolkit.log('[chat] sendChatRequest:stream-start', {

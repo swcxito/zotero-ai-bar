@@ -18,6 +18,51 @@
 
 import { getPref } from './prefs';
 
+/** Optional PDF context must never prevent a request from reaching the model. */
+export function waitForSelectionContext(
+  contextPromise: Promise<string[] | undefined> | undefined,
+  { signal, timeoutMs = 3000 }: { signal?: AbortSignal; timeoutMs?: number } = {}
+): Promise<string[] | undefined> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+    };
+    const finish = (context?: string[]) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(context);
+    };
+    const abort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      const error = new Error('Selection context request cancelled.');
+      error.name = 'AbortError';
+      reject(error);
+    };
+    const timer = setTimeout(() => {
+      if (settled) return;
+      ztoolkit.log('[chat] selection-context timed out; continuing without context', { timeoutMs });
+      finish();
+    }, timeoutMs);
+    // Observe rejection immediately, including when the request is already
+    // cancelled or the worker rejects after the timeout has elapsed.
+    Promise.resolve(contextPromise).then(finish, (error) => {
+      if (settled) return;
+      ztoolkit.log('[chat] selection-context failed; continuing without context:', error);
+      finish();
+    });
+    if (signal?.aborted) {
+      abort();
+      return;
+    }
+    signal?.addEventListener('abort', abort, { once: true });
+  });
+}
+
 /**
  * 获取选中内容的上下文
  */
@@ -25,10 +70,16 @@ export async function getSelectionContext(
   reader: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>,
   params: { annotation: _ZoteroTypes.Annotations.AnnotationJson }
 ): Promise<Array<string> | undefined> {
+  return waitForSelectionContext(extractSelectionContext(reader, params));
+}
+
+async function extractSelectionContext(
+  reader: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>,
+  params: { annotation: _ZoteroTypes.Annotations.AnnotationJson }
+): Promise<Array<string> | undefined> {
   const itemID = reader.itemID;
   const selected = params.annotation;
   const selectedText = selected.text.trim();
-  addon.data.selection.text = selectedText;
   let selectionContext: Array<string> | undefined;
   const isCrossPage = !!(selected.position?.rects && selected.position?.nextPageRects);
   const lineCount = (selected.position?.rects.length || 0) + (isCrossPage ? selected.position.nextPageRects.length || 0 : 0);
@@ -36,8 +87,10 @@ export async function getSelectionContext(
   const index = parseSortIndex(selected.sortIndex);
 
   if (itemID && index?.indexType === 'pdf' && reader._internalReader._type === 'pdf' && lineCount <= 40) {
-    const selectedPageIndexes = isCrossPage ? [index.pageIndex!, index.pageIndex! + 1] : [index.pageIndex!];
-    const fullText = await Zotero.PDFWorker.getFullText(itemID, selectedPageIndexes);
+    // Zotero expects a page COUNT here, not an array of page indexes.
+    // Include all pages up to the selection (and its next page if needed).
+    const maxPages = index.pageIndex! + (isCrossPage ? 2 : 1);
+    const fullText = await Zotero.PDFWorker.getFullText(itemID, maxPages, true);
 
     // search in fullText
     const matches = countOccurrencesInFullText(fullText.text, selectedText);
@@ -278,11 +331,12 @@ function countOccurrencesInFullText(fullText: string | string[], selected: strin
  * @returns {Promise<Object>} 返回包含 metadata 和 pages 数组的数据对象
  */
 
-const _batchRecognizerCache = new Map<number, Promise<any>>();
+const _batchRecognizerCache = new Map<string, Promise<any>>();
 const MAX_CACHE_SIZE = 8;
 
 async function getPageBatchRecognizerData(itemID: number, startIndex: number) {
-  const cached = _batchRecognizerCache.get(itemID);
+  const cacheKey = `${itemID}:${startIndex}`;
+  const cached = _batchRecognizerCache.get(cacheKey);
   if (cached) return cached;
 
   if (_batchRecognizerCache.size >= MAX_CACHE_SIZE) {
@@ -291,6 +345,9 @@ async function getPageBatchRecognizerData(itemID: number, startIndex: number) {
   }
 
   const promise = (async () => {
+    // Zotero's unified document worker namespaces PDF actions. Older PDF
+    // workers lack this API and still expect the original action names.
+    const actionPrefix = typeof Zotero.PDFWorker.getStructuredDocumentText === 'function' ? 'pdf.' : '';
     // 1. 获取附件并读取文件
     const attachment = await Zotero.Items.getAsync(itemID);
     if (!attachment.isPDFAttachment()) {
@@ -311,7 +368,7 @@ async function getPageBatchRecognizerData(itemID: number, startIndex: number) {
     const pageIndexesToDelete = Array.from({ length: startIndex }, (_, i) => i);
 
     try {
-      const result = await Zotero.PDFWorker._query('deletePages', { buf, pageIndexes: pageIndexesToDelete, password: '' }, [buf]);
+      const result = await Zotero.PDFWorker._query(`${actionPrefix}deletePages`, { buf, pageIndexes: pageIndexesToDelete, password: '' }, [buf]);
       buf = result.buf;
     } catch (e: any) {
       Zotero.debug(`[Plugin] Failed to delete pages for offset ${startIndex}: ${e.message}`);
@@ -321,7 +378,7 @@ async function getPageBatchRecognizerData(itemID: number, startIndex: number) {
     // 3. 获取数据
     let data;
     try {
-      data = await Zotero.PDFWorker._query('getRecognizerData', { buf, password: '' }, [buf]);
+      data = await Zotero.PDFWorker._query(`${actionPrefix}getRecognizerData`, { buf, password: '' }, [buf]);
     } catch (e: any) {
       const msg = typeof e === 'object' && e.message ? e.message : JSON.stringify(e);
       throw new Error(`Failed to get recognizer data: ${msg}`, { cause: e });
@@ -338,8 +395,11 @@ async function getPageBatchRecognizerData(itemID: number, startIndex: number) {
     }
 
     return data;
-  })();
-  _batchRecognizerCache.set(itemID, promise);
+  })().catch((error) => {
+    if (_batchRecognizerCache.get(cacheKey) === promise) _batchRecognizerCache.delete(cacheKey);
+    throw error;
+  });
+  _batchRecognizerCache.set(cacheKey, promise);
   return promise;
 }
 
