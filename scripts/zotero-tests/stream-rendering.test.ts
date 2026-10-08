@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import { Session } from '../../src/modules/chatManager';
-import { consumeAgentStream, onLLMStreamUpdateV2 } from '../../src/modules/chatUI';
+import { consumeAgentStream, onLLMStreamEndV2, onLLMStreamUpdateV2, onReasoningStartV2 } from '../../src/modules/chatUI';
 import { renderMarkdown, type MarkdownRenderContext } from '../../src/utils/markdown';
 
 describe('API text streaming in isolated Zotero', function () {
@@ -147,5 +147,30 @@ describe('API text streaming in isolated Zotero', function () {
       fullText.getItemCacheFile = originalCacheFile;
       Zotero.PDFWorker.getFullText = originalPdfText;
     }
+  });
+
+  it('clears the thinking placeholder and restores input when stopped before any output', function () {
+    const placeholder = pop.ownerDocument!.createElement('div');
+    placeholder.classList.add('zaibar-thinking-placeholder');
+    pop.querySelector('.chat-message-content')!.appendChild(placeholder);
+    const states: boolean[] = [];
+    (wrapper as any)._inputAreaAPI = { setStreaming: (_id: string, streaming: boolean) => states.push(streaming) };
+    onLLMStreamEndV2(session, undefined, true);
+    assert.isNull(pop.querySelector('.zaibar-thinking-placeholder'));
+    assert.deepEqual(states, [false]);
+    assert.isEmpty(session.pending);
+  });
+
+  it('finishes a reasoning card on Stop and handles SDK abort events without saving a turn', async function () {
+    onReasoningStartV2(session);
+    const card = session.pending.reasoningBox!;
+    const title = card.querySelector('.tool-call-summary')!.textContent;
+    session.pending.userMessage = { role: 'user', content: 'Question' };
+    const outcome = await consume([{ type: 'abort' }]);
+    assert.isTrue(outcome.failed);
+    assert.notEqual(card.querySelector('.tool-call-summary')!.textContent, title);
+    assert.isTrue(card.querySelector('.tool-call-details')!.classList.contains('max-h-0'));
+    assert.isEmpty(session.conversationHistory);
+    assert.isEmpty(session.pending);
   });
 });

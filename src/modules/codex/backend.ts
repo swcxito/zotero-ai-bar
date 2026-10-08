@@ -346,7 +346,7 @@ export async function streamCodex(
       return work;
     });
     listener = (message) => {
-      if (!active) return;
+      if (!active || signal?.aborted) return;
       const params = message.params || {};
       if (message.method === 'client/disconnected') {
         rejectDone(new Error(codexString('codex-error-turn-disconnected', 'Codex 连接中断，未自动重试。')));

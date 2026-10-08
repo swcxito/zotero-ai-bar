@@ -725,6 +725,18 @@ function bindAutoScrollTracker(container: HTMLElement, session: Session) {
 export function onLLMStreamEndV2(session: Session, usage?: TokenUsage, aborted?: boolean) {
   const pop = session.pending.messagePop;
   if (pop) {
+    const chatMessage = pop.querySelector('.chat-message') as HTMLElement | null;
+    if (chatMessage) {
+      const hadPlaceholder = !!chatMessage.querySelector('.zaibar-thinking-placeholder');
+      removeThinkingPlaceholder(chatMessage);
+      onReasoningEndV2(session, aborted);
+      if (aborted && hadPlaceholder) {
+        const status = pop.ownerDocument!.createElement('div');
+        status.classList.add('chat-message-content');
+        status.textContent = getString('thinking-card-stopped');
+        chatMessage.appendChild(status);
+      }
+    }
     captureAssistantPreviewSnapshot(pop as HTMLElement);
     const actions = pop.querySelector('.chat-actions');
     if (actions) {
@@ -1384,12 +1396,12 @@ export function onReasoningDeltaV2(session: Session, text: string) {
   maybeAutoScroll(session);
 }
 
-export function onReasoningEndV2(session: Session) {
+export function onReasoningEndV2(session: Session, aborted?: boolean) {
   const box = session.pending.reasoningBox as HTMLElement | undefined;
   if (!box) return;
 
   const summaryEl = box.querySelector('.tool-call-summary') as HTMLElement | null;
-  if (summaryEl) summaryEl.textContent = getString('thinking-card-done');
+  if (summaryEl) summaryEl.textContent = getString(aborted ? 'thinking-card-stopped' : 'thinking-card-done');
 
   // Force-collapse (not toggle) so the card always folds up when this
   // reasoning segment ends, regardless of manual interaction during streaming.
@@ -1489,7 +1501,7 @@ export async function consumeAgentStream(
 
   try {
     for await (const part of result.fullStream) {
-      if (session.pending.abortController?.signal.aborted) {
+      if (session.pending.abortController?.signal.aborted || part.type === 'abort') {
         aborted = true;
         break;
       }
@@ -1608,7 +1620,7 @@ export async function consumeAgentStream(
     }
   } catch (e: any) {
     await textRenderer.flush(textBuffer || undefined).catch(() => undefined);
-    if (e?.name === 'AbortError') {
+    if (session.pending.abortController?.signal.aborted || e?.name === 'AbortError' || e?.name === 'AI_AbortError') {
       aborted = true;
     } else {
       ztoolkit.log('[chatUI] agent stream iteration failed:', e);
@@ -1641,6 +1653,7 @@ export async function consumeAgentStream(
   (pop as HTMLElement).dataset.markdown = fullMarkdownBuffer.trim();
 
   let agentUsage: any;
+  aborted ||= !!session.pending.abortController?.signal.aborted;
   if (!aborted) {
     try {
       const response = await result.response;

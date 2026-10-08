@@ -259,6 +259,7 @@ export type FluentMessageId =
   | 'sidepane-title'
   | 'sidepane-toggle-tooltip'
   | 'thinking-card-done'
+  | 'thinking-card-stopped'
   | 'thinking-card-title'
   | 'thinking-effort-high'
   | 'thinking-effort-low'

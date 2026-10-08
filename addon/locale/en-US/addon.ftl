@@ -204,6 +204,7 @@ chat-mode-full-text = Full Text
 chat-mode-agent = Agent
 thinking-card-title = Thinking
 thinking-card-done = Thought
+thinking-card-stopped = Stopped
 
 tool-call-ask-user-custom-placeholder = Or type your own answer...
 tool-call-ask-user-input-placeholder = Type your answer...

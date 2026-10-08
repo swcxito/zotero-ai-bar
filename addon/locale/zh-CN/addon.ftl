@@ -204,6 +204,7 @@ chat-mode-full-text = 全文
 chat-mode-agent = Agent
 thinking-card-title = 思考中
 thinking-card-done = 已思考
+thinking-card-stopped = 已停止
 
 tool-call-ask-user-custom-placeholder = 或输入自定义回答...
 tool-call-ask-user-input-placeholder = 请输入回答...

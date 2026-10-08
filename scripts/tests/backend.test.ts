@@ -233,6 +233,39 @@ describe('Codex chat backend', function () {
     );
   });
 
+  it('stops during reasoning without waiting for a final answer and ignores late events', async function () {
+    const session = sessionFixture();
+    const controller = session.pending.abortController;
+    let reasoningStarted!: () => void;
+    const ready = new Promise<void>((resolve) => (reasoningStarted = resolve));
+    state.server.generate = async (threadId: string, turnId: string) => {
+      state.server.emit('item/started', { threadId, turnId, item: { id: 'thinking', type: 'reasoning', summary: [] } });
+      state.server.emit('item/reasoning/summaryTextDelta', { threadId, turnId, delta: 'Still thinking' });
+      reasoningStarted();
+    };
+    const request = streamCodex(messagesFor(session), session);
+    await ready;
+    assert.equal(state.reasoning.at(-1).text, 'Still thinking');
+    controller.abort();
+    state.server.emit('item/reasoning/summaryTextDelta', { threadId: 'thread_1', turnId: 'turn_1', delta: 'Late reasoning' });
+    await request;
+    assert.isTrue(state.ends[0].aborted);
+    assert.isEmpty(state.errors);
+    assert.isEmpty(session.pending);
+    assert.isEmpty(session.conversationHistory);
+    assert.isUndefined(session.codex);
+    assert.notInclude(
+      state.reasoning.map((part: any) => part.text),
+      'Late reasoning'
+    );
+    assert.isEmpty(state.updates);
+    assert.isDefined(state.server.requests.find((r: any) => r.method === 'turn/interrupt' && r.params.turnId === 'turn_1'));
+    state.server.generate = Object.getPrototypeOf(state.server).generate;
+    prepareTurn(session);
+    await streamCodex(messagesFor(session), session);
+    assert.equal(state.updates.at(-1), 'Hello', 'A fresh turn must work after Stop');
+  });
+
   it('clears bindings on disconnection and does not replay turn/start', async function () {
     const session = sessionFixture();
     state.server.disconnect = true;

@@ -351,6 +351,7 @@ export async function streamLLMV2(messagesOrPromise: ModelMessage[] | Promise<Mo
       for (let attempt = 0; attempt < 2; attempt++) {
         let callbackError: unknown;
         let streamError: unknown;
+        let aborted = false;
         let fullText = '';
         const renderContext: MarkdownRenderContext = new Map();
         const textRenderer = createStreamRenderer((text) => onLLMStreamUpdateV2({ session, fullText: text, force: true, renderContext }));
@@ -370,6 +371,10 @@ export async function streamLLMV2(messagesOrPromise: ModelMessage[] | Promise<Mo
 
         try {
           for await (const part of result.fullStream) {
+            if (session.pending.abortController?.signal.aborted || part.type === 'abort') {
+              aborted = true;
+              break;
+            }
             switch (part.type) {
               case 'reasoning-start':
                 await textRenderer.flush();
@@ -406,6 +411,10 @@ export async function streamLLMV2(messagesOrPromise: ModelMessage[] | Promise<Mo
         }
 
         const failure = streamError ?? callbackError;
+        if (aborted || session.pending.abortController?.signal.aborted) {
+          onLLMStreamEndV2(session, undefined, true);
+          break;
+        }
         if (failure && !fullText.trim() && attempt === 0 && isContextOverflowError(failure)) {
           Zotero.debug('[zaibar-compaction] provider overflow before output; compacting and retrying once');
           messages = await compactRequestMessages({
@@ -437,7 +446,7 @@ export async function streamLLMV2(messagesOrPromise: ModelMessage[] | Promise<Mo
         if (typeof usage?.cachedInputTokens === 'number') {
           Zotero.debug(`[zaibar-cache] cachedInputTokens=${usage.cachedInputTokens}`);
         }
-        onLLMStreamEndV2(session, usage);
+        onLLMStreamEndV2(session, usage, session.pending.abortController?.signal.aborted);
         break;
       }
     }
@@ -445,7 +454,7 @@ export async function streamLLMV2(messagesOrPromise: ModelMessage[] | Promise<Mo
     Zotero.debug('[zaibar-llm] streamLLMV2 catch: ' + (error?.name || '') + ' ' + (error?.message || error));
     // Abort from intentional stop: use the normal-end handler for UI cleanup
     // but signal `aborted` so the partial turn isn't recorded in history.
-    if (error?.name === 'AbortError') {
+    if (session.pending.abortController?.signal.aborted || error?.name === 'AbortError' || error?.name === 'AI_AbortError') {
       onLLMStreamEndV2(session, undefined, true);
       return;
     }
