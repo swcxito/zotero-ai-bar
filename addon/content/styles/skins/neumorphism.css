@@ -42,6 +42,8 @@
   --shadow: 9px 9px 24px var(--za-neu-shade), -9px -9px 24px var(--za-neu-light);
   --card-shadow: 4px 4px 10px var(--za-neu-shade), -4px -4px 10px var(--za-neu-light);
   --za-neu-inset: inset 3px 3px 7px var(--za-neu-shade), inset -3px -3px 7px var(--za-neu-light);
+  --za-neu-control-shadow: 2px 2px 6px var(--za-neu-shade), -2px -2px 6px var(--za-neu-light);
+  --za-neu-control-inset: inset 2px 2px 5px var(--za-neu-shade), inset -2px -2px 5px var(--za-neu-light);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -79,7 +81,21 @@
 }
 
 /* Extra root specificity keeps material styling above shared component rules. */
-[data-zaibar-skin='neumorphism'][data-zaibar-skin] :is(.provider-card, .prompt-row, .tool-call-box, .zaibar-history-panel [data-conversation-id]) {
+[data-zaibar-skin='neumorphism'][data-zaibar-skin]
+  :is(
+    .provider-card,
+    .prompt-row,
+    .tool-call-box,
+    .zaibar-history-panel [data-conversation-id],
+    .translate-result,
+    .chat-reference-card,
+    .zaibar-skin-preview-controls
+  ) {
+  box-shadow: var(--card-shadow) !important;
+}
+
+[data-zaibar-skin='neumorphism'][data-zaibar-skin]
+  :is(#prompt-edit-panel > div, #add-provider-popup, #model-select-overlay > div, #codex-connection-panel) {
   box-shadow: var(--card-shadow) !important;
 }
 
@@ -90,8 +106,117 @@
   box-shadow: var(--za-neu-inset) !important;
 }
 
-[data-zaibar-skin='neumorphism'][data-zaibar-skin] :is(.input-send-btn, .input-chat-mode-btn, .zaibar-image-viewer-button, #toolbar button) {
-  box-shadow: var(--card-shadow) !important;
+[data-zaibar-skin='neumorphism'][data-zaibar-skin]
+  :is(.input-screenshot-btn, .input-thinking-btn, .zaibar-window-clear, .zaibar-sidepane-btn, .ai-btn, .chat-selection-copy-button) {
+  background: var(--raised) !important;
+}
+
+[data-zaibar-skin='neumorphism'][data-zaibar-skin]
+  :is(
+    .input-send-btn,
+    .input-chat-mode-btn,
+    .input-screenshot-btn,
+    .input-thinking-btn,
+    .model-info-container,
+    .zaibar-window-clear,
+    .zaibar-sidepane-btn,
+    .zaibar-image-viewer-button,
+    .ai-btn,
+    .ai-send-btn,
+    .nav-btn,
+    .chat-selection-copy-button,
+    .chat-actions button,
+    .zaibar-history-panel button,
+    .zaibar-skin-preview-controls button,
+    .provider-card button,
+    .prompt-row button,
+    #toggle-provider-cards,
+    #connect-chatgpt-button,
+    #codex-connection-panel button,
+    #codex-login-wait button,
+    #add-provider-button,
+    #add-provider-list button,
+    #add-provider-custom button,
+    #model-select-list button,
+    #prompt-add-button-host button,
+    #prompt-cancel-btn,
+    #prompt-save-btn,
+    #toolbar button
+  ) {
+  box-shadow: var(--za-neu-control-shadow) !important;
+}
+
+[data-zaibar-skin='neumorphism'][data-zaibar-skin]
+  :is(
+    .input-send-btn,
+    .input-chat-mode-btn,
+    .input-screenshot-btn,
+    .input-thinking-btn,
+    .model-info-container,
+    .zaibar-window-clear,
+    .zaibar-sidepane-btn,
+    .zaibar-image-viewer-button,
+    .ai-btn,
+    .ai-send-btn,
+    .nav-btn,
+    .chat-selection-copy-button,
+    .chat-actions button,
+    .zaibar-history-panel button,
+    .zaibar-skin-preview-controls button,
+    .provider-card button,
+    .prompt-row button,
+    #toggle-provider-cards,
+    #connect-chatgpt-button,
+    #codex-connection-panel button,
+    #codex-login-wait button,
+    #add-provider-button,
+    #add-provider-list button,
+    #add-provider-custom button,
+    #model-select-list button,
+    #prompt-add-button-host button,
+    #prompt-cancel-btn,
+    #prompt-save-btn,
+    #toolbar button
+  ):active:not(:disabled):not([aria-disabled='true']),
+[data-zaibar-skin='neumorphism'][data-zaibar-skin]
+  :is(.model-dropdown-item.selected, .chat-mode-dropdown-item.is-selected, .thinking-effort-dropdown-item.is-selected),
+[data-zaibar-skin='neumorphism'][data-zaibar-skin] :is(.zaibar-window-tabs, .zaibar-workspace-tabs)::before {
+  box-shadow: var(--za-neu-control-inset) !important;
+}
+
+[data-zaibar-skin='neumorphism'][data-zaibar-skin]
+  :is(
+    .input-send-btn,
+    .input-chat-mode-btn,
+    .input-screenshot-btn,
+    .input-thinking-btn,
+    .model-info-container,
+    .zaibar-window-clear,
+    .zaibar-sidepane-btn,
+    .zaibar-image-viewer-button,
+    .ai-btn,
+    .ai-send-btn,
+    .nav-btn,
+    .chat-selection-copy-button,
+    .chat-actions button,
+    .zaibar-history-panel button,
+    .zaibar-skin-preview-controls button,
+    .provider-card button,
+    .prompt-row button,
+    #toggle-provider-cards,
+    #connect-chatgpt-button,
+    #codex-connection-panel button,
+    #codex-login-wait button,
+    #add-provider-button,
+    #add-provider-list button,
+    #add-provider-custom button,
+    #model-select-list button,
+    #prompt-add-button-host button,
+    #prompt-cancel-btn,
+    #prompt-save-btn,
+    #toolbar button
+  ):is(:disabled, [aria-disabled='true']) {
+  box-shadow: none !important;
 }
 
 [data-zaibar-skin='neumorphism'][data-zaibar-skin]
@@ -100,11 +225,58 @@
 }
 
 [data-zaibar-skin='neumorphism'][data-zaibar-skin]
-  :is(.input-send-btn, .input-chat-mode-btn, .zaibar-image-viewer-button, #toolbar button):active:not(:disabled),
+  :is(.input-screenshot-btn, .input-thinking-btn, .zaibar-window-clear, .zaibar-sidepane-btn, .ai-btn):hover:not(:disabled) {
+  background: var(--soft) !important;
+}
+
 [data-zaibar-skin='neumorphism'][data-zaibar-skin] :is(.zaibar-window-tabs, .zaibar-workspace-tabs)::before {
   box-shadow: var(--za-neu-inset) !important;
 }
 
-[data-zaibar-skin='neumorphism'][data-zaibar-skin] :is(.input-send-btn, .input-chat-mode-btn, .zaibar-image-viewer-button, #toolbar button):disabled {
-  box-shadow: none !important;
+[data-zaibar-skin='neumorphism'][data-zaibar-skin]
+  :is(#provider-search-input, #model-search-input, #prompt-edit-panel input, #prompt-edit-panel textarea):focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+  box-shadow: var(--za-neu-inset) !important;
+}
+
+/* The preferences pane is plugin-owned, even though Zotero hosts it in a native window. */
+[data-zaibar-skin='neumorphism'][id$='-prefs-root'] {
+  background: var(--page-gradient);
+  color: var(--text);
+  border-radius: var(--radius);
+}
+
+[data-zaibar-skin='neumorphism'][id$='-prefs-root'] > groupbox {
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: var(--card-shadow) !important;
+}
+
+[data-zaibar-skin='neumorphism'][id$='-prefs-root'] button {
+  appearance: none;
+  padding: 5px 10px;
+  color: var(--text);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--small-radius);
+  box-shadow: var(--za-neu-control-shadow);
+}
+
+[data-zaibar-skin='neumorphism'][id$='-prefs-root'] button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--soft);
+}
+
+[data-zaibar-skin='neumorphism'][id$='-prefs-root'] button:active:not(:disabled) {
+  box-shadow: var(--za-neu-control-inset);
+}
+
+[data-zaibar-skin='neumorphism'][id$='-prefs-root'] button:disabled {
+  box-shadow: none;
+}
+
+[data-zaibar-skin='neumorphism'][id$='-prefs-root'] [id$='-docs-link'] {
+  color: var(--accent) !important;
 }

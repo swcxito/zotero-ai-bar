@@ -25,10 +25,11 @@ import { openPromptEditor } from './promptEditor';
 import { getLocaleID, getString } from '../utils/locale';
 import { setSeparateTranslationEnabled } from './chatWorkspace';
 import { CHAT_FONT_SIZE_LEVELS, getChatFontSizeValue, normalizeChatFontSizeIndex, refreshChatFontSize } from '../utils/chatFontSize';
-import { normalizeChatSkin } from '../utils/chatSkin';
+import { normalizeChatSkin, registerChatSkinRoot } from '../utils/chatSkin';
 
 export async function registerPrefsScripts(_window: Window) {
-  _window.document.getElementById(`${config.addonRef}-prefs-root`)?.removeAttribute('data-zaibar-skin');
+  const prefsRoot = _window.document.getElementById(`${config.addonRef}-prefs-root`);
+  if (prefsRoot) registerChatSkinRoot(prefsRoot);
   if (!addon.data.prefs) {
     addon.data.prefs = {
       window: _window,

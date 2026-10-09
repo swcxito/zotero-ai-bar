@@ -457,6 +457,24 @@
   position: relative;
 }
 
+/* Let the reader's More menu follow its items instead of inheriting the
+ * model selector's 200px minimum width and trailing list padding. */
+.expand-container .model-dropdown-menu {
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 0;
+  max-width: min(300px, calc(100vw - 24px));
+}
+
+.expand-container .model-dropdown-group-list {
+  padding-bottom: 0;
+}
+
+.expand-container .model-dropdown-item > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .dropdown-item-icon-text {
   width: 18px;
   height: 18px;

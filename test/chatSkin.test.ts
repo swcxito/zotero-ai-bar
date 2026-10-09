@@ -57,8 +57,21 @@ async function verifyShadowRootMaterial(skin: (typeof NEW_SKINS)[number]): Promi
   const input = htmlElement(doc, 'div', 'input-area');
   const tool = htmlElement(doc, 'div', 'tool-call-box');
   const textarea = htmlElement(doc, 'textarea');
+  const screenshot = htmlElement(doc, 'button', 'input-screenshot-btn') as HTMLButtonElement;
+  const thinking = htmlElement(doc, 'button', 'input-thinking-btn');
+  const sideButton = htmlElement(doc, 'button', 'zaibar-sidepane-btn');
+  const readerButton = htmlElement(doc, 'button', 'ai-btn');
+  const promptRow = htmlElement(doc, 'div', 'prompt-row');
+  const selectedMenuItem = htmlElement(doc, 'div', 'model-dropdown-item selected');
+  const previewControls = htmlElement(doc, 'div', 'zaibar-skin-preview-controls');
+  const previewButton = htmlElement(doc, 'button');
+  previewControls.appendChild(previewButton);
+  const connectionPanel = htmlElement(doc, 'div');
+  connectionPanel.id = 'codex-connection-panel';
+  const connectionButton = htmlElement(doc, 'button');
+  connectionPanel.appendChild(connectionButton);
   input.appendChild(textarea);
-  root.append(input, tool);
+  root.append(input, tool, screenshot, thinking, sideButton, readerButton, promptRow, selectedMenuItem, previewControls, connectionPanel);
   shadow.appendChild(root);
   doc.documentElement.appendChild(host);
   try {
@@ -69,10 +82,17 @@ async function verifyShadowRootMaterial(skin: (typeof NEW_SKINS)[number]): Promi
     assert.equal(computed(host).getPropertyValue('--page').trim(), '');
     assert.notEqual(computed(tool).boxShadow, 'none');
     assert.include(computed(input).boxShadow, 'inset');
+    for (const node of [screenshot, thinking, sideButton, readerButton, promptRow, previewButton, connectionPanel, connectionButton]) {
+      assert.notEqual(computed(node).boxShadow, 'none', node.className || 'preview button');
+    }
+    assert.include(computed(selectedMenuItem).boxShadow, 'inset');
+    screenshot.disabled = true;
+    assert.equal(computed(screenshot).boxShadow, 'none');
     setPref('chat.skin', 'rose');
     refreshChatSkin();
     await new Promise<void>((resolve) => doc.defaultView!.setTimeout(resolve, 350));
     assert.notInclude(computed(input).boxShadow, 'inset');
+    assert.equal(computed(thinking).boxShadow, 'none');
   } finally {
     stopChatSkinSync();
     host.remove();
@@ -114,6 +134,62 @@ describe('chat skins', function () {
 
   it('loads new relief material inside a chat ShadowRoot without styling the host', async function () {
     await verifyShadowRootMaterial('neumorphism');
+  });
+
+  it('styles the outer side pane in the Zotero main document', async function () {
+    const original = getPref('chat.skin');
+    const doc = Zotero.getMainWindow().document;
+    assert.isNotNull(doc.querySelector('link[href="chrome://zaibar/content/styles/skins.css"]'));
+    const pane = doc.createXULElement('vbox');
+    pane.id = 'zaibar-sidepane';
+    const button = htmlElement(doc, 'button', 'zaibar-sidepane-btn');
+    pane.appendChild(button);
+    doc.documentElement.appendChild(pane);
+    try {
+      setPref('chat.skin', 'neumorphism');
+      registerChatSkinRoot(pane);
+      assert.equal(computed(pane).getPropertyValue('--page').trim(), expectedPage(doc, 'neumorphism'));
+      assert.notEqual(computed(button).boxShadow, 'none');
+      setPref('chat.skin', 'rose');
+      refreshChatSkin();
+      await new Promise<void>((resolve) => doc.defaultView!.setTimeout(resolve, 350));
+      assert.equal(computed(button).boxShadow, 'none');
+    } finally {
+      stopChatSkinSync();
+      pane.remove();
+      setPref('chat.skin', original || 'rose');
+    }
+  });
+
+  it('styles only the plugin-owned preferences groupbox', async function () {
+    const original = getPref('chat.skin');
+    const doc = Zotero.getMainWindow().document;
+    const root = doc.createXULElement('groupbox');
+    root.id = 'zaibar-prefs-root';
+    const section = doc.createXULElement('groupbox');
+    const button = doc.createXULElement('button');
+    section.appendChild(button);
+    root.appendChild(section);
+    doc.documentElement.appendChild(root);
+    let link: HTMLLinkElement | undefined;
+    try {
+      link = await loadSkinStyles(doc, doc.documentElement);
+      setPref('chat.skin', 'neumorphism');
+      registerChatSkinRoot(root);
+      assert.equal(computed(root).getPropertyValue('--page').trim(), expectedPage(doc, 'neumorphism'));
+      assert.notEqual(computed(section).boxShadow, 'none');
+      assert.notEqual(computed(button).boxShadow, 'none');
+      assert.equal(computed(doc.documentElement).getPropertyValue('--za-neu-inset').trim(), '');
+      setPref('chat.skin', 'rose');
+      refreshChatSkin();
+      await new Promise<void>((resolve) => doc.defaultView!.setTimeout(resolve, 350));
+      assert.equal(computed(button).boxShadow, 'none');
+    } finally {
+      stopChatSkinSync();
+      link?.remove();
+      root.remove();
+      setPref('chat.skin', original || 'rose');
+    }
   });
 
   it('switches immediately without a transition marker when motion is reduced', function () {
