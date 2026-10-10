@@ -105,6 +105,16 @@ marked.setOptions({
 });
 
 marked.use({
+  hooks: {
+    emStrongMask(source) {
+      // CommonMark rejects a closing ** after punctuation when a letter follows.
+      // Allow CJK labels such as **单片集成：**重点 without changing their text.
+      // Only adjust the delimiter mask; Marked has already masked code and links.
+      return source.replace(/(\p{P}\*{2,3})([\p{L}\p{N}])/gu, (match, closing: string, next: string) =>
+        /[\u2018-\u201f\u3000-\u303f\uff00-\uffef]/u.test(closing[0]) ? closing + '.'.repeat(next.length) : match
+      );
+    },
+  },
   renderer: {
     html(token: any) {
       const raw = typeof token === 'string' ? token : (token?.text ?? '');
