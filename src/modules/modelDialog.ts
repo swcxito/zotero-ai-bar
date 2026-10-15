@@ -872,7 +872,7 @@ class ModelDialogV2 {
         iconSlot.className = 'w-4 h-4 shrink-0 inline-flex items-center justify-center';
         const iconMarkup = getModelIconPath(m.family);
         if (iconMarkup !== ModelIcons.custom) {
-          iconSlot.innerHTML = iconMarkup;
+          ztoolkit.UI.appendElement(IconView({ iconMarkup }), iconSlot);
         }
         btn.appendChild(iconSlot);
 

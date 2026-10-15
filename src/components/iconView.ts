@@ -16,7 +16,152 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { TagElementProps } from 'zotero-plugin-toolkit';
+import type { TagElementProps } from 'zotero-plugin-toolkit';
+
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+const svgTags = new Set([
+  'svg',
+  'g',
+  'defs',
+  'path',
+  'rect',
+  'circle',
+  'ellipse',
+  'line',
+  'polyline',
+  'polygon',
+  'title',
+  'desc',
+  'linearGradient',
+  'radialGradient',
+  'stop',
+  'clipPath',
+  'mask',
+]);
+const svgAttributes = new Set([
+  'viewBox',
+  'width',
+  'height',
+  'x',
+  'y',
+  'x1',
+  'y1',
+  'x2',
+  'y2',
+  'cx',
+  'cy',
+  'fx',
+  'fy',
+  'r',
+  'rx',
+  'ry',
+  'd',
+  'points',
+  'fill',
+  'fill-rule',
+  'fill-opacity',
+  'stroke',
+  'stroke-width',
+  'stroke-linecap',
+  'stroke-linejoin',
+  'stroke-miterlimit',
+  'stroke-dasharray',
+  'stroke-dashoffset',
+  'stroke-opacity',
+  'opacity',
+  'transform',
+  'id',
+  'class',
+  'offset',
+  'stop-color',
+  'stop-opacity',
+  'gradientUnits',
+  'gradientTransform',
+  'spreadMethod',
+  'preserveAspectRatio',
+  'clip-path',
+  'clip-rule',
+  'clipPathUnits',
+  'mask',
+  'maskUnits',
+  'maskContentUnits',
+  'color',
+  'role',
+  'aria-hidden',
+  'aria-label',
+  'focusable',
+]);
+const svgStyleProperties = new Set([
+  'fill',
+  'fill-rule',
+  'fill-opacity',
+  'stroke',
+  'stroke-width',
+  'stroke-linecap',
+  'stroke-linejoin',
+  'stroke-miterlimit',
+  'stroke-dasharray',
+  'stroke-dashoffset',
+  'stroke-opacity',
+  'opacity',
+  'color',
+  'clip-path',
+  'mask',
+  'flex',
+  'flex-grow',
+  'flex-shrink',
+  'flex-basis',
+  'line-height',
+]);
+
+// Keep paint references within the icon; never turn SVG markup into an active
+// document or allow it to fetch external resources when creating DOM nodes.
+function isLocalPaint(value: string): boolean {
+  return (
+    !Array.from(value).some((char) => char === '\\' || char.charCodeAt(0) < 32) &&
+    !/url\s*\(/i.test(value.replace(/url\(\s*(['"]?)#[\w.-]+\1\s*\)/gi, ''))
+  );
+}
+
+function svgElementProps(element: Element): TagElementProps | undefined {
+  if (element.namespaceURI !== SVG_NAMESPACE || !svgTags.has(element.localName)) return undefined;
+  const attributes: Record<string, string> = {};
+  for (const attr of element.attributes) {
+    if (!attr.namespaceURI && svgAttributes.has(attr.name) && isLocalPaint(attr.value)) attributes[attr.name] = attr.value;
+  }
+  // Preserve the bundled multicolour icons' paint styles without admitting
+  // event handlers, links, foreignObject, scripts, or external CSS resources.
+  const style = (element as SVGElement).style;
+  const declarations: string[] = [];
+  for (const name of Array.from(style)) {
+    const value = style.getPropertyValue(name);
+    if (svgStyleProperties.has(name) && isLocalPaint(value)) declarations.push(`${name}: ${value}`);
+  }
+  if (declarations.length) attributes.style = declarations.join('; ');
+  return {
+    tag: element.localName,
+    namespace: 'svg',
+    attributes,
+    ...(element.localName === 'title' || element.localName === 'desc'
+      ? { properties: { textContent: element.textContent } }
+      : {
+          children: Array.from(element.children)
+            .map(svgElementProps)
+            .filter((child): child is TagElementProps => !!child),
+        }),
+  };
+}
+
+function parseSVG(markup: string): TagElementProps {
+  // xmlns is needed only by the detached XML parser. The toolkit subsequently
+  // creates each live node with createElementNS, without setting innerHTML.
+  const source = /\sxmlns\s*=/.test(markup) ? markup : markup.replace('<svg', `<svg xmlns="${SVG_NAMESPACE}"`);
+  const parsed = new DOMParser().parseFromString(source, 'image/svg+xml');
+  const root = parsed.documentElement;
+  const props = root.localName === 'svg' ? svgElementProps(root) : undefined;
+  if (!props) throw new Error('Invalid SVG icon markup');
+  return props;
+}
 
 export interface IconViewProps {
   iconMarkup: string;
@@ -27,9 +172,7 @@ export interface IconViewProps {
 export function IconView({ iconMarkup, sizeRem = 1, extraClasses = [] }: IconViewProps): TagElementProps {
   const trimmedMarkup = iconMarkup.trim();
 
-  // If it's a raw SVG or has xmlns, treat as markup
-  if (trimmedMarkup.startsWith('<svg') || trimmedMarkup.includes('xmlns=')) {
-    const finalMarkup = trimmedMarkup.includes('xmlns=') ? trimmedMarkup : trimmedMarkup.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+  if (trimmedMarkup.startsWith('<svg')) {
     return {
       tag: 'span',
       namespace: 'html',
@@ -44,7 +187,7 @@ export function IconView({ iconMarkup, sizeRem = 1, extraClasses = [] }: IconVie
         lineHeight: '0',
       },
       classList: extraClasses,
-      properties: { innerHTML: finalMarkup },
+      children: [parseSVG(trimmedMarkup)],
     };
   }
   return {

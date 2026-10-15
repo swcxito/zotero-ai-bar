@@ -1,5 +1,6 @@
 import { config } from '../../package.json';
 import { Icons } from '../components/common';
+import { IconView } from '../components/iconView';
 import { InputArea, type InputAreaAPI } from '../components/inputArea';
 import { ChatHistoryPanel } from '../components/chatHistoryPanel';
 import { createChatTurnNavigator, disposeChatTurnNavigatorHost, setChatTurnNavigatorHost } from '../components/chatTurnNavigator';
@@ -76,7 +77,7 @@ function renderWindowTabs(doc: Document, tabs: HTMLElement): void {
       image.height = 16;
       icon.appendChild(image);
     } else {
-      icon.innerHTML = kind === 'translation' ? Icons.Translate : Icons.Agent;
+      ztoolkit.UI.appendElement(IconView({ iconMarkup: kind === 'translation' ? Icons.Translate : Icons.Agent }), icon);
     }
     const label = doc.createElement('span');
     label.classList.add('zaibar-window-tab-label');

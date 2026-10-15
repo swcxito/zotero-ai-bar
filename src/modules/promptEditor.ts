@@ -1,5 +1,6 @@
 import { config } from '../../package.json';
 import { InlineButton } from '../components/buttons/inlineButton';
+import { IconView } from '../components/iconView';
 import { UserPrompt } from '../types';
 import { setPref } from '../utils/prefs';
 import { getLocaleID } from '../utils/locale';
@@ -91,7 +92,9 @@ export class PromptEditor {
 
     const handle = this.doc.createElement('div');
     handle.className = 'cursor-grab text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300';
-    handle.innerHTML = `
+    ztoolkit.UI.appendElement(
+      IconView({
+        iconMarkup: `
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="9" cy="5" r="1"></circle>
         <circle cx="9" cy="12" r="1"></circle>
@@ -100,7 +103,11 @@ export class PromptEditor {
         <circle cx="15" cy="12" r="1"></circle>
         <circle cx="15" cy="19" r="1"></circle>
       </svg>
-    `;
+    `,
+        sizeRem: 1,
+      }),
+      handle
+    );
 
     const textWrap = this.doc.createElement('div');
     textWrap.className = 'flex flex-col overflow-hidden';
@@ -119,12 +126,18 @@ export class PromptEditor {
     const deleteButton = this.doc.createElement('button');
     deleteButton.className = 'opacity-0 group-hover:opacity-100 p-1 text-zinc-400 hover:text-red-500 transition-opacity focus:opacity-100';
     deleteButton.type = 'button';
-    deleteButton.innerHTML = `
+    ztoolkit.UI.appendElement(
+      IconView({
+        iconMarkup: `
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="18" y1="6" x2="6" y2="18"></line>
         <line x1="6" y1="6" x2="18" y2="18"></line>
       </svg>
-    `;
+    `,
+        sizeRem: 1.125,
+      }),
+      deleteButton
+    );
 
     deleteButton.addEventListener('click', (event) => {
       event.stopPropagation();

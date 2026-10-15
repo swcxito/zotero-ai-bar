@@ -1,5 +1,6 @@
-import { ZoteroToolkit } from 'zotero-plugin-toolkit';
+import { ZoteroToolkit, type ElementProps } from 'zotero-plugin-toolkit';
 import { config } from '../../package.json';
+import { createSVGElement } from './svgDOM';
 
 export { createZToolkit };
 
@@ -15,6 +16,14 @@ function initZToolkit(_ztoolkit: ReturnType<typeof createZToolkit>) {
   _ztoolkit.basicOptions.log.disableConsole = env === 'production';
   _ztoolkit.UI.basicOptions.ui.enableElementJSONLog = __env__ === 'development';
   _ztoolkit.UI.basicOptions.ui.enableElementDOMLog = __env__ === 'development';
+  // The toolkit lowercases tag names, including SVG's case-sensitive gradient
+  // and clipping tags. Keep the normal toolkit path for HTML/XUL controls;
+  // create SVG subtrees natively inside their toolkit-owned wrapper instead.
+  const createElement = _ztoolkit.UI.createElement;
+  _ztoolkit.UI.createElement = ((doc: Document, tag: string, props?: ElementProps | string, enableElementRecord?: boolean) => {
+    if (props && typeof props === 'object' && props.namespace === 'svg') return createSVGElement(doc, tag, props);
+    return Reflect.apply(createElement, _ztoolkit.UI, [doc, tag, props, enableElementRecord]);
+  }) as typeof createElement;
   // Getting basicOptions.debug will load global modules like the debug bridge.
   // since we want to deprecate it, should avoid using it unless necessary.
   // _ztoolkit.basicOptions.debug.disableDebugBridgePassword =

@@ -58,6 +58,7 @@ import { getPref, setPref } from '../utils/prefs';
 import { installChatSelectionCopyHandler, registerChatSelectionCopyContainer, uninstallChatSelectionCopyHandler } from '../utils/chatSelectionCopy';
 import { SHARED_CHAT_DRAFT_ID } from '../utils/chatDraft';
 import { Icons } from '../components/common';
+import { IconView } from '../components/iconView';
 import { getReaderSourceLabel } from './readerBarPopup';
 import { renderPersistedTranscript } from './chatUI';
 import { applyChatFontSize } from '../utils/chatFontSize';
@@ -1140,7 +1141,7 @@ function createWorkspaceTab(doc: Document, kind: ChatSessionKind, articleLabel: 
     image.height = 16;
     icon.appendChild(image);
   } else {
-    icon.innerHTML = kind === 'translation' ? Icons.Translate : Icons.Agent;
+    ztoolkit.UI.appendElement(IconView({ iconMarkup: kind === 'translation' ? Icons.Translate : Icons.Agent }), icon);
   }
 
   const label = doc.createElement('span');

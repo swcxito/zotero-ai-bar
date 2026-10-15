@@ -30,10 +30,10 @@ const ARROW_LEFT_SVG =
 const ARROW_RIGHT_SVG =
   '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>';
 
-function createNavButton(innerHTML: string, extraStyles: string, ownerDoc: Document): HTMLButtonElement {
-  const btn = ownerDoc.createElement('button');
+function createNavButton(iconMarkup: string, extraStyles: string, ownerDoc: Document): HTMLButtonElement {
+  const btn = ztoolkit.UI.createElement(ownerDoc, 'button', { namespace: 'html' }) as HTMLButtonElement;
   btn.classList.add('zaibar-image-viewer-button');
-  btn.innerHTML = innerHTML;
+  ztoolkit.UI.appendElement(IconView({ iconMarkup, sizeRem: 1.5 }), btn);
   btn.style.cssText = `position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1;transition:background 0.2s;${extraStyles}`;
   return btn;
 }
