@@ -16,12 +16,13 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-import { marked } from 'marked';
+import { Marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import markedKatex from 'marked-katex-extension';
 import hljs from 'highlight.js';
 import { markedXhtml } from 'marked-xhtml';
 import { getPref } from './prefs';
+import { createMarkdownRenderCache } from './markdownRenderCache';
 import { getItemFullTextByPage, type PageTextResult } from './zoteroItemAccess';
 
 /** Per-stream cache; a new response can see newly indexed or changed PDFs. */
@@ -76,59 +77,90 @@ function protectAllowedHtmlPairs(text: string, allowedTags: readonly string[]): 
   return { text: withTokens, tokenMap };
 }
 
-marked.use(
-  // 代码高亮扩展（必须在 KaTeX 之前）
-  markedHighlight({
-    emptyLangClass: 'hljs',
-    langPrefix: 'hljs language-', // 与 highlight.js 样式类匹配
-    highlight(code, lang) {
-      const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-      return hljs.highlight(code, { language }).value;
-    },
-  }),
-  // 公式渲染扩展（自动处理 $...$ 和 $$...$$）
-  markedKatex({
+function createMarkdownParser(cache?: ReturnType<typeof createMarkdownRenderCache>): Marked {
+  const parser = new Marked();
+  const math = markedKatex({
     throwOnError: false, // 公式错误时不中断渲染
     // Keep KaTeX's hidden MathML annotation. The selection-copy serializer
     // reads its application/x-tex payload to restore the original formula
     // instead of copying the many visual glyph spans as plain text.
     output: 'htmlAndMathml',
     nonStandard: true, // 支持非标准的公式
-  }),
-  markedXhtml()
-);
-// 可选：自定义基础渲染选项
-marked.setOptions({
-  breaks: true, // 支持 GFM 换行
-  gfm: true, // 启用 GitHub 风格 Markdown
-  async: true,
-});
+  });
+  if (cache) {
+    for (const extension of math.extensions ?? []) {
+      if (!('renderer' in extension) || !extension.renderer) continue;
+      const original = extension.renderer;
+      const name = extension.name;
+      extension.renderer = function (token) {
+        return cache.getOrRender('math', JSON.stringify([name, token.displayMode, token.text]), () => original.call(this, token) as string);
+      };
+    }
+  }
+  parser.use(
+    // 代码高亮扩展（必须在 KaTeX 之前）
+    markedHighlight({
+      emptyLangClass: 'hljs',
+      langPrefix: 'hljs language-', // 与 highlight.js 样式类匹配
+      highlight(code, lang) {
+        const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+        return cache
+          ? cache.getOrRender('code', JSON.stringify([language, code]), () => hljs.highlight(code, { language }).value)
+          : hljs.highlight(code, { language }).value;
+      },
+    }),
+    // 公式渲染扩展（自动处理 $...$ 和 $$...$$）
+    math,
+    markedXhtml()
+  );
+  // 可选：自定义基础渲染选项
+  parser.setOptions({
+    breaks: true, // 支持 GFM 换行
+    gfm: true, // 启用 GitHub 风格 Markdown
+    async: true,
+  });
 
-marked.use({
-  renderer: {
-    html(token: any) {
-      const raw = typeof token === 'string' ? token : (token?.text ?? '');
-      return escapeHtml(raw);
-    },
-    code(token: any) {
-      const code = typeof token === 'string' ? token : (token?.text ?? '');
-      const infoString = typeof token === 'string' ? '' : (token?.lang ?? '');
-      const language = infoString.match(/^\S*/)?.[0] || 'text';
-      const className = language === 'text' ? 'hljs' : `hljs language-${escapeHtml(language)}`;
-      const renderedCode = token?.escaped ? code : escapeHtml(code);
+  parser.use({
+    renderer: {
+      html(token: any) {
+        const raw = typeof token === 'string' ? token : (token?.text ?? '');
+        return escapeHtml(raw);
+      },
+      code(token: any) {
+        const code = typeof token === 'string' ? token : (token?.text ?? '');
+        const infoString = typeof token === 'string' ? '' : (token?.lang ?? '');
+        const language = infoString.match(/^\S*/)?.[0] || 'text';
+        const className = language === 'text' ? 'hljs' : `hljs language-${escapeHtml(language)}`;
+        const renderedCode = token?.escaped ? code : escapeHtml(code);
 
-      return [
-        '<div class="chat-code-block">',
-        '<div class="chat-code-header" data-zaibar-copy-ignore="true">',
-        `<span class="chat-code-language">${escapeHtml(language)}</span>`,
-        '<span class="chat-code-copy-slot" data-zaibar-copy-ignore="true"></span>',
-        '</div>',
-        `<pre><code class="${className}">${renderedCode.replace(/\n$/, '')}\n</code></pre>`,
-        '</div>',
-      ].join('');
+        return [
+          '<div class="chat-code-block">',
+          '<div class="chat-code-header" data-zaibar-copy-ignore="true">',
+          `<span class="chat-code-language">${escapeHtml(language)}</span>`,
+          '<span class="chat-code-copy-slot" data-zaibar-copy-ignore="true"></span>',
+          '</div>',
+          `<pre><code class="${className}">${renderedCode.replace(/\n$/, '')}\n</code></pre>`,
+          '</div>',
+        ].join('');
+      },
     },
-  },
-});
+  });
+
+  return parser;
+}
+
+const defaultParser = createMarkdownParser();
+const streamParsers = new WeakMap<MarkdownRenderContext, Marked>();
+
+function parserForContext(context?: MarkdownRenderContext): Marked {
+  if (!context) return defaultParser;
+  let parser = streamParsers.get(context);
+  if (!parser) {
+    parser = createMarkdownParser(createMarkdownRenderCache());
+    streamParsers.set(context, parser);
+  }
+  return parser;
+}
 
 function optimizeFormulas(text: string): string {
   const lines = text.replace(/\r\n?/g, '\n').split('\n');
@@ -205,7 +237,7 @@ export async function renderMarkdown(markdown: string, currentItemId?: number, c
 
     const { text: protectedText, tokenMap } = protectAllowedHtmlPairs(textWithPlaceholders, ALLOWED_RAW_HTML_TAGS);
 
-    let html = await marked.parse(protectedText);
+    let html = await parserForContext(context).parse(protectedText);
 
     tokenMap.forEach((value, token) => {
       html = html.replaceAll(token, value);

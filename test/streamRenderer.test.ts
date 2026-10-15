@@ -19,6 +19,49 @@ function manualFrames() {
 }
 
 describe('stream renderer', function () {
+  it('adapts the period to render cost and measures it from the previous start', async function () {
+    let time = 0;
+    const frames = manualFrames();
+    const delays: number[] = [];
+    const renderer = createStreamRenderer(
+      async () => {
+        time += 30;
+      },
+      (callback, delay) => {
+        delays.push(delay);
+        return frames.schedule(callback);
+      },
+      () => time
+    );
+    renderer.update('first');
+    assert.equal(delays.at(-1), 16);
+    await renderer.flush();
+    renderer.update('second');
+    assert.equal(delays.at(-1), 30, '30ms work + 30ms wait = 60ms period');
+    await renderer.flush();
+    time += 100;
+    renderer.update('third');
+    assert.equal(delays.at(-1), 0, 'An idle renderer does not add another full period');
+    await renderer.flush();
+  });
+
+  it('invalidates asynchronous commits when disposed during a render', async function () {
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => (release = resolve));
+    let committed = false;
+    const renderer = createStreamRenderer(async (_text, isCurrent) => {
+      await blocked;
+      if (isCurrent()) committed = true;
+    });
+    renderer.update('old reply');
+    const flushed = renderer.flush();
+    await Promise.resolve();
+    renderer.dispose();
+    release();
+    await flushed;
+    assert.isFalse(committed);
+  });
+
   it('coalesces a burst and flushes the latest text without waiting for a frame', async function () {
     const frames = manualFrames();
     const rendered: string[] = [];

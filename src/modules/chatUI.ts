@@ -20,7 +20,8 @@ import { ChatBox } from '../components/chatBox';
 import { ToolCallBox, updateToolCallBox } from '../components/toolCallBox';
 import { escapeHtml, renderMarkdown, type MarkdownRenderContext } from '../utils/markdown';
 import { createStreamRenderer } from '../utils/streamRenderer';
-import { scrollToBottom, setSendBtnEnabled } from './mainWindowSidePane';
+import { updateMarkdownContent } from '../utils/markdownContent';
+import { setSendBtnEnabled } from './mainWindowSidePane';
 import type { Session, TokenUsage } from './chatManager';
 import { isContextOverflowError } from './contextCompaction';
 import { IconView } from '../components/iconView';
@@ -83,7 +84,10 @@ export async function renderPersistedTranscript(session: Session, container: HTM
 export function attachCitationHandlers(root: HTMLElement): void {
   attachCodeBlockHandlers(root);
 
-  const spans = root.querySelectorAll<HTMLElement>('.zaibar-cite:not([data-bound])');
+  const spans = [
+    ...(root.matches('.zaibar-cite:not([data-bound])') ? [root] : []),
+    ...root.querySelectorAll<HTMLElement>('.zaibar-cite:not([data-bound])'),
+  ];
   for (const span of spans) {
     span.setAttribute('data-bound', '1');
     span.addEventListener('click', () => {
@@ -517,7 +521,10 @@ export async function onLLMStreamUpdateV2(data: {
   segmentText?: string;
   force?: boolean;
   renderContext?: MarkdownRenderContext;
+  isCurrent?: () => boolean;
 }) {
+  const pending = data.session.pending;
+  if (data.isCurrent && !data.isCurrent()) return;
   const pop = data.session.pending.messagePop;
   if (!pop) return;
 
@@ -543,37 +550,32 @@ export async function onLLMStreamUpdateV2(data: {
   const prevLen = data.session.pending.lastRenderedLength ?? 0;
   if (!createdTextSegment && !data.force && newLen - prevLen < 20 && prevLen > 0) return;
 
-  chatMessage.innerHTML = await renderMarkdown(renderedText, data.session.itemId, data.renderContext);
-  attachCitationHandlers(chatMessage as HTMLElement);
+  const html = await renderMarkdown(renderedText, data.session.itemId, data.renderContext);
+  if (
+    data.session.pending !== pending ||
+    !chatMessage.isConnected ||
+    pending.currentTextSegment !== chatMessage ||
+    (data.isCurrent && !data.isCurrent())
+  )
+    return;
+  updateMarkdownContent(chatMessage, html, attachCitationHandlers);
   (pop as HTMLElement).dataset.markdown = data.fullText;
   data.session.pending.lastRenderedLength = newLen;
-  // Non-agent path: keep the active text segment ref in sync (innerHTML rewrite
-  // doesn't replace the element, but be safe).
+  // Keep the active segment reference in sync; the updater preserves its root.
   data.session.pending.currentTextSegment = chatMessage as HTMLElement;
 
   maybeAutoScroll(data.session);
 }
 
 /**
- * Geometric stop condition: when the AI bubble's top scrolls out of the
- * container's top, stop auto-scroll (so a very long AI reply doesn't push
- * itself off-screen while the user reads the start). Two escape hatches keep
- * this from re-disabling auto-scroll between agent tool calls:
- *  1. During programmatic smooth-scroll animation the position is transient —
- *     skip the check (the mark is set by followToBottom).
- *  2. If the user is parked at the bottom, respect the explicit "follow"
- *     intent and keep scrolling.
- */
-/**
- * Programmatic scrollToBottom wrapper. Marks a short window during which the
- * scroll listener ignores position changes — otherwise the smooth-scroll
- * animation (scrollTop lagging behind the newly-grown scrollHeight) would
- * transiently look "not near bottom" and flip the user-pause flags.
+ * Follow a streaming answer immediately. Mark programmatic scroll events so
+ * they do not change the user's pause/override flags. Manual history jumps
+ * keep their own smooth-scroll behavior.
  */
 function followToBottom(container: HTMLElement) {
   const host = container as HTMLElement & { __markProgrammaticScroll?: () => void };
   host.__markProgrammaticScroll?.();
-  scrollToBottom(container);
+  container.scrollTo({ top: container.scrollHeight, behavior: 'instant' });
 }
 
 /**
@@ -625,7 +627,7 @@ function maybeAutoScroll(session: Session) {
  * the active session id (window mode reuses one container across items).
  *  - user scrolls up (wheel/touch/scrollbar) → scrollUserPaused=true (stop)
  *  - user scrolls back to bottom → clear pauses, set override (follow)
- * Programmatic scrollToBottom is suppressed via __markProgrammaticScroll.
+ * Programmatic followToBottom is suppressed via __markProgrammaticScroll.
  */
 function bindAutoScrollTracker(container: HTMLElement, session: Session) {
   const host = container as HTMLElement & {
@@ -677,8 +679,8 @@ function bindAutoScrollTracker(container: HTMLElement, session: Session) {
     maybeAutoScroll(s);
   };
 
-  // Scroll listener catches scrollbar drag and keyboard paging. Suppressed
-  // during programmatic smooth-scroll animation.
+  // Scroll listener catches scrollbar drag and keyboard paging. Suppress
+  // events generated by programmatic following.
   const onScroll = () => {
     if (isProgrammatic()) return;
     const s = getSession();
@@ -840,6 +842,7 @@ function updateContextTokenIndicator(sessionId: string, usage: TokenUsage): void
 }
 
 export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
+  finishReasoningRender(data.session);
   ztoolkit.log('LLM stream error:', data.session.id, data.error);
   let pop = data.session.pending.messagePop;
 
@@ -883,6 +886,7 @@ export function onLLMStreamErrorV2(data: { session: Session; error: string }) {
 }
 
 function cleanupRequestData(session: Session) {
+  reasoningRenders.get(session.pending.reasoningBox as HTMLElement)?.dispose();
   session.pending = {};
   addon.chatManager.notifyHistoryStateChanged();
 }
@@ -1313,6 +1317,7 @@ export function clearTranslationPreviewV2(session: Session): void {
 }
 
 export function onReasoningStartV2(session: Session) {
+  finishReasoningRender(session);
   const pop = session.pending.messagePop as HTMLElement | undefined;
   if (!pop) return;
   const chatMessage = pop.querySelector('.chat-message') as HTMLElement | null;
@@ -1346,25 +1351,52 @@ export function onReasoningStartV2(session: Session) {
 
   session.pending.reasoningBox = box;
   session.pending.reasoningTextEl = reasoningText;
+  const pending = session.pending;
+  const node = doc.createTextNode('');
+  reasoningText.appendChild(node);
+  let buffer = '';
+  let committed = 0;
+  const commit = (text: string) => {
+    if (session.pending !== pending || pending.reasoningTextEl !== reasoningText || !reasoningText.isConnected) return;
+    node.appendData(text.slice(committed));
+    committed = text.length;
+    const details = box.querySelector('.tool-call-details') as HTMLElement | null;
+    if (details) details.scrollTop = details.scrollHeight;
+    maybeAutoScroll(session);
+  };
+  const renderer = createStreamRenderer(async (text, isCurrent) => {
+    if (isCurrent()) commit(text);
+  });
+  reasoningRenders.set(box as HTMLElement, {
+    update(text) {
+      buffer += text;
+      renderer.update(buffer);
+    },
+    finish() {
+      // End/Stop are synchronous UI boundaries: append the last tail now.
+      commit(buffer);
+      renderer.dispose();
+    },
+    dispose: () => renderer.dispose(),
+  });
+}
+
+const reasoningRenders = new WeakMap<HTMLElement, { update: (text: string) => void; finish: () => void; dispose: () => void }>();
+
+function finishReasoningRender(session: Session): void {
+  const box = session.pending.reasoningBox as HTMLElement | undefined;
+  if (!box) return;
+  reasoningRenders.get(box)?.finish();
+  reasoningRenders.delete(box);
 }
 
 export function onReasoningDeltaV2(session: Session, text: string) {
-  if (session.pending.reasoningTextEl) {
-    session.pending.reasoningTextEl.textContent += text;
-  }
-  // Auto-scroll the thinking card's details panel so the latest reasoning
-  // stays in view while tokens stream in.
-  const reasoningBox = session.pending.reasoningBox as HTMLElement | undefined;
-  if (reasoningBox) {
-    const detailsPanel = reasoningBox.querySelector('.tool-call-details') as HTMLElement | null;
-    if (detailsPanel) {
-      detailsPanel.scrollTop = detailsPanel.scrollHeight;
-    }
-  }
-  maybeAutoScroll(session);
+  const box = session.pending.reasoningBox as HTMLElement | undefined;
+  if (box) reasoningRenders.get(box)?.update(text);
 }
 
 export function onReasoningEndV2(session: Session, aborted?: boolean) {
+  finishReasoningRender(session);
   const box = session.pending.reasoningBox as HTMLElement | undefined;
   if (!box) return;
 
@@ -1418,11 +1450,15 @@ export async function consumeAgentStream(
   let contextOverflowBeforeOutput = false;
   let fullMarkdownBuffer = ''; // accumulate raw markdown for copy
   const renderContext: MarkdownRenderContext = new Map();
+  const streamPending = session.pending;
   function createTextRenderer() {
-    return createStreamRenderer(async (text) => {
+    return createStreamRenderer(async (text, isCurrent) => {
+      if (!isCurrent() || session.pending !== streamPending || !chatMessage!.isConnected) return;
       const seg = ensureTextSegment();
-      seg.innerHTML = await renderMarkdown(text, session.itemId, renderContext);
-      attachCitationHandlers(seg);
+      const pending = session.pending;
+      const html = await renderMarkdown(text, session.itemId, renderContext);
+      if (!isCurrent() || session.pending !== pending || !seg.isConnected || pending.currentTextSegment !== seg) return;
+      updateMarkdownContent(seg, html, attachCitationHandlers);
       maybeAutoScroll(session);
     });
   }
@@ -1582,7 +1618,7 @@ export async function consumeAgentStream(
       }
 
       // Text scrolls after the scheduled DOM render, not on every received token.
-      if (part.type !== 'text-delta' && session.pending.shouldAutoScroll) {
+      if (part.type !== 'text-delta' && part.type !== 'reasoning-delta' && session.pending.shouldAutoScroll) {
         maybeAutoScroll(session);
       }
     }

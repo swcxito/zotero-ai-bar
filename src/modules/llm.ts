@@ -353,8 +353,22 @@ export async function streamLLMV2(messagesOrPromise: ModelMessage[] | Promise<Mo
         let streamError: unknown;
         let aborted = false;
         let fullText = '';
+        let segmentText = '';
         const renderContext: MarkdownRenderContext = new Map();
-        const textRenderer = createStreamRenderer((text) => onLLMStreamUpdateV2({ session, fullText: text, force: true, renderContext }));
+        const requestPending = session.pending;
+        function createTextRenderer(prefix: string) {
+          return createStreamRenderer((text, isCurrent) =>
+            onLLMStreamUpdateV2({
+              session,
+              fullText: prefix + text,
+              segmentText: text,
+              force: true,
+              renderContext,
+              isCurrent: () => isCurrent() && session.pending === requestPending,
+            })
+          );
+        }
+        let textRenderer = createTextRenderer('');
         const result = streamTextFn!({
           model: model,
           messages: messages,
@@ -378,6 +392,9 @@ export async function streamLLMV2(messagesOrPromise: ModelMessage[] | Promise<Mo
             switch (part.type) {
               case 'reasoning-start':
                 await textRenderer.flush();
+                textRenderer.dispose();
+                segmentText = '';
+                textRenderer = createTextRenderer(fullText);
                 onReasoningStartV2(session);
                 break;
               case 'reasoning-delta':
@@ -388,8 +405,9 @@ export async function streamLLMV2(messagesOrPromise: ModelMessage[] | Promise<Mo
                 break;
               case 'text-delta':
                 fullText += part.text;
+                segmentText += part.text;
                 if (session.pending.messagePop) (session.pending.messagePop as HTMLElement).dataset.markdown = fullText;
-                textRenderer.update(fullText);
+                textRenderer.update(segmentText);
                 break;
               case 'error':
                 streamError = (part as any)?.error ?? part;
@@ -403,7 +421,7 @@ export async function streamLLMV2(messagesOrPromise: ModelMessage[] | Promise<Mo
           streamError = error;
         } finally {
           try {
-            await textRenderer.flush(fullText || undefined);
+            await textRenderer.flush(segmentText || undefined);
           } catch (error) {
             streamError ??= error;
           }

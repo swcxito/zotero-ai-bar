@@ -1,10 +1,11 @@
 /** Keep only the latest text while an asynchronous UI render is in flight. */
 export function createStreamRenderer(
-  render: (text: string) => Promise<void>,
-  schedule: (callback: () => void) => () => void = (callback) => {
-    const timer = setTimeout(callback, 16);
+  render: (text: string, isCurrent: () => boolean) => Promise<void>,
+  schedule: (callback: () => void, delay: number) => () => void = (callback, delay) => {
+    const timer = setTimeout(callback, delay);
     return () => clearTimeout(timer);
-  }
+  },
+  now: () => number = () => globalThis.performance?.now() ?? Date.now()
 ) {
   let pendingText: string | undefined;
   let renderedText: string | undefined;
@@ -13,13 +14,16 @@ export function createStreamRenderer(
   let disposed = false;
   let failed = false;
   let failure: unknown;
+  let lastStart: number | undefined;
+  let period = 16;
 
   function arm() {
     if (disposed || failed || rendering || cancelScheduled || pendingText === undefined) return;
+    const delay = lastStart === undefined ? 16 : Math.max(0, period - (now() - lastStart));
     cancelScheduled = schedule(() => {
       cancelScheduled = undefined;
       startRender();
-    });
+    }, delay);
   }
 
   function startRender() {
@@ -27,8 +31,11 @@ export function createStreamRenderer(
     const text = pendingText;
     pendingText = undefined;
     if (text === renderedText) return;
+    lastStart = now();
     rendering = Promise.resolve()
-      .then(() => render(text))
+      .then(() => {
+        if (!disposed) return render(text, () => !disposed);
+      })
       .then(() => {
         renderedText = text;
       })
@@ -38,6 +45,7 @@ export function createStreamRenderer(
         pendingText = undefined;
       })
       .finally(() => {
+        period = Math.max(16, Math.min(80, (now() - lastStart!) * 2));
         rendering = undefined;
         arm();
       });

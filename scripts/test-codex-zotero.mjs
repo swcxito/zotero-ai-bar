@@ -6,13 +6,15 @@ process.env.NODE_ENV = 'test';
 const { Config, Test } = await import('zotero-plugin-scaffold');
 const context = await Config.loadConfig({
   test: {
-    entries: process.argv.includes('--live')
-      ? ['scripts/zotero-live']
-      : process.argv.includes('--all')
-        ? ['scripts/zotero-tests', 'test']
-        : ['scripts/zotero-tests'],
+    entries: process.argv.includes('--perf')
+      ? ['scripts/zotero-perf']
+      : process.argv.includes('--live')
+        ? ['scripts/zotero-live']
+        : process.argv.includes('--all')
+          ? ['scripts/zotero-tests', 'test']
+          : ['scripts/zotero-tests'],
     watch: false,
-    mocha: { timeout: process.argv.includes('--live') ? 90000 : 30000 },
+    mocha: { timeout: process.argv.includes('--perf') ? 180000 : process.argv.includes('--live') ? 90000 : 30000 },
   },
   server: { startArgs: ['-no-remote'] },
 });

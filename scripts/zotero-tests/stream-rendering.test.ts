@@ -1,9 +1,22 @@
 import { assert } from 'chai';
 import { Session } from '../../src/modules/chatManager';
-import { consumeAgentStream, onLLMStreamEndV2, onLLMStreamUpdateV2, onReasoningStartV2, onTokenUsageUpdateV2 } from '../../src/modules/chatUI';
+import {
+  attachCitationHandlers,
+  consumeAgentStream,
+  onLLMStreamEndV2,
+  onLLMStreamUpdateV2,
+  onLLMStreamErrorV2,
+  onReasoningStartV2,
+  onReasoningDeltaV2,
+  onReasoningEndV2,
+  onTokenUsageUpdateV2,
+} from '../../src/modules/chatUI';
 import { contextTokenInfo } from '../../src/utils/tokenUsage';
 import { getString } from '../../src/utils/locale';
 import { renderMarkdown, type MarkdownRenderContext } from '../../src/utils/markdown';
+import { updateMarkdownContent } from '../../src/utils/markdownContent';
+import katex from 'katex';
+import hljs from 'highlight.js';
 
 describe('API text streaming in isolated Zotero', function () {
   let wrapper: HTMLElement;
@@ -48,6 +61,153 @@ describe('API text streaming in isolated Zotero', function () {
     await onLLMStreamUpdateV2({ session, fullText: '答', force: true });
     await onLLMStreamUpdateV2({ session, fullText: '答案', force: true });
     assert.equal(pop.querySelector('.chat-message-content')!.textContent!.trim(), '答案');
+  });
+
+  it('reuses unchanged prefix/suffix blocks and hydrated controls, including top-level citation headers', async function () {
+    const content = session.pending.currentTextSegment!;
+    const context = new Map();
+    const prefix = '开头\n\n```js\nconst answer = 42;\n```\n\n[cite:999999]\n\n';
+    await onLLMStreamUpdateV2({ session, fullText: prefix + '旧内容\n\n结尾', force: true, renderContext: context });
+    const first = content.firstChild;
+    const copy = content.querySelector('.chat-code-copy');
+    const cite = content.querySelector('.zaibar-cite');
+    const last = content.lastChild;
+    assert.isNotNull(copy);
+    assert.equal(cite?.getAttribute('data-bound'), '1');
+    await onLLMStreamUpdateV2({ session, fullText: prefix + '新内容\n\n结尾', force: true, renderContext: context });
+    assert.strictEqual(content.firstChild, first);
+    assert.strictEqual(content.lastChild, last);
+    assert.strictEqual(content.querySelector('.chat-code-copy'), copy);
+    assert.strictEqual(content.querySelector('.zaibar-cite'), cite);
+    assert.equal(content.querySelectorAll('.chat-code-copy').length, 1);
+    assert.include(content.textContent!, '新内容');
+    // External error/placeholder replacement invalidates the previous snapshot.
+    content.innerHTML = '<p>external replacement</p>';
+    updateMarkdownContent(content, await renderMarkdown('恢复正常'), attachCitationHandlers);
+    assert.equal(content.textContent!.trim(), '恢复正常');
+  });
+
+  it('matches a full render at every character, including unfinished syntax and late link definitions', async function () {
+    const content = session.pending.currentTextSegment!;
+    const expected = content.ownerDocument!.createElement('div');
+    const markdown =
+      '开始 $E=mc^2$\n\n$$\n\\alpha+\\beta=1\n$$\n\n| A | B |\n| - | - |\n| 1 | 2 |\n\n- 项目\n  - 子项\n\n```js\nlet n = 1;\n```\n\n[后置链接][ref]\n\n[ref]: https://example.org\n\n[cite:p2]\n\n<sub>x</sub>';
+    const context = new Map();
+    for (let end = 1; end <= markdown.length; end++) {
+      const text = markdown.slice(0, end);
+      await onLLMStreamUpdateV2({ session, fullText: text, force: true, renderContext: context });
+      expected.innerHTML = await renderMarkdown(text);
+      attachCitationHandlers(expected);
+      assert.equal(content.innerHTML, expected.innerHTML, `Character ${end}`);
+    }
+    assert.include(content.querySelector('a')!.getAttribute('href')!, 'https://example.org');
+  });
+
+  it('caches math and highlighting per response without crossing concurrent contexts', async function () {
+    const originalMath = katex.renderToString;
+    const originalHighlight = hljs.highlight;
+    let mathCalls = 0;
+    let codeCalls = 0;
+    try {
+      katex.renderToString = (...args) => {
+        mathCalls++;
+        return originalMath(...args);
+      };
+      hljs.highlight = ((...args: any[]) => {
+        codeCalls++;
+        return (originalHighlight as any)(...args);
+      }) as typeof hljs.highlight;
+      const a = new Map();
+      const b = new Map();
+      const text = '$x+1$\n\n```js\nlet x = 1;\n```';
+      const html = await renderMarkdown(text, undefined, a);
+      assert.equal(await renderMarkdown(text + '\n\n尾字', undefined, a), html + '<p>尾字</p>\n');
+      assert.equal(mathCalls, 1);
+      assert.equal(codeCalls, 1);
+      assert.equal(await renderMarkdown(text, undefined, b), html);
+      assert.equal(mathCalls, 2);
+      assert.equal(codeCalls, 2);
+      await renderMarkdown('$$\nx+1\n$$', undefined, a);
+      assert.equal(mathCalls, 3, 'Display math and inline math have distinct cache keys');
+    } finally {
+      katex.renderToString = originalMath;
+      hljs.highlight = originalHighlight;
+    }
+  });
+
+  it('drops an asynchronous Markdown commit when a different pending turn replaces it', async function () {
+    const content = session.pending.currentTextSegment!;
+    const rendering = onLLMStreamUpdateV2({ session, fullText: '不应写入旧回答', force: true, renderContext: new Map() });
+    session.pending = {};
+    await rendering;
+    assert.equal(content.innerHTML, '');
+  });
+
+  it('keeps ordinary API text segments around reasoning without repeating the earlier text', async function () {
+    const context = new Map();
+    await onLLMStreamUpdateV2({ session, fullText: '前文', segmentText: '前文', force: true, renderContext: context });
+    const first = session.pending.currentTextSegment;
+    onReasoningStartV2(session);
+    onReasoningDeltaV2(session, '重新思考');
+    onReasoningEndV2(session);
+    await onLLMStreamUpdateV2({ session, fullText: '前文后文', segmentText: '后文', force: true, renderContext: context });
+    const segments = [...pop.querySelectorAll('.chat-message-content')];
+    assert.strictEqual(segments[0], first);
+    assert.deepEqual(
+      segments.map((node) => node.textContent!.trim()),
+      ['前文', '后文']
+    );
+    assert.equal(pop.dataset.markdown, '前文后文');
+  });
+
+  it('appends batched reasoning to one text node and flushes tails on end, stop and error', async function () {
+    onReasoningStartV2(session);
+    const element = session.pending.reasoningTextEl!;
+    const node = element.firstChild;
+    for (let index = 0; index < 100; index++) onReasoningDeltaV2(session, '思');
+    assert.equal(element.textContent, '', 'A burst is buffered until the scheduled update');
+    await Zotero.Promise.delay(50);
+    assert.equal(element.textContent, '思'.repeat(100));
+    assert.strictEqual(element.firstChild, node);
+    onReasoningDeltaV2(session, '尾字');
+    onReasoningEndV2(session);
+    assert.equal(element.textContent, '思'.repeat(100) + '尾字');
+    assert.strictEqual(element.firstChild, node);
+
+    onReasoningStartV2(session);
+    const stopped = session.pending.reasoningTextEl!;
+    onReasoningDeltaV2(session, '停止前的思考');
+    onLLMStreamEndV2(session, undefined, true);
+    assert.equal(stopped.textContent, '停止前的思考');
+    const html = pop.innerHTML;
+    await Zotero.Promise.delay(50);
+    assert.equal(pop.innerHTML, html);
+
+    session.pending = { messagePop: pop };
+    onReasoningStartV2(session);
+    const failed = session.pending.reasoningTextEl!;
+    onReasoningDeltaV2(session, '错误前的思考');
+    onLLMStreamErrorV2({ session, error: 'test error' });
+    assert.equal(failed.textContent, '错误前的思考');
+    const errorHtml = pop.innerHTML;
+    await Zotero.Promise.delay(50);
+    assert.equal(pop.innerHTML, errorHtml);
+  });
+
+  it('follows a streaming answer without smooth scrolling and respects user pause', async function () {
+    const calls: ScrollToOptions[] = [];
+    wrapper.scrollTo = ((options: ScrollToOptions) => calls.push(options)) as typeof wrapper.scrollTo;
+    session.pending.shouldAutoScroll = true;
+    session.pending.scrollUserOverride = true;
+    await onLLMStreamUpdateV2({ session, fullText: '第一段', force: true });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].behavior, 'instant');
+    session.pending.scrollUserPaused = true;
+    await onLLMStreamUpdateV2({ session, fullText: '第一段继续', force: true });
+    assert.equal(calls.length, 1);
+    session.pending.scrollUserPaused = false;
+    await onLLMStreamUpdateV2({ session, fullText: '第一段继续跟随', force: true });
+    assert.equal(calls.length, 2);
   });
 
   it('updates cumulative consumption while streaming and keeps reply usage separate', function () {
@@ -135,6 +295,8 @@ describe('API text streaming in isolated Zotero', function () {
     let reads = 0;
     let yielded = 0;
     let receivedWhileReading = 0;
+    let releasePdf: (() => void) | undefined;
+    let pdfGate: Promise<void> | undefined;
     try {
       (Zotero.Items as any).get = (id: any) =>
         id === 999999
@@ -143,7 +305,9 @@ describe('API text streaming in isolated Zotero', function () {
       fullText.getItemCacheFile = () => ({ exists: () => false });
       (Zotero.PDFWorker as any).getFullText = async () => {
         reads++;
-        await Zotero.Promise.delay(80);
+        // Hold the streaming lookup until all deltas arrive. A watchdog makes
+        // a blocking regression fail the assertion rather than hang the suite.
+        await (pdfGate ? Promise.race([pdfGate, Zotero.Promise.delay(1000)]) : Zotero.Promise.delay(1));
         receivedWhileReading = yielded;
         return { text: 'page one\fpage two\nline three' };
       };
@@ -156,6 +320,7 @@ describe('API text streaming in isolated Zotero', function () {
       await renderMarkdown('[cite:999999:L1]', undefined, new Map());
       assert.equal(reads, 2, 'A new response has a fresh citation cache');
 
+      pdfGate = new Promise<void>((resolve) => (releasePdf = resolve));
       const result = await consumeAgentStream(session, {
         fullStream: (async function* () {
           for (let i = 0; i < 30; i++) {
@@ -163,16 +328,18 @@ describe('API text streaming in isolated Zotero', function () {
             yield { type: 'text-delta', text: i === 0 ? '[cite:999999:L1] ' : '正文' };
             await Zotero.Promise.delay(2);
           }
+          releasePdf!();
         })(),
         response: Promise.resolve({ messages: [] }),
         usage: Promise.resolve({}),
       });
       assert.isFalse(result.failed);
-      assert.isAbove(receivedWhileReading, 10, 'Slow Markdown must not block reading subsequent text deltas');
+      assert.equal(receivedWhileReading, 30, 'Slow Markdown must not block reading subsequent text deltas');
       assert.equal(reads, 3, 'The whole streamed response must reuse one PDF lookup');
       assert.equal(pop.dataset.markdown, '[cite:999999:L1] ' + '正文'.repeat(29));
       assert.include(pop.innerHTML, 'data-page="1"');
     } finally {
+      releasePdf?.();
       Zotero.Items.get = originalGet;
       fullText.getItemCacheFile = originalCacheFile;
       Zotero.PDFWorker.getFullText = originalPdfText;
