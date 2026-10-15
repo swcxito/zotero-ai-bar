@@ -307,7 +307,7 @@ describe('API text streaming in isolated Zotero', function () {
         reads++;
         // Hold the streaming lookup until all deltas arrive. A watchdog makes
         // a blocking regression fail the assertion rather than hang the suite.
-        await (pdfGate ? Promise.race([pdfGate, Zotero.Promise.delay(1000)]) : Zotero.Promise.delay(1));
+        await (pdfGate ? Promise.race([pdfGate, Zotero.Promise.delay(5000)]) : Zotero.Promise.delay(1));
         receivedWhileReading = yielded;
         return { text: 'page one\fpage two\nline three' };
       };

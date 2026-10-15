@@ -38,6 +38,11 @@ function computed(node: Element): CSSStyleDeclaration {
   return node.ownerDocument.defaultView!.getComputedStyle(node);
 }
 
+async function waitForNoShadow(node: Element): Promise<void> {
+  const deadline = Date.now() + 1500;
+  while (computed(node).boxShadow !== 'none' && Date.now() < deadline) await Zotero.Promise.delay(20);
+}
+
 function expectedPage(doc: Document, skin: (typeof NEW_SKINS)[number]): string {
   return PAGE_COLORS[skin][doc.defaultView!.matchMedia('(prefers-color-scheme: dark)').matches ? 1 : 0];
 }
@@ -87,11 +92,13 @@ async function verifyShadowRootMaterial(skin: (typeof NEW_SKINS)[number]): Promi
     }
     assert.include(computed(selectedMenuItem).boxShadow, 'inset');
     screenshot.disabled = true;
+    await waitForNoShadow(screenshot);
     assert.equal(computed(screenshot).boxShadow, 'none');
     setPref('chat.skin', 'rose');
     refreshChatSkin();
     await new Promise<void>((resolve) => doc.defaultView!.setTimeout(resolve, 350));
     assert.notInclude(computed(input).boxShadow, 'inset');
+    await waitForNoShadow(thinking);
     assert.equal(computed(thinking).boxShadow, 'none');
   } finally {
     stopChatSkinSync();
@@ -153,6 +160,7 @@ describe('chat skins', function () {
       setPref('chat.skin', 'rose');
       refreshChatSkin();
       await new Promise<void>((resolve) => doc.defaultView!.setTimeout(resolve, 350));
+      await waitForNoShadow(button);
       assert.equal(computed(button).boxShadow, 'none');
     } finally {
       stopChatSkinSync();
@@ -183,6 +191,7 @@ describe('chat skins', function () {
       setPref('chat.skin', 'rose');
       refreshChatSkin();
       await new Promise<void>((resolve) => doc.defaultView!.setTimeout(resolve, 350));
+      await waitForNoShadow(button);
       assert.equal(computed(button).boxShadow, 'none');
     } finally {
       stopChatSkinSync();

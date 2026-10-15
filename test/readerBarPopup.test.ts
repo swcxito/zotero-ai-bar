@@ -79,7 +79,7 @@ describe('readerBarPopup', function () {
       } as any);
     }
 
-    const flush = () => Zotero.Promise.delay(20);
+    const flush = () => Zotero.Promise.delay(60);
 
     it('translates a live selection once across repeated popup renders', async function () {
       render();

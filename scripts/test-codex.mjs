@@ -14,6 +14,8 @@ await build({
     'test/chatHistoryStore.test.ts',
     'test/streamRenderer.test.ts',
     'test/markdownRenderCache.test.ts',
+    'test/attachmentAccess.test.ts',
+    'test/sharedInfrastructure.test.ts',
   ],
   bundle: true,
   platform: 'node',
@@ -38,6 +40,8 @@ mocha.addFile(join(directory, 'scripts/tests/backend.test.js'));
 mocha.addFile(join(directory, 'test/chatHistoryStore.test.js'));
 mocha.addFile(join(directory, 'test/streamRenderer.test.js'));
 mocha.addFile(join(directory, 'test/markdownRenderCache.test.js'));
+mocha.addFile(join(directory, 'test/attachmentAccess.test.js'));
+mocha.addFile(join(directory, 'test/sharedInfrastructure.test.js'));
 // mkdtemp is outside the ESM package, so the generated CommonJS .js files are loadable.
 mocha.run((failures) => {
   process.exitCode = failures ? 1 : 0;
