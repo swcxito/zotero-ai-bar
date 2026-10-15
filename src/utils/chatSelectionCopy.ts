@@ -5,6 +5,8 @@
  * This file is part of Zotero AI Bar.
  */
 
+import TurndownService from 'turndown';
+import { gfm } from 'turndown-plugin-gfm';
 import { getString } from './locale';
 import { registerChatSkinRoot } from './chatSkin';
 
@@ -226,96 +228,26 @@ function showCopySuccess(doc: Document, state: ChatSelectionCopyState, popover: 
   }, 1000);
 }
 
-function inlineMarkdown(node: Node): string {
-  if (node.nodeType === 3) {
-    return (node.nodeValue ?? '').replace(/\s+/g, ' ');
-  }
-  if (node.nodeType !== 1) return '';
-  const element = node as HTMLElement;
-  if (element.hasAttribute('data-zaibar-copy-ignore')) return '';
-  const tag = element.tagName.toLowerCase();
-  const content = Array.from(element.childNodes).map(inlineMarkdown).join('');
-  if (tag === 'br') return '  \n';
-  if (tag === 'strong' || tag === 'b') return content.trim() ? `**${content.trim()}**` : '';
-  if (tag === 'em' || tag === 'i') return content.trim() ? `*${content.trim()}*` : '';
-  if (tag === 'del' || tag === 's') return content.trim() ? `~~${content.trim()}~~` : '';
-  if (tag === 'code' && element.parentElement?.tagName.toLowerCase() !== 'pre') {
-    const code = element.textContent ?? '';
-    const fence = code.includes('`') ? '``' : '`';
-    return `${fence}${code}${fence}`;
-  }
-  if (tag === 'a') {
-    const href = element.getAttribute('href');
-    return href && content.trim() ? `[${content.trim()}](${href})` : content;
-  }
-  return content;
-}
-
-function listMarkdown(list: Element, depth = 0): string {
-  const ordered = list.tagName.toLowerCase() === 'ol';
-  const items = Array.from(list.children).filter((child) => child.tagName.toLowerCase() === 'li');
-  return items
-    .map((item, index) => {
-      const nestedLists = Array.from(item.children).filter((child) => ['ul', 'ol'].includes(child.tagName.toLowerCase()));
-      const content = Array.from(item.childNodes)
-        .filter((child) => !(child.nodeType === 1 && ['ul', 'ol'].includes((child as Element).tagName.toLowerCase())))
-        .map(markdownForNode)
-        .join('')
-        .replace(/\s*\n\s*/g, ' ')
-        .trim();
-      const indent = '  '.repeat(depth);
-      const marker = ordered ? `${index + 1}.` : '-';
-      const nested = nestedLists.map((child) => listMarkdown(child, depth + 1)).join('\n');
-      return `${indent}${marker} ${content}${nested ? `\n${nested}` : ''}`;
-    })
-    .join('\n');
-}
-
-function tableMarkdown(table: Element): string {
-  const rows = Array.from(table.querySelectorAll('tr')).map((row) =>
-    Array.from(row.children)
-      .filter((cell) => ['th', 'td'].includes(cell.tagName.toLowerCase()))
-      .map((cell) => inlineMarkdown(cell).trim().replace(/\|/g, '\\|'))
-  );
-  if (!rows.length || !rows[0].length) return '';
-  const width = Math.max(...rows.map((row) => row.length));
-  const normalized = rows.map((row) => [...row, ...Array(Math.max(0, width - row.length)).fill('')]);
-  const renderRow = (row: string[]) => `| ${row.join(' | ')} |`;
-  return [renderRow(normalized[0]), renderRow(Array(width).fill('---')), ...normalized.slice(1).map(renderRow)].join('\n');
-}
-
-function markdownForNode(node: Node): string {
-  if (node.nodeType === 3) return (node.nodeValue ?? '').replace(/\s+/g, ' ');
-  if (node.nodeType !== 1) return '';
-  const element = node as HTMLElement;
-  if (element.hasAttribute('data-zaibar-copy-ignore')) return '';
-  const tag = element.tagName.toLowerCase();
-  const mathKind = element.getAttribute('data-zaibar-math');
-  if (mathKind) {
-    const latex = element.textContent?.trim() ?? '';
-    return mathKind === 'display' ? `\n\n$$\n${latex}\n$$\n\n` : `$${latex}$`;
-  }
-  if (tag === 'pre') {
-    const codeElement = element.querySelector('code');
-    const language = codeElement?.className.match(/(?:language|lang)-([\w-]+)/)?.[1] ?? '';
-    const code = (codeElement?.textContent ?? element.textContent ?? '').replace(/\n$/, '');
-    return `\n\n\`\`\`${language}\n${code}\n\`\`\`\n\n`;
-  }
-  if (tag === 'ul' || tag === 'ol') return `\n\n${listMarkdown(element)}\n\n`;
-  if (tag === 'table') return `\n\n${tableMarkdown(element)}\n\n`;
-  const content = Array.from(element.childNodes).map(markdownForNode).join('');
-  if (/^h[1-6]$/.test(tag)) return `\n\n${'#'.repeat(Number(tag[1]))} ${content.trim()}\n\n`;
-  if (tag === 'p' || tag === 'div' || tag === 'section' || tag === 'article') return `\n\n${content.trim()}\n\n`;
-  if (tag === 'blockquote') {
-    const quoted = content
-      .trim()
-      .split('\n')
-      .map((line) => `> ${line}`)
-      .join('\n');
-    return `\n\n${quoted}\n\n`;
-  }
-  if (tag === 'hr') return '\n\n---\n\n';
-  return inlineMarkdown(element);
+function markdownConverter() {
+  const converter = new TurndownService({
+    headingStyle: 'atx',
+    bulletListMarker: '-',
+    codeBlockStyle: 'fenced',
+    emDelimiter: '*',
+    strongDelimiter: '**',
+  });
+  converter.use(gfm);
+  converter.addRule('chatStrike', { filter: ['del', 's', 'strike'], replacement: (content) => `~~${content}~~` });
+  converter.addRule('chatMath', {
+    filter: (node) => node.hasAttribute('data-zaibar-math'),
+    replacement: (_content, node) => {
+      const element = node as HTMLElement;
+      const text = element.textContent?.trim() ?? '';
+      return element.getAttribute('data-zaibar-math') === 'display' ? `\n\n$$\n${text}\n$$\n\n` : `$${text}$`;
+    },
+  });
+  converter.addRule('ignoredChatControls', { filter: (node) => node.hasAttribute('data-zaibar-copy-ignore'), replacement: () => '' });
+  return converter;
 }
 
 function plainTextForNode(node: Node): string {
@@ -357,11 +289,21 @@ export function renderedElementToPlainText(element: Element): string {
 export function htmlToMarkdown(html: string): string {
   if (!html) return '';
   const parsed = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
-  return Array.from(parsed.body.childNodes)
-    .map(markdownForNode)
-    .join('')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
+  replaceRenderedMath(parsed.body, parsed);
+  let fence = '';
+  return markdownConverter()
+    .turndown(parsed.body)
+    .split('\n')
+    .map((line) => {
+      const marker = line.match(/^\s*(`{3,}|~{3,})/);
+      if (marker) {
+        if (!fence) fence = marker[1];
+        else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = '';
+        return line;
+      }
+      return fence ? line : line.replace(/^(\s*(?:[-*+]|\d+\.)) {2,}/, '$1 ');
+    })
+    .join('\n')
     .trim();
 }
 

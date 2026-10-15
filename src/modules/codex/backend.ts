@@ -1,10 +1,12 @@
+import { createOrderedStreamRenderer } from '../../utils/orderedStreamRenderer';
+import type { MarkdownRenderContext } from '../../utils/markdown';
 import { asSchema, type ModelMessage } from 'ai';
 import type { AgentUserAnswer, Session, TokenCounts, TokenUsage } from '../chatManager';
 import { getSharedToolDefinitions } from '../agentTools';
 import { askUserSchema, type AskUserPayload } from '../../utils/agentSchemas';
 import { getPref } from '../../utils/prefs';
 import { normalizeTokenCounts } from '../../utils/tokenUsage';
-import { normalizeTranslationResultCandidate, type TranslationRequestMeta } from '../../utils/translation';
+import { translationWireSchema, normalizeTranslationResultCandidate, type TranslationRequestMeta } from '../../utils/translation';
 import {
   onLLMStreamStartV2,
   onLLMStreamUpdateV2,
@@ -165,32 +167,7 @@ function historicalText(messages: ModelMessage[]): string {
     .join('\n\n');
 }
 
-const translationSchema = {
-  type: 'object',
-  properties: {
-    textType: { type: 'string', enum: ['word', 'abbreviation', 'text'] },
-    translatedText: { type: 'string' },
-    originalText: { type: 'string' },
-    fullForm: { type: 'string' },
-    explanation: { type: 'string' },
-    pos: { type: 'string' },
-    pronunciation: { type: 'string' },
-    otherMeanings: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          pos: { type: 'string' },
-          translatedText: { type: 'array', items: { type: 'string' }, minItems: 1 },
-        },
-        required: ['pos', 'translatedText'],
-        additionalProperties: false,
-      },
-    },
-  },
-  required: ['textType', 'translatedText', 'originalText', 'fullForm', 'explanation', 'pos', 'pronunciation', 'otherMeanings'],
-  additionalProperties: false,
-};
+const translationSchema = asSchema(translationWireSchema).jsonSchema;
 
 export async function streamCodex(
   messagesPromise: ModelMessage[] | Promise<ModelMessage[]>,
@@ -207,7 +184,24 @@ export async function streamCodex(
   let binding: CodexBinding | undefined;
   let completed = false;
   let active = true;
-  let renderQueue = Promise.resolve();
+  let fullText = '';
+  let renderedKey: string | undefined;
+  const renderContext: MarkdownRenderContext = new Map();
+  const textRender = createOrderedStreamRenderer(async (key, text, isCurrent) => {
+    if (!active || signal?.aborted || !isCurrent()) return;
+    if (renderedKey !== key) {
+      session.pending.currentTextSegment = undefined;
+      renderedKey = key;
+    }
+    await onLLMStreamUpdateV2({
+      session,
+      fullText,
+      segmentText: text,
+      force: true,
+      renderContext,
+      isCurrent: () => active && !signal?.aborted && isCurrent(),
+    });
+  });
   let currentTurnId: string | undefined;
   let turnStarted = false;
   let turnUsage: TokenUsage | undefined;
@@ -291,7 +285,6 @@ export async function streamCodex(
       session.codex = undefined;
       addon.chatManager.persistActiveContext(session);
     }
-    let fullText = '';
     const textItems = new Map<string, string>();
     let reasoning = false;
     let reasoningSummary = '';
@@ -310,7 +303,7 @@ export async function streamCodex(
       clearTimeout(responseTimer);
       if (message.method === 'item/tool/requestUserInput') {
         if (!active || signal?.aborted || (currentTurnId && message.params?.turnId !== currentTurnId)) throw new Error('Inactive turn');
-        await renderQueue;
+        await textRender.boundary();
         if (!active || signal?.aborted) throw new Error('Inactive turn');
         return requestNativeUserInput(session, message.params);
       }
@@ -325,7 +318,7 @@ export async function streamCodex(
         const name = typeof tool === 'string' && tool.startsWith('zotero_') ? tool.slice(7) : '';
         const definition = Object.hasOwn(tools, name) ? tools[name] : undefined;
         if (!definition || ++toolCount > 30) throw new Error('Tool not permitted');
-        await renderQueue;
+        await textRender.boundary();
         if (!active || signal?.aborted) throw new Error('Inactive turn');
         const ui = { toolCallId: callId, toolName: name, input: args };
         if (name !== 'ask_user') onToolCallStartV2(session, ui);
@@ -409,25 +402,13 @@ export async function streamCodex(
         const text = (textItems.get(key) || '') + params.delta;
         textItems.set(key, text);
         fullText = [...textItems.values()].join('\n\n');
-        const snapshot = fullText;
-        if (!translation) {
-          renderQueue = renderQueue.then(() => {
-            if (active && !signal?.aborted) return onLLMStreamUpdateV2({ session, fullText: snapshot, segmentText: text });
-          });
-          void renderQueue.catch(rejectDone);
-        }
+        if (!translation) textRender.update(key, text);
       } else if (message.method === 'item/completed' && params.item?.type === 'agentMessage') {
         const key = params.item.id || 'agent';
         const text = typeof params.item.text === 'string' ? params.item.text : textItems.get(key) || '';
-        if (typeof params.item.text === 'string') textItems.set(key, params.item.text);
+        textItems.set(key, text);
         fullText = [...textItems.values()].join('\n\n');
-        const snapshot = fullText;
-        if (!translation) {
-          renderQueue = renderQueue.then(() => {
-            if (active && !signal?.aborted) return onLLMStreamUpdateV2({ session, fullText: snapshot, segmentText: text });
-          });
-          void renderQueue.catch(rejectDone);
-        }
+        if (!translation) textRender.update(key, text);
       } else if (message.method === 'error') {
         const diagnostic = formatCodexRuntimeError(params);
         Zotero.debug?.(`[zaibar-codex] app-server error: ${diagnostic.message}`);
@@ -438,23 +419,23 @@ export async function streamCodex(
       } else if (message.method === 'item/started' && params.item?.type === 'reasoning') {
         reasoningSummary = '';
         reasoning = true;
-        onReasoningStartV2(session);
+        void textRender.boundary(() => onReasoningStartV2(session)).catch(rejectDone);
         const summary = reasoningSummaryText(params.item.summary);
         if (summary) {
           reasoningSummary = summary;
-          onReasoningDeltaV2(session, summary);
+          void textRender.boundary(() => onReasoningDeltaV2(session, summary)).catch(rejectDone);
         }
       } else if (message.method === 'item/reasoning/summaryTextDelta') {
         if (!reasoning) {
           reasoning = true;
-          onReasoningStartV2(session);
+          void textRender.boundary(() => onReasoningStartV2(session)).catch(rejectDone);
         }
         const delta = typeof params.delta === 'string' ? params.delta : '';
         if (delta) {
           const append = delta.startsWith(reasoningSummary) ? delta.slice(reasoningSummary.length) : delta === reasoningSummary ? '' : delta;
           if (append) {
             reasoningSummary += append;
-            onReasoningDeltaV2(session, append);
+            void textRender.boundary(() => onReasoningDeltaV2(session, append)).catch(rejectDone);
           }
         }
       } else if (message.method === 'item/reasoning/summaryPartAdded') {
@@ -462,29 +443,33 @@ export async function streamCodex(
         if (summary && !reasoningSummary.endsWith(summary)) {
           if (!reasoning) {
             reasoning = true;
-            onReasoningStartV2(session);
+            void textRender.boundary(() => onReasoningStartV2(session)).catch(rejectDone);
           }
           const delta = summary.startsWith(reasoningSummary) ? summary.slice(reasoningSummary.length) : `\n\n${summary}`;
           reasoningSummary += delta;
-          onReasoningDeltaV2(session, delta);
+          void textRender.boundary(() => onReasoningDeltaV2(session, delta)).catch(rejectDone);
         }
       } else if (message.method === 'item/completed' && params.item?.type === 'reasoning') {
         const summary = reasoningSummaryText(params.item.summary);
         if (summary && summary !== reasoningSummary) {
           if (!reasoning) {
             reasoning = true;
-            onReasoningStartV2(session);
+            void textRender.boundary(() => onReasoningStartV2(session)).catch(rejectDone);
           }
           const delta = summary.startsWith(reasoningSummary) ? summary.slice(reasoningSummary.length) : `\n\n${summary}`;
           reasoningSummary += delta;
-          onReasoningDeltaV2(session, delta);
+          void textRender.boundary(() => onReasoningDeltaV2(session, delta)).catch(rejectDone);
         }
-        onReasoningEndV2(session);
+        void textRender.boundary(() => onReasoningEndV2(session)).catch(rejectDone);
         reasoning = false;
       } else if (message.method === 'item/started' && params.item?.type === 'webSearch') {
-        onToolCallStartV2(session, { toolCallId: params.item.id, toolName: 'web_search', input: params.item.action || {} });
+        void textRender
+          .boundary(() => onToolCallStartV2(session, { toolCallId: params.item.id, toolName: 'web_search', input: params.item.action || {} }))
+          .catch(rejectDone);
       } else if (message.method === 'item/completed' && params.item?.type === 'webSearch') {
-        onToolCallEndV2(session, { toolCallId: params.item.id, toolName: 'web_search', output: params.item.action || {} });
+        void textRender
+          .boundary(() => onToolCallEndV2(session, { toolCallId: params.item.id, toolName: 'web_search', output: params.item.action || {} }))
+          .catch(rejectDone);
       } else if (message.method === 'turn/completed') {
         binding!.turnId = params.turn?.id;
         if (params.turn?.status === 'completed') resolveDone();
@@ -540,7 +525,7 @@ export async function streamCodex(
     turnStarted = true;
     if (signal?.aborted) abort();
     await done;
-    await renderQueue;
+    await textRender.boundary();
     if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
     if (!fullText.trim()) throw new Error(codexString('codex-error-empty-response', 'Codex 已结束请求，但没有返回文字。请刷新账号与模型后重试。'));
     if (reasoning) onReasoningEndV2(session);
@@ -555,7 +540,8 @@ export async function streamCodex(
       if (!normalized) throw new Error(codexString('codex-error-translation-incomplete', 'Codex 翻译结果不完整，请重试。'));
       onTranslationResultV2(session, normalized);
     } else {
-      await onLLMStreamUpdateV2({ session, fullText, force: true });
+      await textRender.flush();
+      if (session.pending.messagePop) (session.pending.messagePop as HTMLElement).dataset.markdown = fullText;
       binding.context = contextFingerprint([
         ...session.conversationHistory,
         ...(session.pending.userMessage ? [session.pending.userMessage] : []),
@@ -567,14 +553,16 @@ export async function streamCodex(
     onLLMStreamEndV2(session, turnUsage);
   } catch (error) {
     active = false;
+    textRender.dispose();
     session.pending.userAnswerReject?.(new DOMException('Cancelled', 'AbortError'));
     if (turnStarted && rpc && currentTurnId) void rpc.request('turn/interrupt', { threadId, turnId: currentTurnId }).catch(() => undefined);
-    await renderQueue.catch(() => undefined);
+    await textRender.flush().catch(() => undefined);
     if (signal?.aborted || (error as Error).name === 'AbortError' || (error as Error).name === 'FullTextRequestCancelledError')
       onLLMStreamEndV2(session, turnUsage, true);
     else onLLMStreamErrorV2({ session, error: (error as Error).message });
   } finally {
     active = false;
+    textRender.dispose();
     clearTimeout(timer);
     clearTimeout(responseTimer);
     if (abort) signal?.removeEventListener('abort', abort);

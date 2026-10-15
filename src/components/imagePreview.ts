@@ -16,6 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { createImageNavigation } from '../utils/imageNavigation';
 import { Icons } from './common';
 import { IconView } from './iconView';
 import { getReaderByTabId } from '../modules/tabObserver';
@@ -44,8 +45,6 @@ export function createImageViewer(
   parent: HTMLElement,
   ownerDoc: Document
 ): { overlay: HTMLElement; close: () => void } {
-  let currentIndex = startIndex;
-
   const overlay = ownerDoc.createElement('div');
   registerChatSkinRoot(overlay);
   overlay.style.cssText =
@@ -62,31 +61,32 @@ export function createImageViewer(
   let prevBtn: HTMLButtonElement | null = null;
   let nextBtn: HTMLButtonElement | null = null;
 
-  function showImage(index: number) {
-    currentIndex = index;
-    img.src = images[currentIndex];
-    counter.textContent = `${currentIndex + 1} / ${images.length}`;
+  function showImage(index: number, state: { counter: string; hasPrevious: boolean; hasNext: boolean }) {
+    img.src = images[index];
+    counter.textContent = state.counter;
 
-    if (prevBtn) prevBtn.style.display = currentIndex > 0 ? '' : 'none';
-    if (nextBtn) nextBtn.style.display = currentIndex < images.length - 1 ? '' : 'none';
+    if (prevBtn) prevBtn.style.display = state.hasPrevious ? '' : 'none';
+    if (nextBtn) nextBtn.style.display = state.hasNext ? '' : 'none';
   }
 
   function close() {
     if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
   }
 
+  const navigation = createImageNavigation(images.length, startIndex, showImage, close);
+
   if (images.length > 1) {
     prevBtn = createNavButton(ARROW_LEFT_SVG, 'left:12px;', ownerDoc);
     prevBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (currentIndex > 0) showImage(currentIndex - 1);
+      navigation.previous();
     });
     overlay.appendChild(prevBtn);
 
     nextBtn = createNavButton(ARROW_RIGHT_SVG, 'right:12px;', ownerDoc);
     nextBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (currentIndex < images.length - 1) showImage(currentIndex + 1);
+      navigation.next();
     });
     overlay.appendChild(nextBtn);
 
@@ -97,18 +97,8 @@ export function createImageViewer(
     if (e.target === overlay) close();
   });
 
-  overlay.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      close();
-      return;
-    }
-    if (images.length > 1) {
-      if (e.key === 'ArrowLeft' && currentIndex > 0) showImage(currentIndex - 1);
-      if (e.key === 'ArrowRight' && currentIndex < images.length - 1) showImage(currentIndex + 1);
-    }
-  });
-
-  showImage(startIndex);
+  overlay.addEventListener('keydown', (event: KeyboardEvent) => navigation.key(event.key));
+  navigation.show(startIndex);
   parent.appendChild(overlay);
   overlay.focus();
 

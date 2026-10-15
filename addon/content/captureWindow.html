@@ -153,42 +153,33 @@
           return;
         }
 
-        let currentIndex = startIndex;
         const hasMultiple = images.length > 1;
 
-        function showImage(index) {
-          currentIndex = index;
-          img.src = images[currentIndex];
+        function showImage(index, state) {
+          img.src = images[index];
 
           if (hasMultiple) {
-            counter.textContent = `${currentIndex + 1} / ${images.length}`;
-            prevBtn.style.display = currentIndex > 0 ? '' : 'none';
-            nextBtn.style.display = currentIndex < images.length - 1 ? '' : 'none';
+            counter.textContent = state.counter;
+            prevBtn.style.display = state.hasPrevious ? '' : 'none';
+            nextBtn.style.display = state.hasNext ? '' : 'none';
           }
         }
 
-        showImage(currentIndex);
+        const navigation = window.arguments[0].createImageNavigation(images.length, startIndex, showImage, () => window.close());
 
         img.onload = () => {
           info.textContent = `${img.naturalWidth} × ${img.naturalHeight} px`;
         };
 
         prevBtn.addEventListener('click', () => {
-          if (currentIndex > 0) showImage(currentIndex - 1);
+          navigation.previous();
         });
 
         nextBtn.addEventListener('click', () => {
-          if (currentIndex < images.length - 1) showImage(currentIndex + 1);
+          navigation.next();
         });
 
-        document.addEventListener('keydown', (e) => {
-          if (e.key === 'Escape') {
-            window.close();
-            return;
-          }
-          if (e.key === 'ArrowLeft' && currentIndex > 0) showImage(currentIndex - 1);
-          if (e.key === 'ArrowRight' && currentIndex < images.length - 1) showImage(currentIndex + 1);
-        });
+        document.addEventListener('keydown', (event) => navigation.key(event.key));
 
         document.getElementById('close-btn').addEventListener('click', () => {
           window.close();
@@ -196,7 +187,7 @@
 
         document.getElementById('copy-btn').addEventListener('click', () => {
           if (navigator.clipboard) {
-            fetch(images[currentIndex])
+            fetch(images[navigation.index])
               .then((res) => res.blob())
               .then((blob) => {
                 const item = new ClipboardItem({ 'image/png': blob });

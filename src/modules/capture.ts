@@ -16,6 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { createImageNavigation } from '../utils/imageNavigation';
 import { resolveAttachment } from '../utils/attachments';
 import { config } from '../../package.json';
 import { registerChatSkinRoot } from '../utils/chatSkin';
@@ -740,7 +741,12 @@ function waitForPDFReader(attachmentId: number, timeoutMs: number): Promise<_Zot
 }
 
 export function openCapturePreview(images: string[], startIndex: number): void {
-  const windowArgs = { images, startIndex, onBodyLoaded: (window: Window) => registerChatSkinRoot(window.document.documentElement) };
+  const windowArgs = {
+    images,
+    startIndex,
+    createImageNavigation,
+    onBodyLoaded: (window: Window) => registerChatSkinRoot(window.document.documentElement),
+  };
 
   const dialogWindow = Zotero.getMainWindow().openDialog(
     `chrome://${config.addonRef}/content/captureWindow.html`,

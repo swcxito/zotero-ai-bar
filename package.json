@@ -50,6 +50,8 @@
     "marked-highlight": "^2.2.4",
     "marked-katex-extension": "^5.1.8",
     "marked-xhtml": "^1.0.15",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2",
     "zod": "^3.25.7",
     "zotero-plugin-toolkit": "^5.1.2"
   },
@@ -57,6 +59,7 @@
     "@types/chai": "^5.2.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^25.6.2",
+    "@types/turndown": "^5.0.6",
     "@zotero-plugin/eslint-config": "^0.6.9",
     "autoprefixer": "^10.5.0",
     "chai": "^6.2.2",

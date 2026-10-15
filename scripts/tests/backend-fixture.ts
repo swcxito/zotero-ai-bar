@@ -1,13 +1,15 @@
 import { z } from 'zod';
 import { CodexRpc } from '../../src/modules/codex/protocol';
 
-export const state: any = { errors: [], ends: [], updates: [], calls: [], outputs: [], reasoning: [], writes: 0 };
+export const state: any = { errors: [], ends: [], updates: [], calls: [], outputs: [], reasoning: [], events: [], writes: 0 };
 export function onLLMStreamStartV2(session: any) {
   session._text = '';
 }
-export async function onLLMStreamUpdateV2({ session, fullText }: any) {
+export async function onLLMStreamUpdateV2({ session, fullText, segmentText, isCurrent }: any) {
+  if (isCurrent && !isCurrent()) return;
   session._text = fullText;
   state.updates.push(fullText);
+  state.events.push({ type: 'text', text: segmentText });
 }
 export function onTokenUsageUpdateV2(session: any, usage: any) {
   session.lastUsage = usage;
@@ -22,6 +24,7 @@ export function onLLMStreamErrorV2({ session, error }: any) {
   session.pending = {};
 }
 export function onReasoningStartV2() {
+  state.events.push({ type: 'reasoning' });
   state.reasoning.push({ type: 'start' });
 }
 export function onReasoningDeltaV2(_session: any, text: string) {
@@ -31,6 +34,7 @@ export function onReasoningEndV2() {
   state.reasoning.push({ type: 'end' });
 }
 export function onToolCallStartV2(_session: any, call: any) {
+  state.events.push({ type: 'tool', name: call.toolName });
   state.calls.push(call);
 }
 export function onToolCallEndV2(_session: any, output: any) {
@@ -71,6 +75,7 @@ export class FakeServer {
   tools: { tool: string; args: any; id?: string }[] = [];
   account: any = { type: 'chatgpt', email: 'test@example.org' };
   reply = 'Hello';
+  prefixReply?: string;
   finalOnly = false;
   reasoningSummary?: string;
   webSearch = false;
@@ -118,6 +123,10 @@ export class FakeServer {
     if (this.disconnect) {
       this.rpc.close();
       return;
+    }
+    if (this.prefixReply) {
+      for (const delta of this.prefixReply) this.emit('item/agentMessage/delta', { threadId, turnId, itemId: 'preface', delta });
+      this.emit('item/completed', { threadId, turnId, item: { id: 'preface', type: 'agentMessage', text: this.prefixReply } });
     }
     if (this.reasoningSummary) {
       const item = { id: 'reasoning_1', type: 'reasoning', summary: [{ type: 'summary_text', text: this.reasoningSummary }] };
@@ -191,6 +200,7 @@ export function resetFixture() {
     calls: [],
     outputs: [],
     reasoning: [],
+    events: [],
     writes: 0,
     translation: undefined,
     userInputAnswers: undefined,

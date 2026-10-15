@@ -37,6 +37,25 @@ describe('Codex chat backend', function () {
     assert.include(state.errors[0], '没有返回文字');
   });
 
+  it('coalesces separate text items around reasoning and tools while saving the complete reply', async function () {
+    const prefix = 'prefix '.repeat(100);
+    state.server.prefixReply = prefix;
+    state.server.reasoningSummary = 'Reasoning';
+    state.server.webSearch = true;
+    state.server.tools = [{ tool: 'zotero_read', args: { itemId: 1 } }];
+    const session = sessionFixture();
+    await streamCodex(messagesFor(session), session);
+    assert.isEmpty(state.errors);
+    assert.deepEqual(
+      state.events.map((event: any) => event.type),
+      ['text', 'reasoning', 'tool', 'tool', 'text']
+    );
+    assert.equal(state.events[0].text, prefix);
+    assert.equal(state.events.at(-1).text, 'Hello');
+    assert.equal(session.conversationHistory.at(-1).content, `${prefix}\n\nHello`);
+    assert.isBelow(state.updates.length, 10, 'a burst must not enqueue a render for every delta');
+  });
+
   it('reports cumulative consumption and counts all model steps once per turn', async function () {
     const session = sessionFixture();
     const first = { total: counters(100, 30), last: counters(100, 30), modelContextWindow: 200000 };
@@ -329,6 +348,8 @@ describe('Codex chat backend', function () {
     };
     const request = streamCodex(messagesFor(session), session);
     await ready;
+    // Rendering is serialized behind text boundaries; wait for the UI event loop before Stop.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(state.reasoning.at(-1).text, 'Still thinking');
     controller.abort();
     state.server.emit('item/reasoning/summaryTextDelta', { threadId: 'thread_1', turnId: 'turn_1', delta: 'Late reasoning' });
