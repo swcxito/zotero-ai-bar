@@ -16,6 +16,8 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { resolveModelCapabilities, scopedModel } from './modelCapabilities';
+import { codexRuntime } from '../modules/codex/runtime';
 // 基于 common_providers.json 生成的 TypeScript 类型定义
 // 包含 25 个 providers 和 763 个 models
 
@@ -176,58 +178,14 @@ function safeParseLegacyLLMConfig(llmConfig: string | UserProviderConfig[] | nul
   }
 }
 
-/**
- * Search for model metadata across all commonProviders.
- * Tries: exact key match in own provider, name match in own provider,
- * cross-provider lookup for "prefix/model" style names, and global search.
- */
+/** Resolve a model only within its selected provider; ambiguous names remain unknown. */
 export function findModelMetadata(
   modelName: string,
   modelId: string | undefined,
   providerId: ProviderId,
   commonProviders: CommonProviders | undefined
 ): Model | undefined {
-  if (!commonProviders) {
-    ztoolkit.log('[findModelMetadata] No commonProviders available');
-    return undefined;
-  }
-
-  // 1. Direct lookup in the provider's own models
-  const ownProvider = commonProviders[providerId];
-  if (ownProvider?.models) {
-    if (ownProvider.models[modelName]) return { ...ownProvider.models[modelName], id: modelName };
-    if (modelId && ownProvider.models[modelId]) return { ...ownProvider.models[modelId], id: modelId };
-    for (const [key, m] of Object.entries(ownProvider.models)) {
-      if (m.name === modelName || (modelId && m.name === modelId)) return { ...m, id: key };
-    }
-  }
-
-  // 2. Cross-provider: if modelName has "prefix/model" format (e.g. openrouter)
-  const slashIdx = modelName.indexOf('/');
-  if (slashIdx > 0) {
-    const prefix = modelName.slice(0, slashIdx);
-    const bareName = modelName.slice(slashIdx + 1);
-    const prefixProvider = commonProviders[prefix];
-    if (prefixProvider?.models?.[bareName]) {
-      return { ...prefixProvider.models[bareName], id: bareName };
-    }
-    if (prefixProvider?.models) {
-      for (const [key, m] of Object.entries(prefixProvider.models)) {
-        if (m.name === bareName) return { ...m, id: key };
-      }
-    }
-  }
-
-  // 3. Global search across all providers by name or id
-  for (const p of Object.values(commonProviders)) {
-    for (const [key, m] of Object.entries(p.models)) {
-      if (m.name === modelName || m.id === modelName || (modelId && (m.name === modelId || m.id === modelId))) {
-        return { ...m, id: key };
-      }
-    }
-  }
-
-  return undefined;
+  return scopedModel({ providerId, modelId: modelId || modelName }, modelName, commonProviders);
 }
 
 /** ProviderId → 图标文件 stem（不含 .svg） */
@@ -261,67 +219,43 @@ const PROVIDER_ID_ICON_STEM: Record<string, string> = {
   'moonshotai-cn': 'moonshot',
 };
 
-/**
- * 检查当前选中的模型是否支持图片输入。
- * 综合 addedModels、commonProviders、liveProviders 判断，任一来源确认支持即返回 true。
- * 使用 findModelMetadata 进行模糊匹配，避免因模型 ID/名称不一致导致查找失败。
- */
-export function checkModelSupportsImage(): boolean {
-  const v2 = addon.data.userProviderConfigV2;
-  if (!v2?.active) return false;
-
-  const { providerId, modelId } = v2.active;
-
-  const addedModel = v2.addedModels?.find((m) => m.providerId === providerId && m.id === modelId);
-  if (addedModel?.modalities?.input?.includes('image')) return true;
-
-  const modelName = addedModel?.name ?? modelId;
-
-  const commonMeta = findModelMetadata(modelName, modelId, providerId, addon.data.commonProviders);
-  if (commonMeta?.modalities?.input?.includes('image')) return true;
-
-  const liveMeta = findModelMetadata(modelName, modelId, providerId, addon.data.liveProviders);
-  if (liveMeta?.modalities?.input?.includes('image')) return true;
-
-  if (addedModel?.modalities?.input) return false;
-  if (commonMeta?.modalities?.input) return false;
-
-  return false;
+/** Saved identity with live → saved → bundled capabilities, scoped to the actual provider/model. */
+export function getModelMetadata(selection?: ModelSelect): Model | undefined {
+  selection ??= addon.data.userProviderConfigV2?.active;
+  if (!selection) return undefined;
+  const model = resolveModelCapabilities(selection, {
+    added: addon.data.userProviderConfigV2?.addedModels,
+    live: addon.data.liveProviders,
+    common: addon.data.commonProviders,
+  });
+  if (selection.providerId !== 'codex-subscription') return model;
+  const runtime = codexRuntime.models.find((entry) => entry.model === selection.modelId);
+  if (!runtime) return model;
+  return {
+    ...model,
+    id: selection.modelId,
+    modalities: { input: runtime.inputModalities as ModalityType[], output: ['text'] },
+    reasoningEfforts: runtime.supportedReasoningEfforts.map((entry) => entry.reasoningEffort),
+    reasoning: true,
+    temperature: false,
+    structured_output: true,
+  } as Model;
 }
 
-/**
- * Return the active model's declared structured-output capability.
- * `undefined` means the metadata source does not advertise the capability,
- * so callers may still probe it and cache the result for the session.
- */
+export function checkModelSupportsImage(selection?: ModelSelect): boolean {
+  return getModelMetadata(selection)?.modalities?.input?.includes('image') ?? false;
+}
+
+export function getModelStructuredOutputSupport(selection?: ModelSelect): boolean | undefined {
+  return getModelMetadata(selection)?.structured_output;
+}
+
 export function getActiveModelStructuredOutputSupport(): boolean | undefined {
-  const v2 = addon.data.userProviderConfigV2;
-  const active = v2?.active;
-  if (!active) return undefined;
-
-  const addedModel = v2.addedModels?.find((model) => model.providerId === active.providerId && model.id === active.modelId);
-  const modelName = addedModel?.name ?? active.modelId;
-  const commonMeta = findModelMetadata(modelName, active.modelId, active.providerId, addon.data.commonProviders);
-  const liveMeta = findModelMetadata(modelName, active.modelId, active.providerId, addon.data.liveProviders);
-
-  for (const model of [addedModel, commonMeta, liveMeta]) {
-    if (typeof model?.structured_output === 'boolean') return model.structured_output;
-  }
-  return undefined;
+  return getModelStructuredOutputSupport();
 }
 
-/**
- * Context window (in tokens) of the currently active model, if known.
- * Used by the chat manager to do token-aware history narrowing.
- */
-export function getActiveModelContextLimit(): number | undefined {
-  const v2 = addon.data.userProviderConfigV2;
-  const active = v2?.active;
-  if (!active) return undefined;
-  const model =
-    addon.data.commonProviders?.[active.providerId]?.models[active.modelId] ??
-    v2?.addedModels.find((m) => m.providerId === active.providerId && m.id === active.modelId);
-  const limit = (model as any)?.limit?.context;
+export function getActiveModelContextLimit(selection?: ModelSelect): number | undefined {
+  const limit = getModelMetadata(selection)?.limit?.context;
   return typeof limit === 'number' && limit > 0 ? limit : undefined;
 }
 

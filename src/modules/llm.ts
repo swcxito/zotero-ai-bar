@@ -16,6 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { getModelMetadata, getModelStructuredOutputSupport } from '../utils/providers';
 import { getPref } from '../utils/prefs';
 import { codexString } from './codex/i18n';
 import type { Session } from './chatManager';
@@ -35,15 +36,7 @@ import {
 import { ensureWebStreamsGlobals } from '../utils/webStreamsGlobals';
 import { createStreamRenderer } from '../utils/streamRenderer';
 import type { MarkdownRenderContext } from '../utils/markdown';
-import {
-  findModelMetadata,
-  getActiveModelContextLimit,
-  PROVIDER_ENV_KEY_MAP,
-  resolveApiUrl,
-  type Model,
-  type ModelSelect,
-  type ProviderId,
-} from '../utils/providers';
+import { getActiveModelContextLimit, PROVIDER_ENV_KEY_MAP, resolveApiUrl, type ModelSelect, type ProviderId } from '../utils/providers';
 import { buildTools } from './agentTools';
 import {
   extractTranslationFallback,
@@ -102,15 +95,6 @@ export function mergePromptCacheProviderOptions(providerOptions: Record<string, 
   } else if (providerId === 'anthropic') {
     result.anthropic = { ...result.anthropic, cacheControl: { type: 'ephemeral' } };
   }
-  return result;
-}
-
-function withPromptCacheOptions(providerOptions: Record<string, any>, session: Session): Record<string, any> {
-  const active = addon.data.userProviderConfigV2?.active;
-  if (!active) return providerOptions;
-  const cacheKey = `${session.conversationId ?? session.id}:${active.providerId}:${active.modelId}`;
-  const result = mergePromptCacheProviderOptions(providerOptions, active.providerId, cacheKey);
-  Zotero.debug(`[zaibar-cache] provider=${active.providerId}, key=${cacheKey}`);
   return result;
 }
 
@@ -207,64 +191,20 @@ export async function streamLLMV2(messagesOrPromise: ModelMessage[] | Promise<Mo
   try {
     await preloadLLMRuntime();
     onLLMStreamStartV2(session);
-    const model = await createModel();
+    const selection = resolveModelSelection();
+    const model = await createModel(selection);
     Zotero.debug(
       '[zaibar-llm] model created: ' +
         (addon.data.userProviderConfigV2?.active?.providerId || '?') +
         '/' +
         (addon.data.userProviderConfigV2?.active?.modelId || '?')
     );
-    const modelSettings = buildModelSettings();
+    const modelSettings = buildModelSettings(selection);
     let messages = await messagesOrPromise;
     Zotero.debug('[zaibar-llm] messages count=' + messages.length);
 
-    const activeProviderId = addon.data.userProviderConfigV2?.active?.providerId ?? '';
-    let providerOptions: Record<string, any> = {};
-    for (const [k, v] of Object.entries(V2_PROVIDER_OPTIONS)) {
-      providerOptions[k] = v;
-    }
     const effectiveEffort = session.pending.thinkingEffortOverride ?? session.thinkingEffort;
-    providerOptions.google = getGoogleThinkingConfig(addon.data.userProviderConfigV2?.active?.modelId ?? '', effectiveEffort);
-    const thinkingOpts = getThinkingProviderOptions(activeProviderId, effectiveEffort);
-    if (thinkingOpts && activeProviderId) {
-      providerOptions[activeProviderId] = {
-        ...providerOptions[activeProviderId],
-        ...thinkingOpts,
-      };
-    }
-    providerOptions = withPromptCacheOptions(providerOptions, session);
-
-    // Thinking models consume part of maxOutputTokens for reasoning tokens.
-    // If the budget equals or exceeds maxOutputTokens, the API returns only
-    // reasoning with no text output (Anthropic enforces budget_tokens <
-    // max_tokens; OpenAI o-series counts reasoning against
-    // max_completion_tokens; Google counts against maxOutputTokens).
-    // Bump maxOutputTokens to leave room for actual output when thinking is on.
-    let maxOutputTokens = getConfiguredMaxOutputTokens();
-    const anthropicBudget = (thinkingOpts as any)?.thinking?.budgetTokens;
-    const googleBudget = (providerOptions.google as any)?.thinkingBudget;
-    const thinkingBudget = (typeof anthropicBudget === 'number' ? anthropicBudget : 0) + (typeof googleBudget === 'number' ? googleBudget : 0);
-    const hasThinking = effectiveEffort !== 'none';
-    if (hasThinking && maxOutputTokens !== undefined && maxOutputTokens <= thinkingBudget) {
-      maxOutputTokens = thinkingBudget + 2000;
-    }
-    // For OpenAI o-series and Alibaba, which don't expose an explicit budget
-    // but still consume maxOutputTokens for reasoning, ensure a minimum headroom
-    // when thinking is enabled at medium or higher effort.
-    if (hasThinking && effectiveEffort !== 'low' && (activeProviderId === 'openai' || activeProviderId === 'openrouter')) {
-      const minHeadroom = effectiveEffort === 'xhigh' ? 16000 : effectiveEffort === 'high' ? 10000 : 6000;
-      if (maxOutputTokens !== undefined && maxOutputTokens < minHeadroom) maxOutputTokens = minHeadroom;
-    }
-    Zotero.debug(
-      '[zaibar-llm] maxOutputTokens=' +
-        maxOutputTokens +
-        ', thinkingBudget=' +
-        thinkingBudget +
-        ', effort=' +
-        effectiveEffort +
-        ', provider=' +
-        activeProviderId
-    );
+    const { providerOptions, maxOutputTokens } = buildRequestSettings(selection, effectiveEffort, session);
     const maxOutputTokensSetting = maxOutputTokens === undefined ? {} : { maxOutputTokens };
 
     const agentEnabled = session.effectiveChatMode === 'agent';
@@ -510,17 +450,23 @@ export async function streamTranslationV2(
   request: TranslationRequestMeta
 ) {
   Zotero.debug('[zaibar-llm] streamTranslationV2 started, session=' + session.id);
+  const requestPending = session.pending;
+  const ensureCurrent = () => {
+    if (session.pending !== requestPending || requestPending.abortController?.signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+  };
   try {
     await preloadLLMRuntime();
+    ensureCurrent();
     onLLMStreamStartV2(session);
     const messages = await messagesOrPromise;
+    ensureCurrent();
     const modelSelection = resolveModelSelection(request.modelKey);
     const model = await createModel(modelSelection);
+    ensureCurrent();
     const chatThinkingEffort = session.pending.thinkingEffortOverride ?? session.thinkingEffort;
     const translationThinkingDepth = getPref('translate.thinkingDepth') === 'follow-chat' ? 'follow-chat' : 'minimum';
     const effectiveEffort = resolveTranslationThinkingEffort(translationThinkingDepth, chatThinkingEffort, modelSelection);
-    const providerOptions = buildProviderOptions(effectiveEffort, modelSelection);
-    const maxOutputTokens = getMaxOutputTokensWithThinkingHeadroom(effectiveEffort, providerOptions, modelSelection);
+    const { providerOptions, maxOutputTokens } = buildRequestSettings(modelSelection, effectiveEffort);
     const declaredStructuredSupport = getModelStructuredOutputSupport(modelSelection);
     logTranslationDebug('request-start', {
       model: getModelKey(modelSelection),
@@ -558,7 +504,7 @@ export async function streamTranslationV2(
       strict: false,
       selectedText: request.selectedText,
     });
-    if (finishAbortedTranslation(session)) return;
+    ensureCurrent();
     const firstOutput = first.output ?? repairTranslationResult(first.rawText);
     logTranslationAttempt('first-attempt-finished', first, firstOutput);
     if (firstOutput) {
@@ -591,7 +537,7 @@ export async function streamTranslationV2(
       strict: true,
       selectedText: request.selectedText,
     });
-    if (finishAbortedTranslation(session)) return;
+    ensureCurrent();
     const secondOutput = second.output ?? repairTranslationResult(second.rawText);
     logTranslationAttempt('second-attempt-finished', second, secondOutput);
     if (secondOutput) {
@@ -632,6 +578,7 @@ export async function streamTranslationV2(
     });
     onLLMStreamEndV2(session, second.usage ?? first.usage);
   } catch (error: any) {
+    if (session.pending !== requestPending) return;
     if (isTranslationAbort(session, error)) {
       logTranslationDebug('request-aborted');
       onLLMStreamEndV2(session, undefined, true);
@@ -652,6 +599,11 @@ async function streamQwenMtTranslation(params: {
   targetLanguage: string;
   selectedText: string;
 }): Promise<void> {
+  const pending = params.session.pending;
+  const signal = pending.abortController?.signal;
+  const ensureCurrent = () => {
+    if (params.session.pending !== pending || signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
+  };
   let streamError: unknown;
   const streamState = createQwenMtStreamState();
   const maxOutputTokensSetting = params.maxOutputTokens === undefined ? {} : { maxOutputTokens: params.maxOutputTokens };
@@ -673,6 +625,8 @@ async function streamQwenMtTranslation(params: {
 
   try {
     for await (const part of result.fullStream) {
+      ensureCurrent();
+      if (part.type === 'abort') throw new DOMException('Cancelled', 'AbortError');
       switch (part.type) {
         case 'reasoning-start':
           onReasoningStartV2(params.session);
@@ -704,6 +658,7 @@ async function streamQwenMtTranslation(params: {
   }
 
   if (streamError) throw streamError;
+  ensureCurrent();
   const fullText = finalizeQwenMtStream(streamState, qwenMtUsesIncrementalOutput(params.modelSelection));
   if (!fullText.trim()) throw new Error('The Qwen-MT model returned an empty translation.');
 
@@ -713,6 +668,7 @@ async function streamQwenMtTranslation(params: {
   } catch {
     // Usage is optional.
   }
+  ensureCurrent();
   // Qwen-MT returns plain text, but the translation workspace still expects
   // the common translation-card shape. Wrap the completed text locally; no
   // JSON is requested from or parsed from the model.
@@ -723,13 +679,6 @@ async function streamQwenMtTranslation(params: {
     translatedText: fullText,
   });
   onLLMStreamEndV2(params.session, usage);
-}
-
-function finishAbortedTranslation(session: Session): boolean {
-  if (!session.pending.abortController?.signal.aborted) return false;
-  logTranslationDebug('request-aborted');
-  onLLMStreamEndV2(session, undefined, true);
-  return true;
 }
 
 function isTranslationAbort(session: Session, error: unknown): boolean {
@@ -772,7 +721,7 @@ async function runTranslationAttempt(params: {
   }
 }
 
-async function runSchemaTranslationAttempt(params: {
+type TranslationAttemptParams = {
   model: any;
   modelSelection: ModelSelect;
   messages: ModelMessage[];
@@ -781,253 +730,99 @@ async function runSchemaTranslationAttempt(params: {
   maxOutputTokens?: number;
   strict: boolean;
   selectedText: string;
-}): Promise<TranslationAttempt> {
-  let streamError: unknown;
-  let partialUpdateCount = 0;
-  const prompt = buildDedicatedTranslationPrompt(params.messages, params.strict, false);
-  const maxOutputTokensSetting = params.maxOutputTokens === undefined ? {} : { maxOutputTokens: params.maxOutputTokens };
-  const result = streamTextFn!({
-    model: params.model,
-    system: prompt.system,
-    messages: prompt.messages,
-    abortSignal: params.session.pending.abortController?.signal,
-    ...buildModelSettings(params.modelSelection),
-    ...maxOutputTokensSetting,
-    providerOptions: params.providerOptions,
-    maxRetries: 2,
-    output: Output.object({
-      schema: translationResultSchema,
-      name: 'translation_result',
-      description: 'A validated translation result classified as word, abbreviation, or text.',
-    }),
-    onError: ({ error }: { error: unknown }) => {
-      streamError = error;
-    },
-  });
+};
 
+export async function consumeTranslationStream(result: any, params: TranslationAttemptParams, structured: boolean): Promise<TranslationAttempt> {
+  const controller = params.session.pending.abortController;
+  const signal = controller?.signal;
+  const isCurrent = () => !signal?.aborted && params.session.pending.abortController === controller;
   let rawText = '';
   let plainText = false;
   let partialTranslatedText: string | undefined;
   let partialOutput: Record<string, any> | undefined;
-  let reasoningActive = false;
-  for await (const part of result.fullStream) {
-    switch (part.type) {
-      case 'reasoning-start':
-        if (!reasoningActive) {
-          reasoningActive = true;
+  let reasoning = false;
+  let streamError: unknown;
+  try {
+    for await (const part of result.fullStream) {
+      if (!isCurrent() || part.type === 'abort') throw new DOMException('Cancelled', 'AbortError');
+      if (part.type === 'reasoning-start' || part.type === 'reasoning-delta') {
+        if (!reasoning) {
+          reasoning = true;
           onReasoningStartV2(params.session);
-          logTranslationDebug('reasoning-start', { strict: params.strict });
         }
-        break;
-      case 'reasoning-delta':
-        // Some compatible providers emit deltas without explicit boundaries.
-        if (!reasoningActive) {
-          reasoningActive = true;
-          onReasoningStartV2(params.session);
-          logTranslationDebug('reasoning-start-from-delta', { strict: params.strict });
-        }
-        onReasoningDeltaV2(params.session, part.text);
-        break;
-      case 'reasoning-end':
-        if (reasoningActive) {
-          reasoningActive = false;
-          onReasoningEndV2(params.session);
-          logTranslationDebug('reasoning-end', { strict: params.strict });
-        }
-        break;
-      case 'text-delta': {
+        if (part.type === 'reasoning-delta') onReasoningDeltaV2(params.session, part.text);
+      } else if (part.type === 'reasoning-end') {
+        if (reasoning) onReasoningEndV2(params.session);
+        reasoning = false;
+      } else if (part.type === 'text-delta') {
         rawText += part.text;
-        if (!plainText && classifyTranslationStreamPrefix(rawText) === 'plain') plainText = true;
+        plainText ||= classifyTranslationStreamPrefix(rawText) === 'plain';
         if (plainText) {
           renderPlainTranslationPreview(params.session, params.selectedText, rawText);
-          break;
+          continue;
         }
-        const objectStart = rawText.indexOf('{');
-        const partialSource = objectStart >= 0 ? rawText.slice(objectStart) : rawText;
-        const partial = await parsePartialJson(partialSource);
+        const start = rawText.indexOf('{');
+        const partial = await parsePartialJson(start >= 0 ? rawText.slice(start) : rawText);
+        if (!isCurrent()) throw new DOMException('Cancelled', 'AbortError');
         if (partial.value && typeof partial.value === 'object' && !Array.isArray(partial.value)) {
-          partialUpdateCount++;
           partialOutput = partial.value as Record<string, any>;
-          if (partialUpdateCount === 1) {
-            logTranslationDebug('response-format-first-partial', {
-              strict: params.strict,
-              keys: Object.keys(partialOutput),
-            });
-          }
-          if (typeof (partial.value as any).translatedText === 'string' && (partial.value as any).translatedText.trim()) {
-            partialTranslatedText = (partial.value as any).translatedText;
-          }
-          onTranslationPartialV2(params.session, {
-            ...(partial.value as Record<string, any>),
-            originalText: params.selectedText,
-          });
+          if (typeof partialOutput.translatedText === 'string' && partialOutput.translatedText.trim())
+            partialTranslatedText = partialOutput.translatedText;
+          onTranslationPartialV2(params.session, { ...partialOutput, originalText: params.selectedText });
         }
-        break;
-      }
-      case 'error':
-        streamError = (part as any).error ?? part;
-        break;
+      } else if (part.type === 'error') streamError = part.error ?? part;
     }
+    if (!isCurrent()) throw new DOMException('Cancelled', 'AbortError');
+    if (streamError) throw streamError;
+    let output: TranslationResult | undefined;
+    if (structured) {
+      try {
+        output = await result.output;
+      } catch (error) {
+        logTranslationDebug('response-format-validation-failed', { error: buildErrorMessage(error) });
+      }
+    } else output = repairTranslationResult(rawText);
+    if (!isCurrent()) throw new DOMException('Cancelled', 'AbortError');
+    let usage: any;
+    try {
+      usage = await result.usage;
+    } catch {
+      /* Usage is advisory. */
+    }
+    if (!isCurrent()) throw new DOMException('Cancelled', 'AbortError');
+    return { output, rawText, plainText, partialTranslatedText, partialOutput, usage };
+  } finally {
+    if (reasoning && isCurrent()) onReasoningEndV2(params.session);
   }
-  if (reasoningActive) onReasoningEndV2(params.session);
-  if (streamError) throw streamError;
-
-  let output: TranslationResult | undefined;
-  try {
-    output = (await result.output) as TranslationResult;
-  } catch (error) {
-    Zotero.debug('[zaibar-llm] translation output validation failed: ' + buildErrorMessage(error));
-    logTranslationDebug('response-format-validation-failed', {
-      strict: params.strict,
-      error: buildErrorMessage(error),
-      rawTextLength: rawText.length,
-      rawTextPreview: previewTranslationRawText(rawText),
-      partialUpdateCount,
-      partialKeys: partialOutput ? Object.keys(partialOutput) : [],
-    });
-  }
-
-  let usage: any;
-  try {
-    usage = await result.usage;
-  } catch {
-    // Usage is optional and must not turn a valid translation into an error.
-  }
-  let warnings: unknown;
-  try {
-    warnings = await result.warnings;
-  } catch {
-    // Warnings are advisory only.
-  }
-  if (warnings) {
-    logTranslationDebug('response-format-warnings', {
-      strict: params.strict,
-      warnings: previewTranslationRawText(safeStringify(warnings)),
-    });
-  }
-  const attempt = { output, rawText, plainText, partialTranslatedText, partialOutput, usage };
-  logTranslationDebug('response-format-attempt-complete', {
-    strict: params.strict,
-    partialUpdateCount,
-    ...describeTranslationAttempt(attempt),
-  });
-  return attempt;
 }
 
-/**
- * Compatibility path for models that reject response_format=json_object.
- * JSON is streamed as ordinary text, repaired incrementally by the AI SDK,
- * and never rendered directly.
- */
-async function runJsonTextTranslationAttempt(params: {
-  model: any;
-  modelSelection: ModelSelect;
-  messages: ModelMessage[];
-  session: Session;
-  providerOptions: Record<string, any>;
-  maxOutputTokens?: number;
-  strict: boolean;
-  selectedText: string;
-}): Promise<TranslationAttempt> {
-  let streamError: unknown;
-  let textDeltaCount = 0;
-  let partialParseCount = 0;
-  let failedPartialParseCount = 0;
-  let reasoningActive = false;
-  const prompt = buildDedicatedTranslationPrompt(params.messages, params.strict, true);
-  const maxOutputTokensSetting = params.maxOutputTokens === undefined ? {} : { maxOutputTokens: params.maxOutputTokens };
+async function createTranslationAttempt(params: TranslationAttemptParams, structured: boolean): Promise<TranslationAttempt> {
+  const prompt = buildDedicatedTranslationPrompt(params.messages, params.strict, !structured);
+  let callbackError: unknown;
   const result = streamTextFn!({
     model: params.model,
     system: prompt.system,
     messages: prompt.messages,
     abortSignal: params.session.pending.abortController?.signal,
     ...buildModelSettings(params.modelSelection),
-    ...maxOutputTokensSetting,
+    ...(params.maxOutputTokens === undefined ? {} : { maxOutputTokens: params.maxOutputTokens }),
     providerOptions: params.providerOptions,
     maxRetries: 2,
+    ...(structured
+      ? { output: Output.object({ schema: translationResultSchema, name: 'translation_result', description: 'A classified translation result.' }) }
+      : {}),
     onError: ({ error }: { error: unknown }) => {
-      streamError = error;
+      callbackError = error;
     },
   });
-
-  let rawText = '';
-  let plainText = false;
-  let partialTranslatedText: string | undefined;
-  let partialOutput: Record<string, any> | undefined;
-  for await (const part of result.fullStream) {
-    switch (part.type) {
-      case 'reasoning-start':
-        if (!reasoningActive) {
-          reasoningActive = true;
-          onReasoningStartV2(params.session);
-          logTranslationDebug('reasoning-start', { strict: params.strict, path: 'json-text' });
-        }
-        continue;
-      case 'reasoning-delta':
-        if (!reasoningActive) {
-          reasoningActive = true;
-          onReasoningStartV2(params.session);
-          logTranslationDebug('reasoning-start-from-delta', { strict: params.strict, path: 'json-text' });
-        }
-        onReasoningDeltaV2(params.session, part.text);
-        continue;
-      case 'reasoning-end':
-        if (reasoningActive) {
-          reasoningActive = false;
-          onReasoningEndV2(params.session);
-          logTranslationDebug('reasoning-end', { strict: params.strict, path: 'json-text' });
-        }
-        continue;
-      case 'error':
-        streamError = (part as any).error ?? part;
-        continue;
-    }
-    if (part.type !== 'text-delta') continue;
-    textDeltaCount++;
-    if (textDeltaCount === 1) {
-      logTranslationDebug('json-text-first-delta', { strict: params.strict, deltaLength: part.text.length });
-    }
-    rawText += part.text;
-    if (!plainText && classifyTranslationStreamPrefix(rawText) === 'plain') plainText = true;
-    if (plainText) {
-      renderPlainTranslationPreview(params.session, params.selectedText, rawText);
-      continue;
-    }
-    const objectStart = rawText.indexOf('{');
-    const partialSource = objectStart >= 0 ? rawText.slice(objectStart) : rawText;
-    const partial = await parsePartialJson(partialSource);
-    if (partial.state === 'failed-parse') failedPartialParseCount++;
-    if (partial.value && typeof partial.value === 'object' && !Array.isArray(partial.value)) {
-      partialParseCount++;
-      partialOutput = partial.value as Record<string, any>;
-      if (typeof (partial.value as any).translatedText === 'string' && (partial.value as any).translatedText.trim()) {
-        partialTranslatedText = (partial.value as any).translatedText;
-      }
-      onTranslationPartialV2(params.session, {
-        ...(partial.value as Record<string, any>),
-        originalText: params.selectedText,
-      });
-    }
-  }
-  if (reasoningActive) onReasoningEndV2(params.session);
-  if (streamError) throw streamError;
-
-  let usage: any;
-  try {
-    usage = await result.usage;
-  } catch {
-    // Usage is optional.
-  }
-  const attempt = { output: repairTranslationResult(rawText), rawText, plainText, partialTranslatedText, partialOutput, usage };
-  logTranslationDebug('json-text-attempt-complete', {
-    strict: params.strict,
-    textDeltaCount,
-    partialParseCount,
-    failedPartialParseCount,
-    ...describeTranslationAttempt(attempt),
-  });
+  const attempt = await consumeTranslationStream(result, params, structured);
+  if (callbackError) throw callbackError;
+  logTranslationAttempt(structured ? 'response-format-attempt-complete' : 'json-text-attempt-complete', attempt);
   return attempt;
 }
+
+const runSchemaTranslationAttempt = (params: TranslationAttemptParams) => createTranslationAttempt(params, true);
+const runJsonTextTranslationAttempt = (params: TranslationAttemptParams) => createTranslationAttempt(params, false);
 
 function logTranslationAttempt(event: string, attempt: TranslationAttempt, resolvedOutput?: TranslationResult): void {
   logTranslationDebug(event, {
@@ -1189,14 +984,6 @@ export function isJsonResponseFormatCompatibilityError(error: unknown): boolean 
   return mentionsJsonMode && incompatible;
 }
 
-function safeStringify(value: unknown): string {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
 function normalizeTranslationOriginal(output: TranslationResult, selectedText: string): TranslationResult {
   return normalizeTranslationResultCandidate(output, selectedText) ?? ({ ...output, originalText: selectedText } as TranslationResult);
 }
@@ -1284,6 +1071,15 @@ function getLanguageDisplayName(language: string): string {
   }
 }
 
+export function buildRequestSettings(selection: ModelSelect, effort: Session['thinkingEffort'], chatSession?: Session) {
+  let providerOptions = buildProviderOptions(effort, selection);
+  if (chatSession) {
+    const key = `${chatSession.conversationId ?? chatSession.id}:${selection.providerId}:${selection.modelId}`;
+    providerOptions = mergePromptCacheProviderOptions(providerOptions, selection.providerId, key);
+  }
+  return { providerOptions, maxOutputTokens: getMaxOutputTokensWithThinkingHeadroom(effort, providerOptions, selection) };
+}
+
 function buildProviderOptions(effort: Session['thinkingEffort'], selection: ModelSelect): Record<string, any> {
   const activeProviderId = selection.providerId;
   const providerOptions: Record<string, any> = { ...V2_PROVIDER_OPTIONS };
@@ -1351,7 +1147,7 @@ function getConfiguredMaxOutputTokens(): number | undefined {
   return configured > 0 ? configured : 2000;
 }
 
-function buildModelSettings(selection: ModelSelect = resolveModelSelection()) {
+export function buildModelSettings(selection: ModelSelect = resolveModelSelection()) {
   const temperatureEnabled = getPref('llm.temperatureEnabled');
   if (!temperatureEnabled) {
     Zotero.debug('[zaibar-llm] temperature disabled by user setting');
@@ -1364,26 +1160,6 @@ function buildModelSettings(selection: ModelSelect = resolveModelSelection()) {
     return {};
   }
   return { temperature: temp100 / 100 };
-}
-
-function getModelMetadata(selection: ModelSelect): Model | undefined {
-  const v2 = addon.data.userProviderConfigV2;
-  return (
-    addon.data.commonProviders?.[selection.providerId]?.models[selection.modelId] ??
-    v2?.addedModels.find((model) => model.providerId === selection.providerId && model.id === selection.modelId)
-  );
-}
-
-function getModelStructuredOutputSupport(selection: ModelSelect): boolean | undefined {
-  const v2 = addon.data.userProviderConfigV2;
-  const addedModel = v2?.addedModels.find((model) => model.providerId === selection.providerId && model.id === selection.modelId);
-  const modelName = addedModel?.name ?? selection.modelId;
-  const commonMeta = findModelMetadata(modelName, selection.modelId, selection.providerId, addon.data.commonProviders);
-  const liveMeta = findModelMetadata(modelName, selection.modelId, selection.providerId, addon.data.liveProviders);
-  for (const model of [addedModel, commonMeta, liveMeta]) {
-    if (typeof model?.structured_output === 'boolean') return model.structured_output;
-  }
-  return undefined;
 }
 
 export function buildErrorMessage(error: unknown): string {

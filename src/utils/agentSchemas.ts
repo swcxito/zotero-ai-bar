@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { translationFields } from './translation';
 
 const askUserOptionSchema = z.object({
   label: z.string().min(1).describe('Short label shown for this option.'),
@@ -133,38 +134,30 @@ export const addPaperSchema = z.object({
 
 export type AddPaperPayload = z.infer<typeof addPaperSchema>;
 
-const otherMeaningSchema = z.object({
-  pos: z.string().describe('Part of speech ONLY, e.g. "adj.", "n.", "v.". No definition text here.'),
-  translatedText: z.array(z.string().min(1)).min(1).describe('One or more translated meanings ONLY, with no part-of-speech prefix.'),
-});
-
 export const translateSchema = z.object({
-  originalText: z.string().describe('The original text being translated.'),
-  translatedText: z.string().describe('The translated text.'),
+  originalText: translationFields.originalText.describe('The original text being translated.'),
+  translatedText: translationFields.translatedText.describe('The translated text.'),
   textType: z
     .enum(['word', 'abbreviation'])
     .describe(
       'Type of the selected text. Use this tool ONLY for single words and abbreviations. For sentences or paragraphs, output the translation directly in your response text.'
     ),
-  pronunciation: z
-    .string()
+  pronunciation: translationFields.pronunciation
     .optional()
     .describe('IPA pronunciation of the original word (for words only). Always the source-language pronunciation, never of the translation.'),
-  pos: z.string().optional().describe('Primary part of speech (for words only), e.g. "adj.", "n.", "v.". REQUIRED for textType="word".'),
-  explanation: z
-    .string()
+  pos: translationFields.pos.optional().describe('Primary part of speech (for words only), e.g. "adj.", "n.", "v.". REQUIRED for textType="word".'),
+  explanation: translationFields.explanation
     .optional()
     .describe(
       'For words, the primary translated meaning in context without any POS prefix; for abbreviations, a brief explanation. REQUIRED for textType="word".'
     ),
-  otherMeanings: z
-    .array(otherMeaningSchema)
+  otherMeanings: translationFields.otherMeanings
     .optional()
     .describe(
       'Other common meanings (for words only). Array of {pos, translatedText} objects, where translatedText is an array of strings. Example: [{"pos":"v.","translatedText":["制造","捏造"]}].'
     ),
-  fullForm: z.string().optional().describe('Full form in English (for abbreviations only).'),
-  targetLanguage: z.string().optional().describe('Target language name.'),
+  fullForm: translationFields.fullForm.optional().describe('Full form in English (for abbreviations only).'),
+  targetLanguage: translationFields.targetLanguage.optional().describe('Target language name.'),
 });
 
 export const capturePageSchema = z.object({

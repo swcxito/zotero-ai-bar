@@ -1,38 +1,46 @@
 import { z } from 'zod';
 
-const otherMeaningSchema = z.object({
+export const otherMeaningSchema = z.object({
   pos: z.string().min(1).describe('English part-of-speech abbreviation, such as n., v., adj., or adv.'),
   translatedText: z.array(z.string().min(1)).min(1).describe('One or more concise alternative meanings written in the requested target language.'),
 });
 
-const translationBaseSchema = z.object({
-  originalText: z.string().optional(),
+export const translationFields = {
+  originalText: z.string(),
   translatedText: z.string().min(1).describe('The primary translation written in the requested target language.'),
-  targetLanguage: z.string().optional(),
+  targetLanguage: z.string(),
+  pronunciation: z.string(),
+  pos: z.string(),
+  explanation: z.string(),
+  fullForm: z.string(),
+  otherMeanings: z.array(otherMeaningSchema),
+};
+const translationBaseSchema = z.object({
+  originalText: translationFields.originalText.optional(),
+  translatedText: translationFields.translatedText,
+  targetLanguage: translationFields.targetLanguage.optional(),
 });
-
 export const translationResultSchema = z.discriminatedUnion('textType', [
   translationBaseSchema.extend({
     textType: z.literal('word'),
-    pronunciation: z.string().optional(),
-    pos: z.string().optional().describe('English part-of-speech abbreviation, such as n., v., adj., or adv.'),
-    explanation: z
-      .string()
+    pronunciation: translationFields.pronunciation.optional(),
+    pos: translationFields.pos.optional().describe('Conventional English part-of-speech abbreviation.'),
+    explanation: translationFields.explanation
       .optional()
-      .describe(
-        'A concise target-language explanation only for a specialized, technical, idiomatic, non-literal, or otherwise context-dependent meaning; omit for ordinary dictionary meanings.'
-      ),
-    otherMeanings: z.array(otherMeaningSchema).optional(),
+      .describe('Only explain specialized, idiomatic or context-dependent meanings; omit ordinary dictionary explanations.'),
+    otherMeanings: translationFields.otherMeanings.optional(),
   }),
   translationBaseSchema.extend({
     textType: z.literal('abbreviation'),
-    fullForm: z.string().min(1).describe('The unabbreviated source-language full form.'),
-    explanation: z.string().min(1).describe('A concise explanation written in the requested target language.'),
+    fullForm: translationFields.fullForm.min(1),
+    explanation: translationFields.explanation.min(1),
   }),
-  translationBaseSchema.extend({
-    textType: z.literal('text').describe('General text; preserve list-like source structure as Markdown in translatedText.'),
-  }),
+  translationBaseSchema.extend({ textType: z.literal('text') }),
 ]);
+
+// The strict wire format requires all fields; empty scalars/arrays represent inapplicable dictionary fields.
+const { targetLanguage: _targetLanguage, ...wireFields } = translationFields;
+export const translationWireSchema = z.object({ textType: z.enum(['word', 'abbreviation', 'text']), ...wireFields }).strict();
 
 export type TranslationResult = z.infer<typeof translationResultSchema>;
 
