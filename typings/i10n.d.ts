@@ -4,6 +4,8 @@
 // @ts-nocheck
 export type FluentMessageId =
   | 'agent-max-iterations-reached'
+  | 'attachment-select-message'
+  | 'attachment-select-title'
   | 'capture-drag-hint'
   | 'chat-copy-markdown'
   | 'chat-copy-text'
@@ -34,6 +36,7 @@ export type FluentMessageId =
   | 'chat-turn-navigator-translation'
   | 'chat-turn-navigator-turn-label'
   | 'chat-window-open-tooltip'
+  | 'citation-current-document'
   | 'codex-card-title'
   | 'codex-error-account-required'
   | 'codex-error-api-backend'

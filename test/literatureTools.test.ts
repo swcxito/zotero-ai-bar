@@ -114,7 +114,7 @@ describe('literatureTools', function () {
       const result = await searchCrossrefPapers(
         { title: 'Exact Paper Title', limit: 3 },
         {
-          fetchImpl: async () => {
+          requestImpl: async () => {
             calls++;
             return calls === 1 ? response(429, {}, '0') : response(200, { message: { items: [crossrefItem('10.1000/exact', 'Exact Paper Title')] } });
           },
@@ -135,7 +135,7 @@ describe('literatureTools', function () {
         await searchCrossrefPapers(
           { title: 'Paper', limit: 1 },
           {
-            fetchImpl: async () => {
+            requestImpl: async () => {
               calls++;
               return response(400, {});
             },
@@ -155,7 +155,9 @@ describe('literatureTools', function () {
         await searchCrossrefPapers(
           { title: 'Paper', limit: 1 },
           {
-            fetchImpl: async () => new Promise<never>(() => undefined),
+            requestImpl: async () => {
+              throw new Error('Crossref request timed out');
+            },
             delay: async () => undefined,
             timeoutMs: 1,
           }

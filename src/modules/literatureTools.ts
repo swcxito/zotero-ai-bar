@@ -20,7 +20,7 @@ type FetchResponseLike = {
   json(): Promise<unknown>;
 };
 
-type FetchLike = (input: string, init?: RequestInit) => Promise<FetchResponseLike>;
+export type LiteratureRequest = (url: string, options: { timeoutMs: number; signal?: AbortSignal }) => Promise<FetchResponseLike>;
 
 export type CrossrefPaperCandidate = {
   rank: number;
@@ -75,7 +75,8 @@ export type DuplicatePaperMatch = {
 };
 
 type SearchOptions = {
-  fetchImpl?: FetchLike;
+  requestImpl?: LiteratureRequest;
+  signal?: AbortSignal;
   delay?: (milliseconds: number) => Promise<void>;
   timeoutMs?: number;
 };
@@ -217,11 +218,61 @@ function retryDelayMilliseconds(response: FetchResponseLike): number {
   return Number.isFinite(seconds) ? Math.max(0, Math.min(5_000, seconds * 1_000)) : 1_000;
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  const timeout = Zotero.Promise.delay(timeoutMs).then(() => {
-    throw new Error(`Crossref request timed out after ${timeoutMs} ms.`);
+export const nativeLiteratureRequest: LiteratureRequest = async (url, options) => {
+  options.signal?.throwIfAborted();
+  let cancel: (() => void) | undefined;
+  let rejectCancelled: (reason: unknown) => void = () => {};
+  const aborted = new Promise<never>((_resolve, reject) => {
+    rejectCancelled = reject;
   });
-  return Promise.race([promise, timeout]);
+  void aborted.catch(() => undefined); // A synchronous native failure may precede attaching the race below.
+  const abort = () => {
+    try {
+      cancel?.();
+    } catch {
+      /* The abort still settles if the native request already closed. */
+    }
+    rejectCancelled(new DOMException('Cancelled', 'AbortError'));
+  };
+  options.signal?.addEventListener('abort', abort, { once: true });
+  try {
+    const request = Zotero.HTTP.request('GET', url, {
+      headers: { Accept: 'application/json' },
+      responseType: 'text',
+      timeout: options.timeoutMs,
+      successCodes: false,
+      errorDelayMax: 0,
+      cancellerReceiver: (canceller: () => void) => {
+        cancel = canceller;
+        if (options.signal?.aborted) abort();
+      },
+    });
+    const xhr = await Promise.race([request, aborted]);
+    options.signal?.throwIfAborted();
+    return {
+      ok: xhr.status >= 200 && xhr.status < 300,
+      status: xhr.status,
+      headers: { get: (name) => xhr.getResponseHeader(name) },
+      json: async () => JSON.parse(xhr.responseText),
+    };
+  } finally {
+    options.signal?.removeEventListener('abort', abort);
+  }
+};
+
+async function waitForRetry(milliseconds: number, delay: (milliseconds: number) => Promise<void>, signal?: AbortSignal) {
+  signal?.throwIfAborted();
+  let onAbort: () => void = () => {};
+  const cancelled = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(new DOMException('Cancelled', 'AbortError'));
+  });
+  signal?.addEventListener('abort', onAbort, { once: true });
+  try {
+    await Promise.race([delay(milliseconds), cancelled]);
+    signal?.throwIfAborted();
+  } finally {
+    signal?.removeEventListener('abort', onAbort);
+  }
 }
 
 export async function searchCrossrefPapers(input: SearchPapersPayload, options: SearchOptions = {}): Promise<SearchPapersResult> {
@@ -234,7 +285,7 @@ export async function searchCrossrefPapers(input: SearchPapersPayload, options: 
     mailto: CROSSREF_MAILTO,
   });
   const url = `${CROSSREF_WORKS_URL}?${params.toString()}`;
-  const fetchImpl = options.fetchImpl ?? (fetch as unknown as FetchLike);
+  const request = options.requestImpl ?? nativeLiteratureRequest;
   const delay = options.delay ?? ((milliseconds: number) => Zotero.Promise.delay(milliseconds));
   const timeoutMs = options.timeoutMs ?? CROSSREF_TIMEOUT_MS;
   let lastError: unknown;
@@ -242,18 +293,25 @@ export async function searchCrossrefPapers(input: SearchPapersPayload, options: 
   for (let attempt = 0; attempt < 2; attempt++) {
     let response: FetchResponseLike;
     try {
-      response = await withTimeout(fetchImpl(url, { headers: { Accept: 'application/json' } }), timeoutMs);
+      options.signal?.throwIfAborted();
+      response = await request(url, { timeoutMs, signal: options.signal });
+      options.signal?.throwIfAborted();
     } catch (error) {
+      options.signal?.throwIfAborted();
+      if ((error as Error).name === 'AbortError') throw error;
       lastError = error;
       if (attempt === 1) break;
-      await delay(1_000);
+      await waitForRetry(1_000, delay, options.signal);
       continue;
     }
 
     if (response.ok) {
       try {
-        return parseCrossrefResponse(await response.json(), title, limit);
+        const json = await response.json();
+        options.signal?.throwIfAborted();
+        return parseCrossrefResponse(json, title, limit);
       } catch (error) {
+        options.signal?.throwIfAborted();
         if (error instanceof Error && error.message.startsWith('PAPER_SEARCH_FAILED:')) throw error;
         throw new Error(`PAPER_SEARCH_FAILED: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
       }
@@ -263,7 +321,7 @@ export async function searchCrossrefPapers(input: SearchPapersPayload, options: 
     if (!RETRYABLE_STATUS_CODES.has(response.status) || attempt === 1) {
       break;
     }
-    await delay(retryDelayMilliseconds(response));
+    await waitForRetry(retryDelayMilliseconds(response), delay, options.signal);
   }
 
   throw new Error(`PAPER_SEARCH_FAILED: ${lastError instanceof Error ? lastError.message : String(lastError)}`);

@@ -16,6 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { metadataItem, creatorNames } from '../utils/attachments';
 import { ChatBox } from '../components/chatBox';
 import { ToolCallBox, updateToolCallBox } from '../components/toolCallBox';
 import { escapeHtml, renderMarkdown, type MarkdownRenderContext } from '../utils/markdown';
@@ -90,7 +91,7 @@ export function attachCitationHandlers(root: HTMLElement): void {
   ];
   for (const span of spans) {
     span.setAttribute('data-bound', '1');
-    span.addEventListener('click', () => {
+    const navigate = (chooseAttachment = false) => {
       const itemId = parseInt(span.getAttribute('data-item-id') || '', 10);
       if (!Number.isFinite(itemId)) return;
       const lineStr = span.getAttribute('data-line');
@@ -99,11 +100,17 @@ export function attachCitationHandlers(root: HTMLElement): void {
         // Line cite: resolve 1-based line -> page via the item's lineToPage
         // map, then open. Falls back to no page if resolution fails.
         const line = parseInt(lineStr, 10);
-        void resolveLineToPage(itemId, line).then((page) => openCitation(itemId, page));
+        void resolveLineToPage(itemId, line).then((page) => openCitation(itemId, page, chooseAttachment));
       } else {
         const page = pageStr ? parseInt(pageStr, 10) : undefined;
-        void openCitation(itemId, page);
+        void openCitation(itemId, page, chooseAttachment);
       }
+    };
+    span.addEventListener('click', () => navigate());
+    span.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      navigate(true);
     });
     attachCitationTooltip(span);
   }
@@ -368,24 +375,12 @@ function buildCitationMetadata(itemId: number): CitationMetadata {
   try {
     const item = Zotero.Items.get(itemId);
     if (!item) return empty;
-    // If the AI cited an attachment ID, pull metadata from the parent item.
-    let meta: Zotero.Item = item;
-    if (item.isAttachment?.()) {
-      const parentID = (item as any).parentItemID ?? (item as any).parentID;
-      if (parentID) {
-        const parent = Zotero.Items.get(parentID);
-        if (parent) meta = parent;
-      }
-    }
+    const meta = metadataItem(item);
     const title = (meta.getField?.('title') as string | undefined)?.trim() ?? '';
     const journal = (meta.getField?.('publicationTitle') as string | undefined)?.trim() ?? '';
     let authors = '';
     try {
-      const creators = (meta.getCreators?.() as Array<{ lastName?: string; firstName?: string; name?: string }>) ?? [];
-      authors = creators
-        .map((c) => (c.name?.trim() || [c.lastName, c.firstName].filter(Boolean).join(' ').trim() || '').trim())
-        .filter((n) => n.length > 0)
-        .join(', ');
+      authors = creatorNames(meta).join(', ');
     } catch {
       // ignore
     }
@@ -1121,9 +1116,11 @@ function buildGrepDetails(doc: Document, input: any, output: any): HTMLElement {
   for (const m of excerpts) {
     const lineNo = m?.line != null ? `${m.line}` : '?';
     const pageStr = m?.page != null ? `(P${m.page})` : '';
-    lines.push(`${lineNo}${pageStr}| ${m?.excerpt ?? ''}`);
+    const source = m?.attachmentId ? `${m.attachmentTitle} (#${m.attachmentId}) · ` : '';
+    lines.push(`${source}${lineNo}${pageStr}| ${m?.excerpt ?? ''}`);
   }
-  results.textContent = lines.length > 0 ? lines.join('\n') : '(no matches)';
+  const unavailable = (output.unreadableAttachments ?? []).map((entry: any) => `${entry.attachmentTitle} (#${entry.attachmentId}): ${entry.error}`);
+  results.textContent = [...(lines.length ? lines : ['(no matches)']), ...unavailable].join('\n');
   container.appendChild(results);
 
   return container;

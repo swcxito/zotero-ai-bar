@@ -219,3 +219,6 @@ token-usage-context = Context
 token-usage-cumulative = Total consumed
 token-usage-context-window = Context window
 token-usage-context-window-unknown = Context window size unknown for this model
+attachment-select-title = Choose attachment
+attachment-select-message = This item has several attachments. Choose the file to open.
+citation-current-document = Current document

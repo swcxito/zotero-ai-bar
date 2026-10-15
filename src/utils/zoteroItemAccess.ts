@@ -6,6 +6,8 @@
  */
 
 import { getItemFullText, getItemMetadata } from './itemContext';
+import { attachmentSource, itemAttachments, resolveAttachment, AttachmentSelectionError, getItem, creatorNames } from './attachments';
+import { grepInTextPaginated, type GrepMatch } from './textSearch';
 
 export type PageTextResult = {
   pageTexts: string[];
@@ -18,7 +20,7 @@ export type PageTextResult = {
   pageLineCounts: number[];
 };
 
-export type ReadItemResult = {
+export type ReadItemResult = Partial<ReturnType<typeof attachmentSource>> & {
   itemId: number;
   title?: string;
   itemType?: string;
@@ -41,13 +43,7 @@ export type GlobItem = {
 };
 
 export function getZoteroItem(itemId: number): any | undefined {
-  try {
-    const item = Zotero.Items.get(itemId);
-    return item || undefined;
-  } catch (e) {
-    ztoolkit.log('getZoteroItem failed:', e);
-    return undefined;
-  }
+  return getItem(itemId);
 }
 
 /**
@@ -90,22 +86,9 @@ function buildPageTextResult(rawText: string): PageTextResult {
  */
 export async function getItemFullTextByPage(itemId: number): Promise<PageTextResult | undefined> {
   try {
-    const item = Zotero.Items.get(itemId);
-    if (!item) return undefined;
-
-    let attachmentId = itemId;
-    if (item.isRegularItem?.() && !item.isAttachment?.()) {
-      const attachmentIDs: number[] = item.getAttachments?.() ?? [];
-      const pdfAtt = attachmentIDs.find((aid) => {
-        const att = Zotero.Items.get(aid) as any;
-        return att?.attachmentContentType === 'application/pdf';
-      });
-      if (pdfAtt === undefined) return undefined;
-      attachmentId = pdfAtt;
-    }
-
-    const attachment = Zotero.Items.get(attachmentId) as any;
-    if (!attachment || attachment.attachmentContentType !== 'application/pdf') return undefined;
+    const attachment = resolveAttachment(itemId, 'pdf');
+    if (!attachment) return undefined;
+    const attachmentId = attachment.id;
 
     // 1) Prefer the indexed full-text cache file (instant, no PDF parse).
     const FT: any = (Zotero as any).FullText ?? (Zotero as any).Fulltext;
@@ -129,6 +112,7 @@ export async function getItemFullTextByPage(itemId: number): Promise<PageTextRes
     if (!result?.text || typeof result.text !== 'string') return undefined;
     return buildPageTextResult(result.text);
   } catch (e) {
+    if (e instanceof AttachmentSelectionError) throw e;
     ztoolkit.log('getItemFullTextByPage failed:', e);
     return undefined;
   }
@@ -136,6 +120,64 @@ export async function getItemFullTextByPage(itemId: number): Promise<PageTextRes
 
 const MAX_READ_LINES = 5000;
 const MAX_READ_CHARS = 250000;
+
+/** Paginate one stable stream of matches across the selected item's attachments. */
+export async function searchItemAttachments(itemId: number, pattern: string, useRegex = true, maxResults = 50, offset = 0, signal?: AbortSignal) {
+  if (useRegex) new RegExp(pattern, 'i');
+  const limit = Math.max(1, Math.min(500, Math.floor(maxResults)));
+  const start = Math.max(0, Math.floor(offset));
+  const excerpts: Array<GrepMatch & ReturnType<typeof attachmentSource>> = [];
+  const unreadableAttachments: Array<ReturnType<typeof attachmentSource> & { error: string }> = [];
+  let totalMatches = 0;
+  let outputChars = 0;
+  let saturated = false;
+  for (const attachment of itemAttachments(itemId)) {
+    signal?.throwIfAborted();
+    const source = attachmentSource(attachment);
+    try {
+      const pages = await getItemFullTextByPage(attachment.id);
+      const text = pages?.fullText ?? (await getItemFullText(attachment.id));
+      signal?.throwIfAborted();
+      if (!text) throw new Error('Full text unavailable or unsupported attachment format.');
+      const result = grepInTextPaginated(
+        text,
+        pattern,
+        useRegex,
+        Math.max(1, limit - excerpts.length),
+        Math.max(0, start - totalMatches),
+        pages?.pageTexts,
+        {
+          lines: pages?.lines,
+          lineToPage: pages?.lineToPage,
+        }
+      );
+      if (!saturated && excerpts.length < limit) {
+        for (const match of result.excerpts) {
+          if (outputChars + match.excerpt.length > MAX_READ_CHARS) {
+            saturated = true;
+            break;
+          }
+          excerpts.push({ ...match, ...source });
+          outputChars += match.excerpt.length;
+        }
+      }
+      totalMatches += result.totalMatches;
+    } catch (error) {
+      signal?.throwIfAborted();
+      unreadableAttachments.push({ ...source, error: String((error as Error).message ?? error) });
+    }
+  }
+  const remaining = Math.max(0, totalMatches - start - excerpts.length);
+  return {
+    matches: excerpts.length,
+    totalMatches,
+    excerpts,
+    truncated: remaining > 0,
+    nextOffset: remaining ? start + excerpts.length : undefined,
+    remaining,
+    unreadableAttachments,
+  };
+}
 
 export function formatLinesLimited(
   lines: string[],
@@ -179,7 +221,7 @@ export async function readItemText(
   startLine?: number,
   endLine?: number,
   contextLines?: number
-): Promise<ReadItemResult | { error: string }> {
+): Promise<ReadItemResult | { error: string; candidates?: ReturnType<typeof attachmentSource>[] }> {
   if (!itemId) {
     return { error: 'No item ID provided.' };
   }
@@ -199,39 +241,20 @@ export async function readItemText(
 
   // Only read text if any reading param is provided
   if (pageNumber !== undefined || startLine !== undefined || endLine !== undefined) {
-    let targetItemId = itemId;
-
-    // Resolve parent item to its PDF attachment
-    if (item.isRegularItem?.() && !item.isAttachment?.()) {
-      const attachmentIDs: number[] = item.getAttachments?.() ?? [];
-      const pdfAttachments = attachmentIDs.filter((aid) => {
-        const att = Zotero.Items.get(aid) as any;
-        return att?.attachmentContentType === 'application/pdf';
-      });
-      if (pdfAttachments.length === 0) {
-        return { error: `No PDF attachment found for item ${itemId}` };
-      }
-      if (pdfAttachments.length > 1) {
-        const attachmentList = pdfAttachments
-          .map((aid) => {
-            const att = Zotero.Items.get(aid) as any;
-            const title = (att.getField('title') as string) || '(no title)';
-            return `  - ${title} (attachment ID: ${aid})`;
-          })
-          .join('\n');
-        return {
-          error: `Item ${itemId} has ${pdfAttachments.length} PDF attachments. Please specify which attachment to read by providing the attachment ID directly.\nAvailable PDF attachments:\n${attachmentList}`,
-        };
-      }
-      targetItemId = pdfAttachments[0];
-    } else if (!item.isAttachment?.()) {
-      return { error: `Item ${itemId} is not a readable attachment or parent item.` };
+    let attachment: Zotero.Item | undefined;
+    try {
+      attachment = resolveAttachment(itemId, pageNumber === undefined ? 'text' : 'pdf');
+    } catch (error) {
+      if (error instanceof AttachmentSelectionError) return { error: error.message, candidates: error.candidates };
+      throw error;
     }
-
-    const pageResult = await getItemFullTextByPage(targetItemId);
-    if (!pageResult) {
-      return { error: `Full text not available for item ${targetItemId}` };
-    }
+    if (!attachment) return { error: `No readable attachment found for item ${itemId}` };
+    const targetItemId = attachment.id;
+    Object.assign(result, attachmentSource(attachment), { itemId: targetItemId });
+    const pdfResult = await getItemFullTextByPage(targetItemId);
+    const fullText = pdfResult?.fullText ?? (await getItemFullText(targetItemId));
+    if (!fullText) return { error: `Full text not available for item ${targetItemId}` };
+    const pageResult = pdfResult ?? { pageTexts: [], fullText, lines: fullText.split('\n'), pageLineCounts: [] };
 
     // Page-based reading
     if (pageNumber !== undefined) {
@@ -322,13 +345,7 @@ export async function searchLibraryItems(
       if (options.itemType && item.itemType !== options.itemType) {
         continue;
       }
-      const haystack = [
-        item.getField('title'),
-        item.getField('abstractNote'),
-        (item.getCreators?.() || []).map((c: any) => `${c.firstName || ''} ${c.lastName || ''} ${c.name || ''}`.trim()).join(' '),
-      ]
-        .join(' ')
-        .toLowerCase();
+      const haystack = [item.getField('title'), item.getField('abstractNote'), creatorNames(item).join(' ')].join(' ').toLowerCase();
       if (haystack.includes(normalizedQuery)) {
         matches.push(itemToGlobItem(item.id));
         if (matches.length >= limit) {
@@ -355,15 +372,7 @@ function itemToGlobItem(itemId: number): GlobItem {
   };
 
   if (item.isRegularItem?.() && !item.isAttachment?.()) {
-    const attachmentIDs: number[] = item.getAttachments?.() ?? [];
-    const attachments = attachmentIDs
-      .map((aid) => {
-        const att = Zotero.Items.get(aid) as any;
-        if (!att) return undefined;
-        const title = (att.getField('title') as string) || '(no title)';
-        return { id: aid, title };
-      })
-      .filter((a): a is { id: number; title: string } => a !== undefined);
+    const attachments = itemAttachments(itemId).map((attachment) => ({ id: attachment.id, title: attachmentSource(attachment).attachmentTitle }));
     if (attachments.length > 1) {
       result.attachments = attachments;
     }
@@ -503,11 +512,7 @@ function segmentsForError(path: string[]): string {
 
 export function isValidTreeItem(item: any): boolean {
   if (!item || !item.isRegularItem?.() || item.isAttachment?.() || item.isNote?.() || item.isAnnotation?.()) return false;
-  const creators = (item.getCreators?.() ?? []) as any[];
-  const authors = creators
-    .map((creator) => `${creator.firstName ?? ''} ${creator.lastName ?? ''} ${creator.name ?? ''}`.trim())
-    .filter(Boolean)
-    .join(' ');
+  const authors = creatorNames(item).join(' ');
   const fields = ['title', 'date', 'publicationTitle', 'proceedingsTitle', 'publisher', 'abstractNote'];
   return Boolean(authors || fields.some((field) => String(item.getField?.(field) ?? '').trim()));
 }

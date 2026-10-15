@@ -16,6 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { resolveAttachment } from '../utils/attachments';
 import { config } from '../../package.json';
 import { registerChatSkinRoot } from '../utils/chatSkin';
 import { getString } from '../utils/locale';
@@ -621,16 +622,7 @@ function waitForCanvasRendered(pdfWindow: any, pageNumber: number, timeoutMs: nu
 }
 
 async function resolvePDFAttachmentId(itemId: number): Promise<number | null> {
-  const item = Zotero.Items.get(itemId);
-  if (!item) {
-    return null;
-  }
-
-  if (item.isAttachment()) {
-    return itemId;
-  }
-  const bestAttachment = await item.getBestAttachment();
-  return bestAttachment ? bestAttachment.id : null;
+  return resolveAttachment(itemId, 'pdf')?.id ?? null;
 }
 
 function findOpenPDFReader(attachmentId: number): _ZoteroTypes.ReaderInstance<'pdf'> | null {

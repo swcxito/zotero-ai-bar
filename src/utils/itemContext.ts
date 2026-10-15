@@ -16,6 +16,8 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { creatorNames, metadataItem, resolveAttachment, AttachmentSelectionError } from './attachments';
+
 /**
  * Retrieve metadata for the given Zotero item ID.
  * Returns structured metadata including title, abstract, authors, publication, etc.
@@ -38,17 +40,7 @@ export function getItemMetadata(itemId: number): ItemMetadata | undefined {
       return undefined;
     }
     ztoolkit.log('Found item for tabId:', itemId, 'item:', item);
-    // Get the top-level parent item (not attachment)
-    let targetItem = item;
-    if (item.isAttachment?.()) {
-      const parentID = item.parentID;
-      if (parentID) {
-        const parentItem = Zotero.Items.get(parentID) as any;
-        if (parentItem) {
-          targetItem = parentItem;
-        }
-      }
-    }
+    const targetItem = metadataItem(item);
 
     if (!targetItem.isRegularItem?.()) {
       return undefined;
@@ -69,24 +61,8 @@ export function getItemMetadata(itemId: number): ItemMetadata | undefined {
     }
 
     // Authors
-    const creators = targetItem.getCreators?.() || [];
-    if (creators.length > 0) {
-      const authorNames = creators
-        .map((creator: any) => {
-          if (creator.firstName && creator.lastName) {
-            return `${creator.firstName} ${creator.lastName}`;
-          } else if (creator.name) {
-            return creator.name;
-          } else if (creator.lastName) {
-            return creator.lastName;
-          }
-          return undefined;
-        })
-        .filter(Boolean);
-      if (authorNames.length > 0) {
-        metadata.authors = authorNames as string[];
-      }
-    }
+    const authors = creatorNames(targetItem);
+    if (authors.length) metadata.authors = authors;
 
     // Abstract
     const abstract = targetItem.getField('abstractNote') as string;
@@ -142,28 +118,16 @@ export async function getItemFullText(itemId: number): Promise<string | undefine
       return undefined;
     }
 
-    // If this is a regular item (not an attachment), try to get its best attachment
-    let targetItem = item;
-    if (item.isRegularItem?.() && !item.isAttachment?.()) {
-      const attachmentIDs: number[] = item.getAttachments?.() ?? [];
-      for (const aid of attachmentIDs) {
-        const att = Zotero.Items.get(aid) as any;
-        if (att?.attachmentContentType === 'application/pdf' || att?.attachmentContentType?.startsWith('text/')) {
-          targetItem = att;
-          break;
-        }
-      }
-      if (targetItem === item && attachmentIDs.length > 0) {
-        targetItem = Zotero.Items.get(attachmentIDs[0]) as any;
-      }
-    }
+    const targetItem = resolveAttachment(itemId);
+    if (!targetItem) return undefined;
 
     // Try built-in attachment text
     let text: string | undefined;
-    if (typeof targetItem.attachmentText === 'string') {
-      text = targetItem.attachmentText;
-    } else if (targetItem.attachmentText && typeof targetItem.attachmentText.then === 'function') {
-      text = await targetItem.attachmentText;
+    const attachmentText = targetItem.attachmentText;
+    if (typeof attachmentText === 'string') {
+      text = attachmentText;
+    } else if (attachmentText && typeof attachmentText.then === 'function') {
+      text = await attachmentText;
     }
 
     if (!text) {
@@ -171,6 +135,7 @@ export async function getItemFullText(itemId: number): Promise<string | undefine
     }
     return text;
   } catch (e) {
+    if (e instanceof AttachmentSelectionError) throw e;
     ztoolkit.log('getItemFullText failed:', e);
     return undefined;
   }

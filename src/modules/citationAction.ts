@@ -16,11 +16,13 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { itemAttachments, metadataItem } from '../utils/attachments';
+import { getString } from '../utils/locale';
 /**
  * Resolve a citation marker target and open it in Zotero's reader.
  *
- * - If `itemId` refers to a regular (parent) item, resolves its best PDF
- *   attachment via `getBestAttachment()`.
+ * - If `itemId` refers to a regular (parent) item, resolves its readable
+ *   default readable attachment. A context-menu action explicitly chooses a file.
  * - If `itemId` refers to a file attachment with a reader type, opens it
  *   directly.
  * - If `page` is provided, navigates the reader to that page (1-based,
@@ -29,7 +31,7 @@
  * Reuses an already-open reader tab for the same attachment when one exists
  * (handled by `Zotero.Reader.open` with `allowDuplicate: false`).
  */
-export async function openCitation(itemId: number, page?: number): Promise<void> {
+export async function openCitation(itemId: number, page?: number, chooseAttachment = false): Promise<void> {
   try {
     const item = Zotero.Items.get(itemId);
     if (!item) {
@@ -37,26 +39,37 @@ export async function openCitation(itemId: number, page?: number): Promise<void>
       return;
     }
 
-    let attachmentId: number;
-    if (item.isAttachment() && item.attachmentReaderType) {
-      attachmentId = itemId;
-    } else if (item.isRegularItem()) {
-      const attachment = await item.getBestAttachment();
-      if (!attachment) {
-        Zotero.debug(`[zaibar-cite] no readable attachment for item ${itemId}`);
-        return;
-      }
-      attachmentId = attachment.id;
-    } else {
-      Zotero.debug(`[zaibar-cite] item ${itemId} is not openable`);
-      return;
+    const parent = metadataItem(item);
+    const candidates = itemAttachments(chooseAttachment ? parent.id : itemId).filter((entry) => !!entry.attachmentReaderType);
+    let defaultAttachment = item.isAttachment() ? item : undefined;
+    if (item.isRegularItem()) {
+      const best = await item.getBestAttachment();
+      if (best && best.attachmentReaderType) defaultAttachment = best;
     }
-
-    // Zotero reader location.pageIndex is 0-based; AI emits 1-based pages.
-    const location = page && page > 0 ? { pageIndex: page - 1 } : undefined;
+    defaultAttachment ??= candidates[0];
+    let attachment = defaultAttachment;
+    if (chooseAttachment && candidates.length > 1) {
+      const win = Zotero.getMainWindow();
+      const selected = {
+        value: Math.max(
+          0,
+          candidates.findIndex((entry) => entry.id === defaultAttachment?.id)
+        ),
+      };
+      const choices = candidates.map((entry) => `${entry.getField('title')} (#${entry.id})`);
+      if (!(Services.prompt as any).select(win, getString('attachment-select-title'), getString('attachment-select-message'), choices, selected))
+        return;
+      attachment = candidates[selected.value];
+    }
+    if (!attachment) return;
+    const attachmentId = attachment.id;
+    // Pages belong to the cited file. A different file chosen explicitly
+    // starts at its default location, and non-PDFs never receive PDF pages.
+    const changedFile = chooseAttachment && attachmentId !== defaultAttachment?.id;
+    const location = !changedFile && attachment.attachmentContentType === 'application/pdf' && page && page > 0 ? { pageIndex: page - 1 } : undefined;
 
     await Zotero.Reader.open(attachmentId, location, { allowDuplicate: false });
   } catch (error) {
-    Zotero.debug(`[zaibar-cite] openCitation failed: ${JSON.stringify(error)}`);
+    Zotero.debug(`[zaibar-cite] openCitation failed: ${String(error)}`);
   }
 }

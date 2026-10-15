@@ -8,14 +8,13 @@
 import { tool, asSchema } from 'ai';
 import type { z } from 'zod';
 import type { Session, AgentUserAnswer } from './chatManager';
-import { getItemFullText } from '../utils/itemContext';
-import { getZoteroItem, readItemText, searchLibraryItems, buildLibraryTree, getItemFullTextByPage } from '../utils/zoteroItemAccess';
-import { grepInTextPaginated } from '../utils/textSearch';
+import { searchItemAttachments, readItemText, searchLibraryItems, buildLibraryTree } from '../utils/zoteroItemAccess';
 import { onAgentAskUser } from './chatUI';
 import { getReaderByTabId } from './tabObserver';
 import { capturePageByNumber, getOrOpenPDFReaderForItem } from './capture';
 import { checkModelSupportsImage } from '../utils/providers';
 import { addPaperToZotero, searchCrossrefPapers } from './literatureTools';
+import { attachmentSource, getItem, AttachmentSelectionError } from '../utils/attachments';
 import {
   askUserSchema,
   grepSchema,
@@ -95,7 +94,7 @@ export const askUserTool = defineSharedTool({
 
 export const grepTool = defineSharedTool({
   description:
-    'Search the full text of an article using a case-insensitive literal or regex pattern. Returns line numbers and PDF page numbers for each match. If itemId is omitted, the current document is searched. You may pass either a parent item ID or an attachment ID directly.',
+    'Search the full text of an article using a case-insensitive literal or regex pattern. Returns line numbers and PDF page numbers for each match. If itemId is omitted, the current document is searched. A parent item ID searches all its attachments; each match includes its attachment ID and title. An attachment ID searches that file only.',
   inputSchema: grepSchema,
   execute: async (input: GrepPayload, options) => {
     const session = getSession(options);
@@ -103,45 +102,13 @@ export const grepTool = defineSharedTool({
     if (!itemId) {
       throw new Error('No item specified and no current document is open.');
     }
-    const item = getZoteroItem(itemId);
-    if (!item) {
-      throw new Error(`Item not found: ${itemId}`);
-    }
-
-    let fullText: string | undefined;
-    let pageTexts: string[] | undefined;
-
-    const pageResult = await getItemFullTextByPage(itemId);
-    if (pageResult) {
-      fullText = pageResult.fullText;
-      pageTexts = pageResult.pageTexts;
-    }
-
-    if (!fullText) {
-      fullText = await getItemFullText(itemId);
-    }
-    if (!fullText) {
-      throw new Error('Full text not available for this item.');
-    }
-
-    const results = grepInTextPaginated(fullText, input.pattern, input.useRegex ?? true, input.maxResults ?? 50, input.offset ?? 0, pageTexts, {
-      lines: pageResult?.lines,
-      lineToPage: pageResult?.lineToPage,
-    });
-    return {
-      matches: results.excerpts.length,
-      totalMatches: results.totalMatches,
-      excerpts: results.excerpts,
-      truncated: results.truncated,
-      nextOffset: results.nextOffset,
-      remaining: results.remaining,
-    };
+    return searchItemAttachments(itemId, input.pattern, input.useRegex ?? true, input.maxResults ?? 50, input.offset ?? 0, options.abortSignal);
   },
 });
 
 export const readTool = defineSharedTool({
   description:
-    'Read metadata and text from a Zotero item by itemId. Supports page-based reading (pageNumber) or line-based reading (startLine/endLine) with surrounding context. If itemId is omitted, the current document is used. You may pass either a parent item ID (reads the first PDF attachment) or an attachment ID directly.',
+    'Read metadata and text from a Zotero item by itemId. Supports page-based reading (pageNumber) or line-based reading (startLine/endLine) with surrounding context. If itemId is omitted, the current document is used. A parent item with multiple eligible attachments requires choosing one of the returned attachment IDs.',
   inputSchema: readSchema,
   execute: async (input: ReadPayload, options) => {
     const session = getSession(options);
@@ -150,9 +117,6 @@ export const readTool = defineSharedTool({
       throw new Error('No item specified and no current document is open.');
     }
     const result = await readItemText(itemId, input.pageNumber, input.startLine, input.endLine, input.contextLines);
-    if ('error' in result) {
-      throw new Error(result.error);
-    }
     return result;
   },
 });
@@ -196,7 +160,7 @@ export const searchPapersTool = defineSharedTool({
   description:
     'Search Crossref for papers by title and return DOI candidates with local title-similarity scores. This tool does not change the Zotero library. If highConfidence is true, you may immediately pass the recommended DOI and its exact candidate title to add_paper. If requiresConfirmation is true, use ask_user to let the user choose a candidate before adding anything. Never guess a DOI when there are no candidates.',
   inputSchema: searchPapersSchema,
-  execute: async (input: SearchPapersPayload) => searchCrossrefPapers(input),
+  execute: async (input: SearchPapersPayload, options) => searchCrossrefPapers(input, { signal: options.abortSignal }),
 });
 
 export const addPaperTool = defineSharedTool({
@@ -251,7 +215,12 @@ export const capturePageTool = defineSharedTool({
     if (input.itemId !== undefined) {
       // Reuses an open reader when one exists; otherwise opens the PDF in a
       // background tab (current tab keeps focus) and captures from there.
-      reader = await getOrOpenPDFReaderForItem(input.itemId);
+      try {
+        reader = await getOrOpenPDFReaderForItem(input.itemId);
+      } catch (error) {
+        if (error instanceof AttachmentSelectionError) return { error: error.message, candidates: error.candidates };
+        throw error;
+      }
       if (!reader) {
         throw new Error('Could not access a PDF for this item. The item may not have a PDF attachment, or the attachment file may be unavailable.');
       }
@@ -264,7 +233,8 @@ export const capturePageTool = defineSharedTool({
     }
 
     const result = await capturePageByNumber(reader, input.pageNumber);
-    return result;
+    const attachment = reader.itemID ? getItem(reader.itemID) : undefined;
+    return { ...result, ...(attachment ? attachmentSource(attachment) : {}), itemId: reader.itemID };
   },
 });
 

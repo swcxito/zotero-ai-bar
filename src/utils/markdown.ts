@@ -16,6 +16,9 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { escapeRegExp } from './textPrimitives';
+import { metadataItem } from './attachments';
+import { getString } from './locale';
 import { Marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import markedKatex from 'marked-katex-extension';
@@ -53,10 +56,6 @@ const CITE_BODY = String.raw`(?:\d+(?::(?:\d+|L\d+(?:(?:-|\u2013|\u2014|~)\s*L?\
 const CITE_MARKER_RE = new RegExp(`\\[cite:(${CITE_BODY})\\]`, 'g');
 /** Placeholder prefix used by `extractCiteMarkers` / `restoreCiteMarkers`. */
 const CITE_PLACEHOLDER_PREFIX = 'ZAIBARCITE';
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 function protectAllowedHtmlPairs(text: string, allowedTags: readonly string[]): { text: string; tokenMap: Map<string, string> } {
   const tokenMap = new Map<string, string>();
@@ -193,7 +192,7 @@ function optimizeFormulas(text: string): string {
     }
 
     if (inBlockMath) {
-      const escapedPrefix = blockQuotePrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escapedPrefix = escapeRegExp(blockQuotePrefix);
       const normalizedLine = blockQuotePrefix ? line.replace(new RegExp(`^\\s*${escapedPrefix}`), blockQuotePrefix) : line.replace(/^\s*/, '');
       output.push(normalizedLine);
       continue;
@@ -276,26 +275,6 @@ function resolveCitationItem(itemId: number): Zotero.Item | null {
   }
 }
 
-/**
- * If `item` is a file attachment, return its parent (the regular item that
- * carries title / creators / publication metadata). Otherwise return `item`
- * itself. Falls back to `item` if the parent is missing.
- */
-function resolveMetadataItem(item: Zotero.Item): Zotero.Item {
-  try {
-    if (item.isAttachment?.()) {
-      const parentID = (item as any).parentItemID ?? (item as any).parentID;
-      if (parentID) {
-        const parent = Zotero.Items.get(parentID);
-        if (parent) return parent;
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return item;
-}
-
 function truncateTitle(title: string): string {
   const trimmed = title.replace(/\s+/g, ' ').trim();
   if (trimmed.length <= CITE_TITLE_MAX) return trimmed;
@@ -335,7 +314,7 @@ function stripCitationWrappers(text: string): string {
 function buildCitationLabel(itemId: number, page?: number, truncate = true): string {
   const item = resolveCitationItem(itemId);
   if (!item) return `#${itemId}`;
-  const meta = resolveMetadataItem(item);
+  const meta = metadataItem(item);
   const title = (meta.getField?.('title') as string | undefined)?.trim();
   let label = title ? (truncate ? truncateTitle(title) : title) : `#${itemId}`;
   if (page && page > 0) label += ` · p.${page}`;
@@ -427,7 +406,19 @@ function renderCiteBody(
       const label = buildCitationLabel(itemId, page, false);
       return `<div class="zaibar-cite zaibar-cite-header" data-item-id="${itemId}"${pageAttr}${lineAttr}${lineRangeAttr}>${escapeHtml(label)}</div>`;
     }
-    const label = buildCitationLabel(itemId, page);
+    const current = currentItemId ? resolveCitationItem(currentItemId) : undefined;
+    const cited = resolveCitationItem(itemId);
+    // An explicit parent ID still refers to the current paper. Keep the final
+    // attachment ID on the pill so navigation does not select another file.
+    const isCurrent =
+      itemId === currentItemId || (!!current && !!cited && (metadataItem(current).id === itemId || metadataItem(cited).id === currentItemId));
+    const label = isCurrent
+      ? page !== undefined
+        ? `p.${page}`
+        : line !== undefined
+          ? `L.${lineRange || line}`
+          : getString('citation-current-document')
+      : buildCitationLabel(itemId, page);
     return `<span class="zaibar-cite" data-item-id="${itemId}"${pageAttr}${lineAttr}${lineRangeAttr}>${escapeHtml(label)}</span>`;
   }
 
