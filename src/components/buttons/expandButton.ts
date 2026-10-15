@@ -18,7 +18,8 @@
 
 import { TagElementProps } from 'zotero-plugin-toolkit';
 import { getString } from '../../utils/locale';
-import { closeDropdownMenu, openDropdownMenu, toggleDropdownMenu } from '../dropdownMenu';
+import { openDropdownMenu } from '../dropdownMenu';
+import { bindMenu } from '../menuController';
 import { ActionButton } from './actionButton';
 import { Icons } from '../common';
 
@@ -28,7 +29,6 @@ export interface ExpandMenuItem {
   label: string;
   onClick?: () => void;
 }
-
 export interface ExpandButtonProps {
   label?: string;
   icon?: string;
@@ -37,114 +37,34 @@ export interface ExpandButtonProps {
 }
 
 export function ExpandButton({ label, icon = Icons.Chevron, classList = [], menuItems = [] }: ExpandButtonProps = {}): TagElementProps {
-  const finalLabel = label || getString('reader-bar-expand');
-  const hasItems = menuItems.length > 0;
-  const closeDelayMs = 180;
-  let closeTimer: number | undefined;
-
-  const clearCloseTimer = (container: HTMLElement) => {
-    const view = container.ownerDocument.defaultView;
-    if (!view || closeTimer === undefined) return;
-    view.clearTimeout(closeTimer);
-    closeTimer = undefined;
-  };
-
-  const instanceId = `expand-${Math.random().toString(36).substr(2, 9)}`;
-  const menuId = `${instanceId}-menu`;
-
-  const openMenu = (container: HTMLElement, anchor: HTMLElement) => {
-    clearCloseTimer(container);
-    if (!hasItems) return;
-    openDropdownMenu({
-      menuId,
-      anchor,
-      container,
-      groups: [
-        {
-          items: menuItems.map((item) => ({
-            id: item.id,
-            label: item.label,
-            iconMarkup: item.icon,
-            onClick: item.onClick,
-          })),
-        },
-      ],
-    });
-  };
-
-  const closeMenu = (container: HTMLElement) => {
-    clearCloseTimer(container);
-    closeDropdownMenu(container.getRootNode() as Document | ShadowRoot, menuId);
-  };
-
-  const scheduleCloseMenu = (container: HTMLElement) => {
-    const view = container.ownerDocument.defaultView;
-    if (!view) {
-      closeMenu(container);
-      return;
-    }
-    clearCloseTimer(container);
-    closeTimer = view.setTimeout(() => {
-      closeMenu(container);
-      closeTimer = undefined;
-    }, closeDelayMs);
-  };
-
-  const toggleMenu = (container: HTMLElement, anchor: HTMLElement) => {
-    if (!hasItems) return;
-    toggleDropdownMenu({
-      menuId,
-      anchor,
-      container,
-      groups: [
-        {
-          items: menuItems.map((item) => ({
-            id: item.id,
-            label: item.label,
-            iconMarkup: item.icon,
-            onClick: item.onClick,
-          })),
-        },
-      ],
-    });
-  };
-
+  const menuId = `expand-${crypto.randomUUID()}`;
+  let bound = false;
   return {
     tag: 'div',
     classList: ['expand-container', ...classList],
-    id: instanceId,
-    listeners: hasItems
-      ? [
-          {
-            type: 'mouseenter',
-            listener: (e: Event) => {
-              const container = e.currentTarget as HTMLElement;
-              const anchor = container.querySelector('button') as HTMLElement;
-              if (!anchor) return;
-              openMenu(container, anchor);
-            },
-          },
-          {
-            type: 'mouseleave',
-            listener: (e: Event) => {
-              const container = e.currentTarget as HTMLElement;
-              scheduleCloseMenu(container);
-            },
-          },
-        ]
-      : undefined,
-    children: [
-      ActionButton({
-        label: finalLabel,
-        icon,
-        classList: ['ai-btn', 'expand-trigger-btn'],
-        onClick: (e, btn) => {
-          e.stopPropagation();
-          const container = (btn as HTMLElement).closest(`#${instanceId}`) as HTMLElement;
-          if (!container) return;
-          toggleMenu(container, btn);
+    listeners: [
+      {
+        type: 'mouseenter',
+        listener: (event: Event) => {
+          if (bound || !menuItems.length) return;
+          bound = true;
+          const container = event.currentTarget as HTMLElement;
+          const anchor = container.querySelector('button')!;
+          const controller = bindMenu(
+            anchor,
+            () =>
+              openDropdownMenu({
+                menuId,
+                anchor,
+                container,
+                groups: [{ items: menuItems.map((item) => ({ ...item, iconMarkup: item.icon })) }],
+              }),
+            'hover'
+          );
+          controller.open();
         },
-      }),
+      },
     ],
+    children: [ActionButton({ label: label || getString('reader-bar-expand'), icon, classList: ['ai-btn', 'expand-trigger-btn'] })],
   };
 }

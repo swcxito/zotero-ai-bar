@@ -16,11 +16,12 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
-// TODO review
+import { IconView } from './iconView';
 export interface DropdownMenuItem {
   id: string;
   label: string;
   selected?: boolean;
+  disabled?: boolean;
   iconText?: string;
   iconMarkup?: string;
   renderLeading?: (doc: Document) => HTMLElement | null;
@@ -38,80 +39,45 @@ export interface OpenDropdownMenuOptions {
   container: HTMLElement;
   groups: DropdownMenuGroup[];
   emptyText?: string;
-  closeOnOutsideClick?: boolean;
+  align?: 'left' | 'center' | 'right';
+  presentation?: { menu: string; title: string; item: string; list?: string; minWidth?: string };
   dropUp?: boolean;
 }
-
-const dropdownCloseHandlers = new Map<string, { handler: (e: Event) => void; doc: Document }>();
 
 type DropdownRoot = Document | ShadowRoot;
 
 function getRoot(anchor: HTMLElement): DropdownRoot {
-  const root = anchor.getRootNode();
-  return root.nodeType === 11 /* DocumentFragment */ ? (root as ShadowRoot) : (root as Document);
+  return anchor.getRootNode() as DropdownRoot;
 }
 
 export function closeDropdownMenu(root: DropdownRoot, menuId: string) {
   const menu = root.getElementById(menuId);
-  if (menu) {
-    menu.remove();
-  }
-
-  const entry = dropdownCloseHandlers.get(menuId);
-  if (entry) {
-    entry.doc.removeEventListener('click', entry.handler, true);
-    dropdownCloseHandlers.delete(menuId);
-  }
+  const view = menu?.ownerDocument.defaultView;
+  if (menu && view) menu.dispatchEvent(new view.Event('zaibar-menu-close'));
+  menu?.remove();
 }
 
-/**
- * Fade the dropdown out (opacity transition) then remove it and clean up the
- * outside-click handler. Used for hover-to-close behavior on the sidebar
- * model selector.
- */
-export function fadeCloseDropdownMenu(root: DropdownRoot, menuId: string, fadeMs = 150) {
-  const menu = root.getElementById(menuId) as HTMLElement | null;
-  if (!menu) return;
-  const view = menu.ownerDocument.defaultView;
-  menu.style.transition = `opacity ${fadeMs}ms ease-out`;
-  menu.style.opacity = '0';
-  const cleanup = () => {
-    if (menu.isConnected) menu.remove();
-    const entry = dropdownCloseHandlers.get(menuId);
-    if (entry) {
-      entry.doc.removeEventListener('click', entry.handler, true);
-      dropdownCloseHandlers.delete(menuId);
-    }
-  };
-  menu.addEventListener('transitionend', cleanup, { once: true });
-  if (view) view.setTimeout(cleanup, fadeMs + 30);
-  else cleanup();
-}
-
+/** Render options and positioning; bindMenu owns every interaction and resource. */
 export function openDropdownMenu({
   menuId,
   anchor,
   container,
   groups,
   emptyText,
-  closeOnOutsideClick = true,
+  align,
+  presentation,
   dropUp = false,
 }: OpenDropdownMenuOptions): HTMLElement {
   const doc = anchor.ownerDocument;
   const root = getRoot(anchor);
-
-  // Close any open dropdowns in the same popup to avoid overlap.
-  const menuIds = Array.from(dropdownCloseHandlers.keys());
-  menuIds.forEach((id) => {
-    closeDropdownMenu(root, id);
-  });
 
   // Keep one menu instance per anchor menu id.
   closeDropdownMenu(root, menuId);
 
   const dropdown = doc.createElement('div');
   dropdown.id = menuId;
-  dropdown.className = 'model-dropdown-menu';
+  dropdown.className = presentation?.menu ?? 'model-dropdown-menu';
+  if (presentation?.minWidth) dropdown.style.minWidth = presentation.minWidth;
 
   const validGroups = groups.filter((group) => group.items.length > 0);
   if (validGroups.length === 0) {
@@ -123,19 +89,24 @@ export function openDropdownMenu({
     validGroups.forEach((group) => {
       if (group.title) {
         const groupTitle = doc.createElement('div');
-        groupTitle.className = 'model-dropdown-group-title';
+        groupTitle.className = presentation?.title ?? 'model-dropdown-group-title';
         groupTitle.textContent = group.title;
         dropdown.appendChild(groupTitle);
       }
 
       const groupList = doc.createElement('div');
-      groupList.className = 'model-dropdown-group-list';
+      groupList.className = presentation?.list ?? 'model-dropdown-group-list';
 
       group.items.forEach((item) => {
-        const itemEl = doc.createElement('div');
-        itemEl.className = 'model-dropdown-item';
+        const itemEl = ztoolkit.UI.createElement(doc, 'button', { namespace: 'html' }) as HTMLButtonElement;
+        itemEl.type = 'button';
+        itemEl.disabled = item.disabled ?? false;
+        itemEl.dataset.zaibarCopyIgnore = 'true';
+        itemEl.className = presentation?.item ?? 'model-dropdown-item';
+        itemEl.style.userSelect = 'none';
+        if (item.disabled) itemEl.style.opacity = '0.45';
         if (item.selected) {
-          itemEl.classList.add('selected');
+          itemEl.classList.add(presentation ? 'is-selected' : 'selected');
         }
 
         if (item.renderLeading) {
@@ -146,7 +117,7 @@ export function openDropdownMenu({
         } else if (item.iconMarkup) {
           const icon = doc.createElement('span');
           icon.className = 'dropdown-item-icon-text';
-          icon.innerHTML = item.iconMarkup;
+          icon.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: item.iconMarkup })));
           itemEl.appendChild(icon);
         } else if (item.iconText) {
           const icon = doc.createElement('span');
@@ -159,7 +130,12 @@ export function openDropdownMenu({
         text.textContent = item.label;
         itemEl.appendChild(text);
 
+        itemEl.addEventListener('mouseenter', () => {
+          if (!itemEl.disabled) itemEl.classList.add('is-hover');
+        });
+        itemEl.addEventListener('mouseleave', () => itemEl.classList.remove('is-hover'));
         itemEl.addEventListener('click', (e: Event) => {
+          if (itemEl.disabled) return;
           e.stopPropagation();
           item.onClick?.();
           closeDropdownMenu(root, menuId);
@@ -172,11 +148,14 @@ export function openDropdownMenu({
     });
   }
 
+  // Remove the menu from normal flow before measuring its anchor. Otherwise
+  // a bottom-aligned composer first grows by the menu height, shifting the
+  // measured button and leaving a full menu-height gap after positioning.
+  dropdown.style.position = 'absolute';
   container.appendChild(dropdown);
 
   const containerRect = container.getBoundingClientRect();
   const anchorRect = anchor.getBoundingClientRect();
-  dropdown.style.position = 'absolute';
   if (dropUp) {
     // Pop above the button, right-aligned with it (sidebar model selector).
     dropdown.style.bottom = `${containerRect.bottom - anchorRect.top + 2}px`;
@@ -191,34 +170,10 @@ export function openDropdownMenu({
   }
   dropdown.style.zIndex = '10001';
 
-  if (closeOnOutsideClick) {
-    const closeHandler = (e: Event) => {
-      const path = e.composedPath();
-      if (path.includes(dropdown) || path.includes(anchor)) {
-        return;
-      }
-      closeDropdownMenu(root, menuId);
-    };
-
-    dropdownCloseHandlers.set(menuId, { handler: closeHandler, doc });
-    setTimeout(() => {
-      // Register on the owner document so clicks outside the Shadow DOM
-      // (e.g., on the PDF reader) still close the dropdown. composedPath()
-      // is used in the handler so it works across shadow boundaries.
-      doc.addEventListener('click', closeHandler, true);
-    }, 0);
-  }
-
+  const horizontal = align ?? (dropUp ? 'right' : 'left');
+  dropdown.style.left =
+    horizontal === 'right' ? 'auto' : `${anchorRect.left - containerRect.left + (horizontal === 'center' ? anchorRect.width / 2 : 0)}px`;
+  dropdown.style.right = horizontal === 'right' ? `${containerRect.right - anchorRect.right}px` : 'auto';
+  if (horizontal === 'center') dropdown.style.translate = '-50% 0';
   return dropdown;
-}
-
-export function toggleDropdownMenu(options: OpenDropdownMenuOptions): HTMLElement | undefined {
-  const { menuId, anchor } = options;
-  const root = getRoot(anchor);
-  const existing = root.getElementById(menuId);
-  if (existing) {
-    closeDropdownMenu(root, menuId);
-    return undefined;
-  }
-  return openDropdownMenu(options);
 }

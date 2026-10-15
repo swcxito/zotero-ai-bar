@@ -1,3 +1,4 @@
+import { isConnectedNode, isUsableNode } from '../utils/domLife';
 /*
  * SPDX-License-Identifier: AGPL-3.0-only
  * modelInfo.ts
@@ -16,13 +17,14 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { bindMenu, type MenuController } from './menuController';
 import { TagElementProps } from 'zotero-plugin-toolkit';
 import { setPref } from '../utils/prefs';
 import { saveV2Config } from '../utils/providers';
 import { analyzeModelName, getModelIconPath } from '../utils/modelAnalyzer';
 import { getString } from '../utils/locale';
 import { IconView } from './iconView';
-import { DropdownMenuGroup, closeDropdownMenu, fadeCloseDropdownMenu, toggleDropdownMenu } from './dropdownMenu';
+import { DropdownMenuGroup, closeDropdownMenu, openDropdownMenu } from './dropdownMenu';
 import { openDialog } from '../modules/modelDialog';
 import type { AddedModel, ProviderId } from '../utils/providers';
 
@@ -104,10 +106,16 @@ export function registerModelInfoAnchor(el: HTMLElement) {
   addon.data.modelInfoAnchors.add(el);
 }
 
+export function unregisterModelInfoAnchors(root: HTMLElement) {
+  for (const anchor of addon.data.modelInfoAnchors) {
+    if (!isConnectedNode(anchor) || anchor === root || (isUsableNode(root) && root.contains(anchor))) addon.data.modelInfoAnchors.delete(anchor);
+  }
+}
+
 export function refreshAllModelInfoAnchors() {
   const set = addon.data.modelInfoAnchors;
   for (const el of set) {
-    if (el.isConnected) {
+    if (isConnectedNode(el)) {
       updateModelInfoDisplay(el);
     } else {
       set.delete(el);
@@ -133,6 +141,7 @@ function ensureRefreshHookWired() {
 export function ModelInfo(opts?: { dropUp?: boolean }): TagElementProps {
   const children = buildCurrentModelInfoChildren();
   const dropUp = opts?.dropUp ?? false;
+  let controller: MenuController | undefined;
 
   return {
     tag: 'div',
@@ -141,17 +150,27 @@ export function ModelInfo(opts?: { dropUp?: boolean }): TagElementProps {
     children: children,
     listeners: [
       {
+        type: 'mouseenter',
+        listener: (event: Event) => {
+          const anchor = event.currentTarget as HTMLElement;
+          controller ??= bindMenu(anchor, () => buildModelDropdown(anchor, dropUp), 'click');
+        },
+      },
+      {
         type: 'click',
-        listener: (e: Event) => {
-          e.stopPropagation();
-          toggleModelDropdown(e.currentTarget as HTMLElement, dropUp);
+        listener: (event: Event) => {
+          if (controller) return;
+          event.stopPropagation();
+          const anchor = event.currentTarget as HTMLElement;
+          controller = bindMenu(anchor, () => buildModelDropdown(anchor, dropUp), 'click');
+          controller.open();
         },
       },
     ],
   };
 }
 
-function toggleModelDropdown(anchor: HTMLElement, dropUp = false) {
+function buildModelDropdown(anchor: HTMLElement, dropUp = false) {
   const container = (anchor.closest('.ai-bar-container') || anchor.closest('[data-model-dropdown-container]')) as HTMLElement | null;
   if (!container) return;
 
@@ -199,7 +218,7 @@ function toggleModelDropdown(anchor: HTMLElement, dropUp = false) {
     groups.push({ title: provider?.name ?? providerId, items });
   }
 
-  const dropdown = toggleDropdownMenu({
+  const dropdown = openDropdownMenu({
     menuId: 'ai-bar-model-dropdown',
     anchor,
     container,
@@ -212,8 +231,8 @@ function toggleModelDropdown(anchor: HTMLElement, dropUp = false) {
   // Opening stays click-only.
   if (dropdown) {
     appendAddModelButton(dropdown);
-    wireHoverFadeClose(anchor, dropdown);
   }
+  return dropdown;
 }
 
 /** Footer button at the bottom of the model dropdown that opens the model settings dialog. */
@@ -247,48 +266,4 @@ function appendAddModelButton(dropdown: HTMLElement) {
 
   footer.appendChild(btn);
   dropdown.appendChild(footer);
-}
-
-interface HoverCloseState {
-  timer: number | undefined;
-  dropdown: HTMLElement | undefined;
-  wired: boolean;
-}
-
-function wireHoverFadeClose(anchor: HTMLElement, dropdown: HTMLElement) {
-  const view = anchor.ownerDocument.defaultView;
-  if (!view) return;
-  const win: Window = view;
-  const state =
-    ((anchor as any)._modelHover as HoverCloseState | undefined) ??
-    ((anchor as any)._modelHover = { timer: undefined, dropdown: undefined, wired: false });
-  state.dropdown = dropdown;
-
-  function schedule() {
-    const dd = state.dropdown;
-    if (!dd || !dd.isConnected) return;
-    if (state.timer !== undefined) win.clearTimeout(state.timer);
-    state.timer = win.setTimeout(() => {
-      const root = dd.getRootNode() as Document | ShadowRoot;
-      fadeCloseDropdownMenu(root, 'ai-bar-model-dropdown');
-      state.timer = undefined;
-    }, 250);
-  }
-  function cancel() {
-    if (state.timer !== undefined) {
-      win.clearTimeout(state.timer);
-      state.timer = undefined;
-    }
-  }
-
-  // Attach to the dropdown each open (it is recreated every time).
-  dropdown.addEventListener('mouseleave', schedule);
-  dropdown.addEventListener('mouseenter', cancel);
-
-  // Attach to the anchor once — handlers read state.dropdown dynamically.
-  if (!state.wired) {
-    state.wired = true;
-    anchor.addEventListener('mouseleave', schedule);
-    anchor.addEventListener('mouseenter', cancel);
-  }
 }

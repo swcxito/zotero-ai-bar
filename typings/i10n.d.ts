@@ -17,6 +17,7 @@ export type FluentMessageId =
   | 'chat-host-switch-to-sidebar'
   | 'chat-host-switch-to-window'
   | 'chat-mode-agent'
+  | 'chat-mode-fixed'
   | 'chat-mode-full-text'
   | 'chat-mode-normal'
   | 'chat-mode-title'

@@ -222,3 +222,4 @@ token-usage-context-window-unknown = Context window size unknown for this model
 attachment-select-title = Choose attachment
 attachment-select-message = This item has several attachments. Choose the file to open.
 citation-current-document = Current document
+chat-mode-fixed = Mode fixed in this workspace

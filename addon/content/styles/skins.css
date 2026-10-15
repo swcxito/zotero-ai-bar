@@ -188,7 +188,7 @@ html[data-zaibar-skin] #prompt-edit-panel :is(input,textarea):focus{outline:none
 html[data-zaibar-skin] #prompt-cancel-btn:hover{background:var(--soft)!important;color:var(--text)!important}
 [data-zaibar-skin].ai-bar-container .input-group:focus-within{border-color:var(--accent)!important;background:var(--soft)!important}
 [data-zaibar-skin].ai-bar-container .ai-send-btn:not(:disabled){color:var(--accent-soft-ink)!important}
-[data-zaibar-skin].ai-bar-container .ripple{background:var(--accent-soft)!important}
+[data-zaibar-skin] .ripple{background:var(--accent-soft)!important}
 html[data-zaibar-skin] #toolbar button:hover{background:var(--soft)!important;color:var(--accent-soft-ink)!important;border-color:var(--accent)!important}
 [data-zaibar-skin].capture-tooltip{background:var(--surface)!important;color:var(--text)!important;border:1px solid var(--za-control-line)!important;border-radius:var(--small-radius)!important;box-shadow:var(--shadow)!important}
 [data-zaibar-skin].capture-selection{border-color:var(--accent)!important}

@@ -18,14 +18,14 @@
 /* Light Mode Ripple */
 @media (prefers-color-scheme: light) {
   .ripple {
-    background: rgba(244, 63, 94, 0.3);
+    background: var(--accent-soft, rgba(244, 63, 94, 0.3));
   }
 }
 
 /* Dark Mode Ripple */
 @media (prefers-color-scheme: dark) {
   .ripple {
-    background: rgba(255, 255, 255, 0.3);
+    background: var(--accent-soft, rgba(255, 255, 255, 0.3));
   }
 }
 
@@ -383,6 +383,11 @@
 }
 
 .model-dropdown-item {
+  border: 0;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
   display: flex;
   align-items: center;
   gap: 10px;

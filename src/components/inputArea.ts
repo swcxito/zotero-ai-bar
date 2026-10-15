@@ -16,12 +16,13 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { bindMenu, disposeMenusWithin } from './menuController';
+import { openDropdownMenu } from './dropdownMenu';
 import { Icons } from './common';
 import { IconView } from './iconView';
 import { ImagePreview, createImageViewer } from './imagePreview';
-import { ModelInfo, registerModelInfoAnchor } from './modelInfo';
+import { ModelInfo, registerModelInfoAnchor, unregisterModelInfoAnchors } from './modelInfo';
 import { getString } from '../utils/locale';
-import { getPref } from '../utils/prefs';
 import { codexEfforts } from '../modules/codex/settings';
 import type { ChatSessionKind } from '../modules/chatWorkspace';
 
@@ -47,6 +48,7 @@ export interface InputAreaContext {
 }
 
 export interface InputAreaAPI {
+  dispose: () => void;
   setContext: (context: InputAreaContext) => void;
   setStreaming: (sessionId: string, isStreaming: boolean) => void;
   setContextTokens: (sessionId: string, text: string, title: string) => void;
@@ -84,6 +86,9 @@ export function InputArea(
   let allowScreenshot = opts?.allowScreenshot ?? true;
   let allowSelectionHint = opts?.allowSelectionHint ?? sessionKind !== 'global-agent';
   const draftId = opts?.draftId ?? sectionId;
+  let disposed = false;
+  let resizeFrame: number | undefined;
+  const clipboardReaders = new Set<FileReader>();
   // ── outer wrapper (contains hint bar + input-row + disclaimer) ───────────
   const wrapper = doc.createElement('div');
   wrapper.classList.add('input-area-wrapper', 'max-w-3xl', 'w-full', 'mx-auto', 'mt-2', 'flex', 'flex-col', 'relative');
@@ -180,8 +185,19 @@ export function InputArea(
   hintBar.appendChild(hintText);
 
   let hintAnimationSequence = 0;
+  let hintTimer: number | undefined;
+  let finishHintHide: (() => void) | undefined;
+
+  function cancelHintHide() {
+    if (hintTimer !== undefined) doc.defaultView?.clearTimeout(hintTimer);
+    hintTimer = undefined;
+    if (finishHintHide) hintBar.removeEventListener('transitionend', finishHintHide);
+    finishHintHide = undefined;
+  }
 
   function showSelectionHint(text: string) {
+    if (disposed) return;
+    cancelHintHide();
     const oneLine = text.replace(/\s+/g, ' ').trim();
     if (!oneLine) return;
     hintText.textContent = `“${oneLine}”`;
@@ -200,6 +216,8 @@ export function InputArea(
   }
 
   function hideSelectionHint() {
+    if (disposed) return;
+    cancelHintHide();
     const sequence = ++hintAnimationSequence;
     hintBar.style.transform = 'translateY(0)';
     wrapper.dataset.selectionHintVisible = 'false';
@@ -211,11 +229,13 @@ export function InputArea(
 
     const finishHide = () => {
       if (sequence !== hintAnimationSequence || hintBar.style.transform !== 'translateY(0)') return;
+      cancelHintHide();
       hintBar.style.opacity = '0';
       hintBar.style.visibility = 'hidden';
     };
+    finishHintHide = finishHide;
     hintBar.addEventListener('transitionend', finishHide, { once: true });
-    doc.defaultView?.setTimeout(finishHide, 260);
+    hintTimer = doc.defaultView?.setTimeout(finishHide, 260);
   }
 
   function updateSelectionHint(text?: string, selectedTabId?: string) {
@@ -267,10 +287,11 @@ export function InputArea(
     const mode = session.effectiveChatMode;
     chatModeBtn.innerHTML = '';
     chatModeBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: chatModeIconMap[mode], sizeRem: 1 })));
-    chatModeBtn.title = chatModeAdjustable ? getString('input-chat-mode-tooltip') : chatModeLabel(mode);
-    chatModeBtn.setAttribute('aria-disabled', String(!chatModeAdjustable));
-    chatModeBtn.tabIndex = chatModeAdjustable ? 0 : -1;
-    chatModeBtn.classList.toggle('cursor-default', !chatModeAdjustable);
+    chatModeBtn.title = chatModeAdjustable ? getString('input-chat-mode-tooltip') : getString('chat-mode-fixed');
+    chatModeBtn.removeAttribute('aria-disabled');
+    chatModeBtn.setAttribute('aria-haspopup', 'menu');
+    chatModeBtn.tabIndex = 0;
+    chatModeBtn.classList.remove('cursor-default');
 
     if (mode !== 'normal') {
       chatModeBtn.classList.remove('text-slate-400', 'dark:text-neutral-600');
@@ -458,7 +479,10 @@ export function InputArea(
   function resizeAfterMount() {
     const view = doc.defaultView;
     if (!view) return;
-    view.requestAnimationFrame(() => autoResize());
+    resizeFrame = view.requestAnimationFrame(() => {
+      resizeFrame = undefined;
+      if (!disposed) autoResize();
+    });
   }
 
   function persistTextDraft() {
@@ -647,7 +671,10 @@ export function InputArea(
         if (!blob) continue;
 
         const reader = new FileReader();
+        clipboardReaders.add(reader);
+        reader.onloadend = () => clipboardReaders.delete(reader);
         reader.onload = () => {
+          if (disposed) return;
           const dataUrl = reader.result as string;
           if (dataUrl) {
             preview.addImage(dataUrl);
@@ -683,328 +710,84 @@ export function InputArea(
     }
   });
 
-  // Thinking effort button — simple inline dropdown anchored above the button.
-  function removeThinkingDropdown() {
-    const existing = thinkingBtn.querySelector('.thinking-effort-dropdown') as HTMLElement | null;
-    if (!existing) return;
-    existing.style.opacity = '0';
-    existing.style.transform = 'translateX(-50%) scale(0.95)';
-    const view = doc.defaultView;
-    if (!view) {
-      existing.remove();
-      return;
-    }
-    existing.addEventListener('transitionend', () => existing.remove(), { once: true });
-    view.setTimeout(() => existing.remove(), 160);
+  function buildChoiceMenu(
+    button: HTMLElement,
+    className: string,
+    titleText: string,
+    items: Array<{ label: string; selected: boolean; disabled?: boolean; icon?: string; select: () => void }>
+  ) {
+    return openDropdownMenu({
+      menuId: className,
+      anchor: button,
+      container: wrapper,
+      dropUp: true,
+      align: button === thinkingBtn ? 'center' : 'left',
+      presentation: {
+        menu: `${className} rounded-lg pb-[3px] text-xs`,
+        title: `${className}-title pt-2 px-2.5 pb-2 text-[10px] font-semibold uppercase select-none`,
+        item: `${className}-item flex items-center gap-2 py-2 px-2.5 cursor-pointer whitespace-nowrap text-left w-full`,
+        list: 'flex flex-col',
+        minWidth: button === thinkingBtn ? '104px' : '96px',
+      },
+      groups: [
+        {
+          title: titleText,
+          items: items.map((entry, index) => ({
+            id: String(index),
+            label: entry.label,
+            selected: entry.selected,
+            disabled: entry.disabled,
+            iconMarkup: entry.icon,
+            onClick: entry.select,
+          })),
+        },
+      ],
+    });
   }
 
-  function buildThinkingDropdown(): HTMLElement {
-    removeThinkingDropdown();
-    const dropdown = doc.createElement('div');
-    dropdown.classList.add(
-      'thinking-effort-dropdown',
-      'absolute',
-      'bottom-full',
-      'left-1/2',
-      'mb-1',
-      'min-w-[104px]',
-      'rounded-lg',
-      'pb-[3px]',
-      'text-xs',
-      'z-[100]'
-    );
-    dropdown.style.opacity = '0';
-    dropdown.style.transform = 'translateX(-50%) scale(0.95)';
-    dropdown.style.transformOrigin = 'bottom center';
-    // Defer the transition + final state to the next frame so the browser
-    // commits the initial (opacity:0) state first — without this, the two
-    // style writes may be batched into one frame and skip the animation.
-    const view = doc.defaultView;
-    if (view) {
-      view.requestAnimationFrame(() => {
-        dropdown.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
-        dropdown.style.opacity = '1';
-        dropdown.style.transform = 'translateX(-50%) scale(1)';
-      });
-    } else {
-      dropdown.style.opacity = '1';
-      dropdown.style.transform = 'translateX(-50%) scale(1)';
-    }
-
-    // Title row
-    const title = doc.createElement('div');
-    title.textContent = getString('thinking-effort-title');
-    title.classList.add(
-      'thinking-effort-dropdown-title',
-      'pt-[2px]',
-      'px-2.5',
-      'pb-[3px]',
-      'text-[10px]',
-      'leading-[1.2]',
-      'font-semibold',
-      'tracking-[0.04em]',
-      'uppercase',
-      'select-none'
-    );
-    dropdown.appendChild(title);
-
-    const subscriptionEfforts = codexEfforts();
-    for (const effort of subscriptionEfforts.length ? subscriptionEfforts : effortOrder) {
-      const item = doc.createElement('div');
-      item.textContent = effortLabelMap[effort] || effort;
-      item.classList.add('thinking-effort-dropdown-item', 'py-[3px]', 'px-2.5', 'cursor-pointer', 'whitespace-nowrap', 'leading-[1.4]', 'text-left');
-      const isSelected = (subscriptionEfforts.length ? session.codexThinkingEffort || session.thinkingEffort : session.thinkingEffort) === effort;
-      if (isSelected) {
-        item.classList.add('is-selected', 'font-semibold');
-      } else {
-        item.classList.add('font-normal');
-      }
-      item.addEventListener('click', () => {
-        if (subscriptionEfforts.length) session.codexThinkingEffort = effort;
-        else session.thinkingEffort = effort as typeof session.thinkingEffort;
-        updateThinkingBtnAppearance();
-        removeThinkingDropdown();
-      });
-      item.addEventListener('mouseenter', () => {
-        item.classList.add('is-hover');
-      });
-      item.addEventListener('mouseleave', () => {
-        item.classList.remove('is-hover');
-      });
-      dropdown.appendChild(item);
-    }
-    dropdown.addEventListener('mouseenter', cancelHoverClose);
-    dropdown.addEventListener('mouseleave', scheduleHoverClose);
-    return dropdown;
-  }
-
-  let hoverCloseTimer: number | undefined;
-
-  function cancelHoverClose() {
-    if (hoverCloseTimer !== undefined) {
-      doc.defaultView?.clearTimeout(hoverCloseTimer);
-      hoverCloseTimer = undefined;
-    }
-  }
-  function scheduleHoverClose() {
-    cancelHoverClose();
-    hoverCloseTimer = doc.defaultView?.setTimeout(() => {
-      removeThinkingDropdown();
-      hoverCloseTimer = undefined;
-    }, 250);
-  }
-
-  function openThinkingDropdown() {
-    cancelHoverClose();
-    if (!thinkingBtn.querySelector('.thinking-effort-dropdown')) {
-      const dropdown = buildThinkingDropdown();
-      thinkingBtn.appendChild(dropdown);
-    }
-  }
-
-  // Hover-only: open on mouseenter, close when the pointer leaves the
-  // button/dropdown region.  We use composedPath() so the check works even
-  // though this listener sits at document level and the dropdown lives inside
-  // a shadow DOM (where event.target is retargeted to the shadow host).
-  function isOverThinkingRegion(e: MouseEvent): boolean {
-    const dd = thinkingBtn.querySelector('.thinking-effort-dropdown');
-    const path = e.composedPath();
-    return path.includes(thinkingBtn) || (!!dd && path.includes(dd as EventTarget));
-  }
-
-  thinkingBtn.addEventListener('mouseenter', openThinkingDropdown);
-  thinkingBtn.addEventListener('mouseleave', scheduleHoverClose);
-
-  // Track pointer position globally while the dropdown is open.  Only start
-  // the close countdown once the pointer is genuinely outside both the button
-  // and the dropdown — moving between them (across the small gap) keeps it
-  // open because we cancel whenever the pointer re-enters either region.
-  doc.addEventListener(
-    'mousemove',
-    (e: MouseEvent) => {
-      const dd = thinkingBtn.querySelector('.thinking-effort-dropdown');
-      if (!dd) return;
-      if (isOverThinkingRegion(e)) {
-        cancelHoverClose();
-      } else {
-        scheduleHoverClose();
-      }
-    },
-    true
-  );
-
-  // Close dropdown when clicking outside
-  const outsideClickHandler = (e: Event) => {
-    if (thinkingBtn.contains(e.target as Node)) return;
-    const dd = thinkingBtn.querySelector('.thinking-effort-dropdown');
-    if (dd && !dd.contains(e.target as Node)) {
-      removeThinkingDropdown();
-    }
-  };
-  doc.addEventListener('click', outsideClickHandler, true);
-
-  // Chat mode dropdown — hover-open, left-aligned, mirrors thinking-effort
-  // dropdown pattern but with icon+label items and left-anchored positioning.
-  function removeChatModeDropdown() {
-    const existing = chatModeBtn.querySelector('.chat-mode-dropdown') as HTMLElement | null;
-    if (!existing) return;
-    existing.style.opacity = '0';
-    existing.style.transform = 'scale(0.95)';
-    const view = doc.defaultView;
-    if (!view) {
-      existing.remove();
-      return;
-    }
-    existing.addEventListener('transitionend', () => existing.remove(), { once: true });
-    view.setTimeout(() => existing.remove(), 160);
-  }
-
-  function buildChatModeDropdown(): HTMLElement {
-    removeChatModeDropdown();
-    const dropdown = doc.createElement('div');
-    dropdown.classList.add(
-      'chat-mode-dropdown',
-      'absolute',
-      'bottom-full',
-      'left-0',
-      'mb-1',
-      'min-w-[96px]',
-      'rounded-lg',
-      'pb-[3px]',
-      'text-xs',
-      'z-[100]'
-    );
-    dropdown.style.opacity = '0';
-    dropdown.style.transform = 'scale(0.95)';
-    dropdown.style.transformOrigin = 'bottom left';
-    const view = doc.defaultView;
-    if (view) {
-      view.requestAnimationFrame(() => {
-        dropdown.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
-        dropdown.style.opacity = '1';
-        dropdown.style.transform = 'scale(1)';
-      });
-    } else {
-      dropdown.style.opacity = '1';
-      dropdown.style.transform = 'scale(1)';
-    }
-
-    const title = doc.createElement('div');
-    title.textContent = getString('chat-mode-title');
-    title.classList.add(
-      'chat-mode-dropdown-title',
-      'pt-2',
-      'px-2.5',
-      'pb-2',
-      'text-[10px]',
-      'leading-[1.2]',
-      'font-semibold',
-      'tracking-[0.04em]',
-      'uppercase',
-      'select-none'
-    );
-    dropdown.appendChild(title);
-
-    for (const mode of chatModeOrder) {
-      const item = doc.createElement('div');
-      item.classList.add(
-        'chat-mode-dropdown-item',
-        'flex',
-        'items-center',
-        'gap-2',
-        'py-2',
-        'px-2.5',
-        'cursor-pointer',
-        'whitespace-nowrap',
-        'leading-relaxed'
+  const thinkingMenu = bindMenu(
+    thinkingBtn,
+    () => {
+      const subscriptionEfforts = codexEfforts();
+      return buildChoiceMenu(
+        thinkingBtn,
+        'thinking-effort-dropdown',
+        getString('thinking-effort-title'),
+        (subscriptionEfforts.length ? subscriptionEfforts : effortOrder).map((effort) => ({
+          label: effortLabelMap[effort] || effort,
+          selected: (subscriptionEfforts.length ? session.codexThinkingEffort || session.thinkingEffort : session.thinkingEffort) === effort,
+          select: () => {
+            if (subscriptionEfforts.length) session.codexThinkingEffort = effort;
+            else session.thinkingEffort = effort as typeof session.thinkingEffort;
+            updateThinkingBtnAppearance();
+          },
+        }))
       );
-      const iconHolder = doc.createElement('span');
-      iconHolder.classList.add('inline-flex', 'items-center');
-      iconHolder.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: chatModeIconMap[mode], sizeRem: 0.875 })));
-      item.appendChild(iconHolder);
-      const labelEl = doc.createElement('span');
-      labelEl.textContent = chatModeLabel(mode);
-      item.appendChild(labelEl);
-      const isSelected = session.chatMode === mode;
-      if (isSelected) {
-        item.classList.add('is-selected', 'font-semibold');
-      } else {
-        item.classList.add('font-normal');
-      }
-      item.addEventListener('click', () => {
-        session.chatMode = mode;
-        updateChatModeBtnAppearance();
-        removeChatModeDropdown();
-      });
-      item.addEventListener('mouseenter', () => {
-        item.classList.add('is-hover');
-      });
-      item.addEventListener('mouseleave', () => {
-        item.classList.remove('is-hover');
-      });
-      dropdown.appendChild(item);
-    }
-    dropdown.addEventListener('mouseenter', cancelChatModeHoverClose);
-    dropdown.addEventListener('mouseleave', scheduleChatModeHoverClose);
-    return dropdown;
-  }
-
-  let chatModeHoverCloseTimer: number | undefined;
-
-  function cancelChatModeHoverClose() {
-    if (chatModeHoverCloseTimer !== undefined) {
-      doc.defaultView?.clearTimeout(chatModeHoverCloseTimer);
-      chatModeHoverCloseTimer = undefined;
-    }
-  }
-  function scheduleChatModeHoverClose() {
-    cancelChatModeHoverClose();
-    chatModeHoverCloseTimer = doc.defaultView?.setTimeout(() => {
-      removeChatModeDropdown();
-      chatModeHoverCloseTimer = undefined;
-    }, 250);
-  }
-
-  function openChatModeDropdown() {
-    if (!chatModeAdjustable) return;
-    cancelChatModeHoverClose();
-    if (!chatModeBtn.querySelector('.chat-mode-dropdown')) {
-      const dropdown = buildChatModeDropdown();
-      chatModeBtn.appendChild(dropdown);
-    }
-  }
-
-  function isOverChatModeRegion(e: MouseEvent): boolean {
-    const dd = chatModeBtn.querySelector('.chat-mode-dropdown');
-    const path = e.composedPath();
-    return path.includes(chatModeBtn) || (!!dd && path.includes(dd as EventTarget));
-  }
-
-  chatModeBtn.addEventListener('mouseenter', openChatModeDropdown);
-  chatModeBtn.addEventListener('mouseleave', scheduleChatModeHoverClose);
-
-  doc.addEventListener(
-    'mousemove',
-    (e: MouseEvent) => {
-      const dd = chatModeBtn.querySelector('.chat-mode-dropdown');
-      if (!dd) return;
-      if (isOverChatModeRegion(e)) {
-        cancelChatModeHoverClose();
-      } else {
-        scheduleChatModeHoverClose();
-      }
     },
-    true
+    'hover'
   );
-
-  const chatModeOutsideClickHandler = (e: Event) => {
-    if (chatModeBtn.contains(e.target as Node)) return;
-    const dd = chatModeBtn.querySelector('.chat-mode-dropdown');
-    if (dd && !dd.contains(e.target as Node)) {
-      removeChatModeDropdown();
-    }
-  };
-  doc.addEventListener('click', chatModeOutsideClickHandler, true);
+  const modeMenu = bindMenu(
+    chatModeBtn,
+    () =>
+      buildChoiceMenu(
+        chatModeBtn,
+        'chat-mode-dropdown',
+        getString(chatModeAdjustable ? 'chat-mode-title' : 'chat-mode-fixed'),
+        chatModeOrder.map((mode) => ({
+          label: chatModeLabel(mode),
+          icon: chatModeIconMap[mode],
+          selected: session.effectiveChatMode === mode,
+          disabled: !chatModeAdjustable,
+          select: () => {
+            session.chatMode = mode;
+            updateChatModeBtnAppearance();
+          },
+        }))
+      ),
+    'hover'
+  );
+  const removeThinkingDropdown = () => thinkingMenu.close();
+  const removeChatModeDropdown = () => modeMenu.close();
 
   screenshotBtn.addEventListener('click', () => {
     if (preview.isFull()) return;
@@ -1015,6 +798,7 @@ export function InputArea(
     }
     if (reader?._type === 'pdf') {
       startCaptureMode(reader as _ZoteroTypes.ReaderInstance<'pdf'>, (imageData: string) => {
+        if (disposed) return;
         preview.addImage(imageData);
         updateScreenshotBtnState();
       });
@@ -1052,7 +836,26 @@ export function InputArea(
   }
 
   const inputAreaAPI: InputAreaAPI = {
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      persistTextDraft();
+      cancelHintHide();
+      if (resizeFrame !== undefined) doc.defaultView?.cancelAnimationFrame(resizeFrame);
+      streamingBySession.clear();
+      disposeMenusWithin(wrapper);
+      unregisterModelInfoAnchors(wrapper);
+      for (const reader of clipboardReaders) {
+        reader.onload = reader.onloadend = null;
+        if (reader.readyState === 1) reader.abort();
+      }
+      clipboardReaders.clear();
+      preview.destroy();
+      addon.data.sharedInputAreas.delete(wrapper);
+      hintAnimationSequence++;
+    },
     setContext(context) {
+      if (disposed) return;
       activeSectionId = context.sessionId;
       sessionKind = context.sessionKind;
       sourceTabId = context.sourceTabId;
@@ -1086,10 +889,12 @@ export function InputArea(
       renderSendState(streamingBySession.get(activeSectionId) ?? !!session.pending.userMessage);
     },
     setStreaming(sessionId, isStreaming) {
+      if (disposed) return;
       streamingBySession.set(sessionId, isStreaming);
       if (sessionId === activeSectionId) renderSendState(isStreaming);
     },
     setContextTokens(sessionId, text, title) {
+      if (disposed) return;
       if (sessionId === activeSectionId) {
         contextTokens.textContent = text;
         contextTokens.title = title;

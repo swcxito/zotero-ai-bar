@@ -16,6 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { sessionMessageContainer } from '../utils/chatSessionDOM';
 // todo 拆分文件
 // TODO 优化provider管理，适配sdk
 // todo !! 一个tab不止对应一个文件
@@ -607,9 +608,7 @@ export class ChatManager {
   }
 
   private getSessionMessageContainer(sessionId: string): HTMLElement | null {
-    const body = addon.data.sidePaneBodyMap?.get(sessionId);
-    const root = body?.querySelector('#ai-bar-chat-root') as HTMLElement | null;
-    return (root?.shadowRoot?.querySelector('.message-container') ?? body?.querySelector('.message-container') ?? null) as HTMLElement | null;
+    return sessionMessageContainer(sessionId);
   }
 
   getOrCreateSession(params: { sessionId: string; kind: ChatSessionKind; sourceTabId?: string; itemId?: number }): Session {

@@ -1,15 +1,16 @@
+import { setButtonIcon } from '../components/buttonIcon';
+import { sessionMessageContainer } from '../utils/chatSessionDOM';
+import { createChatHistoryController, workspaceSession, workspaceInputContext } from './chatViewController';
 import { config } from '../../package.json';
 import { Icons } from '../components/common';
 import { IconView } from '../components/iconView';
 import { InputArea, type InputAreaAPI } from '../components/inputArea';
-import { ChatHistoryPanel } from '../components/chatHistoryPanel';
 import { createChatTurnNavigator, disposeChatTurnNavigatorHost, setChatTurnNavigatorHost } from '../components/chatTurnNavigator';
-import { mountChatEmptyState, resetChatEmptyState, syncChatEmptyState } from '../components/chatEmptyState';
+import { mountChatEmptyState, syncChatEmptyState } from '../components/chatEmptyState';
 import { renderMarkdown } from '../utils/markdown';
 import { getString } from '../utils/locale';
 import { installChatSelectionCopyHandler, registerChatSelectionCopyContainer, uninstallChatSelectionCopyHandler } from '../utils/chatSelectionCopy';
 import { SHARED_CHAT_DRAFT_ID } from '../utils/chatDraft';
-import { getReaderSourceLabel } from './readerBarPopup';
 import { attachCitationHandlers, renderPersistedTranscript } from './chatUI';
 import { applyChatFontSize } from '../utils/chatFontSize';
 import { registerChatSkinRoot } from '../utils/chatSkin';
@@ -26,6 +27,16 @@ import {
   type ChatSessionKind,
 } from './chatWorkspace';
 
+const windowHistories = new WeakMap<Document, ReturnType<typeof createChatHistoryController>>();
+function windowHistory(doc: Document) {
+  let history = windowHistories.get(doc);
+  if (!history) {
+    history = createChatHistoryController();
+    windowHistories.set(doc, history);
+  }
+  return history;
+}
+
 const WINDOW_ROOT_ID = 'ai-bar-window-root';
 const WINDOW_DECK_CLASS = 'zaibar-window-deck';
 const SESSION_ID_ATTR = 'data-session-id';
@@ -35,20 +46,7 @@ const WINDOW_HOST_SWITCH_CLASS = 'zaibar-window-host-switch';
 
 type WorkspaceRoot = HTMLElement & {
   _workspaceUnsubscribe?: () => void;
-  _historyTransition?: number;
-  _historyAnimating?: boolean;
 };
-
-function setWindowButtonIcon(button: HTMLButtonElement, url: string): void {
-  button.replaceChildren();
-  button.style.backgroundImage = `url("${url}")`;
-  button.style.backgroundPosition = 'center';
-  button.style.backgroundRepeat = 'no-repeat';
-  button.style.backgroundSize = '16px 16px';
-  button.style.setProperty('-moz-context-properties', 'fill, stroke');
-  button.style.setProperty('fill', 'currentColor');
-  button.style.setProperty('stroke', 'currentColor');
-}
 
 function renderWindowTabs(doc: Document, tabs: HTMLElement): void {
   const snapshot = getWorkspaceSnapshot('window');
@@ -113,7 +111,7 @@ function renderWindowTabs(doc: Document, tabs: HTMLElement): void {
       const root = tabs.closest(`#${WINDOW_ROOT_ID}`) as HTMLElement | null;
       if (root) {
         root.dataset.skinPreview = 'true';
-        root.dataset.historyVisible = 'false';
+        windowHistory(doc).visible = false;
       }
       refreshChatWindowWorkspace(doc);
     });
@@ -204,30 +202,14 @@ export function refreshChatWindowWorkspace(doc: Document): void {
   const sharedInput = root.querySelector('.zaibar-window-shared-input .input-area-wrapper') as
     | (HTMLElement & { _inputAreaAPI?: InputAreaAPI })
     | null;
-  const requestSourceTabId = snapshot.activeKind === 'global-agent' ? undefined : snapshot.sourceTabId;
-  const reader = snapshot.sourceTabId ? Zotero.Reader.getByTabID(snapshot.sourceTabId) : undefined;
-  const session = addon.chatManager.getOrCreateSession({
-    sessionId,
-    kind: snapshot.activeKind,
-    sourceTabId: snapshot.activeKind === 'global-agent' ? undefined : snapshot.sourceTabId,
-    itemId: snapshot.activeKind === 'global-agent' ? undefined : reader?.itemID,
-  });
+  const session = workspaceSession('window')!;
   const messageContainer = getWindowMessageContainer(sessionId);
   if (messageContainer) {
     syncChatEmptyState(session, messageContainer);
     void renderPersistedTranscript(session, messageContainer);
   }
   updateWindowHistoryView(doc, session, page);
-  sharedInput?._inputAreaAPI?.setContext({
-    sessionId,
-    sessionKind: snapshot.activeKind,
-    sourceTabId: requestSourceTabId,
-    captureSourceTabId: snapshot.sourceTabId,
-    sourceLabel: requestSourceTabId && reader ? getReaderSourceLabel(reader) : undefined,
-    chatModeAdjustable: snapshot.activeKind === 'article',
-    allowScreenshot: true,
-    allowSelectionHint: snapshot.activeKind !== 'global-agent',
-  });
+  sharedInput?._inputAreaAPI?.setContext(workspaceInputContext('window', session));
 }
 
 function selectWindowSessionPage(deck: HTMLElement, page: HTMLElement): void {
@@ -253,175 +235,27 @@ function selectWindowSessionPage(deck: HTMLElement, page: HTMLElement): void {
 }
 
 function getCurrentWindowSession(): Session | undefined {
-  const snapshot = getWorkspaceSnapshot('window');
-  const sessionId = getSessionId(snapshot.activeKind, snapshot.sourceTabId);
-  if (!sessionId) return undefined;
-  const reader = snapshot.sourceTabId ? Zotero.Reader.getByTabID(snapshot.sourceTabId) : undefined;
-  return addon.chatManager.getOrCreateSession({
-    sessionId,
-    kind: snapshot.activeKind,
-    sourceTabId: snapshot.activeKind === 'global-agent' ? undefined : snapshot.sourceTabId,
-    itemId: snapshot.activeKind === 'global-agent' ? undefined : reader?.itemID,
-  });
+  return workspaceSession('window');
 }
-
-function clearActiveWindowHistory(doc: Document): void {
-  const session = getCurrentWindowSession();
-  if (!session) return;
-  const sessionId = session.id;
-  const page = addon.data.sidePaneBodyMap?.get(sessionId);
-  const messageContainer = page?.querySelector('.message-container') as HTMLElement | null;
-  if (messageContainer) messageContainer.innerHTML = '';
-  addon.chatManager.clearSectionHistory(sessionId);
-  resetChatEmptyState(session);
-}
-
 function startNewWindowConversation(doc: Document): void {
-  const session = getCurrentWindowSession();
-  const root = doc.getElementById(WINDOW_ROOT_ID) as WorkspaceRoot | null;
-  if (!session || root?._historyAnimating) return;
-  if (session.kind === 'translation') {
-    clearActiveWindowHistory(doc);
-    return;
-  }
-  if (!addon.chatManager.startNewConversation(session)) return;
-  if (root) root.dataset.historyVisible = 'false';
-  refreshChatWindowWorkspace(doc);
+  if (windowHistory(doc).startNew(getCurrentWindowSession())) refreshChatWindowWorkspace(doc);
 }
-
-function animateWindowHistoryView(
-  root: WorkspaceRoot,
-  deck: HTMLElement,
-  inputHost: HTMLElement | null,
-  historyHost: HTMLElement,
-  visible: boolean
-): void {
-  const renderedVisible = historyHost.dataset.visible;
-  const setDisplay = () => {
-    deck.style.display = visible ? 'none' : 'flex';
-    if (inputHost) inputHost.style.display = visible ? 'none' : '';
-    historyHost.style.display = visible ? 'flex' : 'none';
-  };
-  if (renderedVisible === undefined || renderedVisible === String(visible)) {
-    // Workspace updates may repeat while a history transition is in flight.
-    // Always restore interaction state when settling the already-requested
-    // view so the shared textarea cannot remain pointer-disabled.
-    if (root._historyAnimating) root._historyTransition = (root._historyTransition ?? 0) + 1;
-    for (const element of [deck, inputHost, historyHost]) {
-      if (element) element.style.pointerEvents = '';
-    }
-    root._historyAnimating = false;
-    historyHost.dataset.visible = String(visible);
-    setDisplay();
-    return;
-  }
-
-  historyHost.dataset.visible = String(visible);
-  const sequence = (root._historyTransition ?? 0) + 1;
-  root._historyTransition = sequence;
-  const view = root.ownerDocument.defaultView;
-  const reducedMotion = view?.matchMedia('(prefers-reduced-motion: reduce)')?.matches ?? false;
-  if (reducedMotion || !view) {
-    setDisplay();
-    root._historyAnimating = false;
-    if (!visible) {
-      (historyHost.firstElementChild as any)?._disposeHistory?.();
-      historyHost.replaceChildren();
-      delete historyHost.dataset.sessionId;
-    }
-    return;
-  }
-
-  root._historyAnimating = true;
-  const outgoing = visible ? [deck, inputHost].filter((element): element is HTMLElement => !!element) : [historyHost];
-  for (const element of outgoing) element.style.pointerEvents = 'none';
-  const exitAnimations = outgoing.map((element) =>
-    element.animate(
-      [
-        { opacity: 1, transform: 'translateX(0)' },
-        { opacity: 0, transform: `translateX(${visible ? '-6px' : '6px'})` },
-      ],
-      { duration: 70, easing: 'ease-in' }
-    )
-  );
-  void Promise.all(exitAnimations.map((animation) => animation.finished.catch(() => undefined))).then(() => {
-    if (root._historyTransition !== sequence || historyHost.dataset.visible !== String(visible)) return;
-    setDisplay();
-    const incoming = visible ? [historyHost] : [deck, inputHost].filter((element): element is HTMLElement => !!element);
-    const enterAnimations = incoming.map((element) => {
-      element.style.pointerEvents = 'none';
-      return element.animate(
-        [
-          { opacity: 0, transform: `translateX(${visible ? '6px' : '-6px'})` },
-          { opacity: 1, transform: 'translateX(0)' },
-        ],
-        { duration: 110, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
-      );
-    });
-    void Promise.all(enterAnimations.map((animation) => animation.finished.catch(() => undefined))).then(() => {
-      if (root._historyTransition !== sequence) return;
-      for (const element of incoming) element.style.pointerEvents = '';
-      root._historyAnimating = false;
-      if (!visible) {
-        (historyHost.firstElementChild as any)?._disposeHistory?.();
-        historyHost.replaceChildren();
-        delete historyHost.dataset.sessionId;
-      }
-    });
-  });
-}
-
 function updateWindowHistoryView(doc: Document, session: Session, page: HTMLElement): void {
-  const root = doc.getElementById(WINDOW_ROOT_ID) as WorkspaceRoot | null;
+  const root = doc.getElementById(WINDOW_ROOT_ID);
   const deck = root?.querySelector(`.${WINDOW_DECK_CLASS}`) as HTMLElement | null;
   const historyHost = root?.querySelector(`.${WINDOW_HISTORY_CLASS}`) as HTMLElement | null;
-  const inputHost = root?.querySelector('.zaibar-window-shared-input') as HTMLElement | null;
-  const historyButton = root?.querySelector('.zaibar-window-history-button') as HTMLButtonElement | null;
-  const newButton = root?.querySelector('.zaibar-window-new-chat') as HTMLButtonElement | null;
   if (!root || !deck || !historyHost) return;
-  const supportsHistory = session.kind !== 'translation';
-  if (!supportsHistory) root.dataset.historyVisible = 'false';
-  const visible = supportsHistory && root.dataset.historyVisible === 'true';
-  const busy = !!session.pending.abortController;
-  if (historyButton) {
-    historyButton.style.display = supportsHistory ? '' : 'none';
-    historyButton.disabled = busy || !!root._historyAnimating;
-  }
-  if (newButton) {
-    newButton.title = getString((supportsHistory ? 'history-new-chat' : 'sidepane-clear-tooltip') as any);
-    newButton.setAttribute('aria-label', newButton.title);
-    newButton.disabled = busy || !!root._historyAnimating;
-    setWindowButtonIcon(
-      newButton,
-      supportsHistory ? `chrome://${config.addonRef}/content/icons/chat-new.svg` : 'chrome://zotero/skin/16/universal/empty-trash.svg'
-    );
-  }
-  if (visible && (historyHost.dataset.sessionId !== session.id || !historyHost.firstElementChild)) {
-    (historyHost.firstElementChild as any)?._disposeHistory?.();
-    historyHost.replaceChildren();
-    historyHost.dataset.sessionId = session.id;
-    historyHost.appendChild(
-      ChatHistoryPanel(doc, session, {
-        onActivate: async () => {
-          const container = getWindowMessageContainer(session.id);
-          if (container) await renderPersistedTranscript(session, container, true);
-          root.dataset.historyVisible = 'false';
-          refreshChatWindowWorkspace(doc);
-        },
-        onCurrentDeleted: async () => {
-          const container = getWindowMessageContainer(session.id);
-          if (container) await renderPersistedTranscript(session, container, true);
-        },
-        onClose: () => {
-          if (root._historyAnimating) return;
-          root.dataset.historyVisible = 'false';
-          refreshChatWindowWorkspace(doc);
-        },
-      })
-    );
-  }
-  animateWindowHistoryView(root, deck, inputHost, historyHost, visible);
-  if (!visible) page.style.display = 'flex';
+  windowHistory(doc).update(session, page, {
+    deck,
+    historyHost,
+    inputHost: root.querySelector('.zaibar-window-shared-input'),
+    historyButton: root.querySelector('.zaibar-window-history-button'),
+    newButton: root.querySelector('.zaibar-window-new-chat'),
+    refresh: () => refreshChatWindowWorkspace(doc),
+    setIcon: setButtonIcon,
+    deckDisplay: 'flex',
+    inputDisplay: '',
+  });
 }
 
 export function ensureChatWindowUI(doc: Document) {
@@ -447,26 +281,23 @@ export function ensureChatWindowUI(doc: Document) {
   history.classList.add('zaibar-window-clear', 'zaibar-window-history-button');
   history.title = getString('history-title' as any);
   history.setAttribute('aria-label', history.title);
-  setWindowButtonIcon(history, `chrome://${config.addonRef}/content/icons/chat-history.svg`);
+  setButtonIcon(history, `chrome://${config.addonRef}/content/icons/chat-history.svg`);
   history.addEventListener('click', () => {
-    const session = getCurrentWindowSession();
-    if (!session || session.kind === 'translation' || session.pending.abortController || root._historyAnimating) return;
-    root.dataset.historyVisible = String(root.dataset.historyVisible !== 'true');
-    refreshChatWindowWorkspace(doc);
+    if (windowHistory(doc).toggle(getCurrentWindowSession())) refreshChatWindowWorkspace(doc);
   });
   const newChat = doc.createElement('button');
   newChat.type = 'button';
   newChat.classList.add('zaibar-window-clear', 'zaibar-window-new-chat');
   newChat.title = getString('history-new-chat' as any);
   newChat.setAttribute('aria-label', newChat.title);
-  setWindowButtonIcon(newChat, `chrome://${config.addonRef}/content/icons/chat-new.svg`);
+  setButtonIcon(newChat, `chrome://${config.addonRef}/content/icons/chat-new.svg`);
   newChat.addEventListener('click', () => startNewWindowConversation(doc));
   const hostSwitch = doc.createElement('button');
   hostSwitch.type = 'button';
   hostSwitch.classList.add('zaibar-window-clear', WINDOW_HOST_SWITCH_CLASS);
   hostSwitch.title = getString('chat-host-switch-to-sidebar' as any);
   hostSwitch.setAttribute('aria-label', hostSwitch.title);
-  setWindowButtonIcon(hostSwitch, `chrome://${config.addonRef}/content/icons/chat-dock-sidebar.svg`);
+  setButtonIcon(hostSwitch, `chrome://${config.addonRef}/content/icons/chat-dock-sidebar.svg`);
   hostSwitch.addEventListener('click', async () => {
     if (hostSwitch.disabled) return;
     const { switchChatHost } = await import('./chatHostController');
@@ -502,7 +333,7 @@ export function ensureChatWindowUI(doc: Document) {
   sharedInput.style.userSelect = 'none';
   inputHost.appendChild(sharedInput);
   addon.data.sharedInputAreas.add(sharedInput);
-  root.dataset.historyVisible = 'false';
+  windowHistory(doc).visible = false;
   root.append(header, deck, historyHost, inputHost);
 
   root._workspaceUnsubscribe?.();
@@ -526,12 +357,16 @@ export function onChatWindowLoad(window: Window) {
   window.addEventListener('unload', () => {
     uninstallChatSelectionCopyHandler(window.document);
     window.removeEventListener('beforeunload', preventCloseWhileStreaming);
+    windowHistory(window.document).dispose();
     const root = window.document.getElementById(WINDOW_ROOT_ID) as WorkspaceRoot | null;
     const tabs = root?.querySelector('.zaibar-window-tabs') as HTMLElement | null;
     if (tabs) disposeChatTabHighlight(tabs);
     root?._workspaceUnsubscribe?.();
     const sharedInput = root?.querySelector('.zaibar-window-shared-input .input-area-wrapper') as HTMLElement | null;
-    if (sharedInput) addon.data.sharedInputAreas.delete(sharedInput);
+    if (sharedInput) {
+      (sharedInput as HTMLElement & { _inputAreaAPI?: InputAreaAPI })._inputAreaAPI?.dispose();
+      addon.data.sharedInputAreas.delete(sharedInput);
+    }
     root?.querySelectorAll(`.${WINDOW_DECK_CLASS} > [${SESSION_ID_ATTR}]`).forEach((page) => disposeChatTurnNavigatorHost(page));
     (root?.querySelector(`.${WINDOW_HISTORY_CLASS}`)?.firstElementChild as any)?._disposeHistory?.();
     addon.data.sidePaneBodyMap?.clear();
@@ -541,6 +376,4 @@ export function onChatWindowLoad(window: Window) {
   });
 }
 
-function getWindowMessageContainer(sessionId: string): HTMLElement | null {
-  return (addon.data.sidePaneBodyMap?.get(sessionId)?.querySelector('.message-container') as HTMLElement | null) ?? null;
-}
+const getWindowMessageContainer = sessionMessageContainer;

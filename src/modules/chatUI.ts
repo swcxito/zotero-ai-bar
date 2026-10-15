@@ -16,6 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { sessionElement } from '../utils/chatSessionDOM';
 import { metadataItem, creatorNames } from '../utils/attachments';
 import { ChatBox } from '../components/chatBox';
 import { ToolCallBox, updateToolCallBox } from '../components/toolCallBox';
@@ -891,13 +892,8 @@ function getMessageContainer(session: Session): HTMLElement | null {
 }
 
 function querySessionElement(sessionId: string, selector: string): Element | null {
-  const body = addon.data.sidePaneBodyMap?.get(sessionId);
-  if (body) {
-    const root = body.querySelector('#ai-bar-chat-root');
-    const scope: ParentNode = root?.shadowRoot ?? body;
-    const result = scope.querySelector(selector);
-    if (result) return result;
-  }
+  const result = sessionElement(sessionId, selector);
+  if (result) return result;
   for (const wrapper of addon.data.sharedInputAreas) {
     if (wrapper.dataset.sessionId !== sessionId) continue;
     if (wrapper.matches(selector)) return wrapper;

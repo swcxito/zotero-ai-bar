@@ -1,3 +1,4 @@
+import { isUsableNode } from '../utils/domLife';
 /*
  * SPDX-License-Identifier: AGPL-3.0-only
  * readerBarPopup.ts
@@ -16,6 +17,8 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { metadataItem } from '../utils/attachments';
+import { disposeMenusWithin } from '../components/menuController';
 import { config } from '../../package.json';
 import { registerChatSkinRoot } from '../utils/chatSkin';
 import { getSelectionContext } from '../utils/selectionContext';
@@ -23,7 +26,7 @@ import { getString } from '../utils/locale';
 import { getPref } from '../utils/prefs';
 import { aiBarCommands } from '../utils/prompts';
 import { ActionButton } from '../components/buttons/actionButton';
-import { ModelInfo, registerModelInfoAnchor } from '../components/modelInfo';
+import { ModelInfo, registerModelInfoAnchor, unregisterModelInfoAnchors } from '../components/modelInfo';
 import { ExpandButton, ExpandMenuItem } from '../components/buttons/expandButton';
 import { Icons } from '../components/common';
 import { IconView } from '../components/iconView';
@@ -103,8 +106,7 @@ export function getReaderSourceLabel(reader?: _ZoteroTypes.ReaderInstance<'pdf' 
   if (itemID) {
     const item = Zotero.Items.get(itemID) as any;
 
-    const parentID = item?.parentID || item?.parentItemID;
-    const parentItem = parentID ? (Zotero.Items.get(parentID) as any) : undefined;
+    const parentItem = item ? metadataItem(item) : undefined;
 
     const title = getItemTitle(parentItem) || getItemTitle(item);
     if (title) return title;
@@ -206,6 +208,7 @@ export function registerReaderInitializer() {
       // committing, which intermittently makes Gecko reject observe() even
       // with an otherwise valid MutationObserverInit.
       if (container) {
+        const popupContainer = container;
         const ownerDoc = doc;
         const view = ownerDoc.defaultView;
         const annotation = params.annotation;
@@ -222,11 +225,15 @@ export function registerReaderInitializer() {
         function stop() {
           if (stopped) return;
           stopped = true;
-          if (timer !== undefined && view) view.clearInterval(timer);
-          view?.removeEventListener('pagehide', onDocumentUnload);
           if (selectionPopupWatchers.get(readerKey) === stop) {
             selectionPopupWatchers.delete(readerKey);
           }
+          if (isUsableNode(ownerDoc)) {
+            if (timer !== undefined && view) view.clearInterval(timer);
+            view?.removeEventListener('pagehide', onDocumentUnload);
+          }
+          disposeMenusWithin(popupContainer);
+          unregisterModelInfoAnchors(popupContainer);
         }
         const onPopupGone = () => {
           stop();
@@ -246,6 +253,10 @@ export function registerReaderInitializer() {
               return;
             }
 
+            if (!isUsableNode(container)) {
+              stop();
+              return;
+            }
             const isOpen = isSelectionStillOpen();
             if (!container.isConnected) {
               // A connected selection may cause Zotero to replace the popup
