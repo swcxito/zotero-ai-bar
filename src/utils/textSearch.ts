@@ -127,11 +127,4 @@ export function grepInText(
   return grepInTextPaginated(text, pattern, useRegex, maxResults, 0, pageTexts, options).excerpts;
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// Kept for external callers/tests; grepInText no longer uses it internally now
-// that the literal path lowercases instead of escaping. (Escape is still the
-// correct semantics if a future caller builds a regex from a literal.)
-export { escapeRegExp };
+export { escapeRegExp } from './textPrimitives';

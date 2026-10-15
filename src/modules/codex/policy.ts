@@ -1,3 +1,4 @@
+import { textFingerprint } from '../../utils/textPrimitives';
 import { codexString } from './i18n';
 
 /**
@@ -35,9 +36,7 @@ export function sanitizeCodexBinding(value: unknown): CodexBinding | undefined {
 /** Not a security hash: detects local history edits, retries and backend switches. */
 export function contextFingerprint(value: unknown): string {
   const text = JSON.stringify(value);
-  let hash = 2166136261;
-  for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
-  return `${text.length}:${hash >>> 0}`;
+  return `${text.length}:${textFingerprint(text)}`;
 }
 
 interface ParsedCodexVersion {

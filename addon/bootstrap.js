@@ -7,22 +7,6 @@
 
 var chromeHandle;
 
-function ensureWebStreamsGlobals(target) {
-  const g = target || globalThis;
-  const mainWin = Zotero.getMainWindow?.() || null;
-  if (!mainWin) return;
-
-  if (typeof g.console === 'undefined' && mainWin.console) {
-    g.console = mainWin.console;
-  }
-
-  for (const name of ['TransformStream', 'ReadableStream', 'WritableStream', 'TextEncoder', 'TextDecoder', 'TextDecoderStream', 'DOMException']) {
-    if (typeof g[name] === 'undefined' && mainWin[name]) {
-      g[name] = mainWin[name];
-    }
-  }
-}
-
 function install(data, reason) {}
 
 async function startup({ id, version, resourceURI, rootURI }, reason) {
@@ -40,16 +24,7 @@ async function startup({ id, version, resourceURI, rootURI }, reason) {
   const ctx = { rootURI };
   ctx._globalThis = ctx;
 
-  // Firefox 115 (Zotero 7) does not expose Web Streams in the addon sandbox,
-  // but the bundled AI SDK needs them. Copy them from the main window before
-  // loading the plugin bundle.
-  try {
-    ensureWebStreamsGlobals(ctx);
-    Services.console.logStringMessage('[zaibar-bootstrap] Web Streams polyfill applied');
-  } catch (e) {
-    Services.console.logStringMessage(`[zaibar-bootstrap] Web Streams polyfill failed: ${e}`);
-  }
-
+  // The bundle prelude installs required globals from the shared compatibility source.
   try {
     Services.console.logStringMessage(`[zaibar-bootstrap] loading sub-script ${rootURI}/content/scripts/__addonRef__.js`);
     Services.scriptloader.loadSubScript(`${rootURI}/content/scripts/__addonRef__.js`, ctx);

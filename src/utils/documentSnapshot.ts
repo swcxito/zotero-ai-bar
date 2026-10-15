@@ -1,3 +1,4 @@
+import { textFingerprint } from './textPrimitives';
 import { estimateTextTokens } from '../modules/contextCompaction';
 import type { ItemMetadata } from './itemContext';
 
@@ -23,12 +24,7 @@ function headingOpenings(text: string): string[] {
 }
 
 export function createDocumentFingerprint(text: string): string {
-  let hash = 2166136261;
-  for (let index = 0; index < text.length; index++) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `${text.length}-${(hash >>> 0).toString(16)}`;
+  return `${text.length}-${textFingerprint(text).toString(16)}`;
 }
 
 export function buildDocumentSnapshot(text: string, metadata: ItemMetadata | undefined, tokenBudget: number): string {
