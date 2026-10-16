@@ -10,7 +10,22 @@ export function installWebGlobals(target: any, sourceWindow: any): void {
     'TextDecoder',
     'TextDecoderStream',
     'DOMException',
+    'window',
+    'Node',
+    'Element',
+    'HTMLElement',
+    'ShadowRoot',
+    'CSS',
+    'ResizeObserver',
+    'IntersectionObserver',
+    'getComputedStyle',
+    'requestAnimationFrame',
+    'cancelAnimationFrame',
   ]) {
-    if (typeof target[name] === 'undefined' && sourceWindow[name]) target[name] = sourceWindow[name];
+    if (typeof target[name] === 'undefined' && sourceWindow[name]) {
+      target[name] = ['getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame'].includes(name)
+        ? sourceWindow[name].bind(sourceWindow)
+        : sourceWindow[name];
+    }
   }
 }

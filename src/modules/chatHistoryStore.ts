@@ -189,6 +189,8 @@ export class ChatHistoryStore {
   private data: PersistedChatHistoryFile = emptyHistoryFile();
   private writeQueue: Promise<void> = Promise.resolve();
   private readOnly = false;
+  private dirty = false;
+  private writing = false;
 
   private get directoryPath(): string {
     return PathUtils.join(PathUtils.profileDir, addon.data.config.addonRef);
@@ -288,15 +290,27 @@ export class ChatHistoryStore {
 
   private scheduleWrite(): void {
     if (this.readOnly) return;
-    this.writeQueue = this.writeQueue
-      .then(async () => {
+    this.dirty = true;
+    if (this.writing) return;
+    this.writing = true;
+    this.writeQueue = Promise.resolve().then(async () => {
+      try {
         await IOUtils.makeDirectory(this.directoryPath, { ignoreExisting: true });
-        await IOUtils.writeJSON(this.filePath, this.data, {
-          tmpPath: `${this.filePath}.tmp`,
-          backupFile: `${this.filePath}.bak`,
-          flush: true,
-        });
-      })
-      .catch((error) => ztoolkit.log('[chatHistory] failed to persist history:', error));
+        while (this.dirty) {
+          this.dirty = false;
+          // Detach the snapshot before asynchronous serialization and disk I/O.
+          const snapshot = JSON.parse(JSON.stringify(this.data)) as PersistedChatHistoryFile;
+          await IOUtils.writeJSON(this.filePath, snapshot, {
+            tmpPath: `${this.filePath}.tmp`,
+            backupFile: `${this.filePath}.bak`,
+            flush: true,
+          });
+        }
+      } catch (error) {
+        ztoolkit.log('[chatHistory] failed to persist history:', error);
+      } finally {
+        this.writing = false;
+      }
+    });
   }
 }

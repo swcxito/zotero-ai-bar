@@ -1,3 +1,4 @@
+import { disposeDropdownMenu } from './dropdownMenu';
 import { isUsableNode } from '../utils/domLife';
 
 export interface MenuController {
@@ -47,11 +48,13 @@ export function bindMenu(
     closeTimer = removeTimer = undefined;
     if (frame !== undefined) view?.cancelAnimationFrame(frame);
     frame = undefined;
+    if (menu) disposeDropdownMenu(menu);
     menu?.remove();
     menu = undefined;
     controllers.delete(controller);
     doc.removeEventListener('click', outside, true);
     doc.removeEventListener('mousemove', move, true);
+    doc.removeEventListener('keydown', keydown, true);
   }
   function scheduleClose() {
     if (!menu || closeTimer !== undefined || removeTimer !== undefined) return;
@@ -73,6 +76,34 @@ export function bindMenu(
   }
   function outside(event: Event) {
     if (!inRegion(event)) close();
+  }
+  function keydown(event: KeyboardEvent) {
+    if (!menu) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+      anchor.focus();
+      return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const path = event.composedPath();
+    if (!inRegion(event)) return;
+    const items = [...menu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+    if (!items.length) return;
+    const index = items.findIndex((item) => path.includes(item));
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? items.length - 1
+          : event.key === 'ArrowDown'
+            ? (index + 1) % items.length
+            : index < 0
+              ? items.length - 1
+              : (index - 1 + items.length) % items.length;
+    event.preventDefault();
+    items[next].focus();
   }
   function open() {
     if (disposed || anchor.hasAttribute('disabled') || anchor.getAttribute('aria-disabled') === 'true' || !enabled()) return;
@@ -102,6 +133,7 @@ export function bindMenu(
     else cancelClose();
     doc.addEventListener('click', outside, true);
     doc.addEventListener('mousemove', move, true);
+    doc.addEventListener('keydown', keydown, true);
   }
   const controller: MenuController = {
     open,

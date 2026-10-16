@@ -23,7 +23,7 @@ import { ToolCallBox, updateToolCallBox } from '../components/toolCallBox';
 import { escapeHtml, renderMarkdown, type MarkdownRenderContext } from '../utils/markdown';
 import { createStreamRenderer } from '../utils/streamRenderer';
 import { updateMarkdownContent } from '../utils/markdownContent';
-import { setSendBtnEnabled } from './mainWindowSidePane';
+import { setSendBtnEnabled, setSendButtonMode } from '../components/buttons/sendButton';
 import type { Session, TokenUsage } from './chatManager';
 import { isContextOverflowError } from './contextCompaction';
 import { IconView } from '../components/iconView';
@@ -43,17 +43,20 @@ import type { AskUserPayload } from '../utils/agentSchemas';
 
 Zotero.debug('[zaibar-chatUI] module loaded');
 
+let transcriptRenderSequence = 0;
+
 /** Rebuild a completed, text-only transcript loaded from local history. */
 export async function renderPersistedTranscript(session: Session, container: HTMLElement, force = false): Promise<void> {
   const conversationId = session.conversationId || '';
   if (!force && container.dataset.conversationId === conversationId) return;
   container.dataset.conversationId = conversationId;
   container.innerHTML = '';
-  const renderToken = `${conversationId}:${Date.now()}`;
+  const renderToken = `${conversationId}:${++transcriptRenderSequence}`;
   container.dataset.renderToken = renderToken;
 
+  const isCurrent = () => container.dataset.renderToken === renderToken && (session.conversationId || '') === conversationId && container.isConnected;
   for (const turn of session.persistedTurns) {
-    if (container.dataset.renderToken !== renderToken || !container.isConnected) return;
+    if (!isCurrent()) return;
     if (turn.userText) {
       container.appendChild(createUserMessageBubble(container.ownerDocument, turn.userText, [], () => undefined, turn.referenceText));
     }
@@ -70,7 +73,9 @@ export async function renderPersistedTranscript(session: Session, container: HTM
       }
       const content = container.ownerDocument.createElement('div');
       content.classList.add('chat-message-content');
-      content.innerHTML = await renderMarkdown(turn.assistantMarkdown, session.itemId);
+      const html = await renderMarkdown(turn.assistantMarkdown, session.itemId);
+      if (!isCurrent()) return;
+      content.innerHTML = html;
       attachCitationHandlers(content);
       chatMessage.appendChild(content);
     }
@@ -926,16 +931,10 @@ function updateSectionInputArea(sessionId: string, isStreaming: boolean) {
   const sendBtn = inputArea.querySelector('.input-send-btn') as HTMLButtonElement | null;
   if (!sendBtn) return;
 
-  if (isStreaming) {
-    sendBtn.dataset.mode = 'stop';
-    setSendBtnEnabled(sendBtn, true);
-    sendBtn.innerHTML = '';
-    sendBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Stop, sizeRem: 1.5, extraClasses: ['text-white'] })));
-  } else {
-    sendBtn.dataset.mode = 'send';
-    setSendBtnEnabled(sendBtn, hasText);
-    sendBtn.innerHTML = '';
-    sendBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Send, sizeRem: 1.5, extraClasses: ['text-white'] })));
+  setSendButtonMode(sendBtn, isStreaming);
+  if (!isStreaming) {
+    const images = (inputArea.closest('.input-area-wrapper') as any)?._imagePreviewAPI?.getCount?.() ?? 0;
+    setSendBtnEnabled(sendBtn, hasText || images > 0);
   }
 }
 

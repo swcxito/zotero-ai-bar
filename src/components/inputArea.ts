@@ -28,7 +28,7 @@ import type { ChatSessionKind } from '../modules/chatWorkspace';
 
 import { startCaptureMode } from '../modules/capture';
 import { getReaderByTabId } from '../modules/tabObserver';
-import { scrollToBottom as doScrollToBottom, setSendBtnEnabled } from '../modules/mainWindowSidePane';
+import { setSendBtnEnabled, setSendButtonMode } from './buttons/sendButton';
 import { checkModelSupportsImage, getActiveModelContextLimit, promptModelImageUnsupported } from '../utils/providers';
 import { contextTokenInfo } from '../utils/tokenUsage';
 import { createUserMessageBubble } from './userBubble';
@@ -519,7 +519,7 @@ export function InputArea(
   function scrollToBottom() {
     const resolved = opts?.resolveMessageContainer?.(activeSectionId);
     if (resolved) {
-      doScrollToBottom(resolved);
+      resolved.scrollTo({ top: resolved.scrollHeight, behavior: 'smooth' });
       return;
     }
     const rootNode = textarea.getRootNode() as any;
@@ -527,7 +527,7 @@ export function InputArea(
       ? ((rootNode as ShadowRoot).querySelector('.message-container') as HTMLElement | null)
       : ((wrapper.parentElement?.querySelector('.message-container') as HTMLElement | null) ?? null);
     if (container) {
-      doScrollToBottom(container);
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
     }
   }
 
@@ -822,17 +822,8 @@ export function InputArea(
   }
 
   function renderSendState(isStreaming: boolean) {
-    if (isStreaming) {
-      sendBtn.dataset.mode = 'stop';
-      setSendBtnEnabled(sendBtn, true);
-      sendBtn.innerHTML = '';
-      sendBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Stop, sizeRem: 1.5, extraClasses: ['text-white'] })));
-      return;
-    }
-    sendBtn.dataset.mode = 'send';
-    sendBtn.innerHTML = '';
-    sendBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Send, sizeRem: 1.5, extraClasses: ['text-white'] })));
-    updateSendBtnState();
+    setSendButtonMode(sendBtn, isStreaming);
+    if (!isStreaming) updateSendBtnState();
   }
 
   const inputAreaAPI: InputAreaAPI = {

@@ -241,6 +241,9 @@ export function createChatTurnNavigator(doc: Document, messageContainer: HTMLEle
   let keyboardFocused = false;
   let scheduledFrame: number | undefined;
   let disposed = false;
+  let geometryDirty = true;
+  let anchorOffsets: number[] = [];
+  const observedTurns = new Set<HTMLElement>();
 
   const reducedMotion = () => view?.matchMedia('(prefers-reduced-motion: reduce)')?.matches ?? false;
 
@@ -291,11 +294,24 @@ export function createChatTurnNavigator(doc: Document, messageContainer: HTMLEle
     });
   };
 
-  const refresh = () => {
+  const refresh = (invalidateGeometry = true) => {
     if (disposed) return;
+    geometryDirty ||= invalidateGeometry;
     const nextTurns = getDirectTurnNodes(messageContainer);
     if (!elementsMatch(turns, nextTurns)) {
       turns = nextTurns;
+      geometryDirty = true;
+      const nodes = new Set(turns.flatMap((turn) => [turn.user, turn.assistant].filter((node): node is HTMLElement => !!node)));
+      for (const node of observedTurns)
+        if (!nodes.has(node)) {
+          resizeObserver?.unobserve(node);
+          observedTurns.delete(node);
+        }
+      for (const node of nodes)
+        if (!observedTurns.has(node)) {
+          resizeObserver?.observe(node);
+          observedTurns.add(node);
+        }
       if (hoveredIndex !== null && hoveredIndex >= turns.length) hoveredIndex = turns.length ? turns.length - 1 : null;
       rebuildMarkers();
     } else {
@@ -315,6 +331,12 @@ export function createChatTurnNavigator(doc: Document, messageContainer: HTMLEle
       return;
     }
 
+    if (geometryDirty) {
+      const containerTop = messageContainer.getBoundingClientRect().top;
+      const scrollTop = messageContainer.scrollTop;
+      anchorOffsets = turns.map((turn) => turn.anchor.getBoundingClientRect().top - containerTop + scrollTop);
+      geometryDirty = false;
+    }
     markerPositions = getCenteredMarkerPositions(turns.length, rail.clientHeight || shell.clientHeight);
     const maskBounds = getMarkerGroupMaskBounds(markerPositions, rail.clientHeight || shell.clientHeight);
     if (maskBounds) {
@@ -325,21 +347,21 @@ export function createChatTurnNavigator(doc: Document, messageContainer: HTMLEle
       marker.style.top = `${markerPositions[index]}px`;
     });
 
-    const anchorOffsets = turns.map((turn) => getAnchorOffset(turn.anchor, messageContainer));
     activeIndex = getActiveTurnIndex(anchorOffsets, messageContainer.scrollTop, messageContainer.clientHeight, messageContainer.scrollHeight);
     updateMarkerAppearance();
     updatePreview();
   };
 
-  const scheduleRefresh = () => {
+  const scheduleRefresh = (event?: Event) => {
+    if (event?.type !== 'scroll') geometryDirty = true;
     if (disposed || scheduledFrame !== undefined) return;
     if (!view?.requestAnimationFrame) {
-      refresh();
+      refresh(false);
       return;
     }
     scheduledFrame = view.requestAnimationFrame(() => {
       scheduledFrame = undefined;
-      refresh();
+      refresh(false);
     });
   };
 
@@ -436,11 +458,11 @@ export function createChatTurnNavigator(doc: Document, messageContainer: HTMLEle
   messageContainer.addEventListener('scroll', scheduleRefresh, { passive: true });
 
   const MutationObserverCtor = view?.MutationObserver;
-  const structureObserver = MutationObserverCtor ? new MutationObserverCtor(scheduleRefresh) : undefined;
+  const structureObserver = MutationObserverCtor ? new MutationObserverCtor(() => scheduleRefresh()) : undefined;
   structureObserver?.observe(messageContainer, {
     childList: true,
   });
-  const previewObserver = MutationObserverCtor ? new MutationObserverCtor(scheduleRefresh) : undefined;
+  const previewObserver = MutationObserverCtor ? new MutationObserverCtor(() => scheduleRefresh()) : undefined;
   previewObserver?.observe(messageContainer, {
     attributes: true,
     subtree: true,
@@ -448,7 +470,7 @@ export function createChatTurnNavigator(doc: Document, messageContainer: HTMLEle
   });
 
   const ResizeObserverCtor = (view as any)?.ResizeObserver as typeof ResizeObserver | undefined;
-  const resizeObserver = ResizeObserverCtor ? new ResizeObserverCtor(scheduleRefresh) : undefined;
+  const resizeObserver = ResizeObserverCtor ? new ResizeObserverCtor(() => scheduleRefresh()) : undefined;
   resizeObserver?.observe(shell);
   resizeObserver?.observe(messageContainer);
   if (!resizeObserver) view?.addEventListener('resize', scheduleRefresh);
@@ -459,6 +481,7 @@ export function createChatTurnNavigator(doc: Document, messageContainer: HTMLEle
     structureObserver?.disconnect();
     previewObserver?.disconnect();
     resizeObserver?.disconnect();
+    observedTurns.clear();
     if (!resizeObserver) view?.removeEventListener('resize', scheduleRefresh);
     rail.removeEventListener('pointermove', onPointerMove);
     rail.removeEventListener('pointerleave', onPointerLeave);

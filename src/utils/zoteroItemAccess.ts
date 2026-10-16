@@ -7,7 +7,7 @@
 
 import { getItemFullText, getItemMetadata } from './itemContext';
 import { attachmentSource, itemAttachments, resolveAttachment, AttachmentSelectionError, getItem, creatorNames } from './attachments';
-import { grepInTextPaginated, type GrepMatch } from './textSearch';
+import { compileSearchPattern, grepInTextPaginated, type GrepMatch } from './textSearch';
 
 export type PageTextResult = {
   pageTexts: string[];
@@ -123,7 +123,7 @@ const MAX_READ_CHARS = 250000;
 
 /** Paginate one stable stream of matches across the selected item's attachments. */
 export async function searchItemAttachments(itemId: number, pattern: string, useRegex = true, maxResults = 50, offset = 0, signal?: AbortSignal) {
-  if (useRegex) new RegExp(pattern, 'i');
+  if (useRegex) compileSearchPattern(pattern);
   const limit = Math.max(1, Math.min(500, Math.floor(maxResults)));
   const start = Math.max(0, Math.floor(offset));
   const excerpts: Array<GrepMatch & ReturnType<typeof attachmentSource>> = [];

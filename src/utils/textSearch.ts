@@ -1,3 +1,5 @@
+import { RE2JS } from 're2js';
+
 /*
  * SPDX-License-Identifier: AGPL-3.0-only
  * textSearch.ts
@@ -48,6 +50,11 @@ export type GrepPage = {
   remaining: number;
 };
 
+export function compileSearchPattern(pattern: string) {
+  if (pattern.length > 4096) throw new Error('Regex pattern exceeds 4096 characters.');
+  return RE2JS.compile(pattern, RE2JS.CASE_INSENSITIVE);
+}
+
 const MAX_GREP_RESULTS = 500;
 const MAX_EXCERPT_CHARS = 2000;
 const MAX_GREP_OUTPUT_CHARS = 250000;
@@ -74,8 +81,8 @@ export function grepInTextPaginated(
     test = (line) => line.toLowerCase().includes(needle);
   } else {
     try {
-      const regex = new RegExp(pattern, 'i');
-      test = (line) => regex.test(line);
+      const regex = compileSearchPattern(pattern);
+      test = (line) => regex.matcher(line).find();
     } catch (error) {
       return {
         excerpts: [{ line: 0, excerpt: `Invalid pattern: ${String(error)}` }],

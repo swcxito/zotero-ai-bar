@@ -47,7 +47,9 @@ export const grepSchema = z.object({
     .boolean()
     .optional()
     .default(true)
-    .describe('Treat pattern as a regular expression (default: true). Set to false for a literal case-insensitive match.'),
+    .describe(
+      'Treat pattern as a linear-time RE2 regular expression (default: true; no backreferences or lookaround). Set to false for a literal case-insensitive match.'
+    ),
   maxResults: z
     .number()
     .int()

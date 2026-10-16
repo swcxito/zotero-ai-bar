@@ -19,7 +19,7 @@
 import { escapeRegExp } from './textPrimitives';
 import { metadataItem } from './attachments';
 import { getString } from './locale';
-import { Marked } from 'marked';
+import { Marked, type Token } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import markedKatex from 'marked-katex-extension';
 import hljs from 'highlight.js';
@@ -222,13 +222,6 @@ export async function renderMarkdown(markdown: string, currentItemId?: number, c
       text = optimizeFormulas(text);
     }
 
-    // Strip any markdown emphasis/link wrappers around citation markers.
-    // The cite pill / header has its own styling, so wrappers like
-    // **[cite:..]**, *[cite:..]*, _[cite:..]_, [text](cite-url) that the LLM
-    // sometimes adds are unwanted noise. We unwrap them BEFORE marked.parse
-    // so the emphasis HTML is never generated.
-    text = stripCitationWrappers(text);
-
     // Extract cite markers into alphanumeric placeholders BEFORE marked.parse.
     // This prevents the `|` in [cite:id|title] from being interpreted as a GFM
     // table cell separator (which splits the marker and breaks rendering).
@@ -236,7 +229,34 @@ export async function renderMarkdown(markdown: string, currentItemId?: number, c
 
     const { text: protectedText, tokenMap } = protectAllowedHtmlPairs(textWithPlaceholders, ALLOWED_RAW_HTML_TAGS);
 
-    let html = await parserForContext(context).parse(protectedText);
+    const parser = parserForContext(context);
+    const highlightToken = parser.defaults.walkTokens;
+    const restoreCode = (value: string, escaped: boolean) => {
+      value = value.replace(new RegExp(`${CITE_PLACEHOLDER_PREFIX}(\\d{6})`, 'g'), (marker, index: string) => {
+        const body = citeTokens[Number(index)];
+        return body === undefined ? marker : escaped ? escapeHtml(`[cite:${body}]`) : `[cite:${body}]`;
+      });
+      for (const [marker, original] of tokenMap) value = value.replaceAll(marker, escaped ? escapeHtml(original) : original);
+      return value;
+    };
+    const citationOnly = (token: Token): string | undefined => {
+      if (token.type === 'text' && new RegExp(`^\\s*${CITE_PLACEHOLDER_PREFIX}\\d{6}\\s*$`).test(token.text)) return token.text.trim();
+      if (['strong', 'em', 'del', 'link'].includes(token.type) && 'tokens' in token && token.tokens?.length === 1)
+        return citationOnly(token.tokens[0]);
+      return undefined;
+    };
+    let html = await parser.parse(protectedText, {
+      walkTokens(token) {
+        // Let Marked identify code and emphasis; never interpret their raw Markdown with regexes.
+        if (token.type === 'code' || token.type === 'codespan') {
+          token.text = restoreCode(token.text, token.type === 'codespan');
+        } else if (['strong', 'em', 'del', 'link'].includes(token.type)) {
+          const marker = citationOnly(token);
+          if (marker) Object.assign(token, { type: 'text', text: marker, tokens: undefined });
+        }
+        return highlightToken?.call(parser, token);
+      },
+    });
 
     tokenMap.forEach((value, token) => {
       html = html.replaceAll(token, value);
@@ -279,36 +299,6 @@ function truncateTitle(title: string): string {
   const trimmed = title.replace(/\s+/g, ' ').trim();
   if (trimmed.length <= CITE_TITLE_MAX) return trimmed;
   return trimmed.slice(0, CITE_TITLE_MAX - 1).trimEnd() + '…';
-}
-
-/**
- * Remove markdown emphasis or link wrappers that surround a citation marker.
- * Run before `marked.parse` so the wrapper HTML is never produced.
- *
- * Handles:
- *  - **[cite:..]**   ->  [cite:..]   (bold)
- *  - __[cite:..]__   ->  [cite:..]   (bold alt)
- *  - *[cite:..]*     ->  [cite:..]   (italic)
- *  - _[cite:..]_     ->  [cite:..]   (italic alt)
- *  - ~~[cite:..]~~   ->  [cite:..]   (strikethrough)
- *  - `[cite:..]`     ->  [cite:..]   (inline code — defeats the marker)
- *  - [[cite:..]](url)->  [cite:..]   (markdown link wrapping the marker)
- */
-function stripCitationWrappers(text: string): string {
-  let prev: string;
-  let cur = text;
-  cur = cur.replace(new RegExp(String.raw`\[(\[cite:${CITE_BODY}\])\]\([^)]*\)`, 'g'), '$1');
-  cur = cur.replace(new RegExp('`' + String.raw`(\[cite:${CITE_BODY}\])` + '`', 'g'), '$1');
-  do {
-    prev = cur;
-    cur = cur
-      .replace(new RegExp(String.raw`\*\*\s*(\[cite:${CITE_BODY}\])\s*\*\*`, 'g'), '$1')
-      .replace(new RegExp(String.raw`__\s*(\[cite:${CITE_BODY}\])\s*__`, 'g'), '$1')
-      .replace(new RegExp(String.raw`~~\s*(\[cite:${CITE_BODY}\])\s*~~`, 'g'), '$1')
-      .replace(new RegExp(String.raw`(?<![*_])\*\s*(\[cite:${CITE_BODY}\])\s*\*(?![*_])`, 'g'), '$1')
-      .replace(new RegExp(String.raw`(?<![*_])_\s*(\[cite:${CITE_BODY}\])\s*_(?![*_])`, 'g'), '$1');
-  } while (cur !== prev);
-  return cur;
 }
 
 function buildCitationLabel(itemId: number, page?: number, truncate = true): string {
@@ -540,8 +530,9 @@ async function resolveLineCites(
  * resolve the line to a page before rendering.
  */
 async function restoreCiteMarkers(html: string, citeTokens: string[], currentItemId?: number, context?: MarkdownRenderContext): Promise<string> {
-  const linePageMap = await resolveLineCites(citeTokens, currentItemId, context);
   const placeholderRe = new RegExp(`${CITE_PLACEHOLDER_PREFIX}(\\d{6})`, 'g');
+  const visibleCites = [...html.matchAll(placeholderRe)].map((match) => citeTokens[Number(match[1])]).filter((body) => typeof body === 'string');
+  const linePageMap = await resolveLineCites(visibleCites, currentItemId, context);
   const headerRe = new RegExp(`<p>\\s*(${CITE_PLACEHOLDER_PREFIX}\\d{6})\\s*</p>`, 'g');
 
   // Pass 1: block-level header (item cites only).

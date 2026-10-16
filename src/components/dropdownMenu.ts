@@ -16,7 +16,16 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { autoUpdate, computePosition, flip, offset, shift, size } from '@floating-ui/dom';
+import { installWebGlobals } from '../utils/installWebGlobals';
 import { IconView } from './iconView';
+
+const positionCleanups = new WeakMap<Element, () => void>();
+
+export function disposeDropdownMenu(menu: Element): void {
+  positionCleanups.get(menu)?.();
+  positionCleanups.delete(menu);
+}
 export interface DropdownMenuItem {
   id: string;
   label: string;
@@ -54,6 +63,7 @@ export function closeDropdownMenu(root: DropdownRoot, menuId: string) {
   const menu = root.getElementById(menuId);
   const view = menu?.ownerDocument.defaultView;
   if (menu && view) menu.dispatchEvent(new view.Event('zaibar-menu-close'));
+  if (menu) disposeDropdownMenu(menu);
   menu?.remove();
 }
 
@@ -69,6 +79,7 @@ export function openDropdownMenu({
   dropUp = false,
 }: OpenDropdownMenuOptions): HTMLElement {
   const doc = anchor.ownerDocument;
+  installWebGlobals(globalThis, doc.defaultView);
   const root = getRoot(anchor);
 
   // Keep one menu instance per anchor menu id.
@@ -175,5 +186,68 @@ export function openDropdownMenu({
     horizontal === 'right' ? 'auto' : `${anchorRect.left - containerRect.left + (horizontal === 'center' ? anchorRect.width / 2 : 0)}px`;
   dropdown.style.right = horizontal === 'right' ? `${containerRect.right - anchorRect.right}px` : 'auto';
   if (horizontal === 'center') dropdown.style.translate = '-50% 0';
+  let disposed = false;
+  let sequence = 0;
+  const computed = doc.defaultView!.getComputedStyle(dropdown);
+  const maxHeight = Number.parseFloat(computed?.maxHeight || '') || 300;
+  const maxWidth = Number.parseFloat(computed?.maxWidth || '') || Infinity;
+  const placement = `${dropUp ? 'top' : 'bottom'}${horizontal === 'center' ? '' : horizontal === 'right' ? '-end' : '-start'}` as const;
+  const updatePosition = async () => {
+    const current = ++sequence;
+    const rootBoundary = { x: 0, y: 0, width: doc.defaultView!.innerWidth, height: doc.defaultView!.innerHeight };
+    const position = await computePosition(anchor, dropdown, {
+      placement,
+      middleware: [
+        offset(2),
+        flip({ rootBoundary, boundary: [] }),
+        shift({ padding: 8, rootBoundary, boundary: [] }),
+        size({
+          padding: 8,
+          rootBoundary,
+          boundary: [],
+          apply({ availableHeight, availableWidth }) {
+            if (disposed) return;
+            dropdown.style.maxHeight = `${Math.max(0, Math.min(maxHeight, availableHeight))}px`;
+            dropdown.style.maxWidth = `${Math.max(0, Math.min(maxWidth, availableWidth))}px`;
+            dropdown.style.overflowY = 'auto';
+          },
+        }),
+      ],
+    });
+    if (disposed || current !== sequence || !dropdown.isConnected) return;
+    // Floating UI has already applied alignment, including centering.
+    dropdown.style.translate = 'none';
+    dropdown.style.bottom = dropdown.style.right = 'auto';
+    dropdown.style.left = `${position.x}px`;
+    dropdown.style.top = `${position.y}px`;
+  };
+  const update = () => {
+    if (!anchor.isConnected || !dropdown.isConnected) {
+      void Promise.resolve().then(() => disposeDropdownMenu(dropdown));
+      return;
+    }
+    void updatePosition().catch((error) => ztoolkit.log('[dropdown] positioning failed:', error));
+  };
+  // XUL windows have no HTML body. Floating UI's ancestor discovery assumes one;
+  // use the document's scroll capture and window resize events on native hosts.
+  const nativeDocument = !doc.body;
+  const cleanup = autoUpdate(anchor, dropdown, update, {
+    ancestorScroll: !nativeDocument,
+    ancestorResize: !nativeDocument,
+    layoutShift: !nativeDocument,
+    animationFrame: nativeDocument,
+  });
+  if (nativeDocument) {
+    doc.addEventListener('scroll', update, true);
+    doc.defaultView!.addEventListener('resize', update);
+  }
+  positionCleanups.set(dropdown, () => {
+    disposed = true;
+    cleanup();
+    if (nativeDocument) {
+      doc.removeEventListener('scroll', update, true);
+      doc.defaultView!.removeEventListener('resize', update);
+    }
+  });
   return dropdown;
 }

@@ -11,6 +11,7 @@ await build({
   entryPoints: [
     'scripts/tests/codex.test.ts',
     'scripts/tests/backend.test.ts',
+    'scripts/tests/history-persistence.test.ts',
     'test/chatHistoryStore.test.ts',
     'test/streamRenderer.test.ts',
     'test/markdownRenderCache.test.ts',
@@ -37,6 +38,7 @@ await build({
 const mocha = new Mocha({ timeout: 5000 });
 mocha.addFile(join(directory, 'scripts/tests/codex.test.js'));
 mocha.addFile(join(directory, 'scripts/tests/backend.test.js'));
+mocha.addFile(join(directory, 'scripts/tests/history-persistence.test.js'));
 mocha.addFile(join(directory, 'test/chatHistoryStore.test.js'));
 mocha.addFile(join(directory, 'test/streamRenderer.test.js'));
 mocha.addFile(join(directory, 'test/markdownRenderCache.test.js'));

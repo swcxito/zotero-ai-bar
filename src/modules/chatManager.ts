@@ -425,6 +425,7 @@ export class ChatManager {
       candidate.conversationId = draftId;
       const container = this.getSessionMessageContainer(candidate.id);
       if (container) {
+        delete container.dataset.renderToken;
         container.innerHTML = '';
         container.dataset.conversationId = draftId;
       }

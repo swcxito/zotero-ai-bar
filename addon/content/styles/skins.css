@@ -87,7 +87,7 @@ html[data-zaibar-skin] body,html[data-zaibar-skin] #root,[data-zaibar-skin].mess
 [data-zaibar-skin] .zaibar-history-panel [data-conversation-id]:hover{border-color:var(--accent)!important}
 [data-zaibar-skin] .zaibar-history-panel button{border-radius:var(--small-radius)!important}
 html[data-zaibar-skin] :is(.bg-white,.dark\:bg-zinc-900,.dark\:bg-zinc-800),[data-zaibar-skin] :is(.bg-white,.dark\:bg-zinc-900,.dark\:bg-zinc-800){background-color:var(--surface)!important;color:var(--text)}
-html[data-zaibar-skin] :is(.bg-zinc-100,.bg-slate-50,.bg-gray-50),[data-zaibar-skin] :is(.bg-zinc-100,.bg-slate-50,.bg-gray-50){background-color:var(--page)!important}
+html[data-zaibar-skin] :is(.bg-zinc-100,.bg-slate-50,.bg-gray-50):not(.tool-call-box),[data-zaibar-skin] :is(.bg-zinc-100,.bg-slate-50,.bg-gray-50):not(.tool-call-box){background-color:var(--page)!important}
 html[data-zaibar-skin] :is(.border-zinc-200,.border-zinc-700,.border-gray-200,.border-gray-300),[data-zaibar-skin] :is(.border-zinc-200,.border-zinc-700,.border-gray-200,.border-gray-300){border-color:var(--line)!important}
 html[data-zaibar-skin] :is(input,textarea,select,button),[data-zaibar-skin] :is(input,textarea,select,button){border-radius:var(--small-radius)!important;font-family:var(--font)}
 html[data-zaibar-skin] :is(input,textarea,select),[data-zaibar-skin] :is(input,textarea,select){color:var(--text)}
