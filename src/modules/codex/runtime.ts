@@ -389,6 +389,9 @@ export async function discoverCandidates(): Promise<RuntimeCandidate[]> {
   );
 }
 
+/** Signals a stale binary path/version before any chat turn has been sent. */
+class RuntimeRefreshRequired extends Error {}
+
 class CodexRuntime {
   get sharedLogin(): boolean {
     return getPref('codex.authSource') === 'shared';
@@ -485,82 +488,105 @@ class CodexRuntime {
     if (this.starting) return this.starting;
     const generation = this.generation;
     this.starting = (async () => {
-      const info = this.info || (await this.detect());
-      if (!info) throw new Error(this.status);
-      const network = await runtimeNetworkEnvironment();
-      if (this.stopped || generation !== this.generation) throw new Error(codexString('codex-error-connection-cancelled', '连接已取消。'));
-      const process = await subprocess().call({
+      for (let attempt = 0; ; attempt++) {
+        if (this.stopped || generation !== this.generation) throw new Error(codexString('codex-error-connection-cancelled', '连接已取消。'));
+        try {
+          return await this.startConnection(generation);
+        } catch (error) {
+          // Retry only the handshake, once. Never replay a chat turn or tool action.
+          if (!(error instanceof RuntimeRefreshRequired) || attempt > 0) throw error;
+        }
+      }
+    })().finally(() => {
+      this.starting = undefined;
+    });
+    return this.starting;
+  }
+
+  private async startConnection(generation: number): Promise<CodexRpc> {
+    const cached = !!this.info;
+    const info = this.info || (await this.detect());
+    if (!info) throw new Error(this.status);
+    const network = await runtimeNetworkEnvironment();
+    if (this.stopped || generation !== this.generation) throw new Error(codexString('codex-error-connection-cancelled', '连接已取消。'));
+    let process: any;
+    try {
+      process = await subprocess().call({
         command: info.path,
         arguments: ['app-server', ...policyArguments({ ...info.policy, ...(this.sharedLogin ? { cli_auth_credentials_store: 'auto' } : {}) })],
         environment: { ...environment(this.sharedLogin), ...network },
         stderr: 'pipe',
         workdir: PathUtils.join(codexDirectory(), 'workspace'),
       });
-      this.process = process;
-      const rpc = new CodexRpc((text) => process.stdin.write(text));
-      // Drain stderr without putting runtime messages, credentials or document text in logs.
-      void (async () => {
-        while (await process.stderr.readString()) {
-          /* drain */
-        }
-      })().catch(() => undefined);
-      void (async () => {
-        for (;;) {
-          const chunk = await process.stdout.readString();
-          if (!chunk) break;
-          rpc.feed(chunk);
-        }
-      })()
-        .catch(() => undefined)
-        .finally(() => rpc.close());
-      void process.wait().then(() => {
-        rpc.close();
-        if (this.rpc === rpc) {
+    } catch (error) {
+      if (cached) {
+        this.info = undefined;
+        throw new RuntimeRefreshRequired((error as Error).message);
+      }
+      throw error;
+    }
+    this.process = process;
+    const rpc = new CodexRpc((text) => process.stdin.write(text));
+    // Drain stderr without putting runtime messages, credentials or document text in logs.
+    void (async () => {
+      while (await process.stderr.readString()) {
+        /* drain */
+      }
+    })().catch(() => undefined);
+    void (async () => {
+      for (;;) {
+        const chunk = await process.stdout.readString();
+        if (!chunk) break;
+        rpc.feed(chunk);
+      }
+    })()
+      .catch(() => undefined)
+      .finally(() => rpc.close());
+    void process.wait().then(() => {
+      rpc.close();
+      if (this.rpc === rpc) {
+        this.rpc = undefined;
+        this.account = undefined;
+        this.status = codexString('codex-status-disconnected', 'Codex 连接已断开');
+        this.changed();
+      }
+    });
+    try {
+      const initialized = await rpc.request('initialize', {
+        clientInfo: { name: 'zotero_ai_bar', title: 'Zotero AI Bar', version: pluginVersion },
+        capabilities: { experimentalApi: true },
+      });
+      if (initialized.userAgent?.match(/^[^/]+\/([^\s]+)/)?.[1] !== info.version.replace(/^codex-cli\s+/, '')) {
+        this.info = undefined;
+        throw new RuntimeRefreshRequired(codexString('codex-error-runtime-changed', 'Codex 运行时已改变，请重新检测版本。'));
+      }
+      await rpc.notify('initialized');
+      if (this.stopped || generation !== this.generation) throw new Error(codexString('codex-error-connection-cancelled', '连接已取消。'));
+      this.rpc = rpc;
+      rpc.listeners.add((message) => {
+        if (message.method === 'client/disconnected' && this.rpc === rpc) {
           this.rpc = undefined;
           this.account = undefined;
+          this.models = [];
           this.status = codexString('codex-status-disconnected', 'Codex 连接已断开');
+          void process.kill(1000).catch(() => undefined);
           this.changed();
         }
-      });
-      try {
-        const initialized = await rpc.request('initialize', {
-          clientInfo: { name: 'zotero_ai_bar', title: 'Zotero AI Bar', version: pluginVersion },
-          capabilities: { experimentalApi: true },
-        });
-        if (initialized.userAgent?.match(/^[^/]+\/([^\s]+)/)?.[1] !== info.version.replace(/^codex-cli\s+/, '')) {
-          this.info = undefined;
-          throw new Error(codexString('codex-error-runtime-changed', 'Codex 运行时已改变，请重新检测版本。'));
-        }
-        await rpc.notify('initialized');
-        if (this.stopped || generation !== this.generation) throw new Error(codexString('codex-error-connection-cancelled', '连接已取消。'));
-        this.rpc = rpc;
-        rpc.listeners.add((message) => {
-          if (message.method === 'client/disconnected' && this.rpc === rpc) {
-            this.rpc = undefined;
-            this.account = undefined;
-            this.models = [];
-            this.status = codexString('codex-status-disconnected', 'Codex 连接已断开');
-            void process.kill(1000).catch(() => undefined);
+        if (message.method === 'account/updated' && !this.loginPending)
+          void this.refreshAccount().catch(() => {
+            this.status = codexString('codex-status-relogin', '请重新登录 Codex');
             this.changed();
-          }
-          if (message.method === 'account/updated' && !this.loginPending)
-            void this.refreshAccount().catch(() => {
-              this.status = codexString('codex-status-relogin', '请重新登录 Codex');
-              this.changed();
-            });
-        });
-        await this.refreshAccount();
-        return rpc;
-      } catch (error) {
-        rpc.close();
-        this.rpc = undefined;
-        await process.kill(1000).catch(() => undefined);
-        throw error;
-      }
-    })().finally(() => {
-      this.starting = undefined;
-    });
-    return this.starting;
+          });
+      });
+      await this.refreshAccount();
+      return rpc;
+    } catch (error) {
+      rpc.close();
+      this.rpc = undefined;
+      await process.kill(1000).catch(() => undefined);
+      if (this.process === process) this.process = undefined;
+      throw error;
+    }
   }
 
   async refreshAccount(isCurrent: () => boolean = () => true): Promise<void> {

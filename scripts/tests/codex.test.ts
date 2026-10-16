@@ -193,6 +193,167 @@ describe('Codex components', function () {
     });
   });
 
+  describe('automatic runtime refresh on connection', function () {
+    const g = globalThis as any;
+    const names = ['Zotero', 'ChromeUtils', 'PathUtils', 'Cc', 'Ci', 'Services', 'Components'];
+    let originals: any;
+    let runtime: any;
+    let starts: number;
+    let detections: number;
+    let kills: number;
+    let failLaunch: boolean;
+    let serverVersion: string;
+    const info = (version: string) => ({ path: '/codex', source: 'desktop', version, policy: {} });
+
+    beforeEach(function () {
+      originals = Object.fromEntries(names.map((name) => [name, g[name]]));
+      starts = detections = kills = 0;
+      failLaunch = false;
+      serverVersion = '0.155.0';
+      runtime = new (codexRuntime.constructor as any)();
+      runtime.info = info('codex-cli 0.154.0');
+      runtime.detect = async () => {
+        detections++;
+        runtime.info = info('codex-cli 0.155.0');
+        return runtime.info;
+      };
+      g.Zotero = { Prefs: { get: () => undefined } };
+      g.PathUtils = { join: path.posix.join, profileDir: '/profile' };
+      g.Ci = { nsIProtocolProxyService: {} };
+      g.Services = { io: { newURI: (url: string) => url } };
+      g.Components = { isSuccessCode: () => true };
+      g.Cc = {
+        '@mozilla.org/network/protocol-proxy-service;1': {
+          getService: () => ({
+            asyncResolve: (_uri: any, _flags: any, callback: any) => {
+              queueMicrotask(() => callback.onProxyAvailable(null, null, null, 0));
+              return { cancel() {} };
+            },
+          }),
+        },
+      };
+      g.ChromeUtils = {
+        importESModule: () => ({
+          Subprocess: {
+            getEnvironment: () => ({}),
+            call: async () => {
+              starts++;
+              if (failLaunch && starts === 1) throw new Error('binary removed by update');
+              const queue: string[] = [];
+              let read: ((text: string) => void) | undefined;
+              let exited: (value: any) => void;
+              const exit = new Promise((resolve) => {
+                exited = resolve;
+              });
+              const push = (text: string) => {
+                if (read) {
+                  const resolve = read;
+                  read = undefined;
+                  resolve(text);
+                } else queue.push(text);
+              };
+              return {
+                stdout: {
+                  readString: () =>
+                    queue.length
+                      ? Promise.resolve(queue.shift())
+                      : new Promise((resolve) => {
+                          read = resolve;
+                        }),
+                },
+                stderr: { readString: async () => '' },
+                stdin: {
+                  write: async (text: string) => {
+                    const message = JSON.parse(text);
+                    if (message.id === undefined) return;
+                    const result =
+                      message.method === 'initialize'
+                        ? { userAgent: `codex_cli_rs/${serverVersion}` }
+                        : message.method === 'account/read'
+                          ? { account: { type: 'chatgpt', email: 'test@example.com' } }
+                          : { data: [{ model: 'test-model' }] };
+                    push(JSON.stringify({ id: message.id, result }) + '\n');
+                  },
+                },
+                wait: () => exit,
+                kill: async () => {
+                  kills++;
+                  push('');
+                  exited!({ exitCode: 0 });
+                },
+              };
+            },
+          },
+        }),
+      };
+    });
+
+    afterEach(async function () {
+      await runtime.stop();
+      for (const name of names) {
+        if (originals[name] === undefined) delete g[name];
+        else g[name] = originals[name];
+      }
+    });
+
+    it('redetects a changed version and shares recovery between concurrent callers', async function () {
+      const [first, second] = await Promise.all([runtime.connect(), runtime.connect()]);
+      assert.strictEqual(first, second);
+      assert.equal(starts, 2);
+      assert.equal(detections, 1);
+      assert.equal(kills, 1);
+      assert.equal(runtime.account.email, 'test@example.com');
+      assert.equal(runtime.models[0].model, 'test-model');
+    });
+
+    it('redetects when an update removed the cached binary', async function () {
+      failLaunch = true;
+      await runtime.connect();
+      assert.equal(starts, 2);
+      assert.equal(detections, 1);
+    });
+
+    it('does not redetect when the cached runtime still matches', async function () {
+      serverVersion = '0.154.0';
+      await runtime.connect();
+      assert.equal(starts, 1);
+      assert.equal(detections, 0);
+    });
+
+    it('stops after one recovery when the version keeps changing', async function () {
+      serverVersion = '0.156.0';
+      let failure: any;
+      try {
+        await runtime.connect();
+      } catch (error) {
+        failure = error;
+      }
+      assert.instanceOf(failure, Error);
+      assert.equal(starts, 2);
+      assert.equal(detections, 1);
+      assert.equal(kills, 2);
+      assert.isUndefined(runtime.rpc);
+    });
+
+    it('does not reconnect if stopped during redetection', async function () {
+      runtime.detect = async () => {
+        detections++;
+        await runtime.stop();
+        return info('codex-cli 0.155.0');
+      };
+      let failure: any;
+      try {
+        await runtime.connect();
+      } catch (error) {
+        failure = error;
+      }
+      assert.instanceOf(failure, Error);
+      assert.equal(starts, 1);
+      assert.equal(detections, 1);
+      assert.isUndefined(runtime.rpc);
+    });
+  });
+
   describe('Codex desktop-first runtime discovery (OS adapters)', function () {
     const g = globalThis as any;
     const names = ['Zotero', 'ChromeUtils', 'IOUtils', 'PathUtils'];
