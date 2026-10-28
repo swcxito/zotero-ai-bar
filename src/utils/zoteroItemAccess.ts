@@ -50,6 +50,41 @@ export function getZoteroItem(itemId: number): any | undefined {
   }
 }
 
+/** Read the library selection at tool-call time, including when chat has focus. */
+export function getSelectedLibraryItems(options: { offset?: number; limit?: number } = {}) {
+  // ZoteroPane.getSelectedItems() follows the active reader tab instead of the library list.
+  const itemsView = Zotero.getMainWindow()?.ZoteroPane?.itemsView;
+  if (!itemsView || typeof itemsView.getSelectedItems !== 'function') {
+    throw new Error('The Zotero library pane is unavailable. Open the main Zotero window and select literature items.');
+  }
+
+  const selectedItems = itemsView.getSelectedItems();
+  const uniqueItems = new Map<number, any>();
+  for (const selected of selectedItems) {
+    const item = selected.isAttachment?.() && selected.parentID ? getZoteroItem(selected.parentID) : selected;
+    if (!item || item.deleted || item.isNote?.() || item.isAnnotation?.()) continue;
+    if (!item.isRegularItem?.() && !item.isAttachment?.()) continue;
+    uniqueItems.set(item.id, item);
+  }
+
+  const offset = Math.max(0, options.offset ?? 0);
+  const limit = Math.max(1, Math.min(50, options.limit ?? 20));
+  const items = [...uniqueItems.values()].slice(offset, offset + limit).map((item) => ({
+    ...getItemMetadata(item.id),
+    ...itemToGlobItem(item.id),
+  }));
+  const total = uniqueItems.size;
+  const remaining = Math.max(0, total - offset - items.length);
+  return {
+    items,
+    selectedCount: selectedItems.length,
+    total,
+    truncated: remaining > 0,
+    nextOffset: remaining > 0 ? offset + items.length : undefined,
+    remaining,
+  };
+}
+
 /**
  * Build a PageTextResult (pageTexts, fullText, and all precomputed line
  * structures) from raw PDF text where pages are separated by `\f` (form feed).

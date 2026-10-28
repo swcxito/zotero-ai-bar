@@ -70,6 +70,13 @@ export const readSchema = z.object({
 
 export type ReadPayload = z.infer<typeof readSchema>;
 
+export const getSelectedItemsSchema = z.object({
+  offset: z.number().int().min(0).optional().default(0).describe('Zero-based offset for paginating the selected literature items.'),
+  limit: z.number().int().min(1).max(50).optional().default(20).describe('Maximum selected items to return (default 20, max 50).'),
+});
+
+export type GetSelectedItemsPayload = z.infer<typeof getSelectedItemsSchema>;
+
 export const globSchema = z.object({
   query: z.string().describe('Search query string (title, author, abstract, etc.).'),
   itemType: z.string().optional().describe('Filter by Zotero item type, e.g. journalArticle, book.'),
