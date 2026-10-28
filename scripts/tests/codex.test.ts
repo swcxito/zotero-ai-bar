@@ -195,7 +195,7 @@ describe('Codex components', function () {
 
   describe('Codex desktop-first runtime discovery (OS adapters)', function () {
     const g = globalThis as any;
-    const names = ['Zotero', 'ChromeUtils', 'IOUtils', 'PathUtils'];
+    const names = ['Zotero', 'ChromeUtils', 'IOUtils', 'PathUtils', 'Cc', 'Ci'];
     let originals: any;
     let paths: Record<string, string[]>;
     let output: string;
@@ -255,6 +255,7 @@ describe('Codex components', function () {
 
     afterEach(async function () {
       await codexRuntime.stop();
+      codexRuntime.info = undefined;
       for (const name of names) {
         if (originals[name] === undefined) delete g[name];
         else g[name] = originals[name];
@@ -358,6 +359,144 @@ describe('Codex components', function () {
         cachedBinary
       );
       assert.equal(candidates.find((candidate) => candidate.path === cachedBinary)?.source, 'desktop');
+    });
+
+    function updatedWindowsRuntime(options: { failSpawn?: boolean; incompatible?: boolean; failInitialize?: boolean } = {}) {
+      g.Zotero.isMac = false;
+      g.Zotero.isWin = true;
+      g.PathUtils = {
+        ...g.PathUtils,
+        join: path.win32.join,
+        parent: path.win32.dirname,
+        filename: path.win32.basename,
+        isAbsolute: path.win32.isAbsolute,
+      };
+      environment.HTTPS_PROXY = 'http://127.0.0.1:8080';
+      g.Ci = { nsIProtocolProxyService: {} };
+      g.Cc = { '@mozilla.org/network/protocol-proxy-service;1': { getService: () => ({ proxyConfigType: 5 }) } };
+      const oldBinary = 'C:\\Program Files\\WindowsApps\\OpenAI.Codex_old\\app\\resources\\codex.exe';
+      const root = 'C:\\Program Files\\WindowsApps\\OpenAI.Codex_new';
+      const newBinary = path.win32.join(root, 'app', 'resources', 'codex.exe');
+      paths[newBinary] = [];
+      system = '';
+      const version = 'codex-cli 0.154.0-alpha.6.2';
+      codexRuntime.info = { path: oldBinary, source: 'desktop', version, policy: runtimePolicy(version, features) };
+      const launches: string[] = [];
+      let metadataQueries = 0;
+      g.ChromeUtils.importESModule = () => ({
+        Subprocess: {
+          getEnvironment: () => environment,
+          pathSearch: async () => {
+            throw new Error('missing');
+          },
+          call: async ({ command, arguments: args }: { command: string; arguments: string[] }) => {
+            if (args[0] === 'app-server' && args[1] !== '--help') {
+              launches.push(command);
+              if (command === oldBinary || options.failSpawn) throw new Error('File does not exist, or is not executable');
+              let read: ((text: string) => void) | undefined;
+              let exited: (result: { exitCode: number }) => void;
+              const wait = new Promise<{ exitCode: number }>((resolve) => {
+                exited = resolve;
+              });
+              return {
+                stdout: {
+                  readString: () =>
+                    new Promise<string>((resolve) => {
+                      read = resolve;
+                    }),
+                },
+                stderr: { readString: async () => '' },
+                stdin: {
+                  write: async (text: string) => {
+                    const message = JSON.parse(text);
+                    if (message.id === undefined) return;
+                    const response =
+                      message.method === 'initialize'
+                        ? options.failInitialize
+                          ? { error: { code: -1, message: 'initialize failed' } }
+                          : { result: { userAgent: 'codex/0.154.0-alpha.6.2' } }
+                        : { result: { account: null } };
+                    read?.(JSON.stringify({ jsonrpc: '2.0', id: message.id, ...response }) + '\n');
+                  },
+                },
+                wait: () => wait,
+                kill: async () => {
+                  read?.('');
+                  exited({ exitCode: 0 });
+                },
+              };
+            }
+            if (command.endsWith('powershell.exe')) metadataQueries++;
+            const text = command.endsWith('powershell.exe')
+              ? JSON.stringify([root])
+              : args[0] === '--version'
+                ? version
+                : args[0] === 'features'
+                  ? options.incompatible
+                    ? ''
+                    : features
+                  : 'generate-json-schema';
+            let read = false;
+            return {
+              stdout: {
+                readString: async () => {
+                  if (read) return '';
+                  read = true;
+                  return text;
+                },
+              },
+              stderr: { readString: async () => '' },
+              wait: async () => ({ exitCode: 0 }),
+              kill: async () => {},
+            };
+          },
+        },
+      });
+      return { launches, oldBinary, newBinary, metadataQueries: () => metadataQueries };
+    }
+
+    it('rediscovers and connects after a desktop update removes the cached executable', async function () {
+      const fixture = updatedWindowsRuntime();
+      await codexRuntime.connect();
+      assert.deepEqual(fixture.launches, [fixture.oldBinary, fixture.newBinary]);
+      assert.equal(codexRuntime.info?.path, fixture.newBinary);
+      assert.equal(fixture.metadataQueries(), 1);
+      assert.isDefined(codexRuntime.rpc);
+    });
+
+    it('limits spawn recovery to one retry and clears a failed runtime', async function () {
+      const fixture = updatedWindowsRuntime({ failSpawn: true });
+      const error = await codexRuntime.connect().then(
+        () => undefined,
+        (error: Error) => error
+      );
+      assert.include(error?.message || '', 'not executable');
+      assert.deepEqual(fixture.launches, [fixture.oldBinary, fixture.newBinary]);
+      assert.equal(fixture.metadataQueries(), 1);
+      assert.isUndefined(codexRuntime.info);
+    });
+
+    it('does not launch an updated runtime that fails policy validation', async function () {
+      const fixture = updatedWindowsRuntime({ incompatible: true });
+      const error = await codexRuntime.connect().then(
+        () => undefined,
+        (error: Error) => error
+      );
+      assert.include(error?.message || '', '安全检查');
+      assert.deepEqual(fixture.launches, [fixture.oldBinary]);
+      assert.isUndefined(codexRuntime.info);
+    });
+
+    it('does not repeat RPC initialization when the recovered process returns an error', async function () {
+      const fixture = updatedWindowsRuntime({ failInitialize: true });
+      const error = await codexRuntime.connect().then(
+        () => undefined,
+        (error: Error) => error
+      );
+      assert.include(error?.message || '', 'Codex -1');
+      assert.deepEqual(fixture.launches, [fixture.oldBinary, fixture.newBinary]);
+      assert.equal(fixture.metadataQueries(), 1);
+      assert.isUndefined(codexRuntime.rpc);
     });
   });
 });

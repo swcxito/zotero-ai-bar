@@ -485,17 +485,32 @@ class CodexRuntime {
     if (this.starting) return this.starting;
     const generation = this.generation;
     this.starting = (async () => {
-      const info = this.info || (await this.detect());
+      let info = this.info || (await this.detect());
       if (!info) throw new Error(this.status);
       const network = await runtimeNetworkEnvironment();
-      if (this.stopped || generation !== this.generation) throw new Error(codexString('codex-error-connection-cancelled', '连接已取消。'));
-      const process = await subprocess().call({
-        command: info.path,
-        arguments: ['app-server', ...policyArguments({ ...info.policy, ...(this.sharedLogin ? { cli_auth_credentials_store: 'auto' } : {}) })],
-        environment: { ...environment(this.sharedLogin), ...network },
-        stderr: 'pipe',
-        workdir: PathUtils.join(codexDirectory(), 'workspace'),
-      });
+      let process: any;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (this.stopped || generation !== this.generation) throw new Error(codexString('codex-error-connection-cancelled', '连接已取消。'));
+        try {
+          process = await subprocess().call({
+            command: info.path,
+            arguments: ['app-server', ...policyArguments({ ...info.policy, ...(this.sharedLogin ? { cli_auth_credentials_store: 'auto' } : {}) })],
+            environment: { ...environment(this.sharedLogin), ...network },
+            stderr: 'pipe',
+            workdir: PathUtils.join(codexDirectory(), 'workspace'),
+          });
+          break;
+        } catch (error) {
+          // Desktop updates can remove a versioned installation after detection.
+          // Retry only process creation, before any RPC requests have been sent.
+          this.info = undefined;
+          if (attempt > 0) throw error;
+          if (this.stopped || generation !== this.generation)
+            throw new Error(codexString('codex-error-connection-cancelled', '连接已取消。'), { cause: error });
+          info = await this.detect();
+          if (!info) throw new Error(this.status, { cause: error });
+        }
+      }
       this.process = process;
       const rpc = new CodexRpc((text) => process.stdin.write(text));
       // Drain stderr without putting runtime messages, credentials or document text in logs.
