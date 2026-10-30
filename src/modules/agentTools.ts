@@ -9,7 +9,14 @@ import { tool, asSchema } from 'ai';
 import type { z } from 'zod';
 import type { Session, AgentUserAnswer } from './chatManager';
 import { getItemFullText } from '../utils/itemContext';
-import { getZoteroItem, readItemText, searchLibraryItems, buildLibraryTree, getItemFullTextByPage } from '../utils/zoteroItemAccess';
+import {
+  getZoteroItem,
+  getSelectedLibraryItems,
+  readItemText,
+  searchLibraryItems,
+  buildLibraryTree,
+  getItemFullTextByPage,
+} from '../utils/zoteroItemAccess';
 import { grepInTextPaginated } from '../utils/textSearch';
 import { onAgentAskUser } from './chatUI';
 import { getReaderByTabId } from './tabObserver';
@@ -20,6 +27,7 @@ import {
   askUserSchema,
   grepSchema,
   readSchema,
+  getSelectedItemsSchema,
   globSchema,
   treeSchema,
   translateSchema,
@@ -29,6 +37,7 @@ import {
   type AskUserPayload,
   type GrepPayload,
   type ReadPayload,
+  type GetSelectedItemsPayload,
   type GlobPayload,
   type TreePayload,
   type TranslatePayload,
@@ -173,6 +182,13 @@ export const globTool = defineSharedTool({
   },
 });
 
+export const getSelectedItemsTool = defineSharedTool({
+  description:
+    'Get the literature items currently selected in the Zotero library, including metadata and abstracts. Works from the global assistant without an open document. Child attachments resolve to their parent paper, duplicate papers are removed, and notes/annotations are skipped. An empty items array means no literature is selected. Use the returned itemId with read or grep to read full text; use attachment IDs when a paper has multiple PDFs. For pagination, keep the library selection unchanged between calls.',
+  inputSchema: getSelectedItemsSchema,
+  execute: async (input: GetSelectedItemsPayload) => getSelectedLibraryItems(input),
+});
+
 export const treeTool = defineSharedTool({
   description:
     'List the hierarchical structure of the Zotero library like the Linux tree command. Returns names and item metadata without collection keys to save tokens. To start from a visible subcollection, pass rootCollectionPath as an exact name path such as ["Parent", "Child"].',
@@ -277,6 +293,7 @@ export function buildTools(_options?: { imageSupport?: boolean }) {
     ask_user: askUserTool,
     grep: grepTool,
     read: readTool,
+    get_selected_items: getSelectedItemsTool,
     glob: globTool,
     tree: treeTool,
     search_papers: searchPapersTool,

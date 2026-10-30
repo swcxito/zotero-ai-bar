@@ -40,19 +40,32 @@ import type { AskUserPayload } from '../utils/agentSchemas';
 
 Zotero.debug('[zaibar-chatUI] module loaded');
 
+let transcriptRenderSequence = 0;
+
 /** Rebuild a completed, text-only transcript loaded from local history. */
 export async function renderPersistedTranscript(session: Session, container: HTMLElement, force = false): Promise<void> {
   const conversationId = session.conversationId || '';
   if (!force && container.dataset.conversationId === conversationId) return;
   container.dataset.conversationId = conversationId;
   container.innerHTML = '';
-  const renderToken = `${conversationId}:${Date.now()}`;
+  // Workspace notifications and history activation can render the same conversation
+  // concurrently, even within one millisecond. Each invocation needs a unique owner.
+  const renderToken = String(++transcriptRenderSequence);
   container.dataset.renderToken = renderToken;
+  const isCurrentRender = () =>
+    container.dataset.renderToken === renderToken &&
+    container.dataset.conversationId === conversationId &&
+    (session.conversationId || '') === conversationId &&
+    container.isConnected;
+  // Saving a live response must not extend this in-progress history replay.
+  const turns = session.persistedTurns.map((turn) => ({ ...turn }));
+  const itemId = session.itemId;
 
-  for (const turn of session.persistedTurns) {
-    if (container.dataset.renderToken !== renderToken || !container.isConnected) return;
+  for (const turn of turns) {
+    if (!isCurrentRender()) return;
+    const fragment = container.ownerDocument.createDocumentFragment();
     if (turn.userText) {
-      container.appendChild(createUserMessageBubble(container.ownerDocument, turn.userText, [], () => undefined, turn.referenceText));
+      fragment.appendChild(createUserMessageBubble(container.ownerDocument, turn.userText, [], () => undefined, turn.referenceText));
     }
     const pop = ChatBox({ doc: container.ownerDocument, isUser: false }) as HTMLElement;
     setChatTranslationPreview(pop, !turn.userText ? turn.referenceText : undefined);
@@ -67,16 +80,21 @@ export async function renderPersistedTranscript(session: Session, container: HTM
       }
       const content = container.ownerDocument.createElement('div');
       content.classList.add('chat-message-content');
-      content.innerHTML = await renderMarkdown(turn.assistantMarkdown, session.itemId);
+      const html = await renderMarkdown(turn.assistantMarkdown, itemId);
+      // A newer render or conversation reset may have taken over during Markdown
+      // parsing/citation resolution. Never append either half of a stale turn.
+      if (!isCurrentRender()) return;
+      content.innerHTML = html;
       attachCitationHandlers(content);
       chatMessage.appendChild(content);
     }
     pop.dataset.markdown = turn.assistantMarkdown;
     captureAssistantPreviewSnapshot(pop);
     pop.querySelector('.chat-actions')?.classList.remove('hidden');
-    container.appendChild(pop);
+    fragment.appendChild(pop);
+    container.appendChild(fragment);
   }
-  if (container.dataset.renderToken === renderToken) container.scrollTop = container.scrollHeight;
+  if (isCurrentRender()) container.scrollTop = container.scrollHeight;
 }
 
 /** Wire interactions for rendered Markdown. Safe to call repeatedly. */
