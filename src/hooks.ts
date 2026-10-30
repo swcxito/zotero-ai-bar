@@ -14,6 +14,7 @@ import { convertLegacyLLMConfigByKey, ensureCommonProviders, initIconCache, load
 import { isReaderZoteroTab, updateSelectedZoteroTab } from './modules/chatWorkspace';
 import { codexRuntime } from './modules/codex/runtime';
 import { startChatSkinSync, stopChatSkinSync } from './utils/chatSkin';
+import { startWebDavAutoSync, stopWebDavAutoSync } from './modules/webdavSync';
 
 function zaibarDump(msg: string) {
   try {
@@ -57,6 +58,8 @@ async function onStartup() {
     if (getPref('chat.openOnStartup') && addon.chatManager.getCurrentHostMode() === 'window') {
       await ensureChatWindowReady();
     }
+
+    startWebDavAutoSync();
 
     // Mark initialized as true to confirm plugin loading status
     // outside the plugin (e.g. scaffold testing process)
@@ -166,6 +169,7 @@ async function onMainWindowUnload(win: Window): Promise<void> {
 }
 
 async function onShutdown(): Promise<void> {
+  stopWebDavAutoSync();
   stopChatSkinSync();
   await codexRuntime.stop(true);
   await addon.chatManager.flushHistory();

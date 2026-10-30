@@ -35,8 +35,14 @@ export function ensureWebStreamsGlobals() {
     }
   }
 
-  if (typeof g.DOMException === 'undefined' && mainWin.DOMException) {
+  if (typeof g.DOMException === 'undefined' && mainWin?.DOMException) {
     g.DOMException = mainWin.DOMException;
+  }
+  if (typeof g.AbortController === 'undefined' && mainWin?.AbortController) {
+    g.AbortController = mainWin.AbortController;
+  }
+  if (typeof g.AbortSignal === 'undefined' && mainWin?.AbortSignal) {
+    g.AbortSignal = mainWin.AbortSignal;
   }
 
   if (typeof g.TransformStream !== 'undefined') return;

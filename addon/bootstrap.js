@@ -16,7 +16,17 @@ function ensureWebStreamsGlobals(target) {
     g.console = mainWin.console;
   }
 
-  for (const name of ['TransformStream', 'ReadableStream', 'WritableStream', 'TextEncoder', 'TextDecoder', 'TextDecoderStream', 'DOMException']) {
+  for (const name of [
+    'TransformStream',
+    'ReadableStream',
+    'WritableStream',
+    'TextEncoder',
+    'TextDecoder',
+    'TextDecoderStream',
+    'DOMException',
+    'AbortController',
+    'AbortSignal',
+  ]) {
     if (typeof g[name] === 'undefined' && mainWin[name]) {
       g[name] = mainWin[name];
     }

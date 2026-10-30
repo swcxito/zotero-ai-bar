@@ -55,7 +55,10 @@ import {
   ChatHistoryStore,
   getConversationScope,
   makeConversationTitle,
+  turnsToContextMessages,
   type ConversationScope,
+  type MergeHistoryResult,
+  type PersistedChatHistoryFile,
   type PersistedConversation,
   type PersistedTurn,
 } from './chatHistoryStore';
@@ -281,6 +284,7 @@ export class ChatManager {
   public readonly historyStore = new ChatHistoryStore();
   private historyListeners = new Set<() => void>();
   private initializedScopeConversations = new Map<ConversationScope, string>();
+  private pendingSyncedConversations = new Set<string>();
   private fullTextChoices = new Map<string, 'agent' | 'snapshot' | 'cancel'>();
   /** Per-section sidebar state (keyed by item.id / sectionId) */
 
@@ -299,6 +303,45 @@ export class ChatManager {
 
   async flushHistory(): Promise<void> {
     await this.historyStore.flush();
+  }
+
+  private mergeTurnLists(olderTurns: PersistedTurn[], newerTurns: PersistedTurn[]): PersistedTurn[] {
+    const turnMap = new Map<string, PersistedTurn>();
+    for (const t of olderTurns) turnMap.set(t.id, { ...t });
+    for (const t of newerTurns) turnMap.set(t.id, { ...t });
+    return Array.from(turnMap.values()).sort((a, b) => a.createdAt - b.createdAt);
+  }
+
+  applyRemoteHistoryMerge(remoteFile: PersistedChatHistoryFile): MergeHistoryResult {
+    const result = this.historyStore.mergeRemote(remoteFile);
+    this.synchronizePrunedSessions();
+    for (const session of this.sessionsMap.values()) {
+      if (!session.conversationId) continue;
+      const updated = this.historyStore.get(session.conversationId);
+      if (!updated) continue;
+      if (session.pending.abortController) {
+        this.pendingSyncedConversations.add(session.conversationId);
+        session.persistedTurns = this.mergeTurnLists(session.persistedTurns, updated.turns);
+        if (updated.title) session.conversationTitle = updated.title;
+        session.favorite = updated.favorite;
+        session.conversationCreatedAt =
+          session.conversationCreatedAt !== undefined ? Math.min(session.conversationCreatedAt, updated.createdAt) : updated.createdAt;
+        session.conversationLastMessageAt = Math.max(session.conversationLastMessageAt ?? 0, updated.lastMessageAt);
+        continue;
+      }
+      if (
+        updated.lastMessageAt !== session.conversationLastMessageAt ||
+        updated.turns.length !== session.persistedTurns.length ||
+        updated.title !== session.conversationTitle ||
+        updated.favorite !== session.favorite
+      ) {
+        this.hydrateSession(session, updated);
+        const container = this.getSessionMessageContainer(session.id);
+        if (container) container.dataset.conversationId = '';
+      }
+    }
+    this.notifyHistoryChanged();
+    return result;
   }
 
   subscribeHistory(listener: () => void): () => void {
@@ -323,7 +366,13 @@ export class ChatManager {
   private synchronizePrunedSessions(): void {
     const draftIds = new Map<ConversationScope, string>();
     for (const session of this.sessionsMap.values()) {
-      if (!session.conversationId || !session.persistedTurns.length || this.historyStore.get(session.conversationId)) continue;
+      if (
+        session.pending.abortController ||
+        !session.conversationId ||
+        !session.persistedTurns.length ||
+        this.historyStore.get(session.conversationId)
+      )
+        continue;
       const scope = this.getSessionScope(session);
       if (!scope) continue;
       this.hydrateSession(session);
@@ -498,7 +547,13 @@ export class ChatManager {
   }
 
   recordCompletedTurn(session: Session, assistantMarkdown: string, aborted?: boolean): void {
-    if (aborted || !assistantMarkdown.trim() || session.kind === 'translation') return;
+    if (aborted || !assistantMarkdown.trim() || session.kind === 'translation') {
+      if (session.conversationId && this.pendingSyncedConversations.delete(session.conversationId)) {
+        const stored = this.historyStore.get(session.conversationId);
+        if (stored) this.hydrateSession(session, stored);
+      }
+      return;
+    }
     const scope = this.getSessionScope(session);
     if (!scope) return;
     this.ensureSessionConversation(session);
@@ -511,16 +566,61 @@ export class ChatManager {
       assistantMarkdown,
       sourceLabel: session.pending.displaySourceLabel,
     };
+    const wasSyncedDuringPending = session.conversationId ? this.pendingSyncedConversations.delete(session.conversationId) : false;
+    const preStoreTurnIds = new Set(session.persistedTurns.map((t) => t.id));
+    const existingInStore = session.conversationId ? this.historyStore.get(session.conversationId) : undefined;
+    const storeHasNewTurns = existingInStore ? existingInStore.turns.some((t) => !preStoreTurnIds.has(t.id)) : false;
+    if (existingInStore) {
+      session.persistedTurns = this.mergeTurnLists(existingInStore.turns, session.persistedTurns);
+      if (existingInStore.title && (!session.conversationTitle || (existingInStore.updatedAt ?? 0) > (session.conversationLastMessageAt ?? 0))) {
+        session.conversationTitle = existingInStore.title;
+      }
+      session.favorite = existingInStore.favorite;
+      session.conversationCreatedAt =
+        session.conversationCreatedAt !== undefined ? Math.min(session.conversationCreatedAt, existingInStore.createdAt) : existingInStore.createdAt;
+    }
     session.persistedTurns.push(turn);
     session.conversationTitle ??= makeConversationTitle(turn.userText, assistantMarkdown, getString('history-default-title' as any));
     session.conversationCreatedAt ??= now;
-    session.conversationLastMessageAt = now;
-    session.persistedContextMessages = session.conversationHistory.map((message) => ({ ...message })) as ModelMessage[];
-    if (session.contextCheckpoint) {
-      session.contextCheckpoint = {
-        ...session.contextCheckpoint,
-        recentTail: session.conversationHistory.slice(1).map((message) => ({ ...message })) as ModelMessage[],
-      };
+    session.conversationLastMessageAt = Math.max(now, existingInStore?.lastMessageAt ?? 0);
+
+    if (wasSyncedDuringPending || storeHasNewTurns) {
+      const priorTurns = session.persistedTurns.slice(0, -1);
+      const priorMessages = turnsToContextMessages(priorTurns, session.contextCheckpoint);
+      let lastUserIdx = -1;
+      for (let i = session.conversationHistory.length - 1; i >= 0; i--) {
+        if (session.conversationHistory[i]?.role === 'user') {
+          lastUserIdx = i;
+          break;
+        }
+      }
+      const candidateTail = lastUserIdx >= 0 ? session.conversationHistory.slice(lastUserIdx) : [];
+      const tailHasCompletedTurn = candidateTail.some(
+        (m) => m.role === 'assistant' && typeof m.content === 'string' && m.content.trim() === assistantMarkdown.trim()
+      );
+      const currentTurnMessages = tailHasCompletedTurn ? candidateTail : turnsToContextMessages([turn]);
+      const reconciledTail = [...priorMessages, ...currentTurnMessages].map((message) => ({ ...message })) as ModelMessage[];
+      if (session.contextCheckpoint) {
+        session.contextCheckpoint = {
+          ...session.contextCheckpoint,
+          recentTail: reconciledTail,
+        };
+        session.persistedContextMessages = [
+          createCheckpointMessage(session.contextCheckpoint.summary),
+          ...reconciledTail.map((message) => ({ ...message })),
+        ] as ModelMessage[];
+      } else {
+        session.persistedContextMessages = reconciledTail;
+      }
+      session.conversationHistory = session.persistedContextMessages.map((message) => ({ ...message })) as ModelMessage[];
+    } else {
+      session.persistedContextMessages = session.conversationHistory.map((message) => ({ ...message })) as ModelMessage[];
+      if (session.contextCheckpoint) {
+        session.contextCheckpoint = {
+          ...session.contextCheckpoint,
+          recentTail: session.conversationHistory.slice(1).map((message) => ({ ...message })) as ModelMessage[],
+        };
+      }
     }
     const persistedKind: PersistedConversation['kind'] = session.kind === 'global-agent' ? 'global-agent' : 'article';
     const conversation: PersistedConversation = {
@@ -528,10 +628,14 @@ export class ChatManager {
       scope,
       kind: persistedKind,
       itemId: session.kind === 'article' ? session.itemId : undefined,
+      ...(existingInStore?.itemKey ? { itemKey: existingInStore.itemKey } : {}),
+      ...(existingInStore?.libraryType ? { libraryType: existingInStore.libraryType } : {}),
+      ...(existingInStore?.groupId !== undefined ? { groupId: existingInStore.groupId } : {}),
       title: session.conversationTitle,
       favorite: session.favorite,
       createdAt: session.conversationCreatedAt,
-      lastMessageAt: now,
+      lastMessageAt: session.conversationLastMessageAt,
+      updatedAt: Math.max(session.conversationLastMessageAt, existingInStore?.updatedAt ?? 0),
       turns: session.favorite ? session.persistedTurns : session.persistedTurns.slice(-100),
       contextMessages: session.persistedContextMessages,
       checkpoint: session.contextCheckpoint,

@@ -26,6 +26,8 @@ import { getLocaleID, getString } from '../utils/locale';
 import { setSeparateTranslationEnabled } from './chatWorkspace';
 import { CHAT_FONT_SIZE_LEVELS, getChatFontSizeValue, normalizeChatFontSizeIndex, refreshChatFontSize } from '../utils/chatFontSize';
 import { normalizeChatSkin, registerChatSkinRoot } from '../utils/chatSkin';
+import { getWebDavPassword, setWebDavPassword } from './webdavCredentials';
+import { startWebDavAutoSync, syncWithWebDav, testWebDavConnection } from './webdavSync';
 
 export async function registerPrefsScripts(_window: Window) {
   const prefsRoot = _window.document.getElementById(`${config.addonRef}-prefs-root`);
@@ -40,6 +42,14 @@ export async function registerPrefsScripts(_window: Window) {
     addon.data.prefs.window = _window;
   }
   await updatePrefsUI();
+  const passwordInput = _window.document.querySelector(makeId('sync-password')) as HTMLInputElement | null;
+  if (passwordInput) {
+    try {
+      passwordInput.value = await getWebDavPassword();
+    } catch (error) {
+      ztoolkit.log('[webdavSync] Could not load saved password:', error);
+    }
+  }
   bindPrefEvents();
 }
 
@@ -313,12 +323,130 @@ function bindPrefEvents() {
   const doc = addon.data.prefs?.window.document;
   if (!doc) return;
   const separateTranslation = doc.querySelector(makeId('separate-translation-tab')) as HTMLInputElement | null;
-  if (!separateTranslation) return;
-  const syncSeparateTranslation = () => {
-    setSeparateTranslationEnabled(!!separateTranslation.checked);
+  if (separateTranslation) {
+    const syncSeparateTranslation = () => {
+      setSeparateTranslationEnabled(!!separateTranslation.checked);
+    };
+    separateTranslation.addEventListener('change', syncSeparateTranslation);
+    separateTranslation.addEventListener('command', syncSeparateTranslation);
+  }
+
+  const webdavUrlInput = doc.querySelector(makeId('sync-webdav-url')) as HTMLInputElement | null;
+  const usernameInput = doc.querySelector(makeId('sync-username')) as HTMLInputElement | null;
+  const passwordInput = doc.querySelector(makeId('sync-password')) as HTMLInputElement | null;
+  const remoteFolderInput = doc.querySelector(makeId('sync-remote-folder')) as HTMLInputElement | null;
+  const autoSyncCheckbox = doc.querySelector(makeId('sync-auto')) as HTMLInputElement | null;
+  const includeKeysCheckbox = doc.querySelector(makeId('sync-include-keys')) as HTMLInputElement | null;
+  const statusEl = doc.querySelector(makeId('sync-status')) as HTMLElement | null;
+  const testBtn = doc.querySelector(makeId('sync-test-btn')) as HTMLButtonElement | null;
+  const syncNowBtn = doc.querySelector(makeId('sync-now-btn')) as HTMLButtonElement | null;
+  const pushBtn = doc.querySelector(makeId('sync-push-btn')) as HTMLButtonElement | null;
+  const pullBtn = doc.querySelector(makeId('sync-pull-btn')) as HTMLButtonElement | null;
+
+  const setStatusText = (text: string, isError = false) => {
+    if (!statusEl) return;
+    statusEl.removeAttribute('data-l10n-id');
+    statusEl.textContent = text;
+    statusEl.style.color = isError ? '#dc2626' : '';
   };
-  separateTranslation.addEventListener('change', syncSeparateTranslation);
-  separateTranslation.addEventListener('command', syncSeparateTranslation);
+
+  passwordInput?.addEventListener('change', async () => {
+    try {
+      await setWebDavPassword(passwordInput.value);
+      startWebDavAutoSync();
+    } catch (error: any) {
+      setStatusText(error?.message || String(error), true);
+    }
+  });
+
+  const lastSyncRaw = String(getPref('sync.lastSyncAt' as any) || '');
+  const lastSyncTs = Number(lastSyncRaw);
+  if (statusEl && Number.isFinite(lastSyncTs) && lastSyncTs > 0) {
+    setStatusText(
+      getString('pref-sync-status-last' as any, {
+        args: { time: new Date(lastSyncTs).toLocaleString() },
+      })
+    );
+  }
+
+  const readCurrentSyncOverrides = async () => {
+    const webdavUrl = webdavUrlInput?.value.trim() || (getPref('sync.webdavUrl' as any) as string) || 'https://dav.jianguoyun.com/dav/';
+    const username = usernameInput?.value.trim() ?? (getPref('sync.username' as any) as string) ?? '';
+    const password = passwordInput?.value ?? (getPref('sync.password' as any) as string) ?? '';
+    const remoteFolder = remoteFolderInput?.value.trim() || (getPref('sync.remoteFolder' as any) as string) || 'zotero-ai-bar';
+    const includeApiKeys = includeKeysCheckbox ? !!includeKeysCheckbox.checked : Boolean(getPref('sync.includeApiKeys' as any) ?? false);
+    setPref('sync.webdavUrl' as any, webdavUrl);
+    setPref('sync.username' as any, username);
+    await setWebDavPassword(password);
+    setPref('sync.remoteFolder' as any, remoteFolder);
+    setPref('sync.includeApiKeys' as any, includeApiKeys);
+    return { webdavUrl, username, password, remoteFolder, includeApiKeys };
+  };
+
+  if (autoSyncCheckbox) {
+    const onAutoSyncChange = () => {
+      setPref('sync.autoSync' as any, !!autoSyncCheckbox.checked);
+      startWebDavAutoSync();
+    };
+    autoSyncCheckbox.addEventListener('change', onAutoSyncChange);
+    autoSyncCheckbox.addEventListener('command', onAutoSyncChange);
+  }
+
+  const setButtonsDisabled = (disabled: boolean) => {
+    for (const btn of [testBtn, syncNowBtn, pushBtn, pullBtn]) {
+      if (btn) btn.disabled = disabled;
+    }
+  };
+
+  if (testBtn) {
+    testBtn.addEventListener('click', async () => {
+      setButtonsDisabled(true);
+      setStatusText(getString('pref-sync-status-testing' as any));
+      try {
+        await testWebDavConnection(await readCurrentSyncOverrides());
+        setStatusText(getString('pref-sync-status-test-ok' as any));
+        startWebDavAutoSync();
+      } catch (err: any) {
+        setStatusText(err?.message || String(err), true);
+      } finally {
+        setButtonsDisabled(false);
+      }
+    });
+  }
+
+  const bindSyncButton = (btn: HTMLButtonElement | null, mode: 'sync' | 'push' | 'pull') => {
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      setButtonsDisabled(true);
+      setStatusText(getString('pref-sync-status-syncing' as any));
+      try {
+        const result = await syncWithWebDav(mode, await readCurrentSyncOverrides());
+        if (mode === 'push') {
+          setStatusText(getString('pref-sync-status-pushed' as any));
+        } else {
+          setStatusText(
+            getString('pref-sync-status-ok' as any, {
+              args: {
+                imported: result.imported,
+                updated: result.updated,
+                deleted: result.deleted,
+              },
+            })
+          );
+        }
+        await updatePrefsUI();
+        startWebDavAutoSync();
+      } catch (err: any) {
+        setStatusText(err?.message || String(err), true);
+      } finally {
+        setButtonsDisabled(false);
+      }
+    });
+  };
+
+  bindSyncButton(syncNowBtn, 'sync');
+  bindSyncButton(pushBtn, 'push');
+  bindSyncButton(pullBtn, 'pull');
 }
 
 function bindInputToLabel(input: HTMLInputElement, label: HTMLElement, initValue: number, scale: number = 1) {

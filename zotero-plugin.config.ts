@@ -57,7 +57,7 @@ export default defineConfig({
   const mainWin = typeof Zotero !== 'undefined' && Zotero.getMainWindow ? Zotero.getMainWindow() : null;
   if (!mainWin) return;
   if (typeof g.console === 'undefined' && mainWin.console) g.console = mainWin.console;
-  for (const name of ['TransformStream', 'ReadableStream', 'WritableStream', 'TextEncoder', 'TextDecoder', 'TextDecoderStream', 'DOMException']) {
+  for (const name of ['TransformStream', 'ReadableStream', 'WritableStream', 'TextEncoder', 'TextDecoder', 'TextDecoderStream', 'DOMException', 'AbortController', 'AbortSignal']) {
     if (typeof g[name] === 'undefined' && mainWin[name]) g[name] = mainWin[name];
   }
 })();
