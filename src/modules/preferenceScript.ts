@@ -26,6 +26,7 @@ import { getLocaleID, getString } from '../utils/locale';
 import { setSeparateTranslationEnabled } from './chatWorkspace';
 import { CHAT_FONT_SIZE_LEVELS, getChatFontSizeValue, normalizeChatFontSizeIndex, refreshChatFontSize } from '../utils/chatFontSize';
 import { normalizeChatSkin, registerChatSkinRoot } from '../utils/chatSkin';
+import { getWebDavPassword, setWebDavPassword } from './webdavCredentials';
 import { startWebDavAutoSync, syncWithWebDav, testWebDavConnection } from './webdavSync';
 
 export async function registerPrefsScripts(_window: Window) {
@@ -41,6 +42,14 @@ export async function registerPrefsScripts(_window: Window) {
     addon.data.prefs.window = _window;
   }
   await updatePrefsUI();
+  const passwordInput = _window.document.querySelector(makeId('sync-password')) as HTMLInputElement | null;
+  if (passwordInput) {
+    try {
+      passwordInput.value = await getWebDavPassword();
+    } catch (error) {
+      ztoolkit.log('[webdavSync] Could not load saved password:', error);
+    }
+  }
   bindPrefEvents();
 }
 
@@ -341,6 +350,15 @@ function bindPrefEvents() {
     statusEl.style.color = isError ? '#dc2626' : '';
   };
 
+  passwordInput?.addEventListener('change', async () => {
+    try {
+      await setWebDavPassword(passwordInput.value);
+      startWebDavAutoSync();
+    } catch (error: any) {
+      setStatusText(error?.message || String(error), true);
+    }
+  });
+
   const lastSyncRaw = String(getPref('sync.lastSyncAt' as any) || '');
   const lastSyncTs = Number(lastSyncRaw);
   if (statusEl && Number.isFinite(lastSyncTs) && lastSyncTs > 0) {
@@ -351,15 +369,15 @@ function bindPrefEvents() {
     );
   }
 
-  const readCurrentSyncOverrides = () => {
+  const readCurrentSyncOverrides = async () => {
     const webdavUrl = webdavUrlInput?.value.trim() || (getPref('sync.webdavUrl' as any) as string) || 'https://dav.jianguoyun.com/dav/';
     const username = usernameInput?.value.trim() ?? (getPref('sync.username' as any) as string) ?? '';
     const password = passwordInput?.value ?? (getPref('sync.password' as any) as string) ?? '';
     const remoteFolder = remoteFolderInput?.value.trim() || (getPref('sync.remoteFolder' as any) as string) || 'zotero-ai-bar';
-    const includeApiKeys = includeKeysCheckbox ? !!includeKeysCheckbox.checked : Boolean(getPref('sync.includeApiKeys' as any) ?? true);
+    const includeApiKeys = includeKeysCheckbox ? !!includeKeysCheckbox.checked : Boolean(getPref('sync.includeApiKeys' as any) ?? false);
     setPref('sync.webdavUrl' as any, webdavUrl);
     setPref('sync.username' as any, username);
-    setPref('sync.password' as any, password);
+    await setWebDavPassword(password);
     setPref('sync.remoteFolder' as any, remoteFolder);
     setPref('sync.includeApiKeys' as any, includeApiKeys);
     return { webdavUrl, username, password, remoteFolder, includeApiKeys };
@@ -385,7 +403,7 @@ function bindPrefEvents() {
       setButtonsDisabled(true);
       setStatusText(getString('pref-sync-status-testing' as any));
       try {
-        await testWebDavConnection(readCurrentSyncOverrides());
+        await testWebDavConnection(await readCurrentSyncOverrides());
         setStatusText(getString('pref-sync-status-test-ok' as any));
         startWebDavAutoSync();
       } catch (err: any) {
@@ -402,7 +420,7 @@ function bindPrefEvents() {
       setButtonsDisabled(true);
       setStatusText(getString('pref-sync-status-syncing' as any));
       try {
-        const result = await syncWithWebDav(mode, readCurrentSyncOverrides());
+        const result = await syncWithWebDav(mode, await readCurrentSyncOverrides());
         if (mode === 'push') {
           setStatusText(getString('pref-sync-status-pushed' as any));
         } else {

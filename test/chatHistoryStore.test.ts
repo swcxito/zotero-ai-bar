@@ -8,6 +8,8 @@ import {
   normalizeTextContext,
   pruneHistory,
   rebindPortableHistoryFile,
+  preparePortableItemIndex,
+  resolveLocalItemIdForConversation,
   sanitizeHistoryFile,
   type PersistedChatHistoryFile,
   type PersistedConversation,
@@ -20,6 +22,7 @@ import {
   resetWebDavSyncStateForTests,
   sanitizeProviderConfigForSync,
   syncWithWebDav,
+  testWebDavConnection,
   WEBDAV_SYNC_SCHEMA,
   type WebDavSyncPayload,
 } from '../src/modules/webdavSync';
@@ -592,7 +595,7 @@ describe('chatHistoryStore', function () {
         }
         if (method === 'GET') {
           if (!cloudFileText) return { status: 404, text: async () => '' } as any;
-          return { status: 200, text: async () => cloudFileText } as any;
+          return { status: 200, headers: { get: () => '"v1"' }, text: async () => cloudFileText } as any;
         }
         return { status: 500, text: async () => '' } as any;
       }) as typeof fetch;
@@ -718,5 +721,182 @@ describe('chatHistoryStore', function () {
       (globalThis as any).Zotero = prevZotero;
       (globalThis as any).addon = prevAddon;
     }
+  });
+
+  describe('WebDAV synchronization safety', function () {
+    const connection = { webdavUrl: 'https://dav.example/', remoteFolder: 'test', username: 'u', password: 'p', includeApiKeys: false };
+    let oldZotero: any;
+    let oldAddon: any;
+
+    beforeEach(function () {
+      oldZotero = (globalThis as any).Zotero;
+      oldAddon = (globalThis as any).addon;
+      const prefs = new Map();
+      (globalThis as any).Zotero = { Prefs: { get: (k: string) => prefs.get(k), set: (k: string, v: any) => prefs.set(k, v) } };
+      (globalThis as any).addon = { data: { userPrompts: [{ id: 'p', name: 'P', content: 'original' }] } };
+      resetWebDavSyncStateForTests();
+    });
+
+    afterEach(function () {
+      (globalThis as any).Zotero = oldZotero;
+      (globalThis as any).addon = oldAddon;
+    });
+    function payload(): WebDavSyncPayload {
+      return { schema: WEBDAV_SYNC_SCHEMA, exportedAt: 1, chatHistory: { version: 2, activeByScope: {}, conversations: [] }, userPrompts: [] };
+    }
+
+    it('preserves prompt edits while GET and PUT are pending', async function () {
+      let uploaded: any;
+      const fetcher = async (_url: string, init: any) => {
+        if (init.method === 'GET') {
+          (globalThis as any).addon.data.userPrompts[0].content = 'edited during GET';
+          return { status: 200, headers: { get: () => '"v1"' }, text: async () => JSON.stringify(payload()) };
+        }
+        if (init.method === 'PUT') {
+          uploaded = JSON.parse(init.body);
+          (globalThis as any).addon.data.userPrompts[0].content = 'edited during PUT';
+        }
+        return { status: 200, text: async () => '' };
+      };
+      await syncWithWebDav('sync', connection, fetcher as any);
+      assert.equal(uploaded.userPrompts[0].content, 'edited during GET');
+      assert.equal((globalThis as any).addon.data.userPrompts[0].content, 'edited during PUT');
+    });
+
+    it('re-reads and merges a concurrent writer after HTTP 412', async function () {
+      let reads = 0;
+      let writes = 0;
+      const fetcher = async (_url: string, init: any) => {
+        if (init.method === 'GET') {
+          reads++;
+          const remote = payload();
+          if (reads > 1) remote.userPrompts = [{ id: 'other', name: 'Other', content: 'concurrent' }];
+          return { status: 200, headers: { get: () => '"v' + reads + '"' }, text: async () => JSON.stringify(remote) };
+        }
+        if (init.method === 'PUT') {
+          writes++;
+          assert.equal(init.headers['If-Match'], '"v' + reads + '"');
+          if (writes === 1) return { status: 412, text: async () => '' };
+          assert.include(JSON.stringify(JSON.parse(init.body).userPrompts), 'concurrent');
+        }
+        return { status: 200, text: async () => '' };
+      };
+      await syncWithWebDav('sync', connection, fetcher as any);
+      assert.equal(reads, 2);
+      assert.equal(writes, 2);
+    });
+
+    it('refuses to overwrite an existing snapshot without a strong ETag', async function () {
+      let writes = 0;
+      try {
+        await syncWithWebDav('sync', connection, (async (_url: string, init: any) => {
+          if (init.method === 'PUT') writes++;
+          return { status: 200, text: async () => JSON.stringify(payload()) };
+        }) as any);
+        assert.fail('Expected missing ETag to fail');
+      } catch (error: any) {
+        assert.include(error.message, 'strong ETag');
+      }
+      assert.equal(writes, 0);
+    });
+
+    it('protects initial snapshot creation with If-None-Match', async function () {
+      await syncWithWebDav('sync', connection, (async (_url: string, init: any) => {
+        if (init.method === 'GET') return { status: 404, text: async () => '' };
+        if (init.method === 'PUT') assert.equal(init.headers['If-None-Match'], '*');
+        return { status: 200, text: async () => '' };
+      }) as any);
+    });
+  });
+
+  describe('WebDAV credentials and portable identities', function () {
+    it('migrates the legacy password only after successful credential storage', async function () {
+      const g = globalThis as any;
+      const old = { Zotero: g.Zotero, Services: g.Services, Components: g.Components };
+      const prefs = new Map<string, any>();
+      let stored: any;
+      try {
+        g.Zotero = {
+          Prefs: { get: (k: string) => prefs.get(k), set: (k: string, v: any) => prefs.set(k, v), clear: (k: string) => prefs.delete(k) },
+          OSKeyStore: { encrypt: async (v: string) => 'encrypted:' + v, decrypt: async (v: string) => v.slice(10) },
+        };
+        g.Components = {
+          Constructor: function () {
+            return function (this: any, _origin: string, _form: any, _realm: string, username: string, password: string) {
+              this.username = username;
+              this.password = password;
+            };
+          },
+        };
+        const manager = {
+          searchLoginsAsync: async () => (stored ? [stored] : []),
+          addLoginAsync: async (login: any) => {
+            stored = login;
+          },
+        };
+        g.Services = { logins: manager };
+        setPref('sync.password', 'secret');
+        const { getWebDavPassword } = await import('../src/modules/webdavCredentials');
+        assert.equal(await getWebDavPassword(), 'secret');
+        assert.equal(stored.password, 'encrypted:secret');
+        assert.isUndefined(getPref('sync.password'));
+        assert.equal(await getWebDavPassword(), 'secret');
+        stored = undefined;
+        setPref('sync.password', 'keep-on-error');
+        manager.addLoginAsync = async () => {
+          throw new Error('vault unavailable');
+        };
+        try {
+          await getWebDavPassword();
+          assert.fail('Expected save failure');
+        } catch (error: any) {
+          assert.include(error.message, 'vault unavailable');
+        }
+        assert.equal(getPref('sync.password'), 'keep-on-error');
+      } finally {
+        Object.assign(g, old);
+      }
+    });
+
+    it('resolves a different item key by DOI and leaves duplicate matches unresolved', async function () {
+      const item = (id: number) => ({ id, key: 'LOCAL' + id, libraryID: 1, getField: (k: string) => (k === 'DOI' ? '10.1000/example' : '') });
+      let items = [item(20)];
+      const Z = {
+        Libraries: { userLibraryID: 1, getAll: () => [{ libraryID: 1 }] },
+        Items: { getAll: async () => items, getByLibraryAndKey: () => false, get: () => undefined },
+      };
+      const conv = { ...conversation(1), itemKey: 'REMOTE', itemIdentity: { doi: '10.1000/example' } };
+      await preparePortableItemIndex(Z);
+      assert.equal(resolveLocalItemIdForConversation(conv, Z), 20);
+      items = [item(20), item(21)];
+      await preparePortableItemIndex(Z);
+      assert.isBelow(resolveLocalItemIdForConversation(conv, Z)!, 0);
+    });
+
+    it('verifies write/read/delete and cleans up after a failed readback', async function () {
+      const conn = { webdavUrl: 'https://dav.example/', username: 'u', password: 'p' };
+      const methods: string[] = [];
+      try {
+        await testWebDavConnection(conn, (async (_url: string, init: any) => {
+          methods.push(init.method);
+          return { status: init.method === 'DELETE' ? 204 : 200, text: async () => 'wrong content' };
+        }) as any);
+        assert.fail('Expected readback failure');
+      } catch (error: any) {
+        assert.include(error.message, 'read back');
+      }
+      assert.deepEqual(methods, ['PROPFIND', 'PUT', 'GET', 'DELETE']);
+      const readonlyMethods: string[] = [];
+      try {
+        await testWebDavConnection(conn, (async (_url: string, init: any) => {
+          readonlyMethods.push(init.method);
+          return { status: init.method === 'PUT' ? 403 : 200, text: async () => '' };
+        }) as any);
+        assert.fail('Expected read-only failure');
+      } catch (error: any) {
+        assert.include(error.message, '403');
+      }
+      assert.deepEqual(readonlyMethods, ['PROPFIND', 'PUT']);
+    });
   });
 });

@@ -44,5 +44,5 @@ pref('sync.username', '');
 pref('sync.password', '');
 pref('sync.remoteFolder', 'zotero-ai-bar');
 pref('sync.autoSync', false);
-pref('sync.includeApiKeys', true);
+pref('sync.includeApiKeys', false);
 pref('sync.lastSyncAt', '');

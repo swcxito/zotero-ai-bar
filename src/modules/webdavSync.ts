@@ -6,10 +6,17 @@
  * for Zotero AI Bar.
  */
 
+import { getWebDavPassword } from './webdavCredentials';
 import type { UserPrompt } from '../types';
 import { getPref, setPref } from '../utils/prefs';
 import type { AddedModel, AddedProvider, ProviderId, UserProviderConfigV2 } from '../utils/providers';
-import { mergeHistoryFiles, type MergeHistoryResult, type PersistedChatHistoryFile } from './chatHistoryStore';
+import {
+  preparePortableItemIndex,
+  sanitizeHistoryFile,
+  mergeHistoryFiles,
+  type MergeHistoryResult,
+  type PersistedChatHistoryFile,
+} from './chatHistoryStore';
 
 export const WEBDAV_SYNC_SCHEMA = 'zaibar.sync.v1' as const;
 export const WEBDAV_SYNC_FILENAME = 'zaibar-sync-v1.json';
@@ -821,6 +828,14 @@ function reconcileLocalSyncMetadata(
     }
   }
 
+  if (!state.baseline) {
+    const ts = 0;
+    state.lastConfigModifiedAt = ts;
+    state.syncMeta = buildSyncMetaFromPayload({ userPrompts, providerConfigV2: fullV2, settings }, ts);
+    state.baseline = createBaselineSnapshot(userPrompts, fullV2, settings);
+    writeLocalSyncState(state);
+    Object.assign(meta, state.syncMeta);
+  }
   if (options?.isPush) {
     const pushTs = changed ? changeTs : nextSyncTimestamp(maxKnownTs);
     const stampedMeta = buildSyncMetaFromPayload({ userPrompts, providerConfigV2: fullV2, settings, syncMeta: meta }, pushTs, true);
@@ -928,13 +943,13 @@ async function persistV2ConfigToLocal(v2: UserProviderConfigV2): Promise<void> {
   }
 }
 
-function readConnectionConfig(override?: Partial<WebDavConnectionConfig>): WebDavConnectionConfig {
+async function readConnectionConfig(override?: Partial<WebDavConnectionConfig>): Promise<WebDavConnectionConfig> {
   return {
     webdavUrl: (override?.webdavUrl ?? (getPref('sync.webdavUrl' as any) as string) ?? 'https://dav.jianguoyun.com/dav/').trim(),
     username: (override?.username ?? (getPref('sync.username' as any) as string) ?? '').trim(),
-    password: override?.password ?? (getPref('sync.password' as any) as string) ?? '',
+    password: override?.password ?? (await getWebDavPassword()),
     remoteFolder: (override?.remoteFolder ?? (getPref('sync.remoteFolder' as any) as string) ?? 'zotero-ai-bar').trim() || 'zotero-ai-bar',
-    includeApiKeys: override?.includeApiKeys ?? Boolean(getPref('sync.includeApiKeys' as any) ?? true),
+    includeApiKeys: override?.includeApiKeys ?? Boolean(getPref('sync.includeApiKeys' as any) ?? false),
   };
 }
 
@@ -957,6 +972,7 @@ function formatHttpError(status: number, context: string): Error {
 interface SimpleWebDavResponse {
   status: number;
   text(): Promise<string>;
+  etag?: string | null;
 }
 
 async function webdavRequest(
@@ -977,12 +993,15 @@ async function webdavRequest(
   if (!customFetch && typeof Zotero !== 'undefined' && typeof (Zotero as any).HTTP?.request === 'function') {
     const xhr = await (Zotero as any).HTTP.request(method, url, {
       headers,
+      anon: true,
+      logBodyLength: 0,
       body: typeof init.body === 'string' ? init.body : undefined,
       timeout: REQUEST_TIMEOUT_MS,
       successCodes: false,
     });
     return {
       status: Number(xhr?.status ?? 0),
+      etag: xhr.getResponseHeader?.('ETag'),
       text: async () => String(xhr?.responseText ?? ''),
     };
   }
@@ -1013,6 +1032,7 @@ async function webdavRequest(
     ]);
     return {
       status: res.status,
+      etag: res.headers?.get('ETag'),
       text: () => res.text(),
     };
   } finally {
@@ -1095,14 +1115,11 @@ async function applyMergedPayloadToLocal(
   const historyStats = chatManager
     ? chatManager.applyRemoteHistoryMerge(remoteChatHistory)
     : mergeHistoryFiles(mergedPayload.chatHistory, remoteChatHistory);
-  if (chatManager) {
-    await chatManager.flushHistory();
-  }
-
   if (Array.isArray(mergedPayload.userPrompts)) {
     writeLocalUserPrompts(mergedPayload.userPrompts);
   }
 
+  let configWrite: Promise<void> | undefined;
   let finalV2: UserProviderConfigV2 | undefined;
   if (mergedPayload.providerConfigV2) {
     const localV2 = readLocalProviderConfigV2();
@@ -1112,7 +1129,7 @@ async function applyMergedPayloadToLocal(
         ? (mergedPayload.providerConfigV2.env ?? ({} as Record<ProviderId, Record<string, string>>))
         : (localV2?.env ?? ({} as Record<ProviderId, Record<string, string>>)),
     };
-    await persistV2ConfigToLocal(finalV2);
+    configWrite = persistV2ConfigToLocal(finalV2);
   } else {
     finalV2 = readLocalProviderConfigV2();
   }
@@ -1155,13 +1172,29 @@ async function applyMergedPayloadToLocal(
     baseline: createBaselineSnapshot(mergedPayload.userPrompts ?? [], finalV2, mergedPayload.settings ?? {}),
   });
 
+  await configWrite;
+  if (chatManager) await chatManager.flushHistory();
   return historyStats;
 }
 
 export async function testWebDavConnection(override?: Partial<WebDavConnectionConfig>, customFetch?: typeof fetch): Promise<void> {
-  const config = readConnectionConfig(override);
+  const config = await readConnectionConfig(override);
   const { folderUrl } = normalizeWebDavEndpoint(config.webdavUrl, config.remoteFolder);
   await ensureRemoteFolder(folderUrl, config, customFetch);
+  const url = folderUrl + 'zaibar-test-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.txt';
+  const body = 'Zotero AI Bar WebDAV verification';
+  const put = await webdavRequest(url, { method: 'PUT', headers: { 'If-None-Match': '*' }, body }, config, customFetch);
+  if (put.status < 200 || put.status >= 300) throw formatHttpError(put.status, 'WebDAV test PUT failed');
+  let readError: unknown;
+  try {
+    const get = await webdavRequest(url, { method: 'GET' }, config, customFetch);
+    if (get.status !== 200 || (await get.text()) !== body) throw new Error('WebDAV test file could not be read back');
+  } catch (error) {
+    readError = error;
+  }
+  const del = await webdavRequest(url, { method: 'DELETE' }, config, customFetch);
+  if (readError) throw readError;
+  if (del.status !== 200 && del.status !== 204) throw formatHttpError(del.status, 'WebDAV test DELETE failed');
 }
 
 export async function syncWithWebDav(
@@ -1171,9 +1204,10 @@ export async function syncWithWebDav(
 ): Promise<WebDavSyncResult> {
   if (syncInFlight) return syncInFlight;
   syncInFlight = (async () => {
-    const config = readConnectionConfig(override);
+    const config = await readConnectionConfig(override);
     const { folderUrl, fileUrl } = normalizeWebDavEndpoint(config.webdavUrl, config.remoteFolder);
     await ensureRemoteFolder(folderUrl, config, customFetch);
+    await preparePortableItemIndex();
 
     if (mode === 'push') {
       let existingRemote: WebDavSyncPayload | null = null;
@@ -1226,77 +1260,78 @@ export async function syncWithWebDav(
       };
     }
 
-    const localPayload = await collectLocalPayload(config.includeApiKeys, { isPull: mode === 'pull' });
-
-    const getRes = await webdavRequest(fileUrl, { method: 'GET' }, config, customFetch);
-    let remotePayload: WebDavSyncPayload | null = null;
-    if (getRes.status === 404) {
-      if (mode === 'pull') {
-        const syncedAt = Date.now();
-        setPref('sync.lastSyncAt' as any, String(syncedAt));
-        return { mode, syncedAt, imported: 0, updated: 0, deleted: 0, unchanged: localPayload.chatHistory.conversations.length };
+    await collectLocalPayload(config.includeApiKeys, { isPull: mode === 'pull' });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const getRes = await webdavRequest(fileUrl, { method: 'GET' }, config, customFetch);
+      let remotePayload: WebDavSyncPayload | null = null;
+      if (getRes.status === 404) {
+        if (mode === 'pull') {
+          const syncedAt = Date.now();
+          setPref('sync.lastSyncAt' as any, String(syncedAt));
+          return { mode, syncedAt, imported: 0, updated: 0, deleted: 0, unchanged: 0 };
+        }
+      } else if (getRes.status >= 200 && getRes.status < 300) {
+        const parsed = JSON.parse(await getRes.text());
+        const history = sanitizeHistoryFile(parsed?.chatHistory);
+        if (parsed?.schema !== WEBDAV_SYNC_SCHEMA || !history || history === 'unsupported') {
+          throw new Error('Unsupported or invalid WebDAV sync snapshot');
+        }
+        remotePayload = { ...parsed, chatHistory: history };
+      } else {
+        throw formatHttpError(getRes.status, 'WebDAV GET failed');
       }
-    } else if (getRes.status >= 200 && getRes.status < 300) {
-      const text = await getRes.text();
-      if (text.trim()) {
-        const parsed = JSON.parse(text);
-        if (parsed && parsed.chatHistory) {
-          remotePayload = parsed as WebDavSyncPayload;
+
+      const localPayload = await collectLocalPayload(config.includeApiKeys, { isPull: mode === 'pull' });
+      let payloadToUpload = localPayload;
+
+      if (remotePayload) {
+        const merged = mergeSyncPayloads(localPayload, remotePayload, {
+          includeApiKeys: config.includeApiKeys,
+          preferRemote: mode === 'pull',
+        });
+        payloadToUpload = merged.mergedPayload;
+      } else if (mode === 'sync') {
+        payloadToUpload = await collectLocalPayload(config.includeApiKeys, { isPush: true });
+      }
+
+      if (mode === 'sync') {
+        if (getRes.status !== 404 && (!getRes.etag || getRes.etag.startsWith('W/'))) {
+          throw new Error('WebDAV server must provide a strong ETag for safe bidirectional sync');
+        }
+        const putRes = await webdavRequest(
+          fileUrl,
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              ...(getRes.status === 404 ? { 'If-None-Match': '*' } : { 'If-Match': getRes.etag! }),
+            },
+            body: JSON.stringify(payloadToUpload, null, 2),
+          },
+          config,
+          customFetch
+        );
+        if (putRes.status === 412) continue;
+        if (putRes.status < 200 || putRes.status >= 300) {
+          throw formatHttpError(putRes.status, 'WebDAV PUT failed');
         }
       }
-    } else {
-      throw formatHttpError(getRes.status, 'WebDAV GET failed');
-    }
-
-    let historyStats: MergeHistoryResult = {
-      merged: localPayload.chatHistory,
-      imported: 0,
-      updated: 0,
-      deleted: 0,
-      unchanged: localPayload.chatHistory.conversations.length,
-    };
-    let payloadToUpload = localPayload;
-
-    if (remotePayload) {
-      const merged = mergeSyncPayloads(localPayload, remotePayload, {
-        includeApiKeys: config.includeApiKeys,
-        preferRemote: mode === 'pull',
-      });
-      historyStats = await applyMergedPayloadToLocal(merged.mergedPayload, remotePayload.chatHistory, config.includeApiKeys);
-      payloadToUpload = {
-        ...merged.mergedPayload,
-        chatHistory: historyStats.merged,
+      // Preserve local edits made during network I/O, including the final PUT.
+      const latest = await collectLocalPayload(config.includeApiKeys, { isPull: mode === 'pull' });
+      const final = mergeSyncPayloads(latest, payloadToUpload, { includeApiKeys: config.includeApiKeys, preferRemote: mode === 'pull' });
+      const historyStats = await applyMergedPayloadToLocal(final.mergedPayload, payloadToUpload.chatHistory, config.includeApiKeys);
+      const syncedAt = Date.now();
+      setPref('sync.lastSyncAt' as any, String(syncedAt));
+      return {
+        mode,
+        syncedAt,
+        imported: historyStats.imported,
+        updated: historyStats.updated,
+        deleted: historyStats.deleted,
+        unchanged: historyStats.unchanged,
       };
-    } else if (mode === 'sync') {
-      payloadToUpload = await collectLocalPayload(config.includeApiKeys, { isPush: true });
     }
-
-    if (mode === 'sync') {
-      const putRes = await webdavRequest(
-        fileUrl,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json; charset=utf-8' },
-          body: JSON.stringify(payloadToUpload, null, 2),
-        },
-        config,
-        customFetch
-      );
-      if (putRes.status < 200 || putRes.status >= 300) {
-        throw formatHttpError(putRes.status, 'WebDAV PUT failed');
-      }
-    }
-
-    const syncedAt = Date.now();
-    setPref('sync.lastSyncAt' as any, String(syncedAt));
-    return {
-      mode,
-      syncedAt,
-      imported: historyStats.imported,
-      updated: historyStats.updated,
-      deleted: historyStats.deleted,
-      unchanged: historyStats.unchanged,
-    };
+    throw new Error('WebDAV changed repeatedly during sync; please try again');
   })().finally(() => {
     syncInFlight = null;
   });
@@ -1308,8 +1343,7 @@ export function startWebDavAutoSync(): void {
   stopWebDavAutoSync();
   const enabled = Boolean(getPref('sync.autoSync' as any));
   const username = ((getPref('sync.username' as any) as string) ?? '').trim();
-  const password = (getPref('sync.password' as any) as string) ?? '';
-  if (!enabled || !username || !password) return;
+  if (!enabled || !username) return;
 
   startupSyncTimer = setTimeout(() => {
     syncWithWebDav('sync').catch((err) => {

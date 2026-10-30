@@ -24,6 +24,7 @@ export interface PersistedConversation {
   kind: 'article' | 'global-agent';
   itemId?: number;
   itemKey?: string;
+  itemIdentity?: PortableItemIdentity;
   libraryType?: 'user' | 'group';
   groupId?: number;
   title: string;
@@ -59,6 +60,61 @@ export function getConversationScope(kind: 'article' | 'global-agent', itemId?: 
   return itemId === undefined ? undefined : `article:${itemId}`;
 }
 
+export interface PortableItemIdentity {
+  doi?: string;
+  isbn?: string;
+  title?: string;
+  author?: string;
+  year?: string;
+}
+
+function itemIdentity(item: any): PortableItemIdentity {
+  const normalize = (v: string) =>
+    v
+      .normalize('NFKC')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]/gu, '');
+  const field = (name: string) => String(item.getField?.(name) || '').trim();
+  return {
+    doi: field('DOI')
+      .replace(/^https?:\/\/(?:dx\.)?doi.org\//i, '')
+      .toLowerCase(),
+    isbn: field('ISBN')
+      .replace(/[^0-9X]/gi, '')
+      .toUpperCase(),
+    title: normalize(field('title')),
+    author: normalize(String(item.getCreators?.()[0]?.lastName || '')),
+    year: field('date').match(/\b\d{4}\b/)?.[0] || '',
+  };
+}
+
+function identityKey(identity: PortableItemIdentity, kind: 'doi' | 'isbn' | 'title'): string | undefined {
+  if (kind !== 'title') return identity[kind] || undefined;
+  return identity.title && identity.author && identity.year ? JSON.stringify([identity.title, identity.author, identity.year]) : undefined;
+}
+
+let portableIndex = new Map<number, Map<string, number[]>>();
+
+export async function preparePortableItemIndex(zoteroGlobal?: any): Promise<void> {
+  const Z = zoteroGlobal ?? (typeof Zotero !== 'undefined' ? Zotero : undefined);
+  portableIndex = new Map();
+  if (!Z?.Items?.getAll || !Z.Libraries?.getAll) return;
+  for (const lib of Z.Libraries.getAll()) {
+    const index = new Map<string, number[]>();
+    const items = await Z.Items.getAll(lib.libraryID, true, false);
+    await Z.Items.loadDataTypes?.(items, ['itemData', 'creators']);
+    for (const item of items) {
+      if (item.isRegularItem && !item.isRegularItem()) continue;
+      const identity = itemIdentity(item);
+      for (const kind of ['doi', 'isbn', 'title'] as const) {
+        const key = identityKey(identity, kind);
+        if (key) index.set(kind + ':' + key, [...(index.get(kind + ':' + key) || []), item.id]);
+      }
+    }
+    portableIndex.set(lib.libraryID, index);
+  }
+}
+
 export function unresolvedItemId(itemKey: string, groupId?: number): number {
   const seed = groupId !== undefined ? `group:${groupId}:${itemKey.trim()}` : `user:${itemKey.trim()}`;
   let hash = 2166136261;
@@ -79,6 +135,7 @@ export function attachPortableItemMetadata(conversation: PersistedConversation, 
     const item = Z.Items.get(conversation.itemId);
     if (!item || typeof item.key !== 'string' || !item.key.trim()) return conversation;
     conversation.itemKey = item.key.trim();
+    conversation.itemIdentity = itemIdentity(item);
     const lib = typeof item.libraryID === 'number' ? Z.Libraries?.get?.(item.libraryID) : undefined;
     if (lib?.libraryType === 'group' && typeof lib.groupID === 'number') {
       conversation.libraryType = 'group';
@@ -94,7 +151,7 @@ export function attachPortableItemMetadata(conversation: PersistedConversation, 
 }
 
 export function resolveLocalItemIdForConversation(
-  conversation: Pick<PersistedConversation, 'kind' | 'itemId' | 'itemKey' | 'libraryType' | 'groupId'>,
+  conversation: Pick<PersistedConversation, 'kind' | 'itemId' | 'itemKey' | 'libraryType' | 'groupId' | 'itemIdentity'>,
   zoteroGlobal?: any
 ): number | undefined {
   if (conversation.kind !== 'article') return undefined;
@@ -116,11 +173,19 @@ export function resolveLocalItemIdForConversation(
     }
     if (typeof conversation.itemId === 'number' && conversation.itemId > 0 && typeof Z.Items.get === 'function') {
       const existing = Z.Items.get(conversation.itemId);
-      if (existing && existing.key === itemKey) return conversation.itemId;
+      if (existing && existing.key === itemKey && existing.libraryID === libraryID) return conversation.itemId;
+    }
+    if (typeof libraryID === 'number' && conversation.itemIdentity) {
+      for (const kind of ['doi', 'isbn', 'title'] as const) {
+        const key = identityKey(conversation.itemIdentity, kind);
+        const candidates = key ? portableIndex.get(libraryID)?.get(kind + ':' + key) : undefined;
+        if (candidates?.length === 1) return candidates[0];
+        if (candidates?.length) break; // Ambiguous identities must not be bound automatically.
+      }
     }
     return unresolvedItemId(itemKey, conversation.libraryType === 'group' ? conversation.groupId : undefined);
   } catch (_error) {
-    return conversation.itemId;
+    return unresolvedItemId(itemKey, conversation.libraryType === 'group' ? conversation.groupId : undefined);
   }
 }
 
@@ -128,6 +193,7 @@ export function rebindPortableHistoryFile(file: PersistedChatHistoryFile, zotero
   let changed = false;
   for (const conversation of file.conversations) {
     if (conversation.kind !== 'article') continue;
+    const beforeIdentity = JSON.stringify(conversation.itemIdentity);
     const beforeKey = conversation.itemKey;
     const beforeLib = conversation.libraryType;
     const beforeGroup = conversation.groupId;
@@ -140,11 +206,16 @@ export function rebindPortableHistoryFile(file: PersistedChatHistoryFile, zotero
     }
     if (conversation.itemKey) {
       const resolvedId = resolveLocalItemIdForConversation(conversation, zoteroGlobal);
+      if (resolvedId === conversation.itemId && resolvedId && resolvedId > 0) {
+        attachPortableItemMetadata(conversation, zoteroGlobal);
+        if (JSON.stringify(conversation.itemIdentity) !== beforeIdentity) changed = true;
+      }
       if (typeof resolvedId === 'number' && resolvedId !== conversation.itemId) {
         const oldScope = conversation.scope;
         const newScope = getConversationScope('article', resolvedId)!;
         conversation.itemId = resolvedId;
         conversation.scope = newScope;
+        attachPortableItemMetadata(conversation, zoteroGlobal);
         if (file.activeByScope[oldScope] === conversation.id) {
           delete file.activeByScope[oldScope];
           file.activeByScope[newScope] ??= conversation.id;
@@ -210,6 +281,7 @@ function sanitizeConversation(value: any): PersistedConversation | undefined {
     kind: value.kind,
     itemId: value.kind === 'article' ? value.itemId : undefined,
     ...(itemKey ? { itemKey } : {}),
+    ...(value.itemIdentity && typeof value.itemIdentity === 'object' ? { itemIdentity: value.itemIdentity } : {}),
     ...(libraryType ? { libraryType } : {}),
     ...(groupId !== undefined ? { groupId } : {}),
     title: typeof value.title === 'string' && value.title.trim() ? value.title.trim() : '',
@@ -370,7 +442,10 @@ export function mergeHistoryFiles(localRaw: PersistedChatHistoryFile, remoteRaw:
     const groupId = newer.groupId ?? older.groupId;
     const resolvedItemId =
       newer.kind === 'article'
-        ? (resolveLocalItemIdForConversation({ kind: 'article', itemId: newer.itemId, itemKey, libraryType, groupId }, zoteroGlobal) ?? newer.itemId)
+        ? (resolveLocalItemIdForConversation(
+            { kind: 'article', itemId: newer.itemId, itemKey, libraryType, groupId, itemIdentity: newer.itemIdentity ?? older.itemIdentity },
+            zoteroGlobal
+          ) ?? newer.itemId)
         : undefined;
     const resolvedScope = getConversationScope(newer.kind, resolvedItemId) ?? newer.scope;
     const mergedLastMessageAt = Math.max(existing.lastMessageAt, remoteConv.lastMessageAt);
