@@ -37,6 +37,7 @@ import { cardDataMap, ModelIcons } from '../components/common';
 import { CODEX_PROVIDER_ID } from './codex/policy';
 import { publishModels, disconnectCodex, codexSettingsListeners } from './codex/settings';
 import { codexRuntime } from './codex/runtime';
+import { renderAppsPanel } from './codex/appsPanel';
 import { mountClaudeCodeSettings } from './claudeCode/settings';
 import { CLAUDE_CODE_PROVIDER_ID } from './claudeCode/protocol';
 import { IconView } from '../components/iconView';
@@ -411,6 +412,7 @@ class ModelDialogV2 {
     refresh.id = 'codex-refresh-models';
     (refresh as HTMLButtonElement).disabled = this.codexBusy;
     content.append(refresh);
+    renderAppsPanel(content);
     const card = ProviderCard({
       providerId: CODEX_PROVIDER_ID,
       providerName: getString('codex-card-title'),
@@ -467,6 +469,7 @@ class ModelDialogV2 {
     }
     const list = card.querySelector(`#${CODEX_MODEL_LIST_ID}`);
     if (!list) return;
+    renderAppsPanel(list as HTMLElement);
     const rows = new Map<string, HTMLElement>();
     list.querySelectorAll<HTMLElement>(':scope > [data-model-id]').forEach((row) => rows.set(row.dataset.modelId ?? '', row));
     const wanted = new Set(models.map((model) => model.id));

@@ -82,6 +82,10 @@ export class FakeServer {
   resumeFailure = false;
   onTurn?: () => void;
   tokenUsageUpdates: any[] = [];
+  installedApps: any[] = [{ id: 'notion', enabled: true, callable: true }];
+  appItems: any[] = [];
+  elicitations: any[] = [];
+  elicitationReplies: any[] = [];
   private threads = 0;
   private turns = 0;
   private serverRequests = new Map<string, (message: any) => void>();
@@ -95,6 +99,7 @@ export class FakeServer {
     this.requests.push(message);
     let result: any = {};
     if (message.method === 'account/read') result = { account: this.account };
+    else if (message.method === 'app/installed') result = { apps: this.installedApps };
     else if (message.method === 'config/read') result = { config: { mcp_servers: { unwanted: { command: 'must-not-run' } } } };
     else if (message.method === 'thread/resume' && this.resumeFailure) {
       this.rpc.feed(JSON.stringify({ id: message.id, error: { code: -32600, message: 'not found' } }) + '\n');
@@ -131,6 +136,17 @@ export class FakeServer {
       this.emit('item/completed', { threadId, turnId, item });
     }
     if (this.runtimeError) this.emit('error', { threadId, ...this.runtimeError });
+    for (const [i, params] of this.elicitations.entries()) {
+      const id = `elicit_${i}`;
+      const reply = new Promise<any>((resolve) => this.serverRequests.set(id, resolve));
+      this.rpc.feed(JSON.stringify({ id, method: 'mcpServer/elicitation/request', params: { threadId, turnId, serverName: 'codex_apps', ...params } }) + '\n');
+      this.elicitationReplies.push(await reply);
+    }
+    for (const item of this.appItems) {
+      this.emit('item/started', { threadId, turnId, item: { ...item, status: 'inProgress' } });
+      this.emit('item/completed', { threadId, turnId, item });
+      this.emit('item/completed', { threadId, turnId, item });
+    }
     if (this.userInputQuestions) {
       const id = 'request_user_input_1';
       const reply = new Promise<any>((resolve) => this.serverRequests.set(id, resolve));
@@ -195,10 +211,11 @@ export function resetFixture() {
     translation: undefined,
     userInputAnswers: undefined,
     userInputQuestions: undefined,
+    selectedApps: [],
     server: new FakeServer(),
   });
   Object.assign(globalThis, {
-    Zotero: { Prefs: { get: () => 'minimum' } },
+    Zotero: { Prefs: { get: (key: string) => key.endsWith('codex.apps.selection') ? JSON.stringify({ 'test@example.org': state.selectedApps }) : 'minimum' } },
     PathUtils: { join: (...parts: string[]) => parts.join('/') },
     addon: {
       data: { userProviderConfigV2: { active: { providerId: 'codex-subscription', modelId: 'model' } } },

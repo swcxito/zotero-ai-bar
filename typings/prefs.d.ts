@@ -11,6 +11,7 @@ declare namespace _ZoteroTypes {
       "llm.apiKey": string;
       "codex.runtimePath": string;
       "codex.authSource": string;
+      "codex.apps.selection": string;
       "llm.modelName": string;
       "llm.temperature100": number;
       "llm.temperatureEnabled": boolean;

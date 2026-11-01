@@ -3,6 +3,7 @@ import { policyArguments, runtimePolicy } from './policy';
 import { CodexRpc } from './protocol';
 import { codexString } from './i18n';
 import { version as pluginVersion } from '../../../package.json';
+import { appFeatures, listApps, type CodexApp } from './apps';
 
 export interface RuntimeCandidate {
   path: string;
@@ -400,6 +401,41 @@ class CodexRuntime {
   rpc?: CodexRpc;
   account?: CodexAccount;
   models: CodexModel[] = [];
+  apps: CodexApp[] = [];
+  appsStatus = '';
+  appsLoading = false;
+  private appsRevision = 0;
+
+  async refreshApps(forceRefetch = true): Promise<void> {
+    const rpc = await this.connect();
+    const account = this.accountKey;
+    if (!account) throw new Error('Sign in to ChatGPT before loading apps.');
+    const revision = ++this.appsRevision;
+    this.appsLoading = true;
+    this.appsStatus = '';
+    this.changed();
+    try {
+      const apps = await listApps(rpc, forceRefetch);
+      if (this.rpc === rpc && this.accountKey === account && revision === this.appsRevision) this.apps = apps;
+    } catch (error) {
+      if (this.rpc === rpc && this.accountKey === account && revision === this.appsRevision) {
+        this.appsStatus = codexString('codex-apps-load-error', '无法读取应用。请检查登录、网络和 Codex 版本，然后重试。');
+      }
+      throw error;
+    } finally {
+      if (revision === this.appsRevision) {
+        this.appsLoading = false;
+        this.changed();
+      }
+    }
+  }
+
+  private clearApps(): void {
+    this.appsRevision++;
+    this.apps = [];
+    this.appsStatus = '';
+    this.appsLoading = false;
+  }
   status = codexString('codex-status-not-detected', '尚未检测');
   diagnostics: string[] = [];
   readonly listeners = new Set<() => void>();
@@ -494,7 +530,7 @@ class CodexRuntime {
         try {
           process = await subprocess().call({
             command: info.path,
-            arguments: ['app-server', ...policyArguments({ ...info.policy, ...(this.sharedLogin ? { cli_auth_credentials_store: 'auto' } : {}) })],
+            arguments: ['app-server', ...policyArguments({ ...info.policy, ...appFeatures(info.policy, true), 'apps._default.enabled': false, ...(this.sharedLogin ? { cli_auth_credentials_store: 'auto' } : {}) })],
             environment: { ...environment(this.sharedLogin), ...network },
             stderr: 'pipe',
             workdir: PathUtils.join(codexDirectory(), 'workspace'),
@@ -533,6 +569,7 @@ class CodexRuntime {
         if (this.rpc === rpc) {
           this.rpc = undefined;
           this.account = undefined;
+          this.clearApps();
           this.status = codexString('codex-status-disconnected', 'Codex 连接已断开');
           this.changed();
         }
@@ -554,8 +591,14 @@ class CodexRuntime {
             this.rpc = undefined;
             this.account = undefined;
             this.models = [];
+            this.clearApps();
             this.status = codexString('codex-status-disconnected', 'Codex 连接已断开');
             void process.kill(1000).catch(() => undefined);
+            this.changed();
+          }
+          if (message.method === 'app/list/updated' && this.rpc === rpc && this.accountKey) {
+            // Invalidate instead of trusting a notification that may belong to the previous account.
+            this.appsStatus = codexString('codex-apps-changed', '应用列表有更新，请刷新应用。');
             this.changed();
           }
           if (message.method === 'account/updated' && !this.loginPending)
@@ -583,6 +626,7 @@ class CodexRuntime {
     if (!rpc) return;
     const result = await rpc.request('account/read', { refreshToken: false });
     if (this.rpc !== rpc || !isCurrent()) return;
+    if (this.account?.email !== result.account?.email || this.account?.type !== result.account?.type) this.clearApps();
     this.account = result.account || undefined;
     if (this.account?.type === 'chatgpt') {
       this.status = codexString('codex-status-logged-in', `已登录 ${this.account.email || ''} · ${this.account.planType || 'Codex'}`, {
@@ -758,6 +802,7 @@ class CodexRuntime {
   }
 
   async stop(shutdown = false): Promise<void> {
+    this.clearApps();
     this.cancelLogin();
     this.generation++;
     this.stopped = shutdown;

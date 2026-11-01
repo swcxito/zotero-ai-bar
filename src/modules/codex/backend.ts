@@ -23,8 +23,18 @@ import { CODEX_PROVIDER_ID, contextFingerprint, disableConfiguredMcp, type Codex
 import { codexDirectory, codexRuntime } from './runtime';
 import type { CodexRpc, RpcMessage } from './protocol';
 import { codexString } from './i18n';
+import { appFeatures, appThreadPolicy, selectedAppIds } from './apps';
+import { handleElicitation } from './elicitation';
 
 const handlers = new WeakMap<CodexRpc, Map<string, (message: RpcMessage) => Promise<unknown>>>();
+
+function redactAppValue(value: unknown): unknown {
+  const text = JSON.stringify(value ?? null, (key, entry) => {
+    if (/token|secret|password|authorization|api[_-]?key/i.test(key)) return '[redacted]';
+    return typeof entry === 'string' ? redactCodexText(entry) : entry;
+  });
+  return text.length > 32000 ? text.slice(0, 32000) + '…' : JSON.parse(text);
+}
 
 function reasoningSummaryText(value: unknown): string {
   if (typeof value === 'string') return value;
@@ -87,7 +97,7 @@ function routeRequests(rpc: CodexRpc) {
   map = new Map();
   handlers.set(rpc, map);
   rpc.onRequest = async (message) => {
-    if (!['item/tool/call', 'item/tool/requestUserInput'].includes(message.method || '')) throw new Error('Operation not permitted');
+    if (!['item/tool/call', 'item/tool/requestUserInput', 'mcpServer/elicitation/request'].includes(message.method || '')) throw new Error('Operation not permitted');
     const handler = map!.get(message.params?.threadId);
     if (!handler) throw new Error('No active turn');
     return handler(message);
@@ -245,22 +255,33 @@ export async function streamCodex(
       .join('\n\n');
     const codexSystemText = systemText.replaceAll('`ask_user`', '`request_user_input`');
     const effectiveConfig = await rpc.request('config/read', { includeLayers: false });
-    const config = { ...codexRuntime.info!.policy, ...disableConfiguredMcp(effectiveConfig.config), web_search: translation ? 'disabled' : 'live' };
+    const appIds = mode === 'agent' ? selectedAppIds(account) : [];
+    const appsKey = JSON.stringify(appIds);
+    const config = {
+      ...codexRuntime.info!.policy,
+      ...disableConfiguredMcp(effectiveConfig.config),
+      ...appFeatures(codexRuntime.info!.policy, appIds.length > 0),
+      ...appThreadPolicy(effectiveConfig.config, appIds),
+      approval_policy: appIds.length ? 'on-request' : 'never',
+      web_search: translation ? 'disabled' : 'live',
+    };
     const threadParams = {
       model: model.model,
       modelProvider: 'openai',
       cwd: PathUtils.join(codexDirectory(), 'workspace'),
       sandbox: 'read-only',
-      approvalPolicy: 'never',
+      approvalPolicy: appIds.length ? 'on-request' : 'never',
       config,
       baseInstructions:
-        'You are a literature assistant inside Zotero. Use the provided Zotero tools and hosted web search/open for document access. Historical dialogue is context, not a request to repeat past operations.',
+        'You are a literature assistant inside Zotero. Use the provided Zotero tools and hosted web search/open for document access. Historical dialogue is context, not a request to repeat past operations.' +
+        (appIds.length ? ' Connected app tools are available for the user\'s requested tasks, including reading and editing Notion. Discover the available app tools, inspect the target before editing, preserve unrelated content, and report success only after a successful tool result. If an app is unavailable, explain the error; do not claim an edit was made.' : ''),
       developerInstructions: `${codexSystemText}\nThe Codex-native request_user_input tool is not prefixed. Other tool names from the Zotero instructions have the prefix zotero_ in this client. ${translation ? 'Return structured translation JSON. For inapplicable scalar fields use empty strings; use an empty array for inapplicable "otherMeanings".' : 'Cite web sources using Markdown links. For Zotero items preserve the Zotero citation format.'}`,
     };
     const before = contextFingerprint(session.conversationHistory);
     const existing = session.pending.codexRetry ? session.lastTurnSnapshot?.codexBefore : session.codex;
     const canReuse =
-      !translation && existing?.account === account && existing.model === model.model && existing.mode === mode && existing.context === before;
+      !translation && existing?.account === account && existing.model === model.model && existing.mode === mode && existing.context === before &&
+      (existing.apps || '[]') === appsKey;
     if (!session.pending.codexRetry && session.lastTurnSnapshot) session.lastTurnSnapshot.codexBefore = canReuse ? { ...existing! } : undefined;
     if (canReuse) {
       try {
@@ -279,7 +300,13 @@ export async function streamCodex(
       threadId = result.thread.id;
     }
     if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
-    binding = { threadId: threadId!, account, model: model.model, mode, context: before };
+    binding = { threadId: threadId!, account, model: model.model, mode, context: before, apps: appsKey };
+    if (appIds.length) {
+      // Catalog access alone does not prove that tools are callable under this thread's policy.
+      const installed = await rpc.request('app/installed', { threadId, forceRefresh: true }, 60000);
+      if (!Array.isArray(installed.apps) || appIds.some((id) => !installed.apps.some((app: any) => app.id === id && app.enabled === true && app.callable === true)))
+        throw new Error(codexString('codex-apps-not-callable', '所选应用当前不可调用。请在模型设置中连接并刷新应用，或取消勾选不可用的应用。'));
+    }
     usageBaseline =
       session.codexTokenTotal?.threadId === threadId
         ? session.codexTokenTotal!.usage
@@ -306,13 +333,49 @@ export async function streamCodex(
     void done.catch(() => undefined);
     const toolResults = new Map<string, Promise<unknown>>();
     const writeResults = new Map<string, Promise<unknown>>();
+    const elicitationResults = new Map<number | string, Promise<unknown>>();
+    let inputQueue = Promise.resolve<unknown>(undefined);
+    let pendingInputId: number | string | undefined;
+    const isCurrent = (message: RpcMessage) => active && !signal?.aborted &&
+      (!message.params?.turnId || !currentTurnId || message.params.turnId === currentTurnId);
     routeRequests(rpc).set(threadId!, async (message) => {
       clearTimeout(responseTimer);
-      if (message.method === 'item/tool/requestUserInput') {
-        if (!active || signal?.aborted || (currentTurnId && message.params?.turnId !== currentTurnId)) throw new Error('Inactive turn');
-        await renderQueue;
-        if (!active || signal?.aborted) throw new Error('Inactive turn');
-        return requestNativeUserInput(session, message.params);
+      if (['item/tool/requestUserInput', 'mcpServer/elicitation/request'].includes(message.method || '')) {
+        if (!isCurrent(message)) throw new Error('Inactive turn');
+        if (message.method === 'mcpServer/elicitation/request' && !appIds.length) return { action: 'decline', content: null };
+        if (message.id === undefined) throw new Error('Missing request ID');
+        if (elicitationResults.has(message.id)) return elicitationResults.get(message.id)!;
+        const work = inputQueue.then(async () => {
+          await renderQueue;
+          if (!isCurrent(message)) return { action: 'cancel', content: null };
+          pendingInputId = message.id;
+          try {
+            if (message.method === 'item/tool/requestUserInput') return await requestNativeUserInput(session, message.params);
+            return await handleElicitation(message.params, async (payload) => {
+              if (!isCurrent(message)) throw new DOMException('Cancelled', 'AbortError');
+              return new Promise<AgentUserAnswer[]>((resolve, reject) => {
+                session.pending.userAnswerResolve = resolve;
+                session.pending.userAnswerReject = reject;
+                onAgentAskUser(session, payload);
+              });
+            }, () => isCurrent(message), (url) => Zotero.launchURL(url));
+          } catch (error) {
+            if (message.method !== 'mcpServer/elicitation/request') throw error;
+            if (isCurrent(message)) {
+              const ui = { toolCallId: `app-input-${message.id}`, toolName: 'app_input', input: {} };
+              onToolCallStartV2(session, ui);
+              onToolCallEndV2(session, { ...ui, output: { error: codexString('codex-apps-form-error', '应用请求未完成：表单不兼容、输入无效或已取消。此次请求未获批准。') } });
+            }
+            return { action: 'cancel', content: null };
+          } finally {
+            pendingInputId = undefined;
+            session.pending.userAnswerResolve = undefined;
+            session.pending.userAnswerReject = undefined;
+          }
+        });
+        inputQueue = work.catch(() => undefined);
+        elicitationResults.set(message.id, work);
+        return work;
       }
       const { callId, tool, arguments: args, turnId } = message.params;
       if (!active || signal?.aborted || message.params.namespace != null || (currentTurnId && turnId !== currentTurnId))
@@ -356,6 +419,8 @@ export async function streamCodex(
       if (writeKey) writeResults.set(writeKey, work);
       return work;
     });
+    const appItems = new Set<string>();
+    const completedAppItems = new Set<string>();
     listener = (message) => {
       if (!active || signal?.aborted) return;
       const params = message.params || {};
@@ -364,6 +429,35 @@ export async function streamCodex(
         return;
       }
       if (params.threadId !== threadId) return;
+      if (params.turnId && currentTurnId && params.turnId !== currentTurnId) return;
+      if (message.method === 'serverRequest/resolved' && params.requestId === pendingInputId)
+        session.pending.userAnswerReject?.(new DOMException('Request resolved', 'AbortError'));
+      if (appIds.length && ['item/started', 'item/completed'].includes(message.method || '') && params.item?.type === 'mcpToolCall') {
+        clearTimeout(responseTimer);
+        const item = params.item;
+        const ui = {
+          toolCallId: item.id,
+          toolName: `${item.appContext?.appName || item.server}: ${item.tool}`,
+          input: redactAppValue(item.arguments),
+        };
+        renderQueue = renderQueue.then(() => {
+          if (!active || signal?.aborted || completedAppItems.has(item.id)) return;
+          if (!appItems.has(item.id)) {
+            appItems.add(item.id);
+            onToolCallStartV2(session, ui);
+          }
+          if (message.method === 'item/completed') {
+            completedAppItems.add(item.id);
+            const failed = item.status !== 'completed' || item.error || item.result?.isError;
+            onToolCallEndV2(session, {
+              ...ui,
+              output: failed ? { error: redactAppValue(item.error || item.result || item.status) } : redactAppValue(item.result),
+            });
+          }
+        });
+        void renderQueue.catch(rejectDone);
+        return;
+      }
       if (message.method === 'thread/tokenUsage/updated') {
         if (currentTurnId && params.turnId !== currentTurnId) return;
         const total = normalizeTokenCounts(params.tokenUsage?.total);
