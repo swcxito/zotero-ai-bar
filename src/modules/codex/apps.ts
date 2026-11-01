@@ -21,11 +21,12 @@ export function appFeatures(policy: Record<string, unknown>, enabled: boolean): 
   return flags;
 }
 
+/** A malformed entry is skipped (never selectable) so one bad row cannot hide a catalog of thousands. */
 export function parseApps(data: unknown): CodexApp[] {
   if (!Array.isArray(data)) throw new Error('Invalid Codex app list');
   const apps = new Map<string, CodexApp>();
   for (const app of data) {
-    if (!app || !validId(app.id) || typeof app.name !== 'string') throw new Error('Invalid Codex app entry');
+    if (!app || !validId(app.id) || typeof app.name !== 'string') continue;
     apps.set(app.id, {
       id: app.id,
       name: app.name,
@@ -46,6 +47,22 @@ export function appInstallUrl(value: unknown): string | undefined {
       return url.href;
   } catch { /* No usable installation link. */ }
   return undefined;
+}
+
+/**
+ * The catalog is the whole ChatGPT app directory (thousands of entries). Show the
+ * connected ones, plus selected ones that lost access so they can be turned off.
+ */
+export function visibleApps(apps: CodexApp[], selected: string[]): CodexApp[] {
+  return apps.filter((app) => app.isAccessible || selected.includes(app.id)).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Short reason for a failed app/list, from the runtime's error (which may embed an HTML page). */
+export function appListFailureReason(error: unknown): string {
+  const message = String((error as { rpcError?: { message?: unknown } })?.rpcError?.message ?? '');
+  const status = /status (\d{3})/.exec(message)?.[1];
+  if (!status) return '';
+  return /Enable JavaScript and cookies/i.test(message) ? `HTTP ${status}, browser verification` : `HTTP ${status}`;
 }
 
 export async function listApps(rpc: CodexRpc, forceRefetch = false): Promise<CodexApp[]> {

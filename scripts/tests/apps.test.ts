@@ -1,5 +1,5 @@
 import { assert } from 'chai';
-import { appThreadPolicy, parseApps, listApps, selectApp, selectedAppIds } from '../../src/modules/codex/apps';
+import { appListFailureReason, appThreadPolicy, parseApps, listApps, selectApp, selectedAppIds, visibleApps } from '../../src/modules/codex/apps';
 import { formFields, handleElicitation, elicitationUrl } from '../../src/modules/codex/elicitation';
 
 describe('Codex apps', function () {
@@ -29,7 +29,12 @@ describe('Codex apps', function () {
   it('validates catalog entries and paginates without duplicating apps', async function () {
     const app = { id: 'notion', name: 'Notion', isAccessible: true, isEnabled: false, installUrl: 'javascript:alert(1)' };
     assert.isUndefined(parseApps([app])[0].installUrl);
-    assert.throws(() => parseApps([{ ...app, id: 'unsafe.key' }]));
+    // An unsafe row is never selectable, and does not hide the rest of a catalog of thousands.
+    assert.deepEqual(
+      parseApps([{ ...app, id: 'unsafe.key' }, null, { id: 'x' }, app]).map((entry) => entry.id),
+      ['notion']
+    );
+    assert.throws(() => parseApps({ data: [app] }));
     const calls: any[] = [];
     const rpc: any = { request: async (_: string, params: any) => {
       calls.push(params);
@@ -41,6 +46,27 @@ describe('Codex apps', function () {
     let failure: unknown;
     try { await listApps({ request: async () => ({ data: [app], nextCursor: 'repeat' }) } as any); } catch (error) { failure = error; }
     assert.instanceOf(failure, Error);
+  });
+
+  it('lists connected and selected apps only, and explains a blocked app directory', function () {
+    const apps = parseApps([
+      { id: 'zeta', name: 'Zeta', isAccessible: true },
+      { id: 'dir_1', name: 'Directory app', isAccessible: false },
+      { id: 'gone', name: 'Was connected', isAccessible: false },
+      { id: 'alpha', name: 'Alpha', isAccessible: true },
+    ]);
+    // Sorted by name; the unconnected directory entry is hidden, the formerly connected selection stays.
+    assert.deepEqual(
+      visibleApps(apps, ['gone']).map((app) => app.name),
+      ['Alpha', 'Was connected', 'Zeta']
+    );
+    // Error text returned by codex-cli 0.166 when chatgpt.com answers app/list with a browser challenge.
+    const blocked = Object.assign(new Error('Codex -32603'), {
+      rpcError: { code: -32603, message: 'failed to list apps: Request failed with status 403 Forbidden: <html><body>Enable JavaScript and cookies to continue</body></html>' },
+    });
+    assert.equal(appListFailureReason(blocked), 'HTTP 403, browser verification');
+    assert.equal(appListFailureReason({ rpcError: { message: 'failed to list apps: Request failed with status 502 Bad Gateway' } }), 'HTTP 502');
+    assert.equal(appListFailureReason(new Error('timeout')), '');
   });
 
   it('validates typed form constraints, enum titles and arrays', async function () {

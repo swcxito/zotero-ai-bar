@@ -361,7 +361,17 @@ describe('Codex components', function () {
       assert.equal(candidates.find((candidate) => candidate.path === cachedBinary)?.source, 'desktop');
     });
 
-    function updatedWindowsRuntime(options: { failSpawn?: boolean; incompatible?: boolean; failInitialize?: boolean } = {}) {
+    /** `apps`: a ChatGPT login whose App Server pushes `catalog()` and answers app/list with the directory's 403 challenge. */
+    function updatedWindowsRuntime(
+      options: {
+        failSpawn?: boolean;
+        incompatible?: boolean;
+        failInitialize?: boolean;
+        apps?: { email: () => string; catalog: () => unknown[] };
+      } = {}
+    ) {
+      let emit: (text: string) => void = () => {};
+      const appListCalls: boolean[] = [];
       g.Zotero.isMac = false;
       g.Zotero.isWin = true;
       g.PathUtils = {
@@ -394,29 +404,66 @@ describe('Codex components', function () {
               launches.push(command);
               if (command === oldBinary || options.failSpawn) throw new Error('File does not exist, or is not executable');
               let read: ((text: string) => void) | undefined;
+              // Buffered like a real pipe: an answer to a request sent from inside a notification
+              // handler is written before the runtime's next read.
+              let queued = '';
+              const deliver = (text: string) => {
+                const pending = read;
+                read = undefined;
+                if (pending) pending(queued + text);
+                else queued += text;
+                if (pending) queued = '';
+              };
               let exited: (result: { exitCode: number }) => void;
               const wait = new Promise<{ exitCode: number }>((resolve) => {
                 exited = resolve;
               });
+              emit = deliver;
               return {
                 stdout: {
-                  readString: () =>
-                    new Promise<string>((resolve) => {
+                  readString: () => {
+                    if (queued) {
+                      const text = queued;
+                      queued = '';
+                      return Promise.resolve(text);
+                    }
+                    return new Promise<string>((resolve) => {
                       read = resolve;
-                    }),
+                    });
+                  },
                 },
                 stderr: { readString: async () => '' },
                 stdin: {
                   write: async (text: string) => {
                     const message = JSON.parse(text);
                     if (message.id === undefined) return;
+                    const apps = options.apps;
                     const response =
                       message.method === 'initialize'
                         ? options.failInitialize
                           ? { error: { code: -1, message: 'initialize failed' } }
                           : { result: { userAgent: 'codex/0.154.0-alpha.6.2' } }
-                        : { result: { account: null } };
-                    read?.(JSON.stringify({ jsonrpc: '2.0', id: message.id, ...response }) + '\n');
+                        : apps && message.method === 'account/read'
+                          ? { result: { account: { type: 'chatgpt', email: apps.email(), planType: 'plus' } } }
+                          : apps && message.method === 'model/list'
+                            ? { result: { data: [], nextCursor: null } }
+                            : apps && message.method === 'app/list'
+                              ? {
+                                  error: {
+                                    code: -32603,
+                                    message:
+                                      'failed to list apps: Request failed with status 403 Forbidden: <html><body>Enable JavaScript and cookies to continue</body></html>',
+                                  },
+                                }
+                              : { result: { account: null } };
+                    // As observed from codex-cli 0.166: only a non-forced app/list pushes the cached
+                    // catalog, before its (failing) answer; nothing is pushed at startup.
+                    if (apps && message.method === 'app/list') appListCalls.push(!!message.params?.forceRefetch);
+                    const push =
+                      apps && message.method === 'app/list' && !message.params?.forceRefetch
+                        ? JSON.stringify({ jsonrpc: '2.0', method: 'app/list/updated', params: { data: apps.catalog() } }) + '\n'
+                        : '';
+                    deliver(push + JSON.stringify({ jsonrpc: '2.0', id: message.id, ...response }) + '\n');
                   },
                 },
                 wait: () => wait,
@@ -452,8 +499,56 @@ describe('Codex components', function () {
           },
         },
       });
-      return { launches, oldBinary, newBinary, metadataQueries: () => metadataQueries };
+      return { launches, oldBinary, newBinary, metadataQueries: () => metadataQueries, emit: (text: string) => emit(text), appListCalls };
     }
+
+    async function settled(condition: () => boolean) {
+      for (let i = 0; i < 100 && !condition(); i++) await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    it('uses the runtime-pushed app catalog when the app directory is blocked, per login', async function () {
+      let email = 'a@example.com';
+      let catalog: unknown[] = [
+        { id: 'asdk_app_notion', name: 'Notion', isAccessible: true, isEnabled: false },
+        { id: 'asdk_app_other', name: 'Other', isAccessible: false, isEnabled: false },
+        { id: 'bad.id', name: 'Malformed', isAccessible: true },
+      ];
+      const fixture = updatedWindowsRuntime({ apps: { email: () => email, catalog: () => catalog } });
+      await codexRuntime.connect();
+      assert.deepEqual(codexRuntime.apps, [], 'nothing is pushed at startup');
+      // Opening the apps panel loads once per login, non-forced; the malformed row is skipped.
+      codexRuntime.loadAppsOnce();
+      codexRuntime.loadAppsOnce();
+      await settled(() => !codexRuntime.appsLoading && codexRuntime.apps.length > 0);
+      assert.deepEqual(
+        codexRuntime.apps.map((app) => app.id),
+        ['asdk_app_notion', 'asdk_app_other']
+      );
+      assert.include(codexRuntime.appsStatus, 'HTTP 403, browser verification');
+      assert.deepEqual(fixture.appListCalls, [false]);
+      // The refresh button forces a refetch, which pushes nothing; it retries non-forced for the catalog.
+      codexRuntime.apps = [];
+      await codexRuntime.refreshApps();
+      assert.deepEqual(
+        codexRuntime.apps.map((app) => app.name),
+        ['Notion', 'Other']
+      );
+      assert.deepEqual(fixture.appListCalls, [false, true, false]);
+      assert.isFalse(codexRuntime.appsLoading);
+      // Account switch: the old login's catalog is dropped, and the new login loads its own.
+      email = 'b@example.com';
+      catalog = [{ id: 'connector_gmail', name: 'Gmail', isAccessible: true, isEnabled: false }];
+      fixture.emit(JSON.stringify({ jsonrpc: '2.0', method: 'account/updated', params: { authMode: 'chatgpt' } }) + '\n');
+      await settled(() => codexRuntime.accountKey === 'b@example.com');
+      assert.equal(codexRuntime.accountKey, 'b@example.com');
+      assert.deepEqual(codexRuntime.apps, []);
+      codexRuntime.loadAppsOnce();
+      await settled(() => !codexRuntime.appsLoading && codexRuntime.apps.length > 0);
+      assert.deepEqual(
+        codexRuntime.apps.map((app) => app.name),
+        ['Gmail']
+      );
+    });
 
     it('rediscovers and connects after a desktop update removes the cached executable', async function () {
       const fixture = updatedWindowsRuntime();

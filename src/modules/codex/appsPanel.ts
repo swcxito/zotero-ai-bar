@@ -1,4 +1,4 @@
-import { appInstallUrl, selectApp, selectedAppIds } from './apps';
+import { appInstallUrl, selectApp, selectedAppIds, visibleApps } from './apps';
 import { codexRuntime } from './runtime';
 import { codexString } from './i18n';
 
@@ -13,15 +13,18 @@ export function renderAppsPanel(container: HTMLElement): void {
     container.append(panel);
   }
   const account = codexRuntime.accountKey;
+  codexRuntime.loadAppsOnce();
   const selected = account ? selectedAppIds(account) : [];
-  const fingerprint = JSON.stringify([account, selected, codexRuntime.apps, codexRuntime.appsLoading, codexRuntime.appsStatus]);
+  const apps = visibleApps(codexRuntime.apps, selected);
+  const hidden = codexRuntime.apps.length - apps.length;
+  const fingerprint = JSON.stringify([account, selected, apps, hidden, codexRuntime.appsLoading, codexRuntime.appsStatus]);
   if (panel.dataset.state === fingerprint) return;
   panel.dataset.state = fingerprint;
   panel.replaceChildren();
   const title = doc.createElement('strong');
   title.textContent = codexString('codex-apps-title', 'ChatGPT 应用（Agent 模式）');
   const help = doc.createElement('p');
-  help.textContent = codexString('codex-apps-help', '刷新后勾选要在 AI Bar 中使用的应用。连接完成后请再次刷新；选择从下一轮对话生效。');
+  help.textContent = codexString('codex-apps-help', '勾选要在 Agent 模式中使用的已连接应用。在 ChatGPT 中连接新应用后点击刷新；选择从下一轮对话生效。');
   const refresh = doc.createElement('button');
   refresh.type = 'button';
   refresh.textContent = codexString('codex-apps-refresh', '刷新应用');
@@ -34,7 +37,7 @@ export function renderAppsPanel(container: HTMLElement): void {
     ? codexString('codex-apps-loading', '正在读取应用…')
     : codexRuntime.appsStatus || (!codexRuntime.apps.length ? codexString('codex-apps-empty', '尚无应用列表，请刷新。应用是否可用取决于当前账号和运行时。') : '');
   panel.append(title, help, refresh, status);
-  for (const app of codexRuntime.apps) {
+  for (const app of apps) {
     const row = doc.createElement('div');
     row.className = 'flex flex-wrap items-center gap-2';
     const label = doc.createElement('label');
@@ -63,5 +66,15 @@ export function renderAppsPanel(container: HTMLElement): void {
       row.append(link);
     }
     panel.append(row);
+  }
+  if (hidden > 0) {
+    const more = doc.createElement('p');
+    more.className = 'text-zinc-500';
+    more.textContent = codexString(
+      'codex-apps-hidden',
+      `目录中另有 ${hidden} 个未连接的应用。在 ChatGPT 中连接后刷新，即可在这里勾选。`,
+      { count: hidden }
+    );
+    panel.append(more);
   }
 }
