@@ -29,6 +29,7 @@
     "release": "zotero-plugin release",
     "test": "zotero-plugin test",
     "test:codex": "node scripts/test-codex.mjs",
+    "test:claude-code": "node --test scripts/tests/claude-code.test.mjs",
     "test:codex-runtime": "node scripts/verify-codex-runtime.mjs",
     "test:codex-zotero": "node scripts/test-codex-zotero.mjs",
     "update-deps": "npm update --save"

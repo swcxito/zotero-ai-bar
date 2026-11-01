@@ -196,6 +196,8 @@ thinking-effort-low = 低
 thinking-effort-medium = 中
 thinking-effort-high = 高
 thinking-effort-xhigh = 极高
+thinking-effort-max = 最高
+thinking-effort-default = 默认
 
 input-chat-mode-tooltip = 对话模式
 chat-mode-title = 对话模式

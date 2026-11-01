@@ -35,6 +35,7 @@ declare namespace _ZoteroTypes {
       "chat.startConversationMode": string;
       "chat.autoAttachItemData": boolean;
       "chat.openOnStartup": boolean;
+      "chat.showPoem": boolean;
       "chat.autoImagePrompt": boolean;
       "chat.thinkingEffort": string;
       "translate.enableAuto": boolean;
@@ -53,6 +54,8 @@ declare namespace _ZoteroTypes {
       "sync.autoSync": boolean;
       "sync.includeApiKeys": boolean;
       "sync.lastSyncAt": string;
+      "claudeCode.runtimePath": string;
+      "claudeCode.modelsVersion": string;
     };
   }
 }

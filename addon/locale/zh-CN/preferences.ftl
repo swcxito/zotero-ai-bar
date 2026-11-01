@@ -28,6 +28,8 @@ pref-chat-window-always-on-top =
     .label = 置顶聊天窗口
 pref-chat-open-on-startup =
     .label = 启动时打开窗口
+pref-chat-show-poem =
+    .label = 新对话显示诗词（中文界面）
 pref-provider = 模型提供商
 pref-model-name = 模型名称
 # 提示词选项

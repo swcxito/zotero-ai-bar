@@ -37,6 +37,8 @@ import { cardDataMap, ModelIcons } from '../components/common';
 import { CODEX_PROVIDER_ID } from './codex/policy';
 import { publishModels, disconnectCodex, codexSettingsListeners } from './codex/settings';
 import { codexRuntime } from './codex/runtime';
+import { mountClaudeCodeSettings } from './claudeCode/settings';
+import { CLAUDE_CODE_PROVIDER_ID } from './claudeCode/protocol';
 import { IconView } from '../components/iconView';
 import { CardModelRow } from '../components/modelRow';
 import { InlineButton } from '../components/buttons/inlineButton';
@@ -142,6 +144,7 @@ class ModelDialogV2 {
     const icon = this.doc.getElementById('connect-chatgpt-icon');
     if (icon) ztoolkit.UI.appendElement(IconView({ iconMarkup: getModelIconPath('gpt'), sizeRem: 1 }), icon);
     this.createCodexConnectionPanel();
+    mountClaudeCodeSettings(this.doc, this.win);
     const loginStatus = this.doc.createElement('div');
     loginStatus.id = 'codex-login-wait';
     loginStatus.className = 'mb-4 flex items-center gap-3 text-sm text-zinc-500';
@@ -235,7 +238,7 @@ class ModelDialogV2 {
 
     const v2 = addon.data.userProviderConfigV2!;
     for (const [providerId] of Object.entries(v2.addedProviders)) {
-      if (providerId === CODEX_PROVIDER_ID) continue;
+      if (providerId === CODEX_PROVIDER_ID || providerId === CLAUDE_CODE_PROVIDER_ID) continue;
       this.createAndAppendCard(providerId, container as HTMLElement);
     }
     this.renderCodexCard();
@@ -794,6 +797,10 @@ class ModelDialogV2 {
     });
 
     // Subscription metadata belongs to its dedicated runtime UI, not API-key cards.
+    if (v2.addedProviders[CLAUDE_CODE_PROVIDER_ID]) {
+      newAddedProviders[CLAUDE_CODE_PROVIDER_ID] = v2.addedProviders[CLAUDE_CODE_PROVIDER_ID];
+      newAddedModels.push(...v2.addedModels.filter((model) => model.providerId === CLAUDE_CODE_PROVIDER_ID));
+    }
     if (v2.addedProviders[CODEX_PROVIDER_ID]) {
       newAddedProviders[CODEX_PROVIDER_ID] = v2.addedProviders[CODEX_PROVIDER_ID];
       newAddedModels.push(...v2.addedModels.filter((model) => model.providerId === CODEX_PROVIDER_ID));

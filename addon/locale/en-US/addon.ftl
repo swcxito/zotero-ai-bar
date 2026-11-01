@@ -196,6 +196,8 @@ thinking-effort-low = L
 thinking-effort-medium = M
 thinking-effort-high = H
 thinking-effort-xhigh = X
+thinking-effort-max = Max
+thinking-effort-default = Auto
 
 input-chat-mode-tooltip = Chat mode
 chat-mode-title = Chat mode

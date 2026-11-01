@@ -749,6 +749,7 @@ function hasLocalIcon(providerId: string): boolean {
 /** 获取 provider 图标：本地优先 → 缓存 → favicon */
 export function resolveProviderIcon(providerId: string): string {
   if (providerId === 'codex-subscription') return getV2LogoUrl('openai');
+  if (providerId === 'claude-code-local') return getV2LogoUrl('anthropic');
   if (hasLocalIcon(providerId)) return getV2LogoUrl(providerId);
   const cached = loadIconCache()[providerId];
   if (cached) return cached;

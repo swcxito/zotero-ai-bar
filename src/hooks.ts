@@ -13,6 +13,7 @@ import { preloadLLMRuntime } from './modules/llm';
 import { convertLegacyLLMConfigByKey, ensureCommonProviders, initIconCache, loadV2Config, saveV2Config } from './utils/providers';
 import { isReaderZoteroTab, updateSelectedZoteroTab } from './modules/chatWorkspace';
 import { codexRuntime } from './modules/codex/runtime';
+import { stopClaudeCode } from './modules/claudeCode/runtime';
 import { startChatSkinSync, stopChatSkinSync } from './utils/chatSkin';
 import { startWebDavAutoSync, stopWebDavAutoSync } from './modules/webdavSync';
 
@@ -172,6 +173,7 @@ async function onShutdown(): Promise<void> {
   stopWebDavAutoSync();
   stopChatSkinSync();
   await codexRuntime.stop(true);
+  await stopClaudeCode();
   await addon.chatManager.flushHistory();
   ztoolkit.unregisterAll();
   if (addon.data._tabObserverID) {
