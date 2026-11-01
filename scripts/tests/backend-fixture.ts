@@ -139,7 +139,9 @@ export class FakeServer {
     for (const [i, params] of this.elicitations.entries()) {
       const id = `elicit_${i}`;
       const reply = new Promise<any>((resolve) => this.serverRequests.set(id, resolve));
-      this.rpc.feed(JSON.stringify({ id, method: 'mcpServer/elicitation/request', params: { threadId, turnId, serverName: 'codex_apps', ...params } }) + '\n');
+      this.rpc.feed(
+        JSON.stringify({ id, method: 'mcpServer/elicitation/request', params: { threadId, turnId, serverName: 'codex_apps', ...params } }) + '\n'
+      );
       this.elicitationReplies.push(await reply);
     }
     for (const item of this.appItems) {
@@ -215,7 +217,11 @@ export function resetFixture() {
     server: new FakeServer(),
   });
   Object.assign(globalThis, {
-    Zotero: { Prefs: { get: (key: string) => key.endsWith('codex.apps.selection') ? JSON.stringify({ 'test@example.org': state.selectedApps }) : 'minimum' } },
+    Zotero: {
+      Prefs: {
+        get: (key: string) => (key.endsWith('codex.apps.selection') ? JSON.stringify({ 'test@example.org': state.selectedApps }) : 'minimum'),
+      },
+    },
     PathUtils: { join: (...parts: string[]) => parts.join('/') },
     addon: {
       data: { userProviderConfigV2: { active: { providerId: 'codex-subscription', modelId: 'model' } } },

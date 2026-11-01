@@ -580,7 +580,15 @@ class CodexRuntime {
         try {
           process = await subprocess().call({
             command: info.path,
-            arguments: ['app-server', ...policyArguments({ ...info.policy, ...appFeatures(info.policy, true), 'apps._default.enabled': false, ...(this.sharedLogin ? { cli_auth_credentials_store: 'auto' } : {}) })],
+            arguments: [
+              'app-server',
+              ...policyArguments({
+                ...info.policy,
+                ...appFeatures(info.policy, true),
+                'apps._default.enabled': false,
+                ...(this.sharedLogin ? { cli_auth_credentials_store: 'auto' } : {}),
+              }),
+            ],
             environment: { ...environment(this.sharedLogin), ...network },
             stderr: 'pipe',
             workdir: PathUtils.join(codexDirectory(), 'workspace'),

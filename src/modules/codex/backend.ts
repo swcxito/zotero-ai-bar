@@ -97,7 +97,8 @@ function routeRequests(rpc: CodexRpc) {
   map = new Map();
   handlers.set(rpc, map);
   rpc.onRequest = async (message) => {
-    if (!['item/tool/call', 'item/tool/requestUserInput', 'mcpServer/elicitation/request'].includes(message.method || '')) throw new Error('Operation not permitted');
+    if (!['item/tool/call', 'item/tool/requestUserInput', 'mcpServer/elicitation/request'].includes(message.method || ''))
+      throw new Error('Operation not permitted');
     const handler = map!.get(message.params?.threadId);
     if (!handler) throw new Error('No active turn');
     return handler(message);
@@ -274,13 +275,19 @@ export async function streamCodex(
       config,
       baseInstructions:
         'You are a literature assistant inside Zotero. Use the provided Zotero tools and hosted web search/open for document access. Historical dialogue is context, not a request to repeat past operations.' +
-        (appIds.length ? ' Connected app tools are available for the user\'s requested tasks, including reading and editing Notion. Discover the available app tools, inspect the target before editing, preserve unrelated content, and report success only after a successful tool result. If an app is unavailable, explain the error; do not claim an edit was made.' : ''),
+        (appIds.length
+          ? " Connected app tools are available for the user's requested tasks, including reading and editing Notion. Discover the available app tools, inspect the target before editing, preserve unrelated content, and report success only after a successful tool result. If an app is unavailable, explain the error; do not claim an edit was made."
+          : ''),
       developerInstructions: `${codexSystemText}\nThe Codex-native request_user_input tool is not prefixed. Other tool names from the Zotero instructions have the prefix zotero_ in this client. ${translation ? 'Return structured translation JSON. For inapplicable scalar fields use empty strings; use an empty array for inapplicable "otherMeanings".' : 'Cite web sources using Markdown links. For Zotero items preserve the Zotero citation format.'}`,
     };
     const before = contextFingerprint(session.conversationHistory);
     const existing = session.pending.codexRetry ? session.lastTurnSnapshot?.codexBefore : session.codex;
     const canReuse =
-      !translation && existing?.account === account && existing.model === model.model && existing.mode === mode && existing.context === before &&
+      !translation &&
+      existing?.account === account &&
+      existing.model === model.model &&
+      existing.mode === mode &&
+      existing.context === before &&
       (existing.apps || '[]') === appsKey;
     if (!session.pending.codexRetry && session.lastTurnSnapshot) session.lastTurnSnapshot.codexBefore = canReuse ? { ...existing! } : undefined;
     if (canReuse) {
@@ -304,7 +311,10 @@ export async function streamCodex(
     if (appIds.length) {
       // Catalog access alone does not prove that tools are callable under this thread's policy.
       const installed = await rpc.request('app/installed', { threadId, forceRefresh: true }, 60000);
-      if (!Array.isArray(installed.apps) || appIds.some((id) => !installed.apps.some((app: any) => app.id === id && app.enabled === true && app.callable === true)))
+      if (
+        !Array.isArray(installed.apps) ||
+        appIds.some((id) => !installed.apps.some((app: any) => app.id === id && app.enabled === true && app.callable === true))
+      )
         throw new Error(codexString('codex-apps-not-callable', '所选应用当前不可调用。请在模型设置中连接并刷新应用，或取消勾选不可用的应用。'));
     }
     usageBaseline =
@@ -336,8 +346,8 @@ export async function streamCodex(
     const elicitationResults = new Map<number | string, Promise<unknown>>();
     let inputQueue = Promise.resolve<unknown>(undefined);
     let pendingInputId: number | string | undefined;
-    const isCurrent = (message: RpcMessage) => active && !signal?.aborted &&
-      (!message.params?.turnId || !currentTurnId || message.params.turnId === currentTurnId);
+    const isCurrent = (message: RpcMessage) =>
+      active && !signal?.aborted && (!message.params?.turnId || !currentTurnId || message.params.turnId === currentTurnId);
     routeRequests(rpc).set(threadId!, async (message) => {
       clearTimeout(responseTimer);
       if (['item/tool/requestUserInput', 'mcpServer/elicitation/request'].includes(message.method || '')) {
@@ -351,20 +361,28 @@ export async function streamCodex(
           pendingInputId = message.id;
           try {
             if (message.method === 'item/tool/requestUserInput') return await requestNativeUserInput(session, message.params);
-            return await handleElicitation(message.params, async (payload) => {
-              if (!isCurrent(message)) throw new DOMException('Cancelled', 'AbortError');
-              return new Promise<AgentUserAnswer[]>((resolve, reject) => {
-                session.pending.userAnswerResolve = resolve;
-                session.pending.userAnswerReject = reject;
-                onAgentAskUser(session, payload);
-              });
-            }, () => isCurrent(message), (url) => Zotero.launchURL(url));
+            return await handleElicitation(
+              message.params,
+              async (payload) => {
+                if (!isCurrent(message)) throw new DOMException('Cancelled', 'AbortError');
+                return new Promise<AgentUserAnswer[]>((resolve, reject) => {
+                  session.pending.userAnswerResolve = resolve;
+                  session.pending.userAnswerReject = reject;
+                  onAgentAskUser(session, payload);
+                });
+              },
+              () => isCurrent(message),
+              (url) => Zotero.launchURL(url)
+            );
           } catch (error) {
             if (message.method !== 'mcpServer/elicitation/request') throw error;
             if (isCurrent(message)) {
               const ui = { toolCallId: `app-input-${message.id}`, toolName: 'app_input', input: {} };
               onToolCallStartV2(session, ui);
-              onToolCallEndV2(session, { ...ui, output: { error: codexString('codex-apps-form-error', '应用请求未完成：表单不兼容、输入无效或已取消。此次请求未获批准。') } });
+              onToolCallEndV2(session, {
+                ...ui,
+                output: { error: codexString('codex-apps-form-error', '应用请求未完成：表单不兼容、输入无效或已取消。此次请求未获批准。') },
+              });
             }
             return { action: 'cancel', content: null };
           } finally {

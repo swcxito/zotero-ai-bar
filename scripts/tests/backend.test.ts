@@ -29,7 +29,10 @@ describe('Codex chat backend', function () {
     assert.isTrue(start.params.config['apps.notion.enabled']);
     assert.isFalse(start.params.config['apps._default.enabled']);
     assert.equal(start.params.approvalPolicy, 'on-request');
-    assert.include(state.server.requests.map((r: any) => r.method), 'app/installed');
+    assert.include(
+      state.server.requests.map((r: any) => r.method),
+      'app/installed'
+    );
     state.selectedApps = [];
     prepareTurn(session);
     await streamCodex(messagesFor(session), session);
@@ -47,14 +50,26 @@ describe('Codex chat backend', function () {
     const session = sessionFixture();
     await streamCodex(messagesFor(session), session);
     assert.lengthOf(state.errors, 1);
-    assert.notInclude(state.server.requests.map((r: any) => r.method), 'turn/start');
+    assert.notInclude(
+      state.server.requests.map((r: any) => r.method),
+      'turn/start'
+    );
     assert.isUndefined(session.codex);
   });
 
   it('renders app successes and failures once and redacts credentials', async function () {
     state.selectedApps = ['notion'];
     state.server.appItems = [
-      { id: 'app_1', type: 'mcpToolCall', server: 'codex_apps', tool: 'update_page', status: 'completed', appContext: { appName: 'Notion' }, arguments: { page: 'notes', token: 'secret-token' }, result: { content: [{ type: 'text', text: 'Updated' }] } },
+      {
+        id: 'app_1',
+        type: 'mcpToolCall',
+        server: 'codex_apps',
+        tool: 'update_page',
+        status: 'completed',
+        appContext: { appName: 'Notion' },
+        arguments: { page: 'notes', token: 'secret-token' },
+        result: { content: [{ type: 'text', text: 'Updated' }] },
+      },
       { id: 'app_2', type: 'mcpToolCall', server: 'codex_apps', tool: 'update_page', status: 'failed', error: { message: 'Permission denied' } },
     ];
     const session = sessionFixture();
@@ -69,7 +84,13 @@ describe('Codex chat backend', function () {
 
   it('answers app forms through the user UI and declines them when apps are disabled', async function () {
     state.selectedApps = ['notion'];
-    state.server.elicitations = [{ mode: 'form', message: 'Confirm update', requestedSchema: { type: 'object', properties: { approved: { type: 'boolean' } }, required: ['approved'] } }];
+    state.server.elicitations = [
+      {
+        mode: 'form',
+        message: 'Confirm update',
+        requestedSchema: { type: 'object', properties: { approved: { type: 'boolean' } }, required: ['approved'] },
+      },
+    ];
     state.userInputAnswers = [{ selectedOptions: ['false'] }];
     const session = sessionFixture();
     await streamCodex(messagesFor(session), session);

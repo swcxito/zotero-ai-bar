@@ -8,14 +8,16 @@ const cancelled = () => ({ action: 'cancel', content: null });
 
 function choices(schema: any): { value: string; label: string }[] | undefined {
   const entries = schema.oneOf || schema.anyOf;
-  if (Array.isArray(entries)) return entries.map((entry: any) => {
-    if (typeof entry.const !== 'string' || typeof entry.title !== 'string') throw new Error('Unsupported app form choice');
-    return { value: entry.const, label: `${entry.title} (${entry.const})` };
-  });
-  if (Array.isArray(schema.enum)) return schema.enum.map((value: unknown, i: number) => {
-    if (typeof value !== 'string') throw new Error('Unsupported app form enum');
-    return { value, label: schema.enumNames?.[i] ? `${schema.enumNames[i]} (${value})` : value };
-  });
+  if (Array.isArray(entries))
+    return entries.map((entry: any) => {
+      if (typeof entry.const !== 'string' || typeof entry.title !== 'string') throw new Error('Unsupported app form choice');
+      return { value: entry.const, label: `${entry.title} (${entry.const})` };
+    });
+  if (Array.isArray(schema.enum))
+    return schema.enum.map((value: unknown, i: number) => {
+      if (typeof value !== 'string') throw new Error('Unsupported app form enum');
+      return { value, label: schema.enumNames?.[i] ? `${schema.enumNames[i]} (${value})` : value };
+    });
   return undefined;
 }
 
@@ -76,12 +78,26 @@ export async function handleElicitation(params: any, ask: Ask, active: () => boo
   const yes = codexString('codex-apps-continue', '继续');
   const no = codexString('codex-apps-decline', '拒绝');
   const confirm = async (question: string) => {
-    const answers = await ask({ questions: [{ question, options: [{ label: yes, description: '' }, { label: no, description: '' }], isOther: false, isSecret: false, multiple: false }] });
+    const answers = await ask({
+      questions: [
+        {
+          question,
+          options: [
+            { label: yes, description: '' },
+            { label: no, description: '' },
+          ],
+          isOther: false,
+          isSecret: false,
+          multiple: false,
+        },
+      ],
+    });
     return active() && answers[0]?.selectedOptions.length === 1 && answers[0].selectedOptions[0] === yes;
   };
   if (params.mode === 'url') {
     const url = elicitationUrl(params.url);
-    if (!(await confirm(`${header}\n${url}\n${codexString('codex-apps-open-url', '打开上述地址完成连接？')}`))) return { action: 'decline', content: null };
+    if (!(await confirm(`${header}\n${url}\n${codexString('codex-apps-open-url', '打开上述地址完成连接？')}`)))
+      return { action: 'decline', content: null };
     if (!active()) return cancelled();
     openUrl(url);
     if (!(await confirm(codexString('codex-apps-url-complete', '请在浏览器中完成连接后选择继续。')))) return { action: 'decline', content: null };
@@ -94,16 +110,27 @@ export async function handleElicitation(params: any, ask: Ask, active: () => boo
   for (const [key, schema, validator] of fields) {
     if (!active()) return cancelled();
     const required = params.requestedSchema.required?.includes(key);
-    const options = schema.type === 'boolean'
-      ? [{ value: 'true', label: 'true' }, { value: 'false', label: 'false' }]
-      : choices(schema.type === 'array' ? schema.items : schema);
+    const options =
+      schema.type === 'boolean'
+        ? [
+            { value: 'true', label: 'true' },
+            { value: 'false', label: 'false' },
+          ]
+        : choices(schema.type === 'array' ? schema.items : schema);
     // Large enums use explicit JSON/text entry; never silently select defaults.
     const useChoices = options && options.length >= 2 && options.length <= 5;
     const question = `${header}\n${schema.title || key}${schema.description ? `: ${schema.description}` : ''}\n${required ? '*' : '(optional)'} ${schema.type}${!useChoices && options ? `: ${options.map((o) => o.value).join(', ')}` : ''}`;
-    const answers = await ask({ questions: [{
-      question, options: useChoices ? options.map((o) => ({ label: o.label, description: o.value })) : null,
-      isOther: !useChoices, isSecret: false, multiple: schema.type === 'array',
-    }] });
+    const answers = await ask({
+      questions: [
+        {
+          question,
+          options: useChoices ? options.map((o) => ({ label: o.label, description: o.value })) : null,
+          isOther: !useChoices,
+          isSecret: false,
+          multiple: schema.type === 'array',
+        },
+      ],
+    });
     if (!active()) return cancelled();
     const answer = answers[0];
     if (!answer) return cancelled();

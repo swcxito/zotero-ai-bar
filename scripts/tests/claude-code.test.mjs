@@ -4,25 +4,57 @@ import { readFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Buffer } from 'node:buffer';
 
+// Node globals; the shared ESLint config targets Zotero code. `addon` is the stub installed below.
+const { AbortController, DOMException } = globalThis;
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const dataUrl = (code) => `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
 const source = (name) => readFile(resolve(root, `src/modules/claudeCode/${name}.ts`), 'utf8');
 const protocolUrl = dataUrl(stripTypeScriptTypes(await source('protocol')));
 const {
-  ClaudeStream, buildClaudeInput, claudeArguments, claudeDiscoveryArguments, claudeEnvironment, claudeCodeModelSelection, claudeCodeModels, claudeEffort,
-  claudeModelsFromLine, CLAUDE_FALLBACK_MODELS, CLAUDE_INITIALIZE_REQUEST, REQUIRED_CLAUDE_FLAGS,
-  claudeMcpReply, claudeInitializeRequest, claudeControlResponse, claudeControlError, CLAUDE_TOOL_SERVER,
+  ClaudeStream,
+  buildClaudeInput,
+  claudeArguments,
+  claudeDiscoveryArguments,
+  claudeEnvironment,
+  claudeCodeModelSelection,
+  claudeCodeModels,
+  claudeEffort,
+  claudeModelsFromLine,
+  CLAUDE_FALLBACK_MODELS,
+  CLAUDE_INITIALIZE_REQUEST,
+  REQUIRED_CLAUDE_FLAGS,
+  claudeMcpReply,
+  claudeInitializeRequest,
+  claudeControlResponse,
+  claudeControlError,
+  CLAUDE_TOOL_SERVER,
 } = await import(protocolUrl);
 const messageStart = { type: 'stream_event', event: { type: 'message_start', message: {} } };
-const mcpRequest = (id, message) => ({ type: 'control_request', request_id: id, request: { subtype: 'mcp_message', server_name: 'zotero', message } });
+const mcpRequest = (id, message) => ({
+  type: 'control_request',
+  request_id: id,
+  request: { subtype: 'mcp_message', server_name: 'zotero', message },
+});
 // Shape returned by the official CLI 2.1.168 for a Pro account (initialize control response).
 const cliModels = [
-  { value: 'default', displayName: 'Default (recommended)', description: 'Sonnet 4.6 · Best for everyday tasks', supportedEffortLevels: ['low', 'medium', 'high', 'max'] },
-  { value: 'opus', displayName: 'Opus', description: 'Opus 4.8 · Most capable for complex work · ~2× usage vs Sonnet', supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  {
+    value: 'default',
+    displayName: 'Default (recommended)',
+    description: 'Sonnet 4.6 · Best for everyday tasks',
+    supportedEffortLevels: ['low', 'medium', 'high', 'max'],
+  },
+  {
+    value: 'opus',
+    displayName: 'Opus',
+    description: 'Opus 4.8 · Most capable for complex work · ~2× usage vs Sonnet',
+    supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+  },
   { value: 'haiku', displayName: 'Haiku', description: 'Haiku 4.5 · Fastest for quick answers' },
 ];
-const initializeResponse = (models) => JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: 'zaibar-models', response: { commands: [], models } } });
+const initializeResponse = (models) =>
+  JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: 'zaibar-models', response: { commands: [], models } } });
 const delta = (text) => ({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text } } });
 const result = (text) => ({ type: 'result', subtype: 'success', is_error: false, result: text, usage: { input_tokens: 3, output_tokens: 2 } });
 const line = (event) => JSON.stringify(event) + '\n';
@@ -36,7 +68,8 @@ test('routes explicit translation model independently of the active model', () =
 
 test('parses split JSON, Unicode and final lines without duplicating assistant snapshots', () => {
   const parser = new ClaudeStream();
-  const stream = line(delta('你好')) + line({ type: 'assistant', message: { content: [{ type: 'text', text: '你好' }] } }) + JSON.stringify(result('你好'));
+  const stream =
+    line(delta('你好')) + line({ type: 'assistant', message: { content: [{ type: 'text', text: '你好' }] } }) + JSON.stringify(result('你好'));
   for (let i = 0; i < stream.length; i += 7) parser.push(stream.slice(i, i + 7));
   assert.equal(parser.finish(0), '你好');
 });
@@ -50,26 +83,39 @@ test('falls back to the final result when partial messages are absent', () => {
 test('rejects quota errors, malformed output, missing results and process failures', () => {
   assert.throws(() => new ClaudeStream().push(line({ type: 'result', is_error: true, result: 'Rate limit exceeded' })), /Rate limit/);
   assert.throws(() => new ClaudeStream().push('not json\n'), /invalid stream/);
-  const parser = new ClaudeStream(); parser.push(line(delta('partial')));
+  const parser = new ClaudeStream();
+  parser.push(line(delta('partial')));
   assert.throws(() => parser.finish(0), /without a final/);
-  const failed = new ClaudeStream(); failed.push(line(result('text')));
+  const failed = new ClaudeStream();
+  failed.push(line(result('text')));
   assert.throws(() => failed.finish(1), /code 1\. Check login/);
   assert.throws(() => new ClaudeStream().finish(1, 'Error: Invalid setting source\n'), /code 1: Error: Invalid setting source$/);
 });
 
 test('does not leak provider tokens in error text', () => {
-  assert.throws(() => new ClaudeStream().push(line({ type: 'result', is_error: true, result: 'Bearer private-token sk-ant-secret' })), (error) => {
-    assert.doesNotMatch(error.message, /private-token|sk-ant-secret/);
-    return true;
-  });
+  assert.throws(
+    () => new ClaudeStream().push(line({ type: 'result', is_error: true, result: 'Bearer private-token sk-ant-secret' })),
+    (error) => {
+      assert.doesNotMatch(error.message, /private-token|sk-ant-secret/);
+      return true;
+    }
+  );
 });
 
 test('passes paper history and images over stdin with no local path reads', () => {
-  const input = JSON.parse(buildClaudeInput([
-    { role: 'system', content: 'Explain equations accurately.' },
-    { role: 'assistant', content: 'Earlier answer' },
-    { role: 'user', content: [{ type: 'text', text: 'Explain this $x$' }, { type: 'image', image: 'data:image/png;base64,YQ==' }] },
-  ]));
+  const input = JSON.parse(
+    buildClaudeInput([
+      { role: 'system', content: 'Explain equations accurately.' },
+      { role: 'assistant', content: 'Earlier answer' },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Explain this $x$' },
+          { type: 'image', image: 'data:image/png;base64,YQ==' },
+        ],
+      },
+    ])
+  );
   assert.equal(input.message.role, 'user');
   assert.equal(input.message.content.at(-1).source.media_type, 'image/png');
   assert.match(JSON.stringify(input), /Earlier answer/);
@@ -88,20 +134,49 @@ test('isolates execution without disabling official subscription authentication'
   assert.ok(!args.includes('--bare'));
   assert.ok(!args.includes('--dangerously-skip-permissions'));
   assert.throws(() => claudeArguments('sonnet --bad'), /Invalid/);
-  const env = claudeEnvironment({ HOME: '/user', PATH: '/bin', HTTPS_PROXY: 'http://proxy', ANTHROPIC_API_KEY: 'key', ANTHROPIC_BASE_URL: 'override', CLAUDE_CODE_OAUTH_TOKEN: 'token', CLAUDECODE: '1' });
+  const env = claudeEnvironment({
+    HOME: '/user',
+    PATH: '/bin',
+    HTTPS_PROXY: 'http://proxy',
+    ANTHROPIC_API_KEY: 'key',
+    ANTHROPIC_BASE_URL: 'override',
+    CLAUDE_CODE_OAUTH_TOKEN: 'token',
+    CLAUDECODE: '1',
+  });
   assert.deepEqual(env, { HOME: '/user', PATH: '/bin', HTTPS_PROXY: 'http://proxy' });
 });
 
 test('publishes the versions the CLI reports for each alias, without listing default twice', () => {
   const models = claudeCodeModels(cliModels);
-  assert.deepEqual(models.map((m) => [m.id, m.name]), [['sonnet', 'Claude Sonnet 4.6'], ['opus', 'Claude Opus 4.8'], ['haiku', 'Claude Haiku 4.5']]);
+  assert.deepEqual(
+    models.map((m) => [m.id, m.name]),
+    [
+      ['sonnet', 'Claude Sonnet 4.6'],
+      ['opus', 'Claude Opus 4.8'],
+      ['haiku', 'Claude Haiku 4.5'],
+    ]
+  );
   assert.deepEqual(models[1].efforts, ['low', 'medium', 'high', 'xhigh', 'max']);
   assert.deepEqual(models[2].efforts, []);
   // A recommended default that is Opus collapses into the opus entry.
-  assert.deepEqual(claudeCodeModels([{ ...cliModels[1], value: 'default' }, cliModels[1]]).map((m) => m.id), ['opus']);
+  assert.deepEqual(
+    claudeCodeModels([{ ...cliModels[1], value: 'default' }, cliModels[1]]).map((m) => m.id),
+    ['opus']
+  );
   // Session overrides and unsafe ids are not account models.
-  assert.deepEqual(claudeCodeModels([{ value: 'sonnet', displayName: 'sonnet', description: 'Custom model' }, { value: 'x y', description: 'Opus 9 · bad' }, cliModels[2]]).map((m) => m.id), ['haiku']);
-  assert.equal(claudeCodeModels([{ value: 'sonnet[1m]', displayName: 'Sonnet (1M context)', description: 'Sonnet 4.6 with 1M context · Long sessions' }])[0].name, 'Claude Sonnet 4.6 with 1M context');
+  assert.deepEqual(
+    claudeCodeModels([
+      { value: 'sonnet', displayName: 'sonnet', description: 'Custom model' },
+      { value: 'x y', description: 'Opus 9 · bad' },
+      cliModels[2],
+    ]).map((m) => m.id),
+    ['haiku']
+  );
+  assert.equal(
+    claudeCodeModels([{ value: 'sonnet[1m]', displayName: 'Sonnet (1M context)', description: 'Sonnet 4.6 with 1M context · Long sessions' }])[0]
+      .name,
+    'Claude Sonnet 4.6 with 1M context'
+  );
   assert.ok(claudeArguments('sonnet[1m]').includes('sonnet[1m]'));
   assert.equal(claudeCodeModels(undefined), CLAUDE_FALLBACK_MODELS);
   assert.equal(claudeCodeModels([]), CLAUDE_FALLBACK_MODELS);
@@ -112,8 +187,16 @@ test('reads only the initialize response from the stream', () => {
   assert.equal(claudeModelsFromLine('not json'), undefined);
   assert.equal(claudeModelsFromLine(JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: 'other' } })), undefined);
   assert.equal(claudeModelsFromLine(initializeResponse(cliModels)).length, 3);
-  assert.throws(() => claudeModelsFromLine(JSON.stringify({ type: 'control_response', response: { subtype: 'error', request_id: 'zaibar-models', error: 'nope' } })), /nope/);
-  assert.deepEqual(JSON.parse(CLAUDE_INITIALIZE_REQUEST), { type: 'control_request', request_id: 'zaibar-models', request: { subtype: 'initialize' } });
+  assert.throws(
+    () =>
+      claudeModelsFromLine(JSON.stringify({ type: 'control_response', response: { subtype: 'error', request_id: 'zaibar-models', error: 'nope' } })),
+    /nope/
+  );
+  assert.deepEqual(JSON.parse(CLAUDE_INITIALIZE_REQUEST), {
+    type: 'control_request',
+    request_id: 'zaibar-models',
+    request: { subtype: 'initialize' },
+  });
 });
 
 test('sends only effort levels the model reports, otherwise leaves the CLI default', () => {
@@ -144,7 +227,10 @@ test('Agent mode adds only the in-process Zotero MCP server, pre-approved, with 
   assert.match(plain[plain.indexOf('--system-prompt') + 1], /You have no tools/);
   assert.equal(CLAUDE_TOOL_SERVER, 'zotero');
   assert.deepEqual(JSON.parse(claudeInitializeRequest('i', ['zotero'])).request, { subtype: 'initialize', sdkMcpServers: ['zotero'] });
-  assert.deepEqual(JSON.parse(claudeControlResponse('r', { a: 1 })), { type: 'control_response', response: { subtype: 'success', request_id: 'r', response: { a: 1 } } });
+  assert.deepEqual(JSON.parse(claudeControlResponse('r', { a: 1 })), {
+    type: 'control_response',
+    response: { subtype: 'success', request_id: 'r', response: { a: 1 } },
+  });
   assert.equal(JSON.parse(claudeControlError('r', 'no')).response.subtype, 'error');
 });
 
@@ -152,13 +238,23 @@ test('answers the MCP handshake, tool listing and tool calls the CLI sends (as o
   const calls = [];
   const server = {
     tools: [{ name: 'read', description: 'Read', inputSchema: { type: 'object' } }],
-    call: async (name, args, toolUseId) => { calls.push([name, args, toolUseId]); return { content: [{ type: 'text', text: 'ok' }] }; },
+    call: async (name, args, toolUseId) => {
+      calls.push([name, args, toolUseId]);
+      return { content: [{ type: 'text', text: 'ok' }] };
+    },
   };
   const init = await claudeMcpReply({ method: 'initialize', params: { protocolVersion: '2025-11-25' }, jsonrpc: '2.0', id: 0 }, server);
-  assert.deepEqual(init, { jsonrpc: '2.0', id: 0, result: { protocolVersion: '2025-11-25', capabilities: { tools: {} }, serverInfo: { name: 'zotero', version: '1.0.0' } } });
+  assert.deepEqual(init, {
+    jsonrpc: '2.0',
+    id: 0,
+    result: { protocolVersion: '2025-11-25', capabilities: { tools: {} }, serverInfo: { name: 'zotero', version: '1.0.0' } },
+  });
   assert.deepEqual(await claudeMcpReply({ jsonrpc: '2.0', method: 'notifications/initialized' }, server), { jsonrpc: '2.0', result: {}, id: 0 });
   assert.deepEqual((await claudeMcpReply({ method: 'tools/list', jsonrpc: '2.0', id: 1 }, server)).result.tools, server.tools);
-  const called = await claudeMcpReply({ method: 'tools/call', params: { name: 'read', arguments: { itemId: 3 }, _meta: { 'claudecode/toolUseId': 'toolu_1' } }, jsonrpc: '2.0', id: 2 }, server);
+  const called = await claudeMcpReply(
+    { method: 'tools/call', params: { name: 'read', arguments: { itemId: 3 }, _meta: { 'claudecode/toolUseId': 'toolu_1' } }, jsonrpc: '2.0', id: 2 },
+    server
+  );
   assert.deepEqual(called, { jsonrpc: '2.0', id: 2, result: { content: [{ type: 'text', text: 'ok' }] } });
   assert.deepEqual(calls, [['read', { itemId: 3 }, 'toolu_1']]);
   const unknown = await claudeMcpReply({ method: 'tools/call', params: { name: 'Bash', arguments: {} }, jsonrpc: '2.0', id: 3 }, server);
@@ -207,63 +303,104 @@ globalThis.IOUtils = { makeDirectory: async () => {}, exists: async () => true }
 globalThis.Zotero = { isWin: false };
 globalThis.Ci = {};
 globalThis.Cc = { '@mozilla.org/network/protocol-proxy-service;1': { getService: () => ({ proxyConfigType: 5 }) } };
-globalThis.__claudePrefs = { get: (key) => prefs[key], set: (key, value) => { prefs[key] = value; } };
-globalThis.ChromeUtils = { importESModule: () => ({ Subprocess: {
-  getEnvironment: () => ({ HOME: '/user', HTTPS_PROXY: 'http://proxy', ANTHROPIC_API_KEY: 'must-not-leak' }),
-  call: async (options) => {
-    calls.push(options);
-    const args = options.arguments;
-    let chunks = args.includes('--version') ? ['2.1.168 (Claude Code)']
-      : args.includes('--help') ? [REQUIRED_CLAUDE_FLAGS.join(' ')]
-      : args.includes('auth') ? [JSON.stringify({ loggedIn: true, authMethod, subscriptionType: 'pro' })]
-      : [...output];
-    const discovery = args.includes('-p') && !args.includes('--model');
-    if (discovery) chunks = [initializeResponse(cliModels).slice(0, 40), initializeResponse(cliModels).slice(40) + '\n'];
-    const inference = args.includes('-p') && !discovery;
-    const exited = inference && earlyExit;
-    if (exited) chunks = [];
-    const stderr = exited ? [earlyExit] : [];
-    const closed = async () => { throw new Error('File closed'); };
-    let wake;
-    let killed = false;
-    // Agent turns: a { waitFor } chunk holds stdout until the host has written a matching line,
-    // as the real CLI waits for a tool result before continuing.
-    options.writes = [];
-    const written = [];
-    const waitForWrite = (text) => new Promise((resolve) => {
-      const check = () => (options.writes.some((w) => w.includes(text)) ? resolve() : written.push(check));
-      check();
-    });
-    const child = {
-      stdin: exited ? { write: closed, close: closed } : {
-        write: async (input) => {
-          if (options.stdinClosed) throw new Error('File closed');
-          options.input = input;
-          options.writes.push(input);
-          written.splice(0).forEach((check) => check());
-        },
-        close: async () => { options.stdinClosed = true; },
-      },
-      stdout: { readString: async () => {
-        while (chunks.length && typeof chunks[0] === 'object') await waitForWrite(chunks.shift().waitFor);
-        if (chunks.length) { const value = chunks.shift(); if (inference) firstChunk?.(); return value; }
-        if (inference && stall && !killed) return new Promise((resolve) => { wake = resolve; });
-        return '';
-      } },
-      stderr: { readString: async () => stderr.shift() || '' },
-      wait: async () => ({ exitCode: exited ? 1 : 0 }),
-      kill: async () => { killed = true; stopCount++; wake?.(''); },
-    };
-    return child;
+globalThis.__claudePrefs = {
+  get: (key) => prefs[key],
+  set: (key, value) => {
+    prefs[key] = value;
   },
-} }) };
+};
+globalThis.ChromeUtils = {
+  importESModule: () => ({
+    Subprocess: {
+      getEnvironment: () => ({ HOME: '/user', HTTPS_PROXY: 'http://proxy', ANTHROPIC_API_KEY: 'must-not-leak' }),
+      call: async (options) => {
+        calls.push(options);
+        const args = options.arguments;
+        let chunks = args.includes('--version')
+          ? ['2.1.168 (Claude Code)']
+          : args.includes('--help')
+            ? [REQUIRED_CLAUDE_FLAGS.join(' ')]
+            : args.includes('auth')
+              ? [JSON.stringify({ loggedIn: true, authMethod, subscriptionType: 'pro' })]
+              : [...output];
+        const discovery = args.includes('-p') && !args.includes('--model');
+        if (discovery) chunks = [initializeResponse(cliModels).slice(0, 40), initializeResponse(cliModels).slice(40) + '\n'];
+        const inference = args.includes('-p') && !discovery;
+        const exited = inference && earlyExit;
+        if (exited) chunks = [];
+        const stderr = exited ? [earlyExit] : [];
+        const closed = async () => {
+          throw new Error('File closed');
+        };
+        let wake;
+        let killed = false;
+        // Agent turns: a { waitFor } chunk holds stdout until the host has written a matching line,
+        // as the real CLI waits for a tool result before continuing.
+        options.writes = [];
+        const written = [];
+        const waitForWrite = (text) =>
+          new Promise((resolve) => {
+            const check = () => (options.writes.some((w) => w.includes(text)) ? resolve() : written.push(check));
+            check();
+          });
+        const child = {
+          stdin: exited
+            ? { write: closed, close: closed }
+            : {
+                write: async (input) => {
+                  if (options.stdinClosed) throw new Error('File closed');
+                  options.input = input;
+                  options.writes.push(input);
+                  written.splice(0).forEach((check) => check());
+                },
+                close: async () => {
+                  options.stdinClosed = true;
+                },
+              },
+          stdout: {
+            readString: async () => {
+              while (chunks.length && typeof chunks[0] === 'object') await waitForWrite(chunks.shift().waitFor);
+              if (chunks.length) {
+                const value = chunks.shift();
+                if (inference) firstChunk?.();
+                return value;
+              }
+              if (inference && stall && !killed)
+                return new Promise((resolve) => {
+                  wake = resolve;
+                });
+              return '';
+            },
+          },
+          stderr: { readString: async () => stderr.shift() || '' },
+          wait: async () => ({ exitCode: exited ? 1 : 0 }),
+          kill: async () => {
+            killed = true;
+            stopCount++;
+            wake?.('');
+          },
+        };
+        return child;
+      },
+    },
+  }),
+};
 let runtimeCode = stripTypeScriptTypes(await source('runtime'));
-runtimeCode = runtimeCode.replace(/import \{ getPref, setPref \} from '[^']+';/, 'const getPref = globalThis.__claudePrefs.get; const setPref = globalThis.__claudePrefs.set;');
+runtimeCode = runtimeCode.replace(
+  /import \{ getPref, setPref \} from '[^']+';/,
+  'const getPref = globalThis.__claudePrefs.get; const setPref = globalThis.__claudePrefs.set;'
+);
 runtimeCode = runtimeCode.replace("from './protocol'", `from '${protocolUrl}'`);
 const runtime = await import(dataUrl(runtimeCode));
 beforeEach(() => {
-  calls = []; prefs = {}; authMethod = 'claude.ai'; output = [line(delta('answer')), line(result('answer'))];
-  stopCount = 0; stall = false; firstChunk = undefined; earlyExit = undefined;
+  calls = [];
+  prefs = {};
+  authMethod = 'claude.ai';
+  output = [line(delta('answer')), line(result('answer'))];
+  stopCount = 0;
+  stall = false;
+  firstChunk = undefined;
+  earlyExit = undefined;
 });
 
 test('detects actual Claude Pro auth status shape and rejects API-key sessions', async () => {
@@ -288,38 +425,55 @@ test('runs a streamed request with current history and cleans up the child', asy
 
 test('cancellation kills a stalled child and prevents further rendering', async () => {
   const controller = new AbortController();
-  output = [line(delta('partial'))]; stall = true;
+  output = [line(delta('partial'))];
+  stall = true;
   const updates = [];
-  const pending = runtime.runClaudeCode('sonnet', 'input', controller.signal, async (text) => { updates.push(text); controller.abort(); });
+  const pending = runtime.runClaudeCode('sonnet', 'input', controller.signal, async (text) => {
+    updates.push(text);
+    controller.abort();
+  });
   await assert.rejects(pending, { name: 'AbortError' });
   assert.deepEqual(updates, ['partial']);
   assert.ok(stopCount >= 4);
 });
 
 test('already cancelled requests never start a process', async () => {
-  const controller = new AbortController(); controller.abort();
-  await assert.rejects(runtime.runClaudeCode('sonnet', '', controller.signal, async () => {}), { name: 'AbortError' });
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(
+    runtime.runClaudeCode('sonnet', '', controller.signal, async () => {}),
+    { name: 'AbortError' }
+  );
   assert.equal(calls.length, 0);
 });
 
 test('malformed stream fails without falling back to an API provider', async () => {
   output = ['invalid\n'];
-  await assert.rejects(runtime.runClaudeCode('sonnet', 'input', undefined, async () => {}), /invalid stream/);
+  await assert.rejects(
+    runtime.runClaudeCode('sonnet', 'input', undefined, async () => {}),
+    /invalid stream/
+  );
   assert.equal(calls.filter((c) => c.arguments.includes('-p')).length, 1);
 });
 
 test('early CLI exit reports stderr instead of the closed stdin pipe', async () => {
   earlyExit = 'Error processing --setting-sources: Invalid setting source\n';
-  await assert.rejects(runtime.runClaudeCode('sonnet', 'input', undefined, async () => {}), (error) => {
-    assert.match(error.message, /code 1: Error processing --setting-sources/);
-    assert.doesNotMatch(error.message, /File closed/);
-    return true;
-  });
+  await assert.rejects(
+    runtime.runClaudeCode('sonnet', 'input', undefined, async () => {}),
+    (error) => {
+      assert.match(error.message, /code 1: Error processing --setting-sources/);
+      assert.doesNotMatch(error.message, /File closed/);
+      return true;
+    }
+  );
 });
 
 test('lists account models over stdin without a model request and stops the CLI', async () => {
   const models = await runtime.listClaudeCodeModels('/bin/claude');
-  assert.deepEqual(models.map((m) => m.name), ['Claude Sonnet 4.6', 'Claude Opus 4.8', 'Claude Haiku 4.5']);
+  assert.deepEqual(
+    models.map((m) => m.name),
+    ['Claude Sonnet 4.6', 'Claude Opus 4.8', 'Claude Haiku 4.5']
+  );
   const discovery = calls.at(-1);
   assert.ok(!discovery.arguments.includes('--model'));
   assert.equal(discovery.input, CLAUDE_INITIALIZE_REQUEST);
@@ -328,9 +482,23 @@ test('lists account models over stdin without a model request and stops the CLI'
 });
 
 test('Agent turn: declares the tool server, answers tool calls on stdin, and closes stdin after the result', async () => {
-  const toolCall = mcpRequest('req-7', { method: 'tools/call', params: { name: 'read', arguments: { itemId: 1 }, _meta: { 'claudecode/toolUseId': 'toolu_7' } }, jsonrpc: '2.0', id: 2 });
-  output = [line(messageStart) + line(delta('Checking.')), line(toolCall), { waitFor: '"request_id":"req-7"' }, line(messageStart) + line(delta('Done.')), line(result('Done.'))];
-  const server = { tools: [{ name: 'read', description: 'Read', inputSchema: { type: 'object' } }], call: async () => ({ content: [{ type: 'text', text: 'page text' }] }) };
+  const toolCall = mcpRequest('req-7', {
+    method: 'tools/call',
+    params: { name: 'read', arguments: { itemId: 1 }, _meta: { 'claudecode/toolUseId': 'toolu_7' } },
+    jsonrpc: '2.0',
+    id: 2,
+  });
+  output = [
+    line(messageStart) + line(delta('Checking.')),
+    line(toolCall),
+    { waitFor: '"request_id":"req-7"' },
+    line(messageStart) + line(delta('Done.')),
+    line(result('Done.')),
+  ];
+  const server = {
+    tools: [{ name: 'read', description: 'Read', inputSchema: { type: 'object' } }],
+    call: async () => ({ content: [{ type: 'text', text: 'page text' }] }),
+  };
   const updates = [];
   const answer = await runtime.runClaudeCode('opus', 'stdin-content\n', undefined, async (text, segment) => updates.push(segment), undefined, server);
   assert.equal(answer.text, 'Checking.\n\nDone.');
@@ -341,12 +509,21 @@ test('Agent turn: declares the tool server, answers tool calls on stdin, and clo
   assert.deepEqual(JSON.parse(request.writes[0]).request, { subtype: 'initialize', sdkMcpServers: ['zotero'] });
   assert.equal(request.writes[1], 'stdin-content\n');
   const reply = JSON.parse(request.writes.find((w) => w.includes('req-7')));
-  assert.deepEqual(reply.response, { subtype: 'success', request_id: 'req-7', response: { mcp_response: { jsonrpc: '2.0', id: 2, result: { content: [{ type: 'text', text: 'page text' }] } } } });
+  assert.deepEqual(reply.response, {
+    subtype: 'success',
+    request_id: 'req-7',
+    response: { mcp_response: { jsonrpc: '2.0', id: 2, result: { content: [{ type: 'text', text: 'page text' }] } } },
+  });
   assert.equal(request.stdinClosed, true);
 });
 
 test('Agent turn rejects control requests for other servers or purposes', async () => {
-  output = [line({ type: 'control_request', request_id: 'perm-1', request: { subtype: 'can_use_tool', tool_name: 'Bash' } }), { waitFor: 'perm-1' }, line(delta('ok')), line(result('ok'))];
+  output = [
+    line({ type: 'control_request', request_id: 'perm-1', request: { subtype: 'can_use_tool', tool_name: 'Bash' } }),
+    { waitFor: 'perm-1' },
+    line(delta('ok')),
+    line(result('ok')),
+  ];
   const server = { tools: [], call: async () => assert.fail('must not run') };
   await runtime.runClaudeCode('opus', 'x\n', undefined, async () => {}, undefined, server);
   const reply = JSON.parse(calls.find((c) => c.arguments.includes('--model')).writes.find((w) => w.includes('perm-1')));
@@ -370,7 +547,10 @@ globalThis.__claudeBackendFixture = {
   efforts: { sonnet: ['low', 'medium', 'high', 'max'], opus: ['low', 'medium', 'high', 'xhigh', 'max'], haiku: [] },
   toolHooks: [],
   run: async (model, input, signal, onText, effort, server) => {
-    capturedModel = model; capturedInput = input; capturedEffort = effort; globalThis.__claudeBackendFixture.server = server;
+    capturedModel = model;
+    capturedInput = input;
+    capturedEffort = effort;
+    globalThis.__claudeBackendFixture.server = server;
     if (globalThis.__claudeBackendFixture.agentRun) return globalThis.__claudeBackendFixture.agentRun(onText);
     if (fakeResponse instanceof Error) throw fakeResponse;
     await onText(fakeResponse.text, fakeResponse.text);
@@ -385,24 +565,47 @@ globalThis.__claudeBackendFixture = {
   end: (_session, usage, aborted) => uiEvents.push(['end', usage, aborted]),
   error: (data) => uiEvents.push(['error', data.error]),
   translation: (_session, value) => uiEvents.push(['translation', value]),
-  normalize: (value) => value?.textType && value?.translatedText ? value : undefined,
+  normalize: (value) => (value?.textType && value?.translatedText ? value : undefined),
 };
 let backendCode = stripTypeScriptTypes(await source('backend'));
-backendCode = backendCode.replace(/import \{ normalizeTranslationResultCandidate[^;]+;/, 'const normalizeTranslationResultCandidate = globalThis.__claudeBackendFixture.normalize;');
-backendCode = backendCode.replace(/import \{ onLLMStreamStartV2[^;]+;/,
-  'const { start: onLLMStreamStartV2, update: onLLMStreamUpdateV2, end: onLLMStreamEndV2, error: onLLMStreamErrorV2, translation: onTranslationResultV2 } = globalThis.__claudeBackendFixture;');
+backendCode = backendCode.replace(
+  /import \{ normalizeTranslationResultCandidate[^;]+;/,
+  'const normalizeTranslationResultCandidate = globalThis.__claudeBackendFixture.normalize;'
+);
+backendCode = backendCode.replace(
+  /import \{ onLLMStreamStartV2[^;]+;/,
+  'const { start: onLLMStreamStartV2, update: onLLMStreamUpdateV2, end: onLLMStreamEndV2, error: onLLMStreamErrorV2, translation: onTranslationResultV2 } = globalThis.__claudeBackendFixture;'
+);
 backendCode = backendCode.replace("from './protocol'", `from '${protocolUrl}'`);
 backendCode = backendCode.replace(/import \{ runClaudeCode \} from '[^']+';/, 'const runClaudeCode = globalThis.__claudeBackendFixture.run;');
 backendCode = backendCode.replace(/import \{ getPref \} from '[^']+';/, 'const getPref = (key) => globalThis.__claudeBackendFixture.prefs[key];');
-backendCode = backendCode.replace(/import \{ claudeCodeEfforts, refreshClaudeCodeModels \} from '[^']+';/,
-  'const claudeCodeEfforts = (id) => globalThis.__claudeBackendFixture.efforts[id] ?? []; const refreshClaudeCodeModels = async (...a) => { globalThis.__claudeBackendFixture.refreshes.push(a); };');
-backendCode = backendCode.replace(/import \{ zoteroToolServer \} from '[^']+';/, 'const zoteroToolServer = (...a) => globalThis.__claudeBackendFixture.tools(...a);');
+backendCode = backendCode.replace(
+  /import \{ claudeCodeEfforts, refreshClaudeCodeModels \} from '[^']+';/,
+  'const claudeCodeEfforts = (id) => globalThis.__claudeBackendFixture.efforts[id] ?? []; const refreshClaudeCodeModels = async (...a) => { globalThis.__claudeBackendFixture.refreshes.push(a); };'
+);
+backendCode = backendCode.replace(
+  /import \{ zoteroToolServer \} from '[^']+';/,
+  'const zoteroToolServer = (...a) => globalThis.__claudeBackendFixture.tools(...a);'
+);
 const { streamClaudeCode } = await import(dataUrl(backendCode));
-const session = (mode = 'normal', extra = {}) => ({ pending: { abortController: new AbortController() }, effectiveChatMode: mode, thinkingEffort: 'none', ...extra });
+const session = (mode = 'normal', extra = {}) => ({
+  pending: { abortController: new AbortController() },
+  effectiveChatMode: mode,
+  thinkingEffort: 'none',
+  ...extra,
+});
 beforeEach(() => {
-  uiEvents = []; capturedModel = undefined; capturedInput = undefined; capturedEffort = undefined;
+  uiEvents = [];
+  capturedModel = undefined;
+  capturedInput = undefined;
+  capturedEffort = undefined;
   globalThis.__claudeBackendFixture.prefs['translate.thinkingDepth'] = 'minimum';
-  fakeResponse = { text: 'answer', usage: { input_tokens: 2, cache_read_input_tokens: 3, output_tokens: 4 }, path: '/bin/claude', version: '2.1.302' };
+  fakeResponse = {
+    text: 'answer',
+    usage: { input_tokens: 2, cache_read_input_tokens: 3, output_tokens: 4 },
+    path: '/bin/claude',
+    version: '2.1.302',
+  };
   globalThis.__claudeBackendFixture.refreshes = [];
 });
 
@@ -418,7 +621,10 @@ test('backend renders final text and reports usage through the existing UI', asy
 
 test('translation model override reaches the translation renderer without streaming JSON into chat', async () => {
   fakeResponse = { text: '```json\n{"textType":"text","translatedText":"对比学习"}\n```' };
-  await streamClaudeCode([{ role: 'user', content: 'contrastive learning' }], session(), { modelKey: 'claude-code-local::haiku', selectedText: 'contrastive learning' });
+  await streamClaudeCode([{ role: 'user', content: 'contrastive learning' }], session(), {
+    modelKey: 'claude-code-local::haiku',
+    selectedText: 'contrastive learning',
+  });
   assert.equal(capturedModel, 'haiku');
   assert.ok(uiEvents.some((event) => event[0] === 'translation'));
   assert.ok(!uiEvents.some((event) => event[0] === 'update'));
@@ -470,7 +676,10 @@ test('Agent mode runs with the Zotero tools and renders text after a tool below 
     assert.ok(fixture.server?.tools.length, 'tool server passed to the CLI');
     const updates = uiEvents.filter((event) => event[0] === 'update');
     // Before the tool card: the full pre-tool text, forced, exactly once.
-    assert.deepEqual(updates.filter((u) => u[3] && u[2] === 'Checking the paper.'), [['update', 'Checking the paper.', 'Checking the paper.', true]]);
+    assert.deepEqual(
+      updates.filter((u) => u[3] && u[2] === 'Checking the paper.'),
+      [['update', 'Checking the paper.', 'Checking the paper.', true]]
+    );
     assert.ok(!updates.some((u) => u[2] === ''), 'an empty new message renders nothing');
     assert.deepEqual(updates.at(-1), ['update', 'Checking the paper.\n\nDone.', 'Done.', true]);
     assert.equal(uiEvents.at(-1)[0], 'end');
@@ -501,21 +710,40 @@ test('invalid translation is reported instead of saving an empty successful answ
 let savedConfig;
 let listCalls = 0;
 globalThis.__claudeSettingsFixture = {
-  save: async (config) => { savedConfig = config; }, stop: async () => {},
-  get: (key) => prefs[key], set: (key, value) => { prefs[key] = value; },
-  list: async () => { listCalls++; return claudeCodeModels(cliModels); },
+  save: async (config) => {
+    savedConfig = config;
+  },
+  stop: async () => {},
+  get: (key) => prefs[key],
+  set: (key, value) => {
+    prefs[key] = value;
+  },
+  list: async () => {
+    listCalls++;
+    return claudeCodeModels(cliModels);
+  },
 };
 let settingsCode = stripTypeScriptTypes(await source('settings'));
 settingsCode = settingsCode.replace(/import \{ saveV2Config[^;]+;/, 'const saveV2Config = globalThis.__claudeSettingsFixture.save;');
-settingsCode = settingsCode.replace(/import \{ getPref, setPref \} from '[^']+';/, 'const { get: getPref, set: setPref } = globalThis.__claudeSettingsFixture;');
+settingsCode = settingsCode.replace(
+  /import \{ getPref, setPref \} from '[^']+';/,
+  'const { get: getPref, set: setPref } = globalThis.__claudeSettingsFixture;'
+);
 settingsCode = settingsCode.replace("from './protocol'", `from '${protocolUrl}'`);
-settingsCode = settingsCode.replace(/import \{ checkClaudeCode, listClaudeCodeModels, stopClaudeCode \} from '[^']+';/,
-  'const stopClaudeCode = globalThis.__claudeSettingsFixture.stop; const checkClaudeCode = async () => ({}); const listClaudeCodeModels = (...a) => globalThis.__claudeSettingsFixture.list(...a);');
+settingsCode = settingsCode.replace(
+  /import \{ checkClaudeCode, listClaudeCodeModels, stopClaudeCode \} from '[^']+';/,
+  'const stopClaudeCode = globalThis.__claudeSettingsFixture.stop; const checkClaudeCode = async () => ({}); const listClaudeCodeModels = (...a) => globalThis.__claudeSettingsFixture.list(...a);'
+);
 const settings = await import(dataUrl(settingsCode));
 
 test('enabling/removing Claude preserves other providers and clears stale active selection', async () => {
   const other = { providerId: 'openai', id: 'gpt', name: 'GPT', enabled: true };
-  addon.data.userProviderConfigV2 = { active: { providerId: 'openai', modelId: 'gpt' }, addedProviders: { openai: { id: 'openai' } }, addedModels: [other], env: { openai: { API_KEY: 'existing-key' } } };
+  globalThis.addon.data.userProviderConfigV2 = {
+    active: { providerId: 'openai', modelId: 'gpt' },
+    addedProviders: { openai: { id: 'openai' } },
+    addedModels: [other],
+    env: { openai: { API_KEY: 'existing-key' } },
+  };
   await settings.publishClaudeCodeModels();
   assert.equal(savedConfig.addedModels.length, 4);
   assert.equal(savedConfig.addedModels[0], other);
@@ -528,7 +756,7 @@ test('enabling/removing Claude preserves other providers and clears stale active
   assert.equal(opus.family, 'claude-opus');
   assert.deepEqual(opus.reasoningEfforts, ['low', 'medium', 'high', 'xhigh', 'max']);
   assert.equal(savedConfig.addedModels.find((m) => m.id === 'haiku').enabled, false);
-  addon.data.userProviderConfigV2 = savedConfig;
+  globalThis.addon.data.userProviderConfigV2 = savedConfig;
   assert.deepEqual(settings.claudeCodeEfforts('sonnet'), ['low', 'medium', 'high', 'max']);
   assert.deepEqual(settings.claudeCodeEfforts('haiku'), []);
   assert.deepEqual(settings.claudeCodeEfforts(), []); // active model is OpenAI
@@ -544,7 +772,7 @@ test('enabling/removing Claude preserves other providers and clears stale active
 
 test('re-reads the model list only when the CLI version changes', async () => {
   listCalls = 0;
-  addon.data.userProviderConfigV2 = { active: undefined, addedProviders: {}, addedModels: [], env: {} };
+  globalThis.addon.data.userProviderConfigV2 = { active: undefined, addedProviders: {}, addedModels: [], env: {} };
   await settings.refreshClaudeCodeModels('/bin/claude', '2.1.302');
   assert.equal(listCalls, 0, 'provider not enabled');
   await settings.publishClaudeCodeModels(); // enabled, with the old alias names
@@ -558,7 +786,10 @@ test('re-reads the model list only when the CLI version changes', async () => {
   assert.equal(listCalls, 1, 'same version: no extra CLI launch');
   // The model dialog forces a refresh; a failed read keeps the list and retries later.
   const list = globalThis.__claudeSettingsFixture.list;
-  globalThis.__claudeSettingsFixture.list = async () => { listCalls++; throw new Error('timed out'); };
+  globalThis.__claudeSettingsFixture.list = async () => {
+    listCalls++;
+    throw new Error('timed out');
+  };
   prefs['claudeCode.modelsVersion'] = '2.1.168';
   await assert.rejects(settings.refreshClaudeCodeModels('/bin/claude', '2.1.302'), /timed out/);
   assert.equal(prefs['claudeCode.modelsVersion'], '2.1.168');
@@ -571,17 +802,31 @@ test('re-reads the model list only when the CLI version changes', async () => {
 // Agent tool server: the shared Zotero handlers with UI and Zotero access stubbed.
 const toolEvents = [];
 let executions = [];
-const toolDef = (description, execute, parse = (x) => x) => ({ description, inputSchema: { parse, jsonSchema: { type: 'object', description } }, execute });
+const toolDef = (description, execute, parse = (x) => x) => ({
+  description,
+  inputSchema: { parse, jsonSchema: { type: 'object', description } },
+  execute,
+});
 globalThis.__claudeToolsFixture = {
   definitions: () => ({
-    read: toolDef('Read', async (input) => { executions.push(['read', input]); return { text: 'page' }; }, (x) => {
-      if (typeof x.itemId !== 'number') throw new Error('itemId must be a number');
-      return x;
-    }),
+    read: toolDef(
+      'Read',
+      async (input) => {
+        executions.push(['read', input]);
+        return { text: 'page' };
+      },
+      (x) => {
+        if (typeof x.itemId !== 'number') throw new Error('itemId must be a number');
+        return x;
+      }
+    ),
     ask_user: toolDef('Ask', async () => [{ question: 'q', selectedOptions: ['A'] }]),
     translate: toolDef('Translate', async (input) => input),
     capture_page: toolDef('Capture', async () => ({ pageNumber: 2, dataUrl: 'data:image/png;base64,iVBORw0KGgo=' })),
-    add_paper: toolDef('Add', async (input) => { executions.push(['add_paper', input]); return { added: true }; }),
+    add_paper: toolDef('Add', async (input) => {
+      executions.push(['add_paper', input]);
+      return { added: true };
+    }),
   }),
   asSchema: (schema) => ({ jsonSchema: schema.jsonSchema }),
   start: (_session, ui) => toolEvents.push(['start', ui.toolName, ui.toolCallId]),
@@ -590,23 +835,37 @@ globalThis.__claudeToolsFixture = {
 };
 let toolsCode = stripTypeScriptTypes(await source('tools'));
 toolsCode = toolsCode.replace(/import \{ asSchema[^;]+;/, 'const asSchema = (...a) => globalThis.__claudeToolsFixture.asSchema(...a);');
-toolsCode = toolsCode.replace(/import \{ getSharedToolDefinitions \} from '[^']+';/, 'const getSharedToolDefinitions = () => globalThis.__claudeToolsFixture.definitions();');
-toolsCode = toolsCode.replace(/import \{ onToolCallEndV2[^;]+;/,
-  'const { start: onToolCallStartV2, end: onToolCallEndV2, translation: onTranslationResultV2 } = globalThis.__claudeToolsFixture;');
+toolsCode = toolsCode.replace(
+  /import \{ getSharedToolDefinitions \} from '[^']+';/,
+  'const getSharedToolDefinitions = () => globalThis.__claudeToolsFixture.definitions();'
+);
+toolsCode = toolsCode.replace(
+  /import \{ onToolCallEndV2[^;]+;/,
+  'const { start: onToolCallStartV2, end: onToolCallEndV2, translation: onTranslationResultV2 } = globalThis.__claudeToolsFixture;'
+);
 const tools = await import(dataUrl(toolsCode));
 
 test('tool server lists the shared Zotero tools and validates arguments before running them', async () => {
-  toolEvents.length = 0; executions = [];
+  toolEvents.length = 0;
+  executions = [];
   const flushes = [];
   const server = tools.zoteroToolServer({}, undefined, [], async () => flushes.push('flush'));
-  assert.deepEqual(server.tools.map((t) => t.name), ['read', 'ask_user', 'translate', 'capture_page', 'add_paper']);
+  assert.deepEqual(
+    server.tools.map((t) => t.name),
+    ['read', 'ask_user', 'translate', 'capture_page', 'add_paper']
+  );
   assert.deepEqual(server.tools[0].inputSchema, { type: 'object', description: 'Read' });
   assert.deepEqual(await server.call('read', { itemId: 1 }, 'toolu_1'), { content: [{ type: 'text', text: '{"text":"page"}' }] });
   const bad = await server.call('read', { itemId: 'x' }, 'toolu_2');
   assert.equal(bad.isError, true);
   assert.match(bad.content[0].text, /must be a number/);
   assert.deepEqual(executions, [['read', { itemId: 1 }]]);
-  assert.deepEqual(toolEvents, [['start', 'read', 'toolu_1'], ['end', 'read', 'ok'], ['start', 'read', 'toolu_2'], ['end', 'read', 'error']]);
+  assert.deepEqual(toolEvents, [
+    ['start', 'read', 'toolu_1'],
+    ['end', 'read', 'ok'],
+    ['start', 'read', 'toolu_2'],
+    ['end', 'read', 'error'],
+  ]);
   assert.equal(flushes.length, 2, 'text written so far is rendered before each tool card');
   assert.equal((await server.call('Bash', {}, 'x')).isError, true);
 });
@@ -619,7 +878,12 @@ test('tool server: ask_user shows no tool box, translate shows its card, capture
   const page = await server.call('capture_page', { pageNumber: 2 }, 'c');
   assert.deepEqual(page.content[1], { type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgo=' });
   assert.ok(!page.content[0].text.includes('base64'), 'the image is not repeated as text');
-  assert.deepEqual(toolEvents, [['start', 'translate', 't'], ['translation', '对比学习'], ['start', 'capture_page', 'c'], ['end', 'capture_page', 'ok']]);
+  assert.deepEqual(toolEvents, [
+    ['start', 'translate', 't'],
+    ['translation', '对比学习'],
+    ['start', 'capture_page', 'c'],
+    ['end', 'capture_page', 'ok'],
+  ]);
 });
 
 test('tool server: an identical add_paper runs once, a turn is capped at 30 calls, cancelled turns run nothing', async () => {

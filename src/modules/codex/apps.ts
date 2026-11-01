@@ -43,9 +43,10 @@ export function parseApps(data: unknown): CodexApp[] {
 export function appInstallUrl(value: unknown): string | undefined {
   try {
     const url = new URL(String(value));
-    if (url.protocol === 'https:' && url.hostname === 'chatgpt.com' && !url.username && !url.password && !url.port)
-      return url.href;
-  } catch { /* No usable installation link. */ }
+    if (url.protocol === 'https:' && url.hostname === 'chatgpt.com' && !url.username && !url.password && !url.port) return url.href;
+  } catch {
+    /* No usable installation link. */
+  }
   return undefined;
 }
 
@@ -84,7 +85,9 @@ function selections(): Record<string, string[]> {
   try {
     const value = JSON.parse(getPref('codex.apps.selection') || '{}');
     if (value && typeof value === 'object' && !Array.isArray(value)) return value;
-  } catch { /* A damaged preference never enables an app. */ }
+  } catch {
+    /* A damaged preference never enables an app. */
+  }
   return {};
 }
 

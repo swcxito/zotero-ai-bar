@@ -1,15 +1,28 @@
 import { getPref, setPref } from '../../utils/prefs';
 import {
-  claudeArguments, claudeControlError, claudeControlResponse, claudeDiscoveryArguments, claudeEnvironment, claudeInitializeRequest,
-  claudeMcpReply, claudeModelsFromLine, ClaudeStream, CLAUDE_INITIALIZE_REQUEST, CLAUDE_TOOL_SERVER, REQUIRED_CLAUDE_FLAGS,
-  type ClaudeCodeModel, type ClaudeToolServer,
+  claudeArguments,
+  claudeControlError,
+  claudeControlResponse,
+  claudeDiscoveryArguments,
+  claudeEnvironment,
+  claudeInitializeRequest,
+  claudeMcpReply,
+  claudeModelsFromLine,
+  ClaudeStream,
+  CLAUDE_INITIALIZE_REQUEST,
+  CLAUDE_TOOL_SERVER,
+  REQUIRED_CLAUDE_FLAGS,
+  type ClaudeCodeModel,
+  type ClaudeToolServer,
 } from './protocol';
 
 function subprocess(): any {
   return (ChromeUtils.importESModule('resource://gre/modules/Subprocess.sys.mjs') as any).Subprocess;
 }
 
-function directory(): string { return PathUtils.join(PathUtils.profileDir, 'zaibar', 'claude-code', 'workspace'); }
+function directory(): string {
+  return PathUtils.join(PathUtils.profileDir, 'zaibar', 'claude-code', 'workspace');
+}
 const children = new Set<any>();
 
 export async function stopClaudeCode(): Promise<void> {
@@ -40,7 +53,9 @@ export async function findClaudeCode(manual?: string): Promise<string> {
   if (home) candidates.push(PathUtils.join(home, '.local', 'bin', Zotero.isWin ? 'claude.exe' : 'claude'));
   if (Zotero.isWin && env.LOCALAPPDATA) candidates.push(PathUtils.join(env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Links', 'claude.exe'));
   for (const candidate of candidates) if (await IOUtils.exists(candidate)) return candidate;
-  try { return await subprocess().pathSearch(Zotero.isWin ? 'claude.exe' : 'claude'); } catch {
+  try {
+    return await subprocess().pathSearch(Zotero.isWin ? 'claude.exe' : 'claude');
+  } catch {
     throw new Error('Claude Code was not found. Install the official native CLI, run claude to sign in, then select its executable here.');
   }
 }
@@ -62,9 +77,15 @@ async function diagnostic(command: string, args: string[], env: Record<string, s
         if (status.exitCode !== 0) throw new Error('Claude Code is not ready. Run claude in a terminal and complete the official login first.');
         return out;
       }),
-      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Claude Code check timed out.')), 15000); }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Claude Code check timed out.')), 15000);
+      }),
     ]);
-  } finally { clearTimeout(timer); await child.kill(1000).catch(() => undefined); children.delete(child); }
+  } finally {
+    clearTimeout(timer);
+    await child.kill(1000).catch(() => undefined);
+    children.delete(child);
+  }
 }
 
 /** Resolve the actual Claude destinations; do not reuse OpenAI-specific proxy resolution. */
@@ -73,20 +94,33 @@ async function networkEnvironment(): Promise<Record<string, string>> {
   const service = Cc['@mozilla.org/network/protocol-proxy-service;1'].getService(Ci.nsIProtocolProxyService);
   const explicit = env.HTTPS_PROXY || env.https_proxy || env.ALL_PROXY || env.all_proxy;
   if (service.proxyConfigType === 5 && explicit) return env;
-  const resolve = (url: string) => new Promise<string | undefined>((accept, reject) => {
-    const timer = setTimeout(() => { request.cancel(Components.results.NS_ERROR_ABORT); reject(new Error('Unable to resolve Zotero proxy settings.')); }, 5000);
-    const request = service.asyncResolve(Services.io.newURI(url), 0, {
-      onProxyAvailable: (_request: unknown, _channel: unknown, proxy: nsIProxyInfo | null, status: number) => {
-        clearTimeout(timer);
-        if (!Components.isSuccessCode(status)) { reject(new Error('Unable to resolve Zotero proxy settings.')); return; }
-        if (!proxy || proxy.type === 'direct') { accept(undefined); return; }
-        const scheme = ({ http: 'http', https: 'https' } as Record<string, string>)[proxy.type];
-        if (!scheme || !proxy.host || proxy.port < 1) { reject(new Error('Use an HTTP/HTTPS proxy for Claude Code.')); return; }
-        const host = proxy.host.includes(':') ? `[${proxy.host}]` : proxy.host;
-        accept(`${scheme}://${host}:${proxy.port}`);
-      },
-    } as nsIProtocolProxyCallback);
-  });
+  const resolve = (url: string) =>
+    new Promise<string | undefined>((accept, reject) => {
+      const timer = setTimeout(() => {
+        request.cancel(Components.results.NS_ERROR_ABORT);
+        reject(new Error('Unable to resolve Zotero proxy settings.'));
+      }, 5000);
+      const request = service.asyncResolve(Services.io.newURI(url), 0, {
+        onProxyAvailable: (_request: unknown, _channel: unknown, proxy: nsIProxyInfo | null, status: number) => {
+          clearTimeout(timer);
+          if (!Components.isSuccessCode(status)) {
+            reject(new Error('Unable to resolve Zotero proxy settings.'));
+            return;
+          }
+          if (!proxy || proxy.type === 'direct') {
+            accept(undefined);
+            return;
+          }
+          const scheme = ({ http: 'http', https: 'https' } as Record<string, string>)[proxy.type];
+          if (!scheme || !proxy.host || proxy.port < 1) {
+            reject(new Error('Use an HTTP/HTTPS proxy for Claude Code.'));
+            return;
+          }
+          const host = proxy.host.includes(':') ? `[${proxy.host}]` : proxy.host;
+          accept(`${scheme}://${host}:${proxy.port}`);
+        },
+      } as nsIProtocolProxyCallback);
+    });
   const [api, auth] = await Promise.all([resolve('https://api.anthropic.com/'), resolve('https://claude.ai/')]);
   if (api !== auth) throw new Error('Claude API and login destinations need the same proxy setting for this integration.');
   for (const key of Object.keys(env)) if (/^(https?_proxy|all_proxy)$/i.test(key)) delete env[key];
@@ -99,9 +133,12 @@ export async function checkClaudeCode(manual?: string): Promise<{ path: string; 
   const version = (await diagnostic(command, ['--version'], env)).trim();
   if (!/Claude Code/i.test(version)) throw new Error('The selected executable is not recognized as official Claude Code.');
   const help = await diagnostic(command, ['--help'], env);
-  if (REQUIRED_CLAUDE_FLAGS.some((flag) => !help.includes(flag))) throw new Error('Update Claude Code: required streaming/isolation options are missing.');
+  if (REQUIRED_CLAUDE_FLAGS.some((flag) => !help.includes(flag)))
+    throw new Error('Update Claude Code: required streaming/isolation options are missing.');
   let status: any;
-  try { status = JSON.parse(await diagnostic(command, ['auth', 'status', '--json'], env)); } catch {
+  try {
+    status = JSON.parse(await diagnostic(command, ['auth', 'status', '--json'], env));
+  } catch {
     throw new Error('Unable to check Claude Code login. Run claude and sign in with your Claude account, then retry.');
   }
   if (status.loggedIn !== true || status.authMethod !== 'claude.ai')
@@ -135,7 +172,9 @@ export async function listClaudeCodeModels(command: string): Promise<ClaudeCodeM
     return await Promise.race([
       read,
       // Generous: the first launch after an upgrade can be slow while the new binary is scanned.
-      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Claude Code model list timed out.')), 30000); }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Claude Code model list timed out.')), 30000);
+      }),
     ]);
   } finally {
     clearTimeout(timer);
@@ -150,8 +189,12 @@ export async function listClaudeCodeModels(command: string): Promise<ClaudeCodeM
  * stdin, so stdin stays open until the final result.
  */
 export async function runClaudeCode(
-  model: string, input: string, signal: AbortSignal | undefined, onText: (text: string, segment: string) => Promise<void>,
-  effort?: string, server?: ClaudeToolServer
+  model: string,
+  input: string,
+  signal: AbortSignal | undefined,
+  onText: (text: string, segment: string) => Promise<void>,
+  effort?: string,
+  server?: ClaudeToolServer
 ): Promise<{ text: string; segment: string; usage: any; path: string; version: string }> {
   if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
   const info = await checkClaudeCode();
@@ -168,22 +211,29 @@ export async function runClaudeCode(
   };
   if (server) {
     // Not awaited: a tool such as ask_user can wait for the user while the stream continues.
-    parser.onControlRequest = (event) => void (async () => {
-      const id = String(event.request_id);
-      let reply: string;
-      try {
-        if (event.request?.subtype !== 'mcp_message' || event.request.server_name !== CLAUDE_TOOL_SERVER) throw new Error('Unsupported control request.');
-        reply = claudeControlResponse(id, { mcp_response: await claudeMcpReply(event.request.message, server) });
-      } catch (error) {
-        reply = claudeControlError(id, (error as Error).message || 'Tool call failed.');
-      }
-      if (!stdinClosed) await child.stdin.write(reply).catch(() => undefined);
-    })();
+    parser.onControlRequest = (event) =>
+      void (async () => {
+        const id = String(event.request_id);
+        let reply: string;
+        try {
+          if (event.request?.subtype !== 'mcp_message' || event.request.server_name !== CLAUDE_TOOL_SERVER)
+            throw new Error('Unsupported control request.');
+          reply = claudeControlResponse(id, { mcp_response: await claudeMcpReply(event.request.message, server) });
+        } catch (error) {
+          reply = claudeControlError(id, (error as Error).message || 'Tool call failed.');
+        }
+        if (!stdinClosed) await child.stdin.write(reply).catch(() => undefined);
+      })();
   }
   let timer: ReturnType<typeof setTimeout> | undefined;
   let rejectAbort!: (error: Error) => void;
-  const cancelled = new Promise<never>((_, reject) => { rejectAbort = reject; });
-  const abort = () => { void child.kill(1000).catch(() => undefined); rejectAbort(new DOMException('Cancelled', 'AbortError')); };
+  const cancelled = new Promise<never>((_, reject) => {
+    rejectAbort = reject;
+  });
+  const abort = () => {
+    void child.kill(1000).catch(() => undefined);
+    rejectAbort(new DOMException('Cancelled', 'AbortError'));
+  };
   signal?.addEventListener('abort', abort, { once: true });
   try {
     const work = Promise.all([
@@ -194,7 +244,8 @@ export async function runClaudeCode(
           const previous = parser.text;
           const previousSegment = parser.segment;
           parser.push(chunk);
-          if (active && !signal?.aborted && (previous !== parser.text || previousSegment !== parser.segment)) await onText(parser.text, parser.segment);
+          if (active && !signal?.aborted && (previous !== parser.text || previousSegment !== parser.segment))
+            await onText(parser.text, parser.segment);
           if (parser.result) await closeStdin();
         }
       })(),
@@ -205,17 +256,28 @@ export async function runClaudeCode(
         try {
           if (server) await child.stdin.write(claudeInitializeRequest('zaibar-init', [CLAUDE_TOOL_SERVER]));
           await child.stdin.write(input);
-        } catch { /* reported by finish() */ }
+        } catch {
+          /* reported by finish() */
+        }
         if (!server) await closeStdin();
       })(),
     ]);
     if (signal?.aborted) abort();
     const [, stderr, status] = await Promise.race([
-      work, cancelled,
-      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Claude Code request timed out after 10 minutes.')), 600000); }),
+      work,
+      cancelled,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Claude Code request timed out after 10 minutes.')), 600000);
+      }),
     ]);
     if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
-    return { text: parser.finish(status.exitCode, stderr), segment: parser.segment, usage: parser.result?.usage, path: info.path, version: info.version };
+    return {
+      text: parser.finish(status.exitCode, stderr),
+      segment: parser.segment,
+      usage: parser.result?.usage,
+      path: info.path,
+      version: info.version,
+    };
   } finally {
     active = false;
     stdinClosed = true;

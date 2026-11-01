@@ -9,7 +9,9 @@ import { claudeCodeEfforts, refreshClaudeCodeModels } from './settings';
 import { zoteroToolServer } from './tools';
 
 export async function streamClaudeCode(
-  messagesPromise: ModelMessage[] | Promise<ModelMessage[]>, session: Session, translation?: TranslationRequestMeta
+  messagesPromise: ModelMessage[] | Promise<ModelMessage[]>,
+  session: Session,
+  translation?: TranslationRequestMeta
 ): Promise<void> {
   const signal = session.pending.abortController?.signal;
   let usage: TokenUsage | undefined;
@@ -34,29 +36,44 @@ export async function streamClaudeCode(
     let unflushed: { fullText: string; segmentText: string } | undefined;
     const server = agent
       ? zoteroToolServer(session, signal, messages, async () => {
-        const pending = unflushed;
-        unflushed = undefined;
-        if (pending?.segmentText.trim() && !signal?.aborted) await onLLMStreamUpdateV2({ session, ...pending, force: true });
-      })
+          const pending = unflushed;
+          unflushed = undefined;
+          if (pending?.segmentText.trim() && !signal?.aborted) await onLLMStreamUpdateV2({ session, ...pending, force: true });
+        })
       : undefined;
-    const result = await runClaudeCode(model, buildClaudeInput(messages, !!translation), signal, async (fullText, segmentText) => {
-      if (translation || signal?.aborted) return;
-      if (!agent) return onLLMStreamUpdateV2({ session, fullText });
-      unflushed = { fullText, segmentText };
-      if (segmentText.trim()) await onLLMStreamUpdateV2({ session, fullText, segmentText });
-    }, effort, server);
+    const result = await runClaudeCode(
+      model,
+      buildClaudeInput(messages, !!translation),
+      signal,
+      async (fullText, segmentText) => {
+        if (translation || signal?.aborted) return;
+        if (!agent) return onLLMStreamUpdateV2({ session, fullText });
+        unflushed = { fullText, segmentText };
+        if (segmentText.trim()) await onLLMStreamUpdateV2({ session, fullText, segmentText });
+      },
+      effort,
+      server
+    );
     if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
     // After a CLI upgrade the aliases point at new versions; update the menu names in the background.
     void refreshClaudeCodeModels(result.path, result.version).catch(() => undefined);
     if (result.usage) {
-      const promptTokens = (result.usage.input_tokens || 0) + (result.usage.cache_read_input_tokens || 0) + (result.usage.cache_creation_input_tokens || 0);
+      const promptTokens =
+        (result.usage.input_tokens || 0) + (result.usage.cache_read_input_tokens || 0) + (result.usage.cache_creation_input_tokens || 0);
       const completionTokens = result.usage.output_tokens || 0;
       usage = { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens };
     }
     if (translation) {
-      const text = result.text.trim().replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```$/, '');
+      const text = result.text
+        .trim()
+        .replace(/^```(?:json)?\s*\n?/, '')
+        .replace(/\n?```$/, '');
       let parsed: unknown;
-      try { parsed = JSON.parse(text); } catch { throw new Error('Claude Code returned invalid translation JSON. Please retry.'); }
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error('Claude Code returned invalid translation JSON. Please retry.');
+      }
       const normalized = normalizeTranslationResultCandidate(parsed, translation.selectedText);
       if (!normalized) throw new Error('Claude Code returned an incomplete translation. Please retry.');
       onTranslationResultV2(session, normalized);

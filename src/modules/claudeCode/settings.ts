@@ -16,15 +16,28 @@ export async function publishClaudeCodeModels(list: ClaudeCodeModel[] = CLAUDE_F
   const v2 = addon.data.userProviderConfigV2;
   if (!v2) throw new Error('Model settings have not loaded.');
   v2.addedProviders[CLAUDE_CODE_PROVIDER_ID] = {
-    id: CLAUDE_CODE_PROVIDER_ID, name: 'Claude Code (local)', env: [], doc: 'https://code.claude.com/docs/en/overview',
+    id: CLAUDE_CODE_PROVIDER_ID,
+    name: 'Claude Code (local)',
+    env: [],
+    doc: 'https://code.claude.com/docs/en/overview',
   };
   const models: AddedModel[] = list.map(({ id, name, efforts }) => ({
-    id, providerId: CLAUDE_CODE_PROVIDER_ID, name,
+    id,
+    providerId: CLAUDE_CODE_PROVIDER_ID,
+    name,
     enabled: v2.addedModels.find((m) => m.providerId === CLAUDE_CODE_PROVIDER_ID && m.id === id)?.enabled ?? true,
-    family: `claude-${name.replace(/^Claude (Code · )?/, '').split(' ')[0].toLowerCase()}` as AddedModel['family'],
-    reasoning: efforts.length > 0, reasoningEfforts: efforts, temperature: false, structured_output: false,
-    modalities: { input: ['text', 'image'], output: ['text'] }, open_weights: false,
-    cost: { input: 0, output: 0 }, limit: { context: 0, output: 0 },
+    family: `claude-${name
+      .replace(/^Claude (Code · )?/, '')
+      .split(' ')[0]
+      .toLowerCase()}` as AddedModel['family'],
+    reasoning: efforts.length > 0,
+    reasoningEfforts: efforts,
+    temperature: false,
+    structured_output: false,
+    modalities: { input: ['text', 'image'], output: ['text'] },
+    open_weights: false,
+    cost: { input: 0, output: 0 },
+    limit: { context: 0, output: 0 },
   }));
   v2.addedModels = [...v2.addedModels.filter((m) => m.providerId !== CLAUDE_CODE_PROVIDER_ID), ...models];
   await saveV2Config(v2);
@@ -66,7 +79,10 @@ export async function disconnectClaudeCode(): Promise<void> {
   delete v2.addedProviders[CLAUDE_CODE_PROVIDER_ID];
   delete v2.env[CLAUDE_CODE_PROVIDER_ID];
   v2.addedModels = v2.addedModels.filter((m) => m.providerId !== CLAUDE_CODE_PROVIDER_ID);
-  if (v2.active?.providerId === CLAUDE_CODE_PROVIDER_ID) { v2.active = undefined; setPref('llm.modelId', ''); }
+  if (v2.active?.providerId === CLAUDE_CODE_PROVIDER_ID) {
+    v2.active = undefined;
+    setPref('llm.modelId', '');
+  }
   await saveV2Config(v2);
 }
 
@@ -74,7 +90,7 @@ export async function disconnectClaudeCode(): Promise<void> {
 export function mountClaudeCodeSettings(doc: Document, win: Window): void {
   if (doc.getElementById('claude-code-settings')) return;
   const chinese = String(Zotero.locale).toLowerCase().startsWith('zh');
-  const label = (en: string, zh: string) => chinese ? zh : en;
+  const label = (en: string, zh: string) => (chinese ? zh : en);
   const panel = doc.createElement('section');
   panel.id = 'claude-code-settings';
   panel.className = 'mb-6 rounded-2xl border border-gray-200 bg-white p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900';
@@ -84,7 +100,7 @@ export function mountClaudeCodeSettings(doc: Document, win: Window): void {
   const description = doc.createElement('p');
   description.className = 'mb-3 text-zinc-500';
   description.textContent = label(
-    'Sign in with your subscription in the official Claude Code CLI first. Supports text, full-paper questions, images, translation and Agent mode with AI Bar\'s Zotero tools (Claude Code\'s own file and shell tools stay off). Models depend on your account.',
+    "Sign in with your subscription in the official Claude Code CLI first. Supports text, full-paper questions, images, translation and Agent mode with AI Bar's Zotero tools (Claude Code's own file and shell tools stay off). Models depend on your account.",
     '请先在官方 Claude Code 中登录订阅账号。支持选文、全文、图片问答、翻译，以及使用 AI Bar 文献库工具的 Agent 模式（Claude Code 自带的文件和命令工具保持关闭）。可用模型由你的账号决定。'
   );
   const path = doc.createElement('input');
@@ -105,11 +121,15 @@ export function mountClaudeCodeSettings(doc: Document, win: Window): void {
     element.addEventListener('click', () => {
       for (const control of Array.from(controls.querySelectorAll('button'))) control.disabled = true;
       path.disabled = true;
-      void run().catch((error) => { status.textContent = redactClaudeError(String(error.message || error)); }).finally(() => {
-        if (win.closed) return;
-        for (const control of Array.from(controls.querySelectorAll('button'))) control.disabled = false;
-        path.disabled = false;
-      });
+      void run()
+        .catch((error) => {
+          status.textContent = redactClaudeError(String(error.message || error));
+        })
+        .finally(() => {
+          if (win.closed) return;
+          for (const control of Array.from(controls.querySelectorAll('button'))) control.disabled = false;
+          path.disabled = false;
+        });
     });
     controls.append(element);
   };
@@ -124,7 +144,8 @@ export function mountClaudeCodeSettings(doc: Document, win: Window): void {
     if (win.closed) return;
     await publishClaudeCodeModels(models);
     setPref('claudeCode.modelsVersion', info.version);
-    status.textContent = `${info.version} · ${info.plan}\n${models.map((m) => m.name).join(label(', ', '、'))}\n` +
+    status.textContent =
+      `${info.version} · ${info.plan}\n${models.map((m) => m.name).join(label(', ', '、'))}\n` +
       label('Enabled. Select a Claude Code model in the chat model menu.', '已启用，请在聊天模型菜单中选择 Claude Code 模型。');
   });
   button(label('Choose executable', '选择程序'), async () => {

@@ -19,9 +19,15 @@ const binary = resolve(process.argv[2]);
 const version = execFileSync(binary, ['--version'], { encoding: 'utf8' });
 const features = execFileSync(binary, ['features', 'list'], { encoding: 'utf8' });
 const policy = runtimePolicy(version, features);
-const child = spawn(binary, ['app-server', ...policyArguments({ ...policy, ...appFeatures(policy, true), 'apps._default.enabled': false, cli_auth_credentials_store: 'auto' })], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-const rpc = new CodexRpc(async (text) => { child.stdin.write(text); });
-// Like AI Bar's runtime, listen before initializing: the catalog is pushed right after login.
+const child = spawn(
+  binary,
+  ['app-server', ...policyArguments({ ...policy, ...appFeatures(policy, true), 'apps._default.enabled': false, cli_auth_credentials_store: 'auto' })],
+  { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] }
+);
+const rpc = new CodexRpc(async (text) => {
+  child.stdin.write(text);
+});
+// Listen before any app/list call: the runtime pushes its cached catalog during a non-forced one.
 let pushed;
 rpc.listeners.add((message) => {
   if (message.method === 'app/list/updated') pushed = parseApps(message.params?.data);
@@ -32,7 +38,10 @@ child.stderr.resume();
 child.on('error', () => rpc.close());
 child.on('exit', () => rpc.close());
 try {
-  await rpc.request('initialize', { clientInfo: { name: 'zotero_ai_bar', title: 'Zotero AI Bar app discovery', version: '1.6.10' }, capabilities: { experimentalApi: true } });
+  await rpc.request('initialize', {
+    clientInfo: { name: 'zotero_ai_bar', title: 'Zotero AI Bar app discovery', version: '1.6.10' },
+    capabilities: { experimentalApi: true },
+  });
   await rpc.notify('initialized');
   const { account } = await rpc.request('account/read', { refreshToken: false });
   console.log(JSON.stringify({ version: version.trim(), accountType: account?.type || 'notLoggedIn' }));
@@ -52,7 +61,13 @@ try {
     else {
       const connected = visibleApps(apps, []);
       console.log(`${apps.length} apps in the catalog, ${connected.length} connected:`);
-      console.log(JSON.stringify(connected.map(({ id, name, isEnabled }) => ({ id, name, isEnabled })), null, 2));
+      console.log(
+        JSON.stringify(
+          connected.map(({ id, name, isEnabled }) => ({ id, name, isEnabled })),
+          null,
+          2
+        )
+      );
     }
   } else console.log('Sign in to Codex with ChatGPT, then retry. No credentials are read by this script.');
 } finally {
