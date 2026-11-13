@@ -43,7 +43,7 @@
     "@ai-sdk/openai-compatible": "^2.0.47",
     "@ai-sdk/xai": "^3.0.89",
     "@openrouter/ai-sdk-provider": "^2.9.0",
-    "ai": "^6.0.177",
+    "ai": "^6.0.320",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.45",
     "marked": "^18.0.3",
