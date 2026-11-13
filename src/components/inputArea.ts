@@ -19,10 +19,12 @@
 import { Icons } from './common';
 import { IconView } from './iconView';
 import { ImagePreview, createImageViewer } from './imagePreview';
-import { ModelInfo, registerModelInfoAnchor } from './modelInfo';
+import { MODEL_CHANGE_EVENT, ModelInfo, registerModelInfoAnchor } from './modelInfo';
 import { getString } from '../utils/locale';
 import { getPref } from '../utils/prefs';
 import { codexEfforts } from '../modules/codex/settings';
+import { claudeCodeEfforts } from '../modules/claudeCode/settings';
+import { CLAUDE_CODE_PROVIDER_ID, claudeEffort } from '../modules/claudeCode/protocol';
 import type { ChatSessionKind } from '../modules/chatWorkspace';
 
 import { startCaptureMode } from '../modules/capture';
@@ -108,13 +110,15 @@ export function InputArea(
     'w-full',
     'flex',
     'flex-col',
-    'bg-slate-50',
+    'bg-white',
     'dark:bg-neutral-900',
-    'p-2',
+    'px-1.5',
+    'py-1.5',
     'rounded-2xl',
-    'border-2',
+    'border',
     'border-slate-200',
-    'dark:border-neutral-800',
+    'dark:border-neutral-700',
+    'shadow-sm',
     'focus-within:border-rose-300',
     'dark:focus-within:border-rose-900',
     'transition-all',
@@ -144,9 +148,9 @@ export function InputArea(
     'rounded-t-2xl',
     'bg-slate-100',
     'dark:bg-neutral-800',
-    'border-2',
+    'border',
     'border-slate-200',
-    'dark:border-neutral-800',
+    'dark:border-neutral-700',
     'text-xs',
     'text-slate-500',
     'dark:text-neutral-400',
@@ -166,7 +170,7 @@ export function InputArea(
   hintBar.style.opacity = '0';
   hintBar.style.visibility = 'hidden';
   hintBar.style.overflow = 'hidden';
-  hintBar.style.borderWidth = '2px 2px 0 2px';
+  hintBar.style.borderWidth = '1px 1px 0 1px';
   hintBar.style.pointerEvents = 'none';
   hintBar.style.transform = 'translateY(0)';
   hintBar.style.transition = 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1)';
@@ -245,20 +249,24 @@ export function InputArea(
   };
   const chatModeLabel = (mode: string) => getString(`chat-mode-${mode}` as any);
 
+  // Lives in the status row below the input card, shown as icon + label text.
+  // Status row controls share `.input-status-btn` (hover/open highlight in
+  // zoteroAIBar.css and skins.css), matching the model selector.
   const chatModeBtn = doc.createElement('button');
   chatModeBtn.title = getString('input-chat-mode-tooltip');
   chatModeBtn.classList.add(
     'input-chat-mode-btn',
+    'input-status-btn',
     'flex',
     'items-center',
-    'justify-center',
-    'p-2.5',
-    'rounded-xl',
-    'transition-all',
-    'bg-slate-200',
-    'dark:bg-neutral-800',
-    'text-slate-400',
-    'dark:text-neutral-600',
+    'gap-1',
+    'px-1.5',
+    'py-0.5',
+    'rounded-md',
+    'text-xs',
+    'transition-colors',
+    'text-slate-500',
+    'dark:text-neutral-400',
     'flex-shrink-0'
   );
   chatModeBtn.style.position = 'relative';
@@ -266,18 +274,21 @@ export function InputArea(
   function updateChatModeBtnAppearance() {
     const mode = session.effectiveChatMode;
     chatModeBtn.innerHTML = '';
-    chatModeBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: chatModeIconMap[mode], sizeRem: 1 })));
+    chatModeBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: chatModeIconMap[mode], sizeRem: 0.875 })));
+    const labelSpan = doc.createElement('span');
+    labelSpan.textContent = chatModeLabel(mode);
+    chatModeBtn.appendChild(labelSpan);
     chatModeBtn.title = chatModeAdjustable ? getString('input-chat-mode-tooltip') : chatModeLabel(mode);
     chatModeBtn.setAttribute('aria-disabled', String(!chatModeAdjustable));
     chatModeBtn.tabIndex = chatModeAdjustable ? 0 : -1;
     chatModeBtn.classList.toggle('cursor-default', !chatModeAdjustable);
 
     if (mode !== 'normal') {
-      chatModeBtn.classList.remove('text-slate-400', 'dark:text-neutral-600');
+      chatModeBtn.classList.remove('text-slate-500', 'dark:text-neutral-400');
       chatModeBtn.classList.add('text-rose-500', 'dark:text-rose-400');
     } else {
       chatModeBtn.classList.remove('text-rose-500', 'dark:text-rose-400');
-      chatModeBtn.classList.add('text-slate-400', 'dark:text-neutral-600');
+      chatModeBtn.classList.add('text-slate-500', 'dark:text-neutral-400');
     }
   }
   updateChatModeBtnAppearance();
@@ -288,9 +299,13 @@ export function InputArea(
   screenshotBtn.classList.add(
     'input-screenshot-btn',
     'flex',
+    'items-center',
     'justify-center',
-    'p-2.5',
-    'rounded-xl',
+    'w-8',
+    'h-8',
+    'rounded-lg',
+    'hover:bg-slate-100',
+    'dark:hover:bg-neutral-800',
     'text-slate-400',
     'dark:text-neutral-500',
     'hover:text-rose-500',
@@ -315,7 +330,12 @@ export function InputArea(
     'dark:placeholder-neutral-600',
     'resize-none',
     'text-sm',
-    'font-medium',
+    // Whole-pixel line height: a fractional one leaves a sub-pixel overflow
+    // after autoResize and shows a scrollbar. One line + py-1 = 32px, the
+    // height of the screenshot and send buttons.
+    'leading-6',
+    'py-1',
+    'px-1',
     'overflow-y-auto'
   );
   // Zotero 8's global key handler only recognises text inputs and
@@ -326,13 +346,11 @@ export function InputArea(
   textarea.style.maxHeight = '7rem';
   applyChatInputFontSize(wrapper);
 
-  // ── thinking effort button (right of textarea) ────────────────────────────
-
-  // ── model selector button (right of thinking effort) ──────────────────────
-  // Reuses the same ModelInfo component as the reader popup. The dropdown
-  // anchors to `wrapper` via the [data-model-dropdown-container] attribute and
-  // pops upward (away from the input area).
-  const modelInfoSpec = ModelInfo({ dropUp: true });
+  // ── model selector (status row, right) ────────────────────────────────────
+  // Reuses the ModelInfo component from the reader popup in its inline label
+  // form. The dropdown anchors to `wrapper` via the
+  // [data-model-dropdown-container] attribute and pops upward.
+  const modelInfoSpec = ModelInfo({ dropUp: true, variant: 'label' });
   const modelInfoBtn = ztoolkit.UI.createElement(doc, modelInfoSpec.tag, modelInfoSpec) as HTMLElement;
   registerModelInfoAnchor(modelInfoBtn);
 
@@ -343,40 +361,58 @@ export function InputArea(
     medium: getString('thinking-effort-medium'),
     high: getString('thinking-effort-high'),
     xhigh: getString('thinking-effort-xhigh'),
+    max: getString('thinking-effort-max'),
   };
 
+  // Subscription runtimes report their own levels per model (Codex, Claude Code);
+  // API models use the generic list. Claude Code mirrors its backend exactly: a
+  // level the model does not report is not sent, so the CLI default applies.
+  type EffortState = { efforts: string[]; current: string | undefined; set: (effort: string) => void };
+  function effortState(): EffortState {
+    const codex = codexEfforts();
+    if (codex.length) {
+      return { efforts: codex, current: session.codexThinkingEffort || session.thinkingEffort, set: (e) => (session.codexThinkingEffort = e) };
+    }
+    if (addon.data.userProviderConfigV2?.active?.providerId === CLAUDE_CODE_PROVIDER_ID) {
+      const efforts = claudeCodeEfforts();
+      return {
+        efforts,
+        current: claudeEffort(efforts, session.claudeThinkingEffort ?? session.thinkingEffort),
+        set: (e) => (session.claudeThinkingEffort = e),
+      };
+    }
+    return { efforts: effortOrder, current: session.thinkingEffort, set: (e) => (session.thinkingEffort = e as typeof session.thinkingEffort) };
+  }
+
+  // ── thinking effort (status row, right of the model) ──────────────────────
+  // Plain text label, like the effort shown next to the model in Claude.
   const thinkingBtn = doc.createElement('button');
   thinkingBtn.title = getString('input-thinking-tooltip');
   thinkingBtn.classList.add(
     'input-thinking-btn',
+    'input-status-btn',
     'flex',
     'items-center',
-    'justify-center',
-    'gap-1',
-    'p-2',
-    'rounded-xl',
+    'px-1.5',
+    'py-0.5',
+    'rounded-md',
     'text-xs',
-    'font-semibold',
+    'text-slate-500',
+    'dark:text-neutral-400',
     'transition-colors',
     'flex-shrink-0'
   );
   thinkingBtn.style.position = 'relative';
 
   function updateThinkingBtnAppearance() {
-    const effort = codexEfforts().length ? session.codexThinkingEffort || session.thinkingEffort : session.thinkingEffort;
+    const { efforts, current } = effortState();
+    // A model without adjustable effort (e.g. Claude Haiku) shows no control.
+    thinkingBtn.style.display = efforts.length ? '' : 'none';
     thinkingBtn.innerHTML = '';
-    thinkingBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Brain, sizeRem: 0.875 })));
     const labelSpan = doc.createElement('span');
-    labelSpan.textContent = effortLabelMap[effort] || effort;
+    labelSpan.textContent = current ? effortLabelMap[current] || current : getString('thinking-effort-default');
     thinkingBtn.appendChild(labelSpan);
-
-    if (effort !== 'none') {
-      thinkingBtn.classList.remove('text-slate-400', 'dark:text-neutral-500', 'hover:text-rose-500');
-      thinkingBtn.classList.add('text-rose-500', 'dark:text-rose-400');
-    } else {
-      thinkingBtn.classList.remove('text-rose-500', 'dark:text-rose-400');
-      thinkingBtn.classList.add('text-slate-400', 'dark:text-neutral-500', 'hover:text-rose-500');
-    }
+    thinkingBtn.title = `${getString('input-thinking-tooltip')}: ${labelSpan.textContent}`;
   }
   updateThinkingBtnAppearance();
 
@@ -388,9 +424,11 @@ export function InputArea(
   sendBtn.classList.add(
     'input-send-btn',
     'flex',
+    'items-center',
     'justify-center',
-    'p-2.5',
-    'rounded-xl',
+    'w-8',
+    'h-8',
+    'rounded-full',
     'transition-all',
     'bg-slate-200',
     'dark:bg-neutral-800',
@@ -404,42 +442,45 @@ export function InputArea(
       'span',
       IconView({
         iconMarkup: Icons.Send,
-        sizeRem: 1.5,
+        sizeRem: 1.25,
         extraClasses: ['text-white'],
       })
     )
   );
 
+  // Layout modeled on the Claude composer: the card holds only attachments,
+  // the text and its two direct actions; mode, model and effort sit below it.
   container.appendChild(preview.container);
 
   const inputRow = doc.createElement('div');
-  inputRow.classList.add('flex', 'items-center', 'justify-center', 'gap-1');
-  inputRow.appendChild(chatModeBtn);
+  inputRow.classList.add('flex', 'items-end', 'gap-1');
   inputRow.appendChild(screenshotBtn);
   inputRow.appendChild(textarea);
-  inputRow.appendChild(thinkingBtn);
-  inputRow.appendChild(modelInfoBtn);
   inputRow.appendChild(sendBtn);
 
   container.appendChild(inputRow);
 
-  // ── disclaimer + context token usage row ──────────────────────────────────
-  const footerRow = doc.createElement('div');
-  footerRow.classList.add('flex', 'items-center', 'justify-center', 'gap-2', 'mt-1', 'px-2', 'flex-wrap');
+  // ── status row: chat mode (left) · context tokens, model, effort (right) ──
+  const statusRow = doc.createElement('div');
+  statusRow.classList.add('input-status-row', 'flex', 'items-center', 'gap-0.5', 'mt-1', 'px-1', 'min-w-0', 'select-none');
 
-  const disclaimer = doc.createElement('div');
-  disclaimer.classList.add('text-xs', 'text-center', 'text-slate-400', 'dark:text-neutral-500');
-  disclaimer.textContent = getString('input-ai-disclaimer');
-  footerRow.appendChild(disclaimer);
+  const statusSpacer = doc.createElement('div');
+  statusSpacer.classList.add('flex-1', 'min-w-0');
 
   const contextTokens = doc.createElement('span');
-  contextTokens.classList.add('input-context-tokens', 'text-xs', 'text-slate-400', 'dark:text-neutral-500', 'whitespace-nowrap', 'select-none');
+  contextTokens.classList.add('input-context-tokens', 'text-xs', 'text-slate-400', 'dark:text-neutral-500', 'whitespace-nowrap', 'px-1.5');
   contextTokens.textContent = '';
-  footerRow.appendChild(contextTokens);
+
+  statusRow.append(chatModeBtn, statusSpacer, contextTokens, modelInfoBtn, thinkingBtn);
+
+  const disclaimer = doc.createElement('div');
+  disclaimer.classList.add('input-disclaimer', 'text-[11px]', 'leading-4', 'text-center', 'text-slate-400', 'dark:text-neutral-500', 'select-none');
+  disclaimer.textContent = getString('input-ai-disclaimer');
 
   wrapper.appendChild(hintBar);
   wrapper.appendChild(container);
-  wrapper.appendChild(footerRow);
+  wrapper.appendChild(statusRow);
+  wrapper.appendChild(disclaimer);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Helper: auto-resize textarea height
@@ -684,11 +725,19 @@ export function InputArea(
   });
 
   // Thinking effort button — simple inline dropdown anchored above the button.
+  // A dropdown that is fading out is marked .is-closing so a quick re-click
+  // opens a fresh one instead of toggling the fading one.
+  const openThinkingMenu = () => thinkingBtn.querySelector('.thinking-effort-dropdown:not(.is-closing)') as HTMLElement | null;
+
   function removeThinkingDropdown() {
-    const existing = thinkingBtn.querySelector('.thinking-effort-dropdown') as HTMLElement | null;
+    // Before the early return: picking an item re-renders the button, which
+    // drops the dropdown node before this runs.
+    thinkingBtn.classList.remove('is-open');
+    const existing = openThinkingMenu();
     if (!existing) return;
+    existing.classList.add('is-closing');
     existing.style.opacity = '0';
-    existing.style.transform = 'translateX(-50%) scale(0.95)';
+    existing.style.transform = 'scale(0.95)';
     const view = doc.defaultView;
     if (!view) {
       existing.remove();
@@ -701,11 +750,12 @@ export function InputArea(
   function buildThinkingDropdown(): HTMLElement {
     removeThinkingDropdown();
     const dropdown = doc.createElement('div');
+    // Right-aligned: the effort label is the last control in the status row.
     dropdown.classList.add(
       'thinking-effort-dropdown',
       'absolute',
       'bottom-full',
-      'left-1/2',
+      'right-0',
       'mb-1',
       'min-w-[104px]',
       'rounded-lg',
@@ -714,8 +764,8 @@ export function InputArea(
       'z-[100]'
     );
     dropdown.style.opacity = '0';
-    dropdown.style.transform = 'translateX(-50%) scale(0.95)';
-    dropdown.style.transformOrigin = 'bottom center';
+    dropdown.style.transform = 'scale(0.95)';
+    dropdown.style.transformOrigin = 'bottom right';
     // Defer the transition + final state to the next frame so the browser
     // commits the initial (opacity:0) state first — without this, the two
     // style writes may be batched into one frame and skip the animation.
@@ -724,11 +774,11 @@ export function InputArea(
       view.requestAnimationFrame(() => {
         dropdown.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
         dropdown.style.opacity = '1';
-        dropdown.style.transform = 'translateX(-50%) scale(1)';
+        dropdown.style.transform = 'scale(1)';
       });
     } else {
       dropdown.style.opacity = '1';
-      dropdown.style.transform = 'translateX(-50%) scale(1)';
+      dropdown.style.transform = 'scale(1)';
     }
 
     // Title row
@@ -748,20 +798,18 @@ export function InputArea(
     );
     dropdown.appendChild(title);
 
-    const subscriptionEfforts = codexEfforts();
-    for (const effort of subscriptionEfforts.length ? subscriptionEfforts : effortOrder) {
+    const state = effortState();
+    for (const effort of state.efforts) {
       const item = doc.createElement('div');
       item.textContent = effortLabelMap[effort] || effort;
       item.classList.add('thinking-effort-dropdown-item', 'py-[3px]', 'px-2.5', 'cursor-pointer', 'whitespace-nowrap', 'leading-[1.4]', 'text-left');
-      const isSelected = (subscriptionEfforts.length ? session.codexThinkingEffort || session.thinkingEffort : session.thinkingEffort) === effort;
-      if (isSelected) {
+      if (state.current === effort) {
         item.classList.add('is-selected', 'font-semibold');
       } else {
         item.classList.add('font-normal');
       }
       item.addEventListener('click', () => {
-        if (subscriptionEfforts.length) session.codexThinkingEffort = effort;
-        else session.thinkingEffort = effort as typeof session.thinkingEffort;
+        state.set(effort);
         updateThinkingBtnAppearance();
         removeThinkingDropdown();
       });
@@ -796,24 +844,36 @@ export function InputArea(
 
   function openThinkingDropdown() {
     cancelHoverClose();
-    if (!thinkingBtn.querySelector('.thinking-effort-dropdown')) {
+    if (!openThinkingMenu()) {
       const dropdown = buildThinkingDropdown();
       thinkingBtn.appendChild(dropdown);
+      thinkingBtn.classList.add('is-open');
     }
   }
 
-  // Hover-only: open on mouseenter, close when the pointer leaves the
-  // button/dropdown region.  We use composedPath() so the check works even
-  // though this listener sits at document level and the dropdown lives inside
-  // a shadow DOM (where event.target is retargeted to the shadow host).
+  // Click to open/close, like the model selector; once open, it also closes
+  // when the pointer leaves the button/dropdown region.  We use composedPath()
+  // so the check works even though this listener sits at document level and
+  // the dropdown lives inside a shadow DOM (where event.target is retargeted
+  // to the shadow host).
   function isOverThinkingRegion(e: MouseEvent): boolean {
-    const dd = thinkingBtn.querySelector('.thinking-effort-dropdown');
+    const dd = openThinkingMenu();
     const path = e.composedPath();
     return path.includes(thinkingBtn) || (!!dd && path.includes(dd as EventTarget));
   }
 
-  thinkingBtn.addEventListener('mouseenter', openThinkingDropdown);
+  thinkingBtn.addEventListener('click', (e: MouseEvent) => {
+    // The dropdown is a child of the button; its own clicks are not toggles.
+    if ((e.target as Element).closest?.('.thinking-effort-dropdown')) return;
+    if (openThinkingMenu()) removeThinkingDropdown();
+    else openThinkingDropdown();
+  });
   thinkingBtn.addEventListener('mouseleave', scheduleHoverClose);
+  // Effort levels depend on the model (Claude Haiku has none, Opus adds "max").
+  // Skip while the menu is open: re-rendering the button would drop it.
+  modelInfoBtn.addEventListener(MODEL_CHANGE_EVENT, () => {
+    if (!openThinkingMenu()) updateThinkingBtnAppearance();
+  });
 
   // Track pointer position globally while the dropdown is open.  Only start
   // the close countdown once the pointer is genuinely outside both the button
@@ -822,8 +882,7 @@ export function InputArea(
   doc.addEventListener(
     'mousemove',
     (e: MouseEvent) => {
-      const dd = thinkingBtn.querySelector('.thinking-effort-dropdown');
-      if (!dd) return;
+      if (!openThinkingMenu()) return;
       if (isOverThinkingRegion(e)) {
         cancelHoverClose();
       } else {
@@ -833,21 +892,24 @@ export function InputArea(
     true
   );
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside. composedPath(): in the side pane the
+  // target is retargeted to the shadow host, which would make a click on the
+  // button itself look like an outside click (close, then the toggle reopens).
   const outsideClickHandler = (e: Event) => {
-    if (thinkingBtn.contains(e.target as Node)) return;
-    const dd = thinkingBtn.querySelector('.thinking-effort-dropdown');
-    if (dd && !dd.contains(e.target as Node)) {
-      removeThinkingDropdown();
-    }
+    if (e.composedPath().includes(thinkingBtn)) return;
+    if (openThinkingMenu()) removeThinkingDropdown();
   };
   doc.addEventListener('click', outsideClickHandler, true);
 
-  // Chat mode dropdown — hover-open, left-aligned, mirrors thinking-effort
+  // Chat mode dropdown — click-open, left-aligned, mirrors thinking-effort
   // dropdown pattern but with icon+label items and left-anchored positioning.
+  const openChatModeMenu = () => chatModeBtn.querySelector('.chat-mode-dropdown:not(.is-closing)') as HTMLElement | null;
+
   function removeChatModeDropdown() {
-    const existing = chatModeBtn.querySelector('.chat-mode-dropdown') as HTMLElement | null;
+    chatModeBtn.classList.remove('is-open');
+    const existing = openChatModeMenu();
     if (!existing) return;
+    existing.classList.add('is-closing');
     existing.style.opacity = '0';
     existing.style.transform = 'scale(0.95)';
     const view = doc.defaultView;
@@ -968,26 +1030,30 @@ export function InputArea(
   function openChatModeDropdown() {
     if (!chatModeAdjustable) return;
     cancelChatModeHoverClose();
-    if (!chatModeBtn.querySelector('.chat-mode-dropdown')) {
+    if (!openChatModeMenu()) {
       const dropdown = buildChatModeDropdown();
       chatModeBtn.appendChild(dropdown);
+      chatModeBtn.classList.add('is-open');
     }
   }
 
   function isOverChatModeRegion(e: MouseEvent): boolean {
-    const dd = chatModeBtn.querySelector('.chat-mode-dropdown');
+    const dd = openChatModeMenu();
     const path = e.composedPath();
     return path.includes(chatModeBtn) || (!!dd && path.includes(dd as EventTarget));
   }
 
-  chatModeBtn.addEventListener('mouseenter', openChatModeDropdown);
+  chatModeBtn.addEventListener('click', (e: MouseEvent) => {
+    if ((e.target as Element).closest?.('.chat-mode-dropdown')) return;
+    if (openChatModeMenu()) removeChatModeDropdown();
+    else openChatModeDropdown();
+  });
   chatModeBtn.addEventListener('mouseleave', scheduleChatModeHoverClose);
 
   doc.addEventListener(
     'mousemove',
     (e: MouseEvent) => {
-      const dd = chatModeBtn.querySelector('.chat-mode-dropdown');
-      if (!dd) return;
+      if (!openChatModeMenu()) return;
       if (isOverChatModeRegion(e)) {
         cancelChatModeHoverClose();
       } else {
@@ -998,11 +1064,8 @@ export function InputArea(
   );
 
   const chatModeOutsideClickHandler = (e: Event) => {
-    if (chatModeBtn.contains(e.target as Node)) return;
-    const dd = chatModeBtn.querySelector('.chat-mode-dropdown');
-    if (dd && !dd.contains(e.target as Node)) {
-      removeChatModeDropdown();
-    }
+    if (e.composedPath().includes(chatModeBtn)) return;
+    if (openChatModeMenu()) removeChatModeDropdown();
   };
   doc.addEventListener('click', chatModeOutsideClickHandler, true);
 
@@ -1042,12 +1105,12 @@ export function InputArea(
       sendBtn.dataset.mode = 'stop';
       setSendBtnEnabled(sendBtn, true);
       sendBtn.innerHTML = '';
-      sendBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Stop, sizeRem: 1.5, extraClasses: ['text-white'] })));
+      sendBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Stop, sizeRem: 1.25, extraClasses: ['text-white'] })));
       return;
     }
     sendBtn.dataset.mode = 'send';
     sendBtn.innerHTML = '';
-    sendBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Send, sizeRem: 1.5, extraClasses: ['text-white'] })));
+    sendBtn.appendChild(ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Send, sizeRem: 1.25, extraClasses: ['text-white'] })));
     updateSendBtnState();
   }
 
@@ -1073,11 +1136,9 @@ export function InputArea(
       updateChatModeBtnAppearance();
       updateThinkingBtnAppearance();
       updateScreenshotBtnState();
-      setCapabilityVisible(chatModeBtn, true);
-      // The mode dropdown is positioned outside the button. The generic
-      // capability animation clips children, so restore visible overflow now
-      // that the mode button is permanently present in every workspace.
-      chatModeBtn.style.overflow = 'visible';
+      // The mode button is permanently present in every workspace; it is not
+      // passed through setCapabilityVisible, whose width clamp would cut off
+      // its label and whose clipping would hide its dropdown.
       setCapabilityVisible(screenshotBtn, allowScreenshot);
       updateSelectionHint(addon.data.selection.text, (addon.data.selection.currentReader as any)?.tabID);
       const tokenInfo = contextTokenInfo(session.lastUsage, getActiveModelContextLimit());

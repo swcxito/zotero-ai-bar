@@ -66,9 +66,9 @@ html[data-zaibar-skin] body,html[data-zaibar-skin] #root,[data-zaibar-skin].mess
 [data-zaibar-skin] .tool-call-box{background:var(--surface)!important;color:var(--text)!important;border-color:var(--za-control-line)!important;border-radius:var(--small-radius)!important;box-shadow:var(--card-shadow)}
 [data-zaibar-skin] .tool-call-box :is(.tool-call-name,.tool-call-details-inner){color:var(--text)!important}
 [data-zaibar-skin] .tool-call-box :is(.tool-call-summary,.tool-call-chevron){color:var(--muted)!important}
-[data-zaibar-skin] .input-area{background:var(--raised)!important;color:var(--text)!important;border-color:var(--za-control-line)!important;border-radius:var(--radius)!important;box-shadow:var(--card-shadow)}
+[data-zaibar-skin] .input-area{background:var(--raised)!important;color:var(--text)!important;border-color:var(--line)!important;border-radius:var(--radius)!important;box-shadow:var(--card-shadow)}
 [data-zaibar-skin] .input-area:focus-within{border-color:var(--accent)!important}
-[data-zaibar-skin] .selection-hint-bar{background:var(--soft)!important;color:var(--muted)!important;border-color:var(--za-control-line)!important;border-radius:var(--radius) var(--radius) 0 0!important}
+[data-zaibar-skin] .selection-hint-bar{background:var(--soft)!important;color:var(--muted)!important;border-color:var(--line)!important;border-radius:var(--radius) var(--radius) 0 0!important}
 :is([data-zaibar-skin].input-area-wrapper,[data-zaibar-skin] .input-area-wrapper)[data-selection-hint-visible=true] .input-area{border-top-color:transparent!important;border-radius:0 0 var(--radius) var(--radius)!important}
 :is([data-zaibar-skin].input-area-wrapper,[data-zaibar-skin] .input-area-wrapper):focus-within .selection-hint-bar{border-color:var(--accent)!important}
 [data-zaibar-skin] .input-area :is(textarea,input){color:var(--text)!important;font-family:var(--font)}
@@ -78,10 +78,11 @@ html[data-zaibar-skin] body,html[data-zaibar-skin] #root,[data-zaibar-skin].mess
 [data-zaibar-skin] .input-send-btn:not(:disabled){background:var(--accent)!important;color:var(--accent-ink)!important}
 [data-zaibar-skin] .input-send-btn:not(:disabled) span{color:var(--accent-ink)!important}
 [data-zaibar-skin] .input-send-btn:disabled{background:var(--soft)!important;color:var(--muted)!important}
-[data-zaibar-skin] .input-area :is(.input-chat-mode-btn,.input-screenshot-btn,.input-thinking-btn,.model-info-container){color:var(--muted)!important}
-[data-zaibar-skin] .input-area .input-chat-mode-btn{background:var(--soft)!important}
-[data-zaibar-skin] .input-area :is(.input-chat-mode-btn,.input-thinking-btn).text-rose-500{color:var(--accent-soft-ink)!important}
-[data-zaibar-skin] .input-area :is(.input-chat-mode-btn,.input-screenshot-btn,.input-thinking-btn,.model-info-container):hover{background:var(--soft)!important;color:var(--accent-soft-ink)!important}
+:is([data-zaibar-skin].input-area-wrapper,[data-zaibar-skin] .input-area-wrapper) :is(.input-chat-mode-btn,.input-screenshot-btn,.input-thinking-btn,.model-info-container){color:var(--muted)!important}
+:is([data-zaibar-skin].input-area-wrapper,[data-zaibar-skin] .input-area-wrapper) :is(.input-chat-mode-btn,.input-thinking-btn).text-rose-500{color:var(--accent-soft-ink)!important}
+:is([data-zaibar-skin].input-area-wrapper,[data-zaibar-skin] .input-area-wrapper) :is(.input-chat-mode-btn,.input-screenshot-btn,.input-thinking-btn,.model-info-container):is(:hover,.is-open):not([aria-disabled=true]){background:var(--soft)!important;color:var(--accent-soft-ink)!important}
+:is([data-zaibar-skin].input-area-wrapper,[data-zaibar-skin] .input-area-wrapper) :is(.input-context-tokens,.input-disclaimer){color:var(--faint)!important}
+:is([data-zaibar-skin].input-area-wrapper,[data-zaibar-skin] .input-area-wrapper) .input-status-btn{border-radius:var(--small-radius)!important}
 [data-zaibar-skin] .chat-reference-card{color:var(--muted)!important;border-color:var(--line)!important}
 [data-zaibar-skin] .zaibar-history-panel [data-conversation-id]{background:var(--surface)!important;border-color:var(--line)!important;border-radius:var(--small-radius)!important;box-shadow:var(--card-shadow)}
 [data-zaibar-skin] .zaibar-history-panel [data-conversation-id]:hover{border-color:var(--accent)!important}

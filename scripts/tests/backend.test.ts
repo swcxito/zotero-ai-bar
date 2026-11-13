@@ -19,6 +19,97 @@ describe('Codex chat backend', function () {
     state.server.rpc.close();
   });
 
+  it('enables selected apps only in Agent mode and checks thread callability', async function () {
+    state.selectedApps = ['notion'];
+    const session = sessionFixture();
+    await streamCodex(messagesFor(session), session);
+    assert.isEmpty(state.errors);
+    const start = state.server.requests.find((r: any) => r.method === 'thread/start');
+    assert.isTrue(start.params.config['features.apps']);
+    assert.isTrue(start.params.config['apps.notion.enabled']);
+    assert.isFalse(start.params.config['apps._default.enabled']);
+    assert.equal(start.params.approvalPolicy, 'on-request');
+    assert.include(
+      state.server.requests.map((r: any) => r.method),
+      'app/installed'
+    );
+    state.selectedApps = [];
+    prepareTurn(session);
+    await streamCodex(messagesFor(session), session);
+    assert.equal(state.server.requests.filter((r: any) => r.method === 'thread/start').length, 2);
+    state.selectedApps = ['notion'];
+    session.effectiveChatMode = 'full-text';
+    prepareTurn(session);
+    await streamCodex(messagesFor(session), session);
+    assert.isFalse(state.server.requests.filter((r: any) => r.method === 'thread/start').at(-1).params.config['features.apps']);
+  });
+
+  it('does not start a model turn when a selected app is unavailable', async function () {
+    state.selectedApps = ['notion'];
+    state.server.installedApps = [{ id: 'notion', enabled: true, callable: false }];
+    const session = sessionFixture();
+    await streamCodex(messagesFor(session), session);
+    assert.lengthOf(state.errors, 1);
+    assert.notInclude(
+      state.server.requests.map((r: any) => r.method),
+      'turn/start'
+    );
+    assert.isUndefined(session.codex);
+  });
+
+  it('renders app successes and failures once and redacts credentials', async function () {
+    state.selectedApps = ['notion'];
+    state.server.appItems = [
+      {
+        id: 'app_1',
+        type: 'mcpToolCall',
+        server: 'codex_apps',
+        tool: 'update_page',
+        status: 'completed',
+        appContext: { appName: 'Notion' },
+        arguments: { page: 'notes', token: 'secret-token' },
+        result: { content: [{ type: 'text', text: 'Updated' }] },
+      },
+      { id: 'app_2', type: 'mcpToolCall', server: 'codex_apps', tool: 'update_page', status: 'failed', error: { message: 'Permission denied' } },
+    ];
+    const session = sessionFixture();
+    await streamCodex(messagesFor(session), session);
+    assert.isEmpty(state.errors);
+    assert.lengthOf(state.calls, 2);
+    assert.lengthOf(state.outputs, 2);
+    assert.equal(state.calls[0].toolName, 'Notion: update_page');
+    assert.notInclude(JSON.stringify(state.calls), 'secret-token');
+    assert.property(state.outputs[1].output, 'error');
+  });
+
+  it('answers app forms through the user UI and declines them when apps are disabled', async function () {
+    state.selectedApps = ['notion'];
+    state.server.elicitations = [
+      {
+        mode: 'form',
+        message: 'Confirm update',
+        requestedSchema: { type: 'object', properties: { approved: { type: 'boolean' } }, required: ['approved'] },
+      },
+    ];
+    state.userInputAnswers = [{ selectedOptions: ['false'] }];
+    const session = sessionFixture();
+    await streamCodex(messagesFor(session), session);
+    assert.deepEqual(state.server.elicitationReplies[0].result, { action: 'accept', content: { approved: false } });
+    state.selectedApps = [];
+    prepareTurn(session);
+    await streamCodex(messagesFor(session), session);
+    assert.equal(state.server.elicitationReplies[1].result.action, 'decline');
+  });
+
+  it('never accepts stale app forms from a different turn', async function () {
+    state.selectedApps = ['notion'];
+    state.server.elicitations = [{ turnId: 'stale_turn', mode: 'form', message: 'Update', requestedSchema: { type: 'object', properties: {} } }];
+    const session = sessionFixture();
+    await streamCodex(messagesFor(session), session);
+    assert.property(state.server.elicitationReplies[0], 'error');
+    assert.isUndefined(state.userInputQuestions);
+  });
+
   it('renders final-only messages and does not duplicate streamed text', async function () {
     state.server.finalOnly = true;
     const session = sessionFixture();

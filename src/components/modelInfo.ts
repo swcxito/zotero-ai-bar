@@ -86,8 +86,26 @@ function buildCurrentModelInfoChildren(): TagElementProps[] {
   return children;
 }
 
+/** Inline form for the chat input status row: small icon + full model name, no overlays. */
+function buildLabelModelInfoChildren(): TagElementProps[] {
+  const modelName = resolveModelDisplayName();
+  const family = analyzeModelName(modelName).family;
+  return [
+    IconView({
+      iconMarkup: getModelIconPath(addon.data.userProviderConfigV2?.active?.providerId === 'codex-subscription' ? 'gpt' : family),
+      extraClasses: ['model-info-label-icon'],
+      sizeRem: 0.875,
+    }),
+    {
+      tag: 'span',
+      classList: ['model-info-label-text'],
+      properties: { textContent: modelName || getString('model-dialog-add-model') },
+    },
+  ];
+}
+
 function updateModelInfoDisplay(container: HTMLElement) {
-  const children = buildCurrentModelInfoChildren();
+  const children = container.dataset.variant === 'label' ? buildLabelModelInfoChildren() : buildCurrentModelInfoChildren();
   container.innerHTML = '';
   for (const child of children) {
     ztoolkit.UI.appendElement(child, container);
@@ -104,11 +122,16 @@ export function registerModelInfoAnchor(el: HTMLElement) {
   addon.data.modelInfoAnchors.add(el);
 }
 
+/** Fired on each anchor after a model change, for controls that depend on the model. */
+export const MODEL_CHANGE_EVENT = 'zaibar-model-change';
+
 export function refreshAllModelInfoAnchors() {
   const set = addon.data.modelInfoAnchors;
   for (const el of set) {
     if (el.isConnected) {
       updateModelInfoDisplay(el);
+      const view = el.ownerDocument.defaultView;
+      if (view) el.dispatchEvent(new view.Event(MODEL_CHANGE_EVENT));
     } else {
       set.delete(el);
     }
@@ -130,14 +153,16 @@ function ensureRefreshHookWired() {
   }
 }
 
-export function ModelInfo(opts?: { dropUp?: boolean }): TagElementProps {
-  const children = buildCurrentModelInfoChildren();
+export function ModelInfo(opts?: { dropUp?: boolean; variant?: 'badge' | 'label' }): TagElementProps {
+  const variant = opts?.variant ?? 'badge';
+  const children = variant === 'label' ? buildLabelModelInfoChildren() : buildCurrentModelInfoChildren();
   const dropUp = opts?.dropUp ?? false;
 
   return {
     tag: 'div',
     id: 'ai-bar-model-info',
-    classList: ['model-info-container'],
+    classList: variant === 'label' ? ['model-info-container', 'is-label', 'input-status-btn'] : ['model-info-container'],
+    attributes: { 'data-variant': variant },
     children: children,
     listeners: [
       {
@@ -213,7 +238,23 @@ function toggleModelDropdown(anchor: HTMLElement, dropUp = false) {
   if (dropdown) {
     appendAddModelButton(dropdown);
     wireHoverFadeClose(anchor, dropdown);
+    markOpenUntilRemoved(anchor, dropdown);
   }
+}
+
+/** Keep the anchor highlighted (`.is-open`) for as long as its dropdown is in the DOM. */
+function markOpenUntilRemoved(anchor: HTMLElement, dropdown: HTMLElement) {
+  const parent = dropdown.parentNode;
+  const view = anchor.ownerDocument.defaultView;
+  if (!parent || !view) return;
+  anchor.classList.add('is-open');
+  // Every close path (item click, toggle, outside click, hover fade) removes the node.
+  const observer = new view.MutationObserver(() => {
+    if (dropdown.isConnected) return;
+    anchor.classList.remove('is-open');
+    observer.disconnect();
+  });
+  observer.observe(parent, { childList: true });
 }
 
 /** Footer button at the bottom of the model dropdown that opens the model settings dialog. */

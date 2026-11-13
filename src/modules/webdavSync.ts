@@ -87,6 +87,7 @@ const SYNCABLE_PREF_KEYS = [
   'chat.startConversationMode',
   'chat.autoAttachItemData',
   'chat.autoImagePrompt',
+  'chat.showPoem',
   'chat.thinkingEffort',
   'translate.enableAuto',
   'translate.extendContext',

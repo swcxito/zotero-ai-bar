@@ -89,6 +89,8 @@ export class Session {
   contextCheckpoint?: ContextCheckpoint;
   codex?: CodexBinding;
   codexThinkingEffort?: string;
+  /** Claude Code --effort level; only levels the selected model reports are sent. */
+  claudeThinkingEffort?: string;
   sourceLabel?: string;
   chatMode: 'normal' | 'full-text' | 'agent' = 'normal';
   thinkingEffort: 'none' | 'low' | 'medium' | 'high' | 'xhigh' = 'none';

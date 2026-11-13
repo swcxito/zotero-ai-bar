@@ -63,10 +63,14 @@ export class CodexRpc {
         // Do not propagate arbitrary server error bodies (may contain credentials).
         if (message.error)
           pending.reject(
-            new Error(
-              codexString('codex-error-response', `Codex ${message.error.code}: 请求失败。请检查登录、模型和运行时状态。`, {
-                code: message.error.code,
-              })
+            Object.assign(
+              new Error(
+                codexString('codex-error-response', `Codex ${message.error.code}: 请求失败。请检查登录、模型和运行时状态。`, {
+                  code: message.error.code,
+                })
+              ),
+              // The runtime's own error, for callers that turn it into a specific diagnostic.
+              { rpcError: message.error }
             )
           );
         else pending.resolve(message.result);

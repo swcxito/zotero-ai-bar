@@ -3,6 +3,7 @@ import { policyArguments, runtimePolicy } from './policy';
 import { CodexRpc } from './protocol';
 import { codexString } from './i18n';
 import { version as pluginVersion } from '../../../package.json';
+import { appFeatures, appListFailureReason, listApps, parseApps, type CodexApp } from './apps';
 
 export interface RuntimeCandidate {
   path: string;
@@ -400,6 +401,91 @@ class CodexRuntime {
   rpc?: CodexRpc;
   account?: CodexAccount;
   models: CodexModel[] = [];
+  apps: CodexApp[] = [];
+  appsStatus = '';
+  appsLoading = false;
+  private appsRevision = 0;
+  /**
+   * The runtime pushes its cached catalog (app/list/updated) during a non-forced app/list call,
+   * before answering, also when the call itself fails, e.g. when ChatGPT's app directory answers
+   * with a browser challenge (HTTP 403; observed with codex-cli 0.166). A forced call pushes
+   * nothing. The catalog is dropped on account/updated, so whatever arrives afterwards belongs to
+   * the current login.
+   */
+  private pushedApps?: CodexApp[];
+  /** Between account/updated and the next account read, `accountKey` still names the previous login. */
+  private accountChanging = false;
+  private appsRequestedFor?: string;
+
+  private usePushedApps(): void {
+    if (this.accountKey && this.pushedApps && !this.appsLoading && !this.accountChanging) this.apps = this.pushedApps;
+  }
+
+  /** Loads the catalog the first time the apps panel is shown for a login (non-forced, so it can use the cache). */
+  loadAppsOnce(): void {
+    const account = this.accountKey;
+    if (!account || this.appsRequestedFor === account || this.appsLoading) return;
+    this.appsRequestedFor = account;
+    void this.refreshApps(false).catch(() => undefined);
+  }
+
+  async refreshApps(forceRefetch = true): Promise<void> {
+    const rpc = await this.connect();
+    const account = this.accountKey;
+    if (!account) throw new Error('Sign in to ChatGPT before loading apps.');
+    const revision = ++this.appsRevision;
+    const current = () => this.rpc === rpc && this.accountKey === account && revision === this.appsRevision;
+    this.appsLoading = true;
+    this.appsStatus = '';
+    this.changed();
+    try {
+      let apps: CodexApp[] | undefined;
+      let failure: unknown;
+      try {
+        apps = await listApps(rpc, forceRefetch);
+      } catch (error) {
+        failure = error;
+        // Only a non-forced listing makes the runtime push its own catalog.
+        if (forceRefetch && current()) apps = await listApps(rpc, false).catch(() => undefined);
+      }
+      if (!current()) return;
+      if (apps) {
+        this.apps = apps;
+        return;
+      }
+      const reason = appListFailureReason(failure);
+      if (this.pushedApps) {
+        this.apps = this.pushedApps;
+        this.appsStatus = codexString(
+          'codex-apps-directory-fallback',
+          `无法直接读取 ChatGPT 应用目录（${reason || '请求失败'}），已显示 Codex 运行时同步的应用。`,
+          { reason: reason || '-' }
+        );
+        return;
+      }
+      this.appsStatus =
+        codexString('codex-apps-load-error', '无法读取应用。请检查登录、网络和 Codex 版本，然后重试。') + (reason ? ` (${reason})` : '');
+      throw failure;
+    } finally {
+      if (revision === this.appsRevision) {
+        this.appsLoading = false;
+        this.changed();
+      }
+    }
+  }
+
+  /** `keepPushed`: on an account change detected by account/read, whose catalog may already be pushed. */
+  private clearApps(keepPushed = false): void {
+    this.appsRevision++;
+    this.apps = [];
+    this.appsStatus = '';
+    this.appsLoading = false;
+    if (!keepPushed) {
+      this.pushedApps = undefined;
+      this.accountChanging = false;
+      this.appsRequestedFor = undefined;
+    }
+  }
   status = codexString('codex-status-not-detected', '尚未检测');
   diagnostics: string[] = [];
   readonly listeners = new Set<() => void>();
@@ -494,7 +580,15 @@ class CodexRuntime {
         try {
           process = await subprocess().call({
             command: info.path,
-            arguments: ['app-server', ...policyArguments({ ...info.policy, ...(this.sharedLogin ? { cli_auth_credentials_store: 'auto' } : {}) })],
+            arguments: [
+              'app-server',
+              ...policyArguments({
+                ...info.policy,
+                ...appFeatures(info.policy, true),
+                'apps._default.enabled': false,
+                ...(this.sharedLogin ? { cli_auth_credentials_store: 'auto' } : {}),
+              }),
+            ],
             environment: { ...environment(this.sharedLogin), ...network },
             stderr: 'pipe',
             workdir: PathUtils.join(codexDirectory(), 'workspace'),
@@ -533,6 +627,7 @@ class CodexRuntime {
         if (this.rpc === rpc) {
           this.rpc = undefined;
           this.account = undefined;
+          this.clearApps();
           this.status = codexString('codex-status-disconnected', 'Codex 连接已断开');
           this.changed();
         }
@@ -554,9 +649,23 @@ class CodexRuntime {
             this.rpc = undefined;
             this.account = undefined;
             this.models = [];
+            this.clearApps();
             this.status = codexString('codex-status-disconnected', 'Codex 连接已断开');
             void process.kill(1000).catch(() => undefined);
             this.changed();
+          }
+          if (message.method === 'app/list/updated' && this.rpc === rpc) {
+            try {
+              this.pushedApps = parseApps(message.params?.data);
+            } catch {
+              this.pushedApps = undefined;
+            }
+            this.usePushedApps();
+            this.changed();
+          }
+          if (message.method === 'account/updated') {
+            this.pushedApps = undefined;
+            this.accountChanging = true;
           }
           if (message.method === 'account/updated' && !this.loginPending)
             void this.refreshAccount().catch(() => {
@@ -583,8 +692,11 @@ class CodexRuntime {
     if (!rpc) return;
     const result = await rpc.request('account/read', { refreshToken: false });
     if (this.rpc !== rpc || !isCurrent()) return;
+    if (this.account?.email !== result.account?.email || this.account?.type !== result.account?.type) this.clearApps(true);
     this.account = result.account || undefined;
+    this.accountChanging = false;
     if (this.account?.type === 'chatgpt') {
+      this.usePushedApps();
       this.status = codexString('codex-status-logged-in', `已登录 ${this.account.email || ''} · ${this.account.planType || 'Codex'}`, {
         email: this.account.email || '',
         plan: this.account.planType || 'Codex',
@@ -758,6 +870,7 @@ class CodexRuntime {
   }
 
   async stop(shutdown = false): Promise<void> {
+    this.clearApps();
     this.cancelLogin();
     this.generation++;
     this.stopped = shutdown;
