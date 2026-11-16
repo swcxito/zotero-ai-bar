@@ -259,11 +259,9 @@ export function registerReaderInitializer() {
             }
             const isOpen = isSelectionStillOpen();
             if (!container.isConnected) {
-              // A connected selection may cause Zotero to replace the popup
-              // while repositioning it. Its next render installs a new
-              // watcher, so retire this one without clearing shared state.
-              if (isOpen === true) stop();
-              else onPopupGone();
+              // Popup dismissal can leave the highlight active. Keep watching
+              // it until cancellation or a replacement popup takes ownership.
+              if (isOpen !== true) onPopupGone();
               return;
             }
             if (isOpen === false) onPopupGone();

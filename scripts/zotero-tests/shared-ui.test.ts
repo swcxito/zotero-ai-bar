@@ -305,6 +305,55 @@ describe('shared UI behavior in isolated Zotero', function () {
     }
   });
 
+  it('removes the next message reference immediately when the reader selection is cancelled', async function () {
+    const id = `selection-cancel-${Date.now()}`;
+    const originalSelection = addon.data.selection;
+    const originalSend = addon.chatManager.sendChatRequest;
+    const requests: any[] = [];
+    let position: any = { pageIndex: 0 };
+    const messages = doc.createElement('div');
+    shell.appendChild(messages);
+    addon.data.selection = {
+      text: 'Selected reference',
+      currentReader: { tabID: id, _internalReader: { getSelectionPosition: () => position } } as any,
+      contextPromise: Promise.resolve(['before', 'Selected reference', 'after']),
+    };
+    addon.chatManager.sendChatRequest = async (request) => {
+      requests.push(request);
+    };
+    const wrapper = InputArea(doc, id, { sourceTabId: id, resolveMessageContainer: () => messages });
+    shell.appendChild(wrapper);
+    addon.data.sharedInputAreas.add(wrapper);
+    const api = (wrapper as any)._inputAreaAPI as InputAreaAPI;
+    const textarea = wrapper.querySelector('textarea')!;
+    async function send(text: string) {
+      textarea.value = text;
+      textarea.dispatchEvent(new doc.defaultView!.Event('input', { bubbles: true }));
+      textarea.dispatchEvent(new doc.defaultView!.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await wait(30);
+    }
+    try {
+      await send('First question');
+      assert.equal(requests[0].selectionSnapshot.text, 'Selected reference');
+      assert.lengthOf(messages.querySelectorAll('.chat-reference-card'), 1);
+      position = null;
+      await send('Follow-up without a reference');
+      assert.lengthOf(requests, 2);
+      assert.isUndefined(requests[1].selectionSnapshot.text);
+      assert.isUndefined(requests[1].selectionSnapshot.contextPromise);
+      assert.lengthOf(messages.querySelectorAll('.chat-reference-card'), 1, 'The historical message keeps its reference');
+      assert.isNull(messages.lastElementChild!.querySelector('.chat-reference-card'));
+      assert.equal(wrapper.dataset.selectionHintVisible, 'false');
+    } finally {
+      api.dispose();
+      addon.data.sharedInputAreas.delete(wrapper);
+      addon.data.selection = originalSelection;
+      addon.chatManager.sendChatRequest = originalSend;
+      addon.chatManager.sessionsMap.delete(id);
+      addon.data.inputDraftTexts.delete(id);
+    }
+  });
+
   it('opens fixed workspace mode menus for inspection while keeping their choices disabled', function () {
     const ids = [`fixed-menu-${Date.now()}`, `article-menu-${Date.now()}`];
     const shadow = shell.attachShadow({ mode: 'open' });

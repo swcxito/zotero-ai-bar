@@ -16,6 +16,7 @@
  * Repository: https://github.com/swcxito/zotero-ai-bar
  */
 
+import { getCurrentSelectionSnapshot } from './selectionHint';
 import { sessionMessageContainer } from '../utils/chatSessionDOM';
 // todo 拆分文件
 // TODO 优化provider管理，适配sdk
@@ -102,6 +103,7 @@ export class Session {
    * notice only on the transition from "has selection" → "no selection".
    */
   lastSentSelectionText?: string;
+  lastSentSelectionContext?: string;
   /** Token usage returned by the most recent request (persists across pending resets). */
   lastUsage?: TokenUsage;
   /** Last server cumulative counters, used to calculate a whole Codex turn's usage. */
@@ -363,6 +365,7 @@ export class ChatManager {
       session.contextCheckpoint = undefined;
       session.sourceLabel = undefined;
       session.lastSentSelectionText = undefined;
+      session.lastSentSelectionContext = undefined;
       session.lastTurnSnapshot = undefined;
       session.lastAssistantPop = undefined;
       return;
@@ -388,6 +391,7 @@ export class ChatManager {
       .reverse()
       .find((turn) => !!turn.sourceLabel)?.sourceLabel;
     session.lastSentSelectionText = undefined;
+    session.lastSentSelectionContext = undefined;
     session.lastTurnSnapshot = undefined;
     session.lastAssistantPop = undefined;
   }
@@ -875,9 +879,9 @@ export class ChatManager {
     // not read the mutable global selection after the button was clicked.
     const selectionSourceTabId = (addon.data.selection.currentReader as any)?.tabID as string | undefined;
     const canUseCurrentSelection = params.sessionKind !== 'global-agent' && !!params.sourceTabId && selectionSourceTabId === params.sourceTabId;
+    const currentSelection = params.selectionSnapshot === undefined && canUseCurrentSelection ? getCurrentSelectionSnapshot(params.sourceTabId) : {};
     const selectedText =
-      params.translationRequest?.selectedText ??
-      (params.selectionSnapshot !== undefined ? params.selectionSnapshot.text : canUseCurrentSelection ? addon.data.selection.text : undefined);
+      params.translationRequest?.selectedText ?? (params.selectionSnapshot !== undefined ? params.selectionSnapshot.text : currentSelection.text);
     const sessionId = params.sessionId;
     const sourceTabId = params.sourceTabId;
     const itemId = params.itemId ?? (sourceTabId ? getItemIdFromTab(sourceTabId) : undefined);
@@ -939,6 +943,7 @@ export class ChatManager {
       // action that fires with the same selection as before would suppress
       // the block and leave the new conversation without any selection context.
       session.lastSentSelectionText = undefined;
+      session.lastSentSelectionContext = undefined;
     }
     if (session.pending.abortController) {
       session.pending.abortController.abort();
@@ -971,9 +976,7 @@ export class ChatManager {
       }
       // get selection context
       const contextPromise =
-        params.selectionSnapshot !== undefined
-          ? params.selectionSnapshot.contextPromise
-          : (params.contextPromise ?? (canUseCurrentSelection ? addon.data.selection.contextPromise : undefined));
+        params.selectionSnapshot !== undefined ? params.selectionSnapshot.contextPromise : (params.contextPromise ?? currentSelection.contextPromise);
       const selectionContext = await waitForSelectionContext(contextPromise, { signal: abortController.signal });
 
       ztoolkit.log('[chat] sendChatRequest:selection-context', {
@@ -1020,10 +1023,11 @@ export class ChatManager {
       // UI or the copy button.
       const contextLeft = selectionContext?.[0] || '';
       const contextRight = selectionContext?.[2] || '';
+      const contextKey = JSON.stringify([contextLeft, contextRight]);
       let selectionBlock = '';
       // Only emit selection tags when the state changed since the last turn:
       //  - first turn with a selection → emit <selection> + <context>
-      //  - same selection as last turn → omit (avoid redundant tokens,
+      //  - same selection and surrounding context as last turn → omit (avoid redundant tokens,
       //    and keep multi-round history from repeating the same block)
       //  - transition from "had selection" → "no selection" → emit
       //    <no-selection> only (no <context>), so the model knows the user
@@ -1032,7 +1036,7 @@ export class ChatManager {
       if (selectedText) {
         // Every translation is a standalone request, so the selected text
         // must be included even when it is identical to the prior turn.
-        if (params.translationRequest || session.lastSentSelectionText !== selectedText) {
+        if (params.translationRequest || session.lastSentSelectionText !== selectedText || session.lastSentSelectionContext !== contextKey) {
           const parts: string[] = [];
           if (contextLeft) parts.push(`<context>${contextLeft}</context>`);
           parts.push(`<selection>\n${selectedText}\n</selection>`);
@@ -1040,12 +1044,14 @@ export class ChatManager {
           selectionBlock = parts.join('\n') + '\n\n';
         }
         session.lastSentSelectionText = selectedText;
+        session.lastSentSelectionContext = contextKey;
       } else {
         const hadSelectionLastTurn = session.lastSentSelectionText !== undefined;
         if (hadSelectionLastTurn) {
           selectionBlock = '<no-selection>The user has cleared the selection.</no-selection>\n\n';
         }
         session.lastSentSelectionText = undefined;
+        session.lastSentSelectionContext = undefined;
       }
 
       let userContent: UserModelMessage['content'];

@@ -103,6 +103,19 @@ describe('readerBarPopup', function () {
       assert.isUndefined(addon.data.selection.currentAnnotation);
     });
 
+    it('clears the pending reference after a dismissed popup is followed by selection cancellation', async function () {
+      render();
+      await flush();
+      host.replaceChildren();
+      await Zotero.Promise.delay(450);
+      assert.equal(addon.data.selection.text, 'Selected text', 'Dismissing only the popup preserves the highlight');
+      position = null;
+      await Zotero.Promise.delay(450);
+      assert.isUndefined(addon.data.selection.text);
+      assert.isUndefined(addon.data.selection.contextPromise);
+      assert.isUndefined(addon.data.selection.currentAnnotation);
+    });
+
     it('does not translate a selection cleared before the popup commits', async function () {
       render();
       position = null;

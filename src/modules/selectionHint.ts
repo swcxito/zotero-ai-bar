@@ -59,3 +59,25 @@ export function refreshSelectionHints() {
     // Window reference is dead — nothing to update.
   }
 }
+
+/** Read live selection state at send time, before a popup polling tick can run. */
+export function getCurrentSelectionSnapshot(sourceTabId?: string): { text?: string; contextPromise?: Promise<string[] | undefined> } {
+  const selection = addon.data.selection;
+  const reader = selection.currentReader as any;
+  if (!sourceTabId || reader?.tabID !== sourceTabId) return {};
+  let cleared: boolean;
+  try {
+    cleared = typeof reader._internalReader?.getSelectionPosition === 'function' && reader._internalReader.getSelectionPosition() === null;
+  } catch {
+    // A closed reader cannot provide a selection for the next message.
+    cleared = true;
+  }
+  if (cleared) {
+    selection.text = undefined;
+    selection.contextPromise = undefined;
+    selection.currentAnnotation = undefined;
+    refreshSelectionHints();
+    return {};
+  }
+  return selection.text?.trim() ? { text: selection.text, contextPromise: selection.contextPromise } : {};
+}

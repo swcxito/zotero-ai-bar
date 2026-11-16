@@ -34,6 +34,7 @@ import { contextTokenInfo } from '../utils/tokenUsage';
 import { createUserMessageBubble } from './userBubble';
 import { readChatTextDraft, writeChatTextDraft } from '../utils/chatDraft';
 import { applyChatInputFontSize } from '../utils/chatFontSize';
+import { getCurrentSelectionSnapshot } from '../modules/selectionHint';
 
 export interface InputAreaContext {
   sessionId: string;
@@ -572,13 +573,7 @@ export function InputArea(
     const imageCount = preview.getCount();
     if (!text && imageCount === 0) return;
 
-    const selectionReaderTabId = (addon.data.selection.currentReader as any)?.tabID as string | undefined;
-    const selectionText =
-      sessionKind !== 'global-agent' && sourceTabId && selectionReaderTabId === sourceTabId ? addon.data.selection.text : undefined;
-    const selectionSnapshot = {
-      text: selectionText?.trim() ? selectionText : undefined,
-      contextPromise: selectionText?.trim() ? addon.data.selection.contextPromise : undefined,
-    };
+    const selectionSnapshot = sessionKind === 'global-agent' ? {} : getCurrentSelectionSnapshot(sourceTabId);
 
     // Snapshot the route before any async rendering. A tab switch while the
     // Markdown bubble is being prepared must not redirect this turn.
