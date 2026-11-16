@@ -1,5 +1,20 @@
 # Project Agent Instructions
 
+## Development and testing
+
+- Use the pnpm version in `package.json`. Run `pnpm install --frozen-lockfile` after pulling dependency changes.
+- Run `pnpm build` to package the XPI in `.scaffold/build` and type-check the source. The build does not require Zotero to be running.
+- Run `pnpm lint:check` for formatting and lint checks, and `pnpm test` for the Zotero test suite in `test/`. Configure the Zotero binary using `.env.example` for local testing.
+- Run `pnpm test:codex` for Node-based Codex and chat history tests. When Zotero is already open, use `pnpm test:codex-zotero --all` to run the Zotero suites in a separate test profile without stopping the open instance. The `--live` suite is opt-in.
+- After integrating remote changes, run the relevant checks on the resulting commit before pushing. Keep test fixtures free of real credentials and leave unrelated untracked files untouched.
+
+## Code layout and runtime
+
+- `addon/bootstrap.js` loads the bundle built from `src/index.ts`. Keep lifecycle dispatch in `src/hooks.ts` and put implementation in `src/modules/` or `src/utils/`.
+- `src/modules/chatManager.ts` manages chat sessions, `src/modules/chatBackend.ts` defines the backend contract, and `src/modules/chatUI.ts` renders stream updates. Preserve the stream lifecycle when editing request or rendering logic; use `src/utils/markdown.ts` for shared Markdown rendering.
+- The bundle targets Firefox 115. Check the sandbox globals set up in `zotero-plugin.config.ts` before adding browser APIs. For document-scoped timers and animation frames, use the owning document's `defaultView`.
+- Declare preference defaults in `addon/prefs.js` and localize UI strings in `addon/locale/`. Derive add-on identifiers from `package.json` where available.
+
 ## Release workflow
 
 Before releasing, commit all intended tracked changes and leave unrelated untracked files untouched.
