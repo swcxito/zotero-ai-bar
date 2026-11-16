@@ -29,7 +29,7 @@ pref('poem.token', '');
 pref('chat.startConversationMode', 'new');
 pref('chat.autoAttachItemData', false);
 pref('chat.openOnStartup', false);
-pref('chat.showPoem', false);
+pref('chat.showPoem', true);
 pref('chat.autoImagePrompt', true);
 pref('chat.thinkingEffort', 'none');
 pref('translate.enableAuto', false);

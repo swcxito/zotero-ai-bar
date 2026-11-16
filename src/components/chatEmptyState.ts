@@ -644,7 +644,6 @@ class ChatEmptyState {
     this.updateVisibility();
   }
 
-  /** Off by default (pref chat.showPoem); when off, the poem APIs are never called. */
   private shouldShowPoem(): boolean {
     return !!this.session && isChineseLocale() && getPref('chat.showPoem') === true;
   }
