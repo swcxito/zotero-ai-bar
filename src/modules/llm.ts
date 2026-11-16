@@ -42,7 +42,7 @@ import {
   extractTranslationFallback,
   normalizeTranslationResultCandidate,
   repairTranslationResult,
-  translationResultSchema,
+  translationWireSchema,
   type TranslationRequestMeta,
   type TranslationResult,
 } from '../utils/translation';
@@ -777,7 +777,7 @@ export async function consumeTranslationStream(result: any, params: TranslationA
     let output: TranslationResult | undefined;
     if (structured) {
       try {
-        output = await result.output;
+        output = normalizeTranslationResultCandidate(await result.output, params.selectedText);
       } catch (error) {
         logTranslationDebug('response-format-validation-failed', { error: buildErrorMessage(error) });
       }
@@ -809,7 +809,7 @@ async function createTranslationAttempt(params: TranslationAttemptParams, struct
     providerOptions: params.providerOptions,
     maxRetries: 2,
     ...(structured
-      ? { output: Output.object({ schema: translationResultSchema, name: 'translation_result', description: 'A classified translation result.' }) }
+      ? { output: Output.object({ schema: translationWireSchema, name: 'translation_result', description: 'A classified translation result.' }) }
       : {}),
     onError: ({ error }: { error: unknown }) => {
       callbackError = error;
@@ -918,16 +918,18 @@ function buildDedicatedTranslationPrompt(messages: ModelMessage[], strict: boole
     '',
     '# JSON output contract',
     'Return exactly one JSON object and nothing else. Do not use Markdown fences, commentary, or surrounding prose.',
-    'Required fields: "textType" and "translatedText". "originalText" and "targetLanguage" are optional.',
+    jsonTextFallback
+      ? 'Required fields: "textType" and "translatedText". "originalText" and "targetLanguage" are optional.'
+      : 'Include every schema field. Use "" for inapplicable string fields and [] when there are no other meanings.',
     '"textType" must be "word", "abbreviation", or "text".',
     'Write all translatable natural-language fields in the requested target language, including "translatedText", "explanation", and every "otherMeanings[].translatedText". Keep only "originalText", source-language "pronunciation", source-language "fullForm", and English POS abbreviations untranslated.',
     'For "word", "translatedText" must be a concise dictionary-style equivalent in the target language, never the original word or an explanatory sentence.',
     'For "word", include the source-language "pronunciation" and English-abbreviated "pos" when available.',
-    'For "word", include "explanation" only when the meaning is specialized, technical, domain-specific, idiomatic, non-literal, or cannot be adequately conveyed by "translatedText" alone. Omit "explanation" for ordinary dictionary meanings and avoid boilerplate such as "in this context".',
+    'For "word", explain only specialized, technical, domain-specific, idiomatic, or non-literal meanings, or meanings that "translatedText" alone cannot adequately convey. Avoid boilerplate such as "in this context".',
     'Every "pos" must use a conventional English abbreviation such as "n.", "v.", "vt.", "vi.", "adj.", "adv.", "prep.", "pron.", or "conj."; never use a full word or a translated label.',
     'If present, "otherMeanings" must be an array of objects shaped exactly as {"pos":"...","translatedText":["..."]}; "translatedText" must be a non-empty array of strings.',
     'For "abbreviation", both "fullForm" and "explanation" are required. Keep "fullForm" in its source language and write "translatedText" and "explanation" in the requested target language.',
-    'For "text", return a fluent, accurate, academic translation and omit dictionary-only fields.',
+    'For "text", return a fluent, accurate, academic translation. Dictionary fields do not apply.',
     'If the source is or may be a list (for example, it contains bullets such as •, ◦, □, ■, , or ; numbering; repeated short items; or a heading followed by items), preserve it as Markdown in "translatedText" instead of merging it into prose.',
     'Use "- " for unordered Markdown list items, preserve the heading separately, and use nested Markdown indentation when different bullet symbols or source indentation imply subitems.',
     jsonTextFallback ? 'Produce the JSON object as ordinary streamed text while obeying this contract.' : '',
@@ -979,6 +981,7 @@ export function isJsonResponseFormatCompatibilityError(error: unknown): boolean 
     message.includes('unavailable') ||
     message.includes('not available') ||
     message.includes('not valid') ||
+    message.includes('invalid schema for response_format') ||
     message.includes('invalidparameter') ||
     message.includes("must contain the word 'json'");
   return mentionsJsonMode && incompatible;

@@ -37,6 +37,14 @@ describe('LLM compatibility helpers', function () {
       );
     });
 
+    it('falls back when OpenAI rejects the translation schema', function () {
+      const error = Object.assign(
+        new Error("Invalid schema for response_format 'translation_result': In context=('anyOf', '0'), Missing 'originalText'."),
+        { statusCode: 400, name: 'AI_APICallError' }
+      );
+      assert.isTrue(isJsonResponseFormatCompatibilityError(error));
+    });
+
     it('does not hide unrelated provider errors', function () {
       assert.isFalse(isJsonResponseFormatCompatibilityError(new Error('Authentication failed')));
     });
