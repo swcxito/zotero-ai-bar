@@ -18,4 +18,6 @@ jobs:
     with:
       build: "npm run build"
       release: "npm run release"
+      comment-template: >-
+        ${{ !contains(github.ref_name, '-') && ':rocket: _This ticket has been resolved in {release_tag}. See {release_link} for release notes._' || '' }}
     secrets: inherit
