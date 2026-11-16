@@ -51,6 +51,7 @@ export function bindMenu(
     if (menu) disposeDropdownMenu(menu);
     menu?.remove();
     menu = undefined;
+    anchor.classList.remove('is-open');
     controllers.delete(controller);
     doc.removeEventListener('click', outside, true);
     doc.removeEventListener('mousemove', move, true);
@@ -113,6 +114,7 @@ export function bindMenu(
     menu = build();
     if (!menu) return;
     controllers.add(controller);
+    anchor.classList.add('is-open');
     menu.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
     menu.style.transformOrigin = 'bottom';
     menu.style.opacity = '0';

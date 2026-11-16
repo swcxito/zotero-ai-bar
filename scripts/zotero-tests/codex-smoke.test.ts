@@ -6,6 +6,8 @@ import { openDialog } from '../../src/modules/modelDialog';
 import { CODEX_PROVIDER_ID } from '../../src/modules/codex/policy';
 import { CodexRpc } from '../../src/modules/codex/protocol';
 import { getString } from '../../src/utils/locale';
+import { getPref, setPref } from '../../src/utils/prefs';
+import { selectedAppIds } from '../../src/modules/codex/apps';
 
 describe('Codex in isolated Zotero', function () {
   before(function () {
@@ -48,6 +50,10 @@ describe('Codex in isolated Zotero', function () {
 
   it('places the ChatGPT connection button before Add Provider and only shows a connected card', async function () {
     const previous = addon.data.userProviderConfigV2;
+    const originalLoadApps = codexRuntime.loadAppsOnce;
+    const originalAppSelection = getPref('codex.apps.selection');
+    codexRuntime.loadAppsOnce = () => {};
+    setPref('codex.apps.selection', JSON.stringify({ 'fixture@example.org': ['removed-app'] }));
     addon.data.userProviderConfigV2 = { addedProviders: {}, addedModels: [], env: {}, recentUsed: [] } as any;
     let dialog: Window | undefined;
     try {
@@ -109,7 +115,16 @@ describe('Codex in isolated Zotero', function () {
       const tailButton = card.querySelector('.provider-card-collapse') as HTMLButtonElement;
       assert.isTrue(tailButton.classList.contains('inline-flex'), 'Head icon button centers its icon');
       assert.include(card.lastElementChild!.textContent!, 'Models');
-      assert.lengthOf(card.querySelectorAll('.model-card-list button'), 1, 'Only the refresh button, no model deletion buttons');
+      assert.lengthOf(card.querySelectorAll('.model-card-list [data-model-id] button'), 0, 'Model rows have no deletion buttons');
+      assert.isNotNull(card.querySelector('#codex-refresh-models'));
+      const appsPanel = card.querySelector('[data-codex-apps]')!;
+      assert.lengthOf(appsPanel.querySelectorAll('button'), 1, 'The apps panel has its own refresh button');
+      const removedApp = appsPanel.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+      assert.isTrue(removedApp.checked);
+      assert.isFalse(removedApp.disabled);
+      removedApp.click();
+      assert.deepEqual(selectedAppIds('fixture@example.org'), []);
+      assert.isNull(appsPanel.querySelector('input[type="checkbox"]'));
       const collapse = card.querySelector('.provider-card-collapse') as HTMLButtonElement;
       collapse.click();
       assert.isTrue(card.lastElementChild!.classList.contains('grid-rows-[0fr]'));
@@ -157,6 +172,8 @@ describe('Codex in isolated Zotero', function () {
       dialog?.close();
       await Zotero.Promise.delay(100);
       addon.data.userProviderConfigV2 = previous;
+      codexRuntime.loadAppsOnce = originalLoadApps;
+      setPref('codex.apps.selection', originalAppSelection);
     }
   });
 

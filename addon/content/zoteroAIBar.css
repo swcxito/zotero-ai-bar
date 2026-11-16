@@ -332,6 +332,30 @@
   }
 }
 
+/* Model Info - inline label variant (chat input status row) */
+.model-info-container.is-label {
+  min-width: 0;
+  min-height: 0;
+  flex-shrink: 1;
+  gap: 5px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.model-info-label-icon {
+  pointer-events: none;
+}
+
+.model-info-label-text {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Model Info Dropdown */
 
 /* Light Mode */
@@ -346,6 +370,27 @@
   .model-info-container:hover {
     background-color: rgba(255, 255, 255, 0.1);
   }
+}
+
+/* Chat input status row controls (mode, model, effort) share one highlight:
+ * on hover and while their dropdown is open (.is-open). Declared after the
+ * model-info hover rules so it also wins for the model label. */
+@media (prefers-color-scheme: light) {
+  .input-status-btn:hover,
+  .input-status-btn.is-open {
+    background-color: rgba(0, 0, 0, 0.06);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .input-status-btn:hover,
+  .input-status-btn.is-open {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.input-status-btn[aria-disabled='true']:hover {
+  background-color: transparent;
 }
 
 .model-dropdown-menu {

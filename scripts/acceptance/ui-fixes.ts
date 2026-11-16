@@ -71,10 +71,10 @@ async function run() {
     child.remove();
     await wait(20);
     const anchor = root.querySelector('.input-thinking-btn')!;
-    mouse(anchor, 'mouseenter');
+    mouse(anchor, 'click');
     await wait(180);
     const menu = root.querySelector('.thinking-effort-dropdown') as HTMLElement;
-    ensure(menu?.isConnected, 'Actual installed hover menu did not open after child unload');
+    ensure(menu?.isConnected, 'Actual installed menu did not open on click after child unload');
     const rect = menu.getBoundingClientRect();
     ensure(rect.width > 0 && rect.height > 0, 'Menu has no visible size');
     const hit = root.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);

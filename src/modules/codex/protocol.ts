@@ -2,6 +2,8 @@ import { codexString } from './i18n';
 
 export type RpcMessage = { id?: number | string; method?: string; params?: any; result?: any; error?: { code: number; message: string } };
 
+export class CodexRpcTimeoutError extends Error {}
+
 /** Newline-delimited JSON-RPC. No shell, sockets, polling or model API HTTP in the plugin. */
 export class CodexRpc {
   private sequence = 0;
@@ -24,7 +26,7 @@ export class CodexRpc {
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(codexString('codex-error-request-timeout', `Codex ${method} 超时；操作不会自动重试。`, { method })));
+        reject(new CodexRpcTimeoutError(codexString('codex-error-request-timeout', `Codex ${method} 超时；操作不会自动重试。`, { method })));
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
       void this.write(JSON.stringify({ id, method, params }) + '\n').catch(() =>
@@ -63,10 +65,14 @@ export class CodexRpc {
         // Do not propagate arbitrary server error bodies (may contain credentials).
         if (message.error)
           pending.reject(
-            new Error(
-              codexString('codex-error-response', `Codex ${message.error.code}: 请求失败。请检查登录、模型和运行时状态。`, {
-                code: message.error.code,
-              })
+            Object.assign(
+              new Error(
+                codexString('codex-error-response', `Codex ${message.error.code}: 请求失败。请检查登录、模型和运行时状态。`, {
+                  code: message.error.code,
+                })
+              ),
+              // The runtime's own error, for callers that turn it into a specific diagnostic.
+              { rpcError: message.error }
             )
           );
         else pending.resolve(message.result);

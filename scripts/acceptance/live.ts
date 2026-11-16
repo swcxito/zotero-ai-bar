@@ -299,8 +299,10 @@ async function local() {
       [mode, '.chat-mode-dropdown'],
     ] as const) {
       event(anchor!, 'mouseenter');
+      ensure(!root.querySelector(selector), 'Composer menu opened on hover');
+      event(anchor!, 'click');
       const menu = root.querySelector(selector) as HTMLElement;
-      ensure(menu, 'Hover menu did not open immediately');
+      ensure(menu, 'Composer menu did not open on click');
       event(anchor!, 'mouseleave');
       await pause(100);
       ensure(menu.isConnected && menu.style.opacity !== '0', 'Menu closed while traversing its gap');

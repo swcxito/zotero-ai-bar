@@ -17,6 +17,7 @@ export interface CodexBinding {
   /** Local history fingerprint corresponding to the last completed remote turn. */
   context: string;
   turnId?: string;
+  apps?: string;
 }
 
 export function sanitizeCodexBinding(value: unknown): CodexBinding | undefined {
@@ -30,6 +31,7 @@ export function sanitizeCodexBinding(value: unknown): CodexBinding | undefined {
     mode: v.mode,
     context: v.context,
     turnId: typeof v.turnId === 'string' ? v.turnId : undefined,
+    apps: typeof v.apps === 'string' ? v.apps : undefined,
   };
 }
 

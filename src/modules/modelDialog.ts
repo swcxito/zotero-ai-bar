@@ -37,6 +37,9 @@ import { cardDataMap, ModelIcons } from '../components/common';
 import { CODEX_PROVIDER_ID } from './codex/policy';
 import { publishModels, disconnectCodex, codexSettingsListeners } from './codex/settings';
 import { codexRuntime } from './codex/runtime';
+import { renderAppsPanel } from './codex/appsPanel';
+import { mountClaudeCodeSettings } from './claudeCode/settings';
+import { CLAUDE_CODE_PROVIDER_ID } from './claudeCode/protocol';
 import { IconView } from '../components/iconView';
 import { CardModelRow } from '../components/modelRow';
 import { InlineButton } from '../components/buttons/inlineButton';
@@ -142,6 +145,7 @@ class ModelDialogV2 {
     const icon = this.doc.getElementById('connect-chatgpt-icon');
     if (icon) ztoolkit.UI.appendElement(IconView({ iconMarkup: getModelIconPath('gpt'), sizeRem: 1 }), icon);
     this.createCodexConnectionPanel();
+    mountClaudeCodeSettings(this.doc, this.win);
     const loginStatus = this.doc.createElement('div');
     loginStatus.id = 'codex-login-wait';
     loginStatus.className = 'mb-4 flex items-center gap-3 text-sm text-zinc-500';
@@ -235,7 +239,7 @@ class ModelDialogV2 {
 
     const v2 = addon.data.userProviderConfigV2!;
     for (const [providerId] of Object.entries(v2.addedProviders)) {
-      if (providerId === CODEX_PROVIDER_ID) continue;
+      if (providerId === CODEX_PROVIDER_ID || providerId === CLAUDE_CODE_PROVIDER_ID) continue;
       this.createAndAppendCard(providerId, container as HTMLElement);
     }
     this.renderCodexCard();
@@ -408,6 +412,7 @@ class ModelDialogV2 {
     refresh.id = 'codex-refresh-models';
     (refresh as HTMLButtonElement).disabled = this.codexBusy;
     content.append(refresh);
+    renderAppsPanel(content);
     const card = ProviderCard({
       providerId: CODEX_PROVIDER_ID,
       providerName: getString('codex-card-title'),
@@ -464,6 +469,7 @@ class ModelDialogV2 {
     }
     const list = card.querySelector(`#${CODEX_MODEL_LIST_ID}`);
     if (!list) return;
+    renderAppsPanel(list as HTMLElement);
     const rows = new Map<string, HTMLElement>();
     list.querySelectorAll<HTMLElement>(':scope > [data-model-id]').forEach((row) => rows.set(row.dataset.modelId ?? '', row));
     const wanted = new Set(models.map((model) => model.id));
@@ -794,6 +800,10 @@ class ModelDialogV2 {
     });
 
     // Subscription metadata belongs to its dedicated runtime UI, not API-key cards.
+    if (v2.addedProviders[CLAUDE_CODE_PROVIDER_ID]) {
+      newAddedProviders[CLAUDE_CODE_PROVIDER_ID] = v2.addedProviders[CLAUDE_CODE_PROVIDER_ID];
+      newAddedModels.push(...v2.addedModels.filter((model) => model.providerId === CLAUDE_CODE_PROVIDER_ID));
+    }
     if (v2.addedProviders[CODEX_PROVIDER_ID]) {
       newAddedProviders[CODEX_PROVIDER_ID] = v2.addedProviders[CODEX_PROVIDER_ID];
       newAddedModels.push(...v2.addedModels.filter((model) => model.providerId === CODEX_PROVIDER_ID));

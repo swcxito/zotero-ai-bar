@@ -10,7 +10,7 @@ export function setSendBtnEnabled(button: HTMLButtonElement, enabled: boolean): 
   button.classList.add(...(enabled ? ENABLED : DISABLED));
 }
 
-export function setSendButtonMode(button: HTMLButtonElement, streaming: boolean): void {
+export function setSendButtonMode(button: HTMLButtonElement, streaming: boolean, sizeRem = 1.5): void {
   button.dataset.mode = streaming ? 'stop' : 'send';
   button.replaceChildren(
     ztoolkit.UI.createElement(
@@ -18,7 +18,7 @@ export function setSendButtonMode(button: HTMLButtonElement, streaming: boolean)
       'span',
       IconView({
         iconMarkup: streaming ? Icons.Stop : Icons.Send,
-        sizeRem: 1.5,
+        sizeRem,
         extraClasses: ['text-white'],
       })
     )

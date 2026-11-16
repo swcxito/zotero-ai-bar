@@ -247,8 +247,8 @@ async function run(selected?: string[]) {
       .querySelector('textarea')!
       .dispatchEvent(new win.Event('input', { bubbles: true }));
     for (let index = 0; index < 3; index++) {
-      const thinking = [...wrapper().querySelectorAll('button')].find((button) => button.title === '思考强度')!;
-      thinking.dispatchEvent(new win.MouseEvent('mouseenter'));
+      const thinking = wrapper().querySelector<HTMLButtonElement>('.input-thinking-btn')!;
+      thinking.click();
       const oldWrapper = wrapper();
       const switchButton = win.document.querySelector('#zaibar-sidepane-host-switch-button') as HTMLButtonElement;
       ensure(switchButton, 'Native sidebar host-switch button unavailable');

@@ -43,12 +43,15 @@ async function run() {
     const root = wrapper.getRootNode() as ShadowRoot;
     const timings: any[] = [];
     mouse(win.document.documentElement, 'click');
-    for (const title of ['思考强度', '对话模式']) {
-      const anchor = [...wrapper.querySelectorAll('button')].find((button) => button.title === title)!;
+    for (const [title, buttonSelector, menuSelector] of [
+      ['思考强度', '.input-thinking-btn', '.thinking-effort-dropdown'],
+      ['对话模式', '.input-chat-mode-btn', '.chat-mode-dropdown'],
+    ]) {
+      const anchor = wrapper.querySelector(buttonSelector)!;
       ensure(anchor, `Missing native ${title} button`);
-      mouse(anchor, 'mouseenter');
-      const menu = root.querySelector(title === '思考强度' ? '.thinking-effort-dropdown' : '.chat-mode-dropdown') as HTMLElement;
-      ensure(menu, 'Native hover menu did not open');
+      mouse(anchor, 'click');
+      const menu = root.querySelector(menuSelector) as HTMLElement;
+      ensure(menu, 'Native menu did not open on click');
       mouse(anchor, 'mouseleave');
       await wait(280);
       ensure(menu.style.opacity === '0', 'Native menu was not fading after the leave delay');

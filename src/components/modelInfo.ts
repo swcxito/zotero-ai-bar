@@ -88,8 +88,26 @@ function buildCurrentModelInfoChildren(): TagElementProps[] {
   return children;
 }
 
+/** Inline form for the chat input status row: small icon + full model name, no overlays. */
+function buildLabelModelInfoChildren(): TagElementProps[] {
+  const modelName = resolveModelDisplayName();
+  const family = analyzeModelName(modelName).family;
+  return [
+    IconView({
+      iconMarkup: getModelIconPath(addon.data.userProviderConfigV2?.active?.providerId === 'codex-subscription' ? 'gpt' : family),
+      extraClasses: ['model-info-label-icon'],
+      sizeRem: 0.875,
+    }),
+    {
+      tag: 'span',
+      classList: ['model-info-label-text'],
+      properties: { textContent: modelName || getString('model-dialog-add-model') },
+    },
+  ];
+}
+
 function updateModelInfoDisplay(container: HTMLElement) {
-  const children = buildCurrentModelInfoChildren();
+  const children = container.dataset.variant === 'label' ? buildLabelModelInfoChildren() : buildCurrentModelInfoChildren();
   container.innerHTML = '';
   for (const child of children) {
     ztoolkit.UI.appendElement(child, container);
@@ -112,11 +130,16 @@ export function unregisterModelInfoAnchors(root: HTMLElement) {
   }
 }
 
+/** Fired on each anchor after a model change, for controls that depend on the model. */
+export const MODEL_CHANGE_EVENT = 'zaibar-model-change';
+
 export function refreshAllModelInfoAnchors() {
   const set = addon.data.modelInfoAnchors;
   for (const el of set) {
     if (isConnectedNode(el)) {
       updateModelInfoDisplay(el);
+      const view = el.ownerDocument.defaultView;
+      if (view) el.dispatchEvent(new view.Event(MODEL_CHANGE_EVENT));
     } else {
       set.delete(el);
     }
@@ -138,15 +161,17 @@ function ensureRefreshHookWired() {
   }
 }
 
-export function ModelInfo(opts?: { dropUp?: boolean }): TagElementProps {
-  const children = buildCurrentModelInfoChildren();
+export function ModelInfo(opts?: { dropUp?: boolean; variant?: 'badge' | 'label' }): TagElementProps {
+  const variant = opts?.variant ?? 'badge';
+  const children = variant === 'label' ? buildLabelModelInfoChildren() : buildCurrentModelInfoChildren();
   const dropUp = opts?.dropUp ?? false;
   let controller: MenuController | undefined;
 
   return {
     tag: 'div',
     id: 'ai-bar-model-info',
-    classList: ['model-info-container'],
+    classList: variant === 'label' ? ['model-info-container', 'is-label', 'input-status-btn'] : ['model-info-container'],
+    attributes: { 'data-variant': variant },
     children: children,
     listeners: [
       {

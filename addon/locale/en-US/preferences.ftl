@@ -28,6 +28,8 @@ pref-chat-window-always-on-top =
     .label = Keep chat window on top
 pref-chat-open-on-startup =
     .label = Open window on startup
+pref-chat-show-poem =
+    .label = Show a poem in new conversations (Chinese UI)
 pref-provider = Model Provider
 pref-model-name = Model Name
 

@@ -364,12 +364,14 @@ describe('shared UI behavior in isolated Zotero', function () {
     try {
       assert.notEqual(button.getAttribute('aria-disabled'), 'true', 'the menu trigger must remain available');
       button.dispatchEvent(new doc.defaultView!.MouseEvent('mouseenter'));
+      assert.isNull(shadow.querySelector('.chat-mode-dropdown'));
+      button.click();
       let popup = shadow.querySelector('.chat-mode-dropdown')!;
       assert.isNotNull(popup);
       assert.lengthOf(popup.querySelectorAll('button:disabled'), 3);
       assert.equal(popup.querySelector('.is-selected')?.textContent, 'Agent');
       api.setContext({ sessionId: ids[1], sessionKind: 'article', chatModeAdjustable: true });
-      button.dispatchEvent(new doc.defaultView!.MouseEvent('mouseenter'));
+      button.click();
       popup = shadow.querySelector('.chat-mode-dropdown')!;
       assert.isNotNull(popup);
       assert.lengthOf(popup.querySelectorAll('button:enabled'), 3, 'article modes remain selectable');

@@ -1,8 +1,9 @@
 import { getPref, setPref } from '../../utils/prefs';
 import { policyArguments, runtimePolicy } from './policy';
-import { CodexRpc } from './protocol';
+import { CodexRpc, CodexRpcTimeoutError, type RpcMessage } from './protocol';
 import { codexString } from './i18n';
 import { version as pluginVersion } from '../../../package.json';
+import { appFeatures, appListFailureReason, listApps, parseApps, type CodexApp } from './apps';
 
 export interface RuntimeCandidate {
   path: string;
@@ -403,6 +404,106 @@ class CodexRuntime {
   rpc?: CodexRpc;
   account?: CodexAccount;
   models: CodexModel[] = [];
+  apps: CodexApp[] = [];
+  appsStatus = '';
+  appsLoading = false;
+  private appsRevision = 0;
+  private accountRevision = 0;
+  private accountChanging = false;
+  private appsRequestedFor?: string;
+  private appsRequest = Promise.resolve();
+  private ambiguousAppCatalogs = new WeakSet<CodexRpc>();
+
+  /** Loads the catalog the first time the apps panel is shown for a login. */
+  loadAppsOnce(): void {
+    const account = this.accountKey;
+    if (!account || this.appsRequestedFor === account || this.appsLoading) return;
+    this.appsRequestedFor = account;
+    void this.refreshApps(false).catch(() => undefined);
+  }
+
+  async refreshApps(forceRefetch = true): Promise<void> {
+    const rpc = await this.connect();
+    const account = this.accountKey;
+    if (!account) throw new Error('Sign in to ChatGPT before loading apps.');
+    const revision = ++this.appsRevision;
+    const current = () => this.rpc === rpc && this.accountKey === account && revision === this.appsRevision;
+    this.appsLoading = true;
+    this.appsStatus = '';
+    // The fallback notification has no request or account ID. A new listing
+    // must wait for the preceding request to finish before listening for it.
+    const request = this.appsRequest.then(async () => {
+      if (!current()) return;
+      let pushed: CodexApp[] | undefined;
+      const read = async (forced: boolean) => {
+        const listener = (message: RpcMessage) => {
+          if (message.method !== 'app/list/updated' || !current() || this.ambiguousAppCatalogs.has(rpc)) return;
+          try {
+            pushed = parseApps(message.params?.data);
+          } catch {
+            pushed = undefined;
+          }
+        };
+        if (!forced) rpc.listeners.add(listener);
+        try {
+          return await listApps(rpc, forced);
+        } catch (error) {
+          // A timed-out request can still produce a notification later.
+          if (error instanceof CodexRpcTimeoutError) {
+            this.ambiguousAppCatalogs.add(rpc);
+            pushed = undefined;
+          }
+          throw error;
+        } finally {
+          rpc.listeners.delete(listener);
+        }
+      };
+      let apps: CodexApp[] | undefined;
+      let failure: unknown;
+      try {
+        apps = await read(forceRefetch);
+      } catch (error) {
+        failure = error;
+        if (forceRefetch && current()) apps = await read(false).catch(() => undefined);
+      }
+      if (!current()) return;
+      if (apps) {
+        this.apps = apps;
+        return;
+      }
+      const reason = appListFailureReason(failure);
+      if (pushed) {
+        this.apps = pushed;
+        this.appsStatus = codexString(
+          'codex-apps-directory-fallback',
+          `无法直接读取 ChatGPT 应用目录（${reason || '请求失败'}），已显示 Codex 运行时同步的应用。`,
+          { reason: reason || '-' }
+        );
+        return;
+      }
+      this.appsStatus =
+        codexString('codex-apps-load-error', '无法读取应用。请检查登录、网络和 Codex 版本，然后重试。') + (reason ? ` (${reason})` : '');
+      throw failure;
+    });
+    this.appsRequest = request.catch(() => undefined);
+    this.changed();
+    try {
+      await request;
+    } finally {
+      if (current()) {
+        this.appsLoading = false;
+        this.changed();
+      }
+    }
+  }
+
+  private clearApps(): void {
+    this.appsRevision++;
+    this.apps = [];
+    this.appsStatus = '';
+    this.appsLoading = false;
+    this.appsRequestedFor = undefined;
+  }
   status = codexString('codex-status-not-detected', '尚未检测');
   diagnostics: string[] = [];
   readonly listeners = new Set<() => void>();
@@ -420,7 +521,7 @@ class CodexRuntime {
   }
   private generation = 0;
   get accountKey(): string | undefined {
-    return !this.loginPending && this.account?.type === 'chatgpt' ? this.account.email : undefined;
+    return !this.loginPending && !this.accountChanging && this.account?.type === 'chatgpt' ? this.account.email : undefined;
   }
   changed(): void {
     for (const listener of this.listeners) listener();
@@ -513,7 +614,15 @@ class CodexRuntime {
     try {
       process = await subprocess().call({
         command: info.path,
-        arguments: ['app-server', ...policyArguments({ ...info.policy, ...(this.sharedLogin ? { cli_auth_credentials_store: 'auto' } : {}) })],
+        arguments: [
+          'app-server',
+          ...policyArguments({
+            ...info.policy,
+            ...appFeatures(info.policy, true),
+            'apps._default.enabled': false,
+            ...(this.sharedLogin ? { cli_auth_credentials_store: 'auto' } : {}),
+          }),
+        ],
         environment: { ...environment(this.sharedLogin), ...network },
         stderr: 'pipe',
         workdir: PathUtils.join(codexDirectory(), 'workspace'),
@@ -566,15 +675,26 @@ class CodexRuntime {
           this.rpc = undefined;
           this.account = undefined;
           this.models = [];
+          this.accountChanging = false;
+          this.clearApps();
           this.status = codexString('codex-status-disconnected', 'Codex 连接已断开');
           void process.kill(1000).catch(() => undefined);
           this.changed();
         }
-        if (message.method === 'account/updated' && !this.loginPending)
-          void this.refreshAccount().catch(() => {
-            this.status = codexString('codex-status-relogin', '请重新登录 Codex');
-            this.changed();
-          });
+        if (message.method === 'account/updated' && this.rpc === rpc) {
+          this.accountRevision++;
+          this.accountChanging = true;
+          this.clearApps();
+          this.changed();
+          if (!this.loginPending) {
+            const revision = this.accountRevision + 1;
+            void this.refreshAccount().catch(() => {
+              if (this.rpc !== rpc || revision !== this.accountRevision) return;
+              this.status = codexString('codex-status-relogin', '请重新登录 Codex');
+              this.changed();
+            });
+          }
+        }
       });
       await this.refreshAccount();
       return rpc;
@@ -590,9 +710,13 @@ class CodexRuntime {
   async refreshAccount(isCurrent: () => boolean = () => true): Promise<void> {
     const rpc = this.rpc;
     if (!rpc) return;
+    const revision = ++this.accountRevision;
+    const current = () => this.rpc === rpc && revision === this.accountRevision && isCurrent();
     const result = await rpc.request('account/read', { refreshToken: false });
-    if (this.rpc !== rpc || !isCurrent()) return;
+    if (!current()) return;
+    if (this.account?.email !== result.account?.email || this.account?.type !== result.account?.type) this.clearApps();
     this.account = result.account || undefined;
+    this.accountChanging = false;
     if (this.account?.type === 'chatgpt') {
       this.status = codexString('codex-status-logged-in', `已登录 ${this.account.email || ''} · ${this.account.planType || 'Codex'}`, {
         email: this.account.email || '',
@@ -603,7 +727,7 @@ class CodexRuntime {
       const cursors = new Set<string>();
       do {
         const page = await rpc.request('model/list', { cursor, limit: 100 });
-        if (this.rpc !== rpc || !isCurrent()) return;
+        if (!current()) return;
         if (!Array.isArray(page.data)) throw new Error(codexString('codex-error-model-list-format', 'Codex 模型列表格式不兼容。'));
         models.push(...page.data);
         cursor = page.nextCursor || undefined;
@@ -638,6 +762,8 @@ class CodexRuntime {
         if (error) {
           if (id) void rpc.request('account/login/cancel', { loginId: id }).catch(() => undefined);
           this.account = undefined;
+          this.accountChanging = false;
+          this.clearApps();
           this.models = [];
           this.status = error.message;
           reject(error);
@@ -767,6 +893,8 @@ class CodexRuntime {
   }
 
   async stop(shutdown = false): Promise<void> {
+    this.clearApps();
+    this.accountChanging = false;
     this.cancelLogin();
     this.generation++;
     this.stopped = shutdown;

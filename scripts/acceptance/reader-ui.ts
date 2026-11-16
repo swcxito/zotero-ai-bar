@@ -39,11 +39,11 @@ async function run() {
     Zotero.Prefs.set(autoKey, false, true);
     await reader._initPromise;
     await until(() => !!win.document.getElementById('zaibar-sidepane-shared-input')?.shadowRoot?.querySelector('.input-chat-mode-btn'));
-    await check('实际文献模式菜单 hover 可见且未被遮挡', async () => {
+    await check('实际文献模式菜单点击后可见且未被遮挡', async () => {
       const root = win.document.getElementById('zaibar-sidepane-shared-input').shadowRoot;
       const anchor = root.querySelector('.input-chat-mode-btn');
       ensure(anchor.getAttribute('aria-disabled') !== 'true', 'Article mode menu was disabled');
-      mouse(anchor, 'mouseenter');
+      mouse(anchor, 'click');
       await wait(200);
       const menu = root.querySelector('.chat-mode-dropdown');
       ensure(menu?.isConnected, 'Actual article mode menu did not open');
