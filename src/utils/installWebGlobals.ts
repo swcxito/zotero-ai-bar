@@ -10,6 +10,8 @@ export function installWebGlobals(target: any, sourceWindow: any): void {
     'TextDecoder',
     'TextDecoderStream',
     'DOMException',
+    'AbortController',
+    'AbortSignal',
     'window',
     'Node',
     'Element',

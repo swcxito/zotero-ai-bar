@@ -519,10 +519,8 @@ class CodexRuntime {
         workdir: PathUtils.join(codexDirectory(), 'workspace'),
       });
     } catch (error) {
-      if (cached) {
-        this.info = undefined;
-        throw new RuntimeRefreshRequired((error as Error).message);
-      }
+      if (this.info === info) this.info = undefined;
+      if (cached) throw new RuntimeRefreshRequired((error as Error).message);
       throw error;
     }
     this.process = process;

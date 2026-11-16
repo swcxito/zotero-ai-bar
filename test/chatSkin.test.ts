@@ -38,11 +38,6 @@ function computed(node: Element): CSSStyleDeclaration {
   return node.ownerDocument.defaultView!.getComputedStyle(node);
 }
 
-async function waitForNoShadow(node: Element): Promise<void> {
-  const deadline = Date.now() + 1500;
-  while (computed(node).boxShadow !== 'none' && Date.now() < deadline) await Zotero.Promise.delay(20);
-}
-
 function expectedPage(doc: Document, skin: (typeof NEW_SKINS)[number]): string {
   return PAGE_COLORS[skin][doc.defaultView!.matchMedia('(prefers-color-scheme: dark)').matches ? 1 : 0];
 }
@@ -91,14 +86,13 @@ async function verifyShadowRootMaterial(skin: (typeof NEW_SKINS)[number]): Promi
       assert.notEqual(computed(node).boxShadow, 'none', node.className || 'preview button');
     }
     assert.include(computed(selectedMenuItem).boxShadow, 'inset');
+    // Check settled styles independently of the window's animation frame timing.
+    for (const node of [screenshot, input, thinking]) node.style.setProperty('transition', 'none', 'important');
     screenshot.disabled = true;
-    await waitForNoShadow(screenshot);
     assert.equal(computed(screenshot).boxShadow, 'none');
     setPref('chat.skin', 'rose');
     refreshChatSkin();
-    await new Promise<void>((resolve) => doc.defaultView!.setTimeout(resolve, 350));
     assert.notInclude(computed(input).boxShadow, 'inset');
-    await waitForNoShadow(thinking);
     assert.equal(computed(thinking).boxShadow, 'none');
   } finally {
     stopChatSkinSync();
@@ -157,10 +151,9 @@ describe('chat skins', function () {
       registerChatSkinRoot(pane);
       assert.equal(computed(pane).getPropertyValue('--page').trim(), expectedPage(doc, 'neumorphism'));
       assert.notEqual(computed(button).boxShadow, 'none');
+      button.style.setProperty('transition', 'none', 'important');
       setPref('chat.skin', 'rose');
       refreshChatSkin();
-      await new Promise<void>((resolve) => doc.defaultView!.setTimeout(resolve, 350));
-      await waitForNoShadow(button);
       assert.equal(computed(button).boxShadow, 'none');
     } finally {
       stopChatSkinSync();
@@ -191,10 +184,9 @@ describe('chat skins', function () {
       assert.equal(computed(root).backgroundColor, 'rgba(0, 0, 0, 0)');
       assert.equal(computed(section).backgroundColor, 'rgba(0, 0, 0, 0)');
       assert.equal(computed(doc.documentElement).getPropertyValue('--za-neu-inset').trim(), '');
+      button.style.setProperty('transition', 'none', 'important');
       setPref('chat.skin', 'rose');
       refreshChatSkin();
-      await new Promise<void>((resolve) => doc.defaultView!.setTimeout(resolve, 350));
-      await waitForNoShadow(button);
       assert.equal(computed(button).boxShadow, 'none');
     } finally {
       stopChatSkinSync();

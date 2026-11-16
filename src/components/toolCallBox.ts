@@ -20,6 +20,7 @@ export interface ToolCallBoxProps {
 const ICON_MAP: Record<string, string> = {
   grep: Icons.Search,
   read: Icons.Book,
+  get_selected_items: Icons.Book,
   glob: Icons.FolderOpen,
   tree: Icons.Tree,
   search_papers: Icons.Search,

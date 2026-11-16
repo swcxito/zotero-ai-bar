@@ -1,7 +1,7 @@
 {
   "name": "zotero-ai-bar",
   "type": "module",
-  "version": "1.6.8",
+  "version": "1.6.10",
   "packageManager": "pnpm@10.28.0",
   "description": "A handy AI bar for Zotero",
   "config": {
@@ -44,7 +44,7 @@
     "@ai-sdk/xai": "^3.0.89",
     "@floating-ui/dom": "^1.8.0",
     "@openrouter/ai-sdk-provider": "^2.9.0",
-    "ai": "^6.0.177",
+    "ai": "^6.0.320",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.45",
     "marked": "^18.0.3",

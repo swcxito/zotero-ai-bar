@@ -46,6 +46,13 @@ declare namespace _ZoteroTypes {
       "translate.thinkingDepth": string;
       "translate.separateTab": boolean;
       "imagePreview.location": string;
+      "sync.webdavUrl": string;
+      "sync.username": string;
+      "sync.password": string;
+      "sync.remoteFolder": string;
+      "sync.autoSync": boolean;
+      "sync.includeApiKeys": boolean;
+      "sync.lastSyncAt": string;
     };
   }
 }

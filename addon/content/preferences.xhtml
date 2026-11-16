@@ -306,6 +306,44 @@
       <checkbox id="__addonRef__-formula-optimization" preference="chat.formulaOptimization" data-l10n-id="pref-formula-optimization" />
     </hbox>
   </groupbox>
+  <groupbox id="__addonRef__-sync-groupbox">
+    <label>
+      <html:h2 data-l10n-id="pref-sync" />
+    </label>
+    <hbox align="center" style="margin-top: 8px; gap: 8px">
+      <html:label data-l10n-id="pref-sync-webdav-url" style="width: 110px" />
+      <html:input
+        id="__addonRef__-sync-webdav-url"
+        type="text"
+        preference="sync.webdavUrl"
+        placeholder="https://dav.jianguoyun.com/dav/"
+        style="flex: 1; min-width: 0"
+      />
+    </hbox>
+    <hbox align="center" style="margin-top: 8px; gap: 8px">
+      <html:label data-l10n-id="pref-sync-username" style="width: 110px" />
+      <html:input id="__addonRef__-sync-username" type="text" preference="sync.username" style="flex: 1; min-width: 0" />
+      <html:label data-l10n-id="pref-sync-remote-folder" style="width: 80px; text-align: right" />
+      <html:input id="__addonRef__-sync-remote-folder" type="text" preference="sync.remoteFolder" placeholder="zotero-ai-bar" style="width: 140px" />
+    </hbox>
+    <hbox align="center" style="margin-top: 8px; gap: 8px">
+      <html:label data-l10n-id="pref-sync-password" style="width: 110px" />
+      <html:input id="__addonRef__-sync-password" type="password" style="flex: 1; min-width: 0" />
+    </hbox>
+    <hbox align="center" style="margin-top: 8px; gap: 16px">
+      <checkbox id="__addonRef__-sync-auto" preference="sync.autoSync" data-l10n-id="pref-sync-auto-sync" />
+      <checkbox id="__addonRef__-sync-include-keys" preference="sync.includeApiKeys" data-l10n-id="pref-sync-include-api-keys" />
+    </hbox>
+    <hbox align="center" style="margin-top: 10px; gap: 8px; flex-wrap: wrap">
+      <button id="__addonRef__-sync-test-btn" data-l10n-id="pref-sync-test-connection" />
+      <button id="__addonRef__-sync-now-btn" data-l10n-id="pref-sync-now" />
+      <button id="__addonRef__-sync-push-btn" data-l10n-id="pref-sync-push" />
+      <button id="__addonRef__-sync-pull-btn" data-l10n-id="pref-sync-pull" />
+    </hbox>
+    <hbox align="center" style="margin-top: 6px">
+      <html:span id="__addonRef__-sync-status" style="font-size: 0.9em; opacity: 0.85" data-l10n-id="pref-sync-status-idle" />
+    </hbox>
+  </groupbox>
 </groupbox>
 
 <vbox>

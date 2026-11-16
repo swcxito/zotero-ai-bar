@@ -24,15 +24,18 @@ process.env.ZAIBAR_TEST_HTTP_ORIGIN = `http://127.0.0.1:${fixtureServer.address(
 process.env.ZOTERO_PLUGIN_KILL_COMMAND = process.platform === 'win32' ? 'cmd /c exit 0' : 'true';
 process.env.NODE_ENV = 'test';
 const { Config, Test } = await import('zotero-plugin-scaffold');
+const nativeTestSuites = {
+  '--perf': ['scripts/zotero-perf'],
+  '--history': ['scripts/zotero-history'],
+  '--selection': ['scripts/zotero-selection'],
+  '--live': ['scripts/zotero-live'],
+  '--all': ['scripts/zotero-tests', 'scripts/zotero-selection', 'scripts/zotero-history', 'test'],
+};
+const suite = Object.keys(nativeTestSuites).find((flag) => process.argv.includes(flag));
+const entries = nativeTestSuites[suite] ?? ['scripts/zotero-tests'];
 const context = await Config.loadConfig({
   test: {
-    entries: process.argv.includes('--perf')
-      ? ['scripts/zotero-perf']
-      : process.argv.includes('--live')
-        ? ['scripts/zotero-live']
-        : process.argv.includes('--all')
-          ? ['scripts/zotero-tests', 'test']
-          : ['scripts/zotero-tests'],
+    entries,
     watch: false,
     mocha: { timeout: process.argv.includes('--perf') ? 180000 : process.argv.includes('--live') ? 90000 : 30000 },
   },
