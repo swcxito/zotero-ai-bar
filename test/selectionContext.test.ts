@@ -117,6 +117,45 @@ describe('selection context', function () {
       };
     }
 
+    function cachedReader(pages: Record<number, string>, ranges: any[]): any {
+      return {
+        itemID: 684,
+        _internalReader: {
+          _type: 'pdf',
+          _primaryView: {
+            _selectionRanges: ranges,
+            _pdfPages: Object.fromEntries(Object.entries(pages).map(([index, text]) => [index, { chars: [...text].map((c) => ({ c })) }])),
+          },
+        },
+      };
+    }
+
+    it('uses live character offsets for repeated text without waiting on the worker', async function () {
+      const reader = cachedReader({ 7: 'first LA before second LA after' }, [
+        { position: { pageIndex: 7 }, text: 'LA', anchorOffset: 25, headOffset: 23 },
+      ]);
+      const selected = { ...annotation(7), text: 'LA', position: { pageIndex: 7, rects: Array(41).fill([0, 0, 10, 10]) } };
+      assert.deepEqual(await getSelectionContext(reader, { annotation: selected }), ['first LA before second ', 'LA', ' after']);
+      assert.isEmpty(calls, 'A loaded selection must not reparse the PDF');
+    });
+
+    it('takes context outside both ends of a reverse cross-page selection', async function () {
+      const reader = cachedReader({ 7: 'before selected ', 8: 'text after' }, [
+        { position: { pageIndex: 8 }, text: 'text', anchorOffset: 4, headOffset: 0 },
+        { position: { pageIndex: 7 }, text: 'selected', anchorOffset: 16, headOffset: 7 },
+      ]);
+      const selected = { ...annotation(7, true), position: { ...annotation(7, true).position, pageIndex: 7 } };
+      assert.deepEqual(await getSelectionContext(reader, { annotation: selected }), ['before ', 'selected text', ' after']);
+      assert.isEmpty(calls);
+    });
+
+    it('falls back to extraction when cached ranges belong to an older selection', async function () {
+      const reader = cachedReader({ 0: 'old selection' }, [{ position: { pageIndex: 0 }, text: 'old', anchorOffset: 0, headOffset: 3 }]);
+      const selected = { ...annotation(0), position: { ...annotation(0).position, pageIndex: 0 } };
+      assert.deepEqual(await getSelectionContext(reader, { annotation: selected }), ['before ', 'selected text', ' after']);
+      assert.lengthOf(calls, 1);
+    });
+
     it('passes a page count to Zotero, including the first and later selected pages', async function () {
       const reader = { itemID: 684, _internalReader: { _type: 'pdf' } } as any;
       for (const pageIndex of [0, 7]) {
@@ -186,6 +225,20 @@ describe('selection context', function () {
       );
       assert.lengthOf(actions[0].pageIndexes!, 7);
       assert.lengthOf(actions[2].pageIndexes!, 8, 'Each page offset needs its own cached batch');
+    });
+
+    it('preserves left context and cached recognizer boxes across repeated requests', async function () {
+      setUpBatchWorker(true);
+      const box = (text: string, x: number) => [x, 0, x + 10, 100, 10, 1, 0, 0, 0, 0, 0, 0, 0, text];
+      const page = [100, 100, [box('before', -20), box('LA', 0), box('after', 20)]];
+      const query = scope.Zotero.PDFWorker._query;
+      scope.Zotero.PDFWorker._query = async (action: string, data: any) =>
+        action === 'pdf.getRecognizerData' ? { pages: [page], totalPages: 1 } : query(action, data);
+      const reader = { itemID: 900004, _internalReader: { _type: 'pdf' } } as any;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        assert.deepEqual(await getSelectionContext(reader, { annotation: { ...annotation(7), text: 'LA' } }), ['before', 'LA', 'after']);
+      }
+      assert.lengthOf((page[2] as any[])[0], 14, 'The cached worker result must remain unchanged');
     });
 
     it('retains the original PDF task names for older Zotero workers', async function () {

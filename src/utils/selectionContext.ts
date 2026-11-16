@@ -73,6 +73,34 @@ export async function getSelectionContext(
   return waitForSelectionContext(extractSelectionContext(reader, params));
 }
 
+// The reader already has character offsets and page text for a live selection.
+// Use that snapshot before starting a second PDF parse in the worker queue.
+function getCachedReaderContext(reader: any, selected: _ZoteroTypes.Annotations.AnnotationJson, contextSize: number): string[] | undefined {
+  const view = reader._internalReader?._primaryView;
+  const ranges = [...(view?._selectionRanges ?? [])].sort((a, b) => a.position.pageIndex - b.position.pageIndex);
+  if (!ranges.length || ranges[0].position.pageIndex !== selected.position?.pageIndex) return;
+  const normalize = (text: string) => text.replace(/\s+/g, '').normalize('NFKC');
+  if (normalize(ranges.map((range) => range.text).join(' ')) !== normalize(selected.text)) return;
+  const first = ranges[0];
+  const last = ranges[ranges.length - 1];
+  const firstChars = view._pdfPages?.[first.position.pageIndex]?.chars;
+  const lastChars = view._pdfPages?.[last.position.pageIndex]?.chars;
+  if (!firstChars || !lastChars) return;
+  const toText = (chars: any[]) =>
+    chars
+      .map((char) =>
+        char.ignorable ? '' : (char.c ?? char.u ?? '') + (char.spaceAfter || char.lineBreakAfter || char.paragraphBreakAfter ? ' ' : '')
+      )
+      .join('');
+  const before = toText(firstChars.slice(0, Math.min(first.anchorOffset, first.headOffset)));
+  const after = toText(lastChars.slice(Math.max(last.anchorOffset, last.headOffset)));
+  return [
+    getContextAroundIndex(before, [before.length, before.length], contextSize)[0],
+    selected.text.trim(),
+    getContextAroundIndex(after, [0, 0], contextSize)[2],
+  ];
+}
+
 async function extractSelectionContext(
   reader: _ZoteroTypes.ReaderInstance<'pdf' | 'epub' | 'snapshot'>,
   params: { annotation: _ZoteroTypes.Annotations.AnnotationJson }
@@ -80,6 +108,9 @@ async function extractSelectionContext(
   const itemID = reader.itemID;
   const selected = params.annotation;
   const selectedText = selected.text.trim();
+  const contextSize = getPref('extend-selection-size') || 70;
+  const cachedContext = getCachedReaderContext(reader, selected, contextSize);
+  if (cachedContext) return cachedContext;
   let selectionContext: Array<string> | undefined;
   const isCrossPage = !!(selected.position?.rects && selected.position?.nextPageRects);
   const lineCount = (selected.position?.rects.length || 0) + (isCrossPage ? selected.position.nextPageRects.length || 0 : 0);
@@ -95,25 +126,26 @@ async function extractSelectionContext(
     // search in fullText
     const matches = countOccurrencesInFullText(fullText.text, selectedText);
     const macheCount = matches.length;
-    const contextSize = getPref('extend-selection-size') || 70;
     ztoolkit.log('search-matches', matches);
     if (macheCount == 1) {
-      selectionContext = getContextAroundIndex(fullText.text, [matches[0].start, matches[0].end], contextSize + 30);
+      selectionContext = getContextAroundIndex(fullText.text, [matches[0].start, matches[0].end], contextSize);
       ztoolkit.log('selected context by search:', selectionContext);
     } else if (selectedText.split(' ').length <= 5 || selectedText.length <= 5) {
       // words only, use position match
       let data;
       let currentPage;
+      let nextPage;
       if (index.pageIndex! <= 4 && !isCrossPage) {
         data = await Zotero.PDFWorker.getRecognizerData(itemID);
         currentPage = data.pages[index.pageIndex!];
       } else {
         data = await getPageBatchRecognizerData(itemID, index.pageIndex!);
         currentPage = data.pages[0];
+        nextPage = isCrossPage ? data.pages[1] : undefined;
       }
       ztoolkit.log('data:', data);
       ztoolkit.log('current-page:', currentPage);
-      selectionContext = getContextByPosition(selected, currentPage, contextSize, isCrossPage ? data.pages[index.pageIndex! + 1] : undefined);
+      selectionContext = getContextByPosition(selected, currentPage, contextSize, nextPage);
       ztoolkit.log('selected context by position:', selectionContext);
     }
   }
@@ -171,7 +203,7 @@ function getContextByPosition(
       flatTextBoxes.push(...nextPageBoxes);
     }
     const selectedIndex = selectedBox[14];
-    const leftBoxes = flatTextBoxes.slice(selectedIndex - contextSize, selectedIndex);
+    const leftBoxes = flatTextBoxes.slice(Math.max(0, selectedIndex - contextSize), selectedIndex);
     const rightBoxes = flatTextBoxes.slice(selectedIndex + 1, selectedIndex + 1 + contextSize);
     return [leftBoxes.map((box) => box[13]).join(' '), selectedBox[13], rightBoxes.map((box) => box[13]).join(' ')];
   }
@@ -184,9 +216,8 @@ function parseArray(page: Array<any>, indexOffset: number = 0): Array<TextBox> {
     // find an array, recursively
     if (Array.isArray(node)) {
       if (node.length === 14 && typeof node[13] === 'string') {
-        const textBoxNode = node as TextBox;
-        textBoxNode.push(flatTextBoxes.length + indexOffset); // add index
-        flatTextBoxes.push(textBoxNode);
+        // Recognizer batches are cached; never append indexes to their source arrays.
+        flatTextBoxes.push([...node, flatTextBoxes.length + indexOffset] as TextBox);
       } else
         for (let i = 0; i < node.length; i++) {
           walk(node[i], i);
