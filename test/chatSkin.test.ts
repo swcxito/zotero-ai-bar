@@ -175,19 +175,22 @@ describe('chat skins', function () {
     let link: HTMLLinkElement | undefined;
     try {
       link = await loadSkinStyles(doc, doc.documentElement);
+      const nativeNodes = [root, section, button];
+      for (const node of nativeNodes) node.style.setProperty('transition', 'none', 'important');
+      const decorations = () =>
+        nativeNodes.map((node) => {
+          const { boxShadow, backgroundImage, backgroundColor } = computed(node);
+          return { boxShadow, backgroundImage, backgroundColor };
+        });
+      // Native control styling varies with the Zotero version, OS and theme.
+      const baseline = decorations();
       setPref('chat.skin', 'neumorphism');
       registerChatSkinRoot(root);
-      for (const node of [root, section, button]) {
-        assert.equal(computed(node).boxShadow, 'none');
-        assert.equal(computed(node).backgroundImage, 'none');
-      }
-      assert.equal(computed(root).backgroundColor, 'rgba(0, 0, 0, 0)');
-      assert.equal(computed(section).backgroundColor, 'rgba(0, 0, 0, 0)');
+      assert.deepEqual(decorations(), baseline);
       assert.equal(computed(doc.documentElement).getPropertyValue('--za-neu-inset').trim(), '');
-      button.style.setProperty('transition', 'none', 'important');
       setPref('chat.skin', 'rose');
       refreshChatSkin();
-      assert.equal(computed(button).boxShadow, 'none');
+      assert.deepEqual(decorations(), baseline);
     } finally {
       stopChatSkinSync();
       link?.remove();
