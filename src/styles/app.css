@@ -1140,3 +1140,19 @@
     }
   }
 }
+
+/* Transparent thumbs preserve geometry while keeping idle scroll areas quiet. */
+:is(.message-container, .tool-call-details) {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+:is(.message-container, .tool-call-details):is(:hover, :focus-within) {
+  scrollbar-color: var(--muted, #64748b) transparent;
+}
+
+@media (forced-colors: active) {
+  :is(.message-container, .tool-call-details) {
+    scrollbar-color: auto;
+  }
+}

@@ -25,11 +25,9 @@ import { openPromptEditor } from './promptEditor';
 import { getLocaleID, getString } from '../utils/locale';
 import { setSeparateTranslationEnabled } from './chatWorkspace';
 import { CHAT_FONT_SIZE_LEVELS, getChatFontSizeValue, normalizeChatFontSizeIndex, refreshChatFontSize } from '../utils/chatFontSize';
-import { normalizeChatSkin, registerChatSkinRoot } from '../utils/chatSkin';
+import { normalizeChatSkin } from '../utils/chatSkin';
 
 export async function registerPrefsScripts(_window: Window) {
-  const prefsRoot = _window.document.getElementById(`${config.addonRef}-prefs-root`);
-  if (prefsRoot) registerChatSkinRoot(prefsRoot);
   if (!addon.data.prefs) {
     addon.data.prefs = {
       window: _window,

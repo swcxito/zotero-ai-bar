@@ -209,9 +209,10 @@ export function InputArea(
     hintBar.style.transform = 'translateY(-100%)';
     wrapper.dataset.selectionHintVisible = 'true';
     // The floating hint owns the merged shape's top outline. Keep the input
-    // border width for stable geometry, but hide its top color so focus-within
-    // does not draw a second horizontal line at the seam.
-    container.style.borderTopColor = 'transparent';
+    // height stable by replacing the top border with padding. A transparent
+    // border leaves diagonal gaps where it joins the two side borders.
+    container.style.borderTopWidth = '0';
+    container.style.paddingTop = 'calc(0.5rem + 2px)';
     container.style.borderTopLeftRadius = '0';
     container.style.borderTopRightRadius = '0';
   }
@@ -222,9 +223,10 @@ export function InputArea(
     const sequence = ++hintAnimationSequence;
     hintBar.style.transform = 'translateY(0)';
     wrapper.dataset.selectionHintVisible = 'false';
-    // Border width and element height stay constant; only non-layout visual
-    // properties change while the floating bar is hidden.
-    container.style.borderTopColor = '';
+    // Restore the top border and its matching padding together so the input
+    // height stays constant while the floating bar slides underneath.
+    container.style.borderTopWidth = '';
+    container.style.paddingTop = '';
     container.style.borderTopLeftRadius = '';
     container.style.borderTopRightRadius = '';
 

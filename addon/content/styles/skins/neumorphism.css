@@ -43,6 +43,7 @@
   --card-shadow: 4px 4px 10px var(--za-neu-shade), -4px -4px 10px var(--za-neu-light);
   --za-neu-inset: inset 3px 3px 7px var(--za-neu-shade), inset -3px -3px 7px var(--za-neu-light);
   --za-neu-control-shadow: 2px 2px 6px var(--za-neu-shade), -2px -2px 6px var(--za-neu-light);
+  --za-neu-popup-shadow: 0 3px 10px #25364b26;
   --za-neu-control-inset: inset 2px 2px 5px var(--za-neu-shade), inset -2px -2px 5px var(--za-neu-light);
 }
 
@@ -77,6 +78,7 @@
     --glow: linear-gradient(145deg, #ffffff06, transparent 65%);
     --za-neu-light: #4c5d704d;
     --za-neu-shade: #0c131bcc;
+    --za-neu-popup-shadow: 0 3px 10px #0c131b66;
   }
 }
 
@@ -240,43 +242,21 @@
   box-shadow: var(--za-neu-inset) !important;
 }
 
-/* The preferences pane is plugin-owned, even though Zotero hosts it in a native window. */
-[data-zaibar-skin='neumorphism'][id$='-prefs-root'] {
-  background: var(--page-gradient);
-  color: var(--text);
-  border-radius: var(--radius);
+/* Floating surfaces need a quiet drop shadow over arbitrary reader content. */
+[data-zaibar-skin='neumorphism'][data-zaibar-skin]:is(.ai-bar-container, .chat-selection-copy-popover) {
+  box-shadow: var(--za-neu-popup-shadow) !important;
 }
 
-[data-zaibar-skin='neumorphism'][id$='-prefs-root'] > groupbox {
-  background: var(--surface) !important;
+[data-zaibar-skin='neumorphism'][data-zaibar-skin].ai-bar-container .model-info-container {
+  background: var(--raised) !important;
+}
+
+[data-zaibar-skin='neumorphism'][data-zaibar-skin]
+  :is(.model-info-container, .chat-selection-copy-button):hover:not(:disabled) {
+  background: var(--soft) !important;
+  color: var(--accent-soft-ink) !important;
+}
+
+[data-zaibar-skin='neumorphism'][data-zaibar-skin].chat-selection-copy-popover .chat-selection-copy-button {
   border: 1px solid var(--line) !important;
-  border-radius: var(--radius) !important;
-  box-shadow: var(--card-shadow) !important;
-}
-
-[data-zaibar-skin='neumorphism'][id$='-prefs-root'] button {
-  appearance: none;
-  padding: 5px 10px;
-  color: var(--text);
-  background: var(--raised);
-  border: 1px solid var(--line);
-  border-radius: var(--small-radius);
-  box-shadow: var(--za-neu-control-shadow);
-}
-
-[data-zaibar-skin='neumorphism'][id$='-prefs-root'] button:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--soft);
-}
-
-[data-zaibar-skin='neumorphism'][id$='-prefs-root'] button:active:not(:disabled) {
-  box-shadow: var(--za-neu-control-inset);
-}
-
-[data-zaibar-skin='neumorphism'][id$='-prefs-root'] button:disabled {
-  box-shadow: none;
-}
-
-[data-zaibar-skin='neumorphism'][id$='-prefs-root'] [id$='-docs-link'] {
-  color: var(--accent) !important;
 }

@@ -169,7 +169,7 @@ describe('chat skins', function () {
     }
   });
 
-  it('styles only the plugin-owned preferences groupbox', async function () {
+  it('keeps native preferences backgrounds and controls free of chat skin decoration', async function () {
     const original = getPref('chat.skin');
     const doc = Zotero.getMainWindow().document;
     const root = doc.createXULElement('groupbox');
@@ -184,9 +184,12 @@ describe('chat skins', function () {
       link = await loadSkinStyles(doc, doc.documentElement);
       setPref('chat.skin', 'neumorphism');
       registerChatSkinRoot(root);
-      assert.equal(computed(root).getPropertyValue('--page').trim(), expectedPage(doc, 'neumorphism'));
-      assert.notEqual(computed(section).boxShadow, 'none');
-      assert.notEqual(computed(button).boxShadow, 'none');
+      for (const node of [root, section, button]) {
+        assert.equal(computed(node).boxShadow, 'none');
+        assert.equal(computed(node).backgroundImage, 'none');
+      }
+      assert.equal(computed(root).backgroundColor, 'rgba(0, 0, 0, 0)');
+      assert.equal(computed(section).backgroundColor, 'rgba(0, 0, 0, 0)');
       assert.equal(computed(doc.documentElement).getPropertyValue('--za-neu-inset').trim(), '');
       setPref('chat.skin', 'rose');
       refreshChatSkin();
