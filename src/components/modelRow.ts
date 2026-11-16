@@ -30,9 +30,16 @@ export interface CardModelRowProps {
   onEnabledChange?: (enabled: boolean) => void;
 }
 
+export function setCardModelName(row: Element, name: string) {
+  const label = row.querySelector<HTMLElement>('.model-row-name')!;
+  if (label.getAttribute('title') === name) return;
+  label.textContent = name;
+  label.title = name;
+  const modelLabel = getString('model-dialog-model-label');
+  row.querySelector('input[type="checkbox"]')?.setAttribute('aria-label', name ? `${modelLabel}: ${name}` : modelLabel);
+}
+
 export function CardModelRow({ doc, data, onSelectModel, iconMarkup, removable = true, onEnabledChange }: CardModelRowProps) {
-  // Without a selection handler the name is display-only text: no pointer cursor, no caret, no click action.
-  const nameSelectable = typeof onSelectModel === 'function';
   const row = ztoolkit.UI.createElement(doc, 'div', {
     tag: 'div',
     classList: [
@@ -59,6 +66,7 @@ export function CardModelRow({ doc, data, onSelectModel, iconMarkup, removable =
           'mx-1',
           'w-4',
           'h-4',
+          'shrink-0',
           'rounded',
           'border-gray-300',
           'dark:border-zinc-600',
@@ -71,7 +79,7 @@ export function CardModelRow({ doc, data, onSelectModel, iconMarkup, removable =
       },
       {
         tag: 'div',
-        classList: ['relative', 'flex-1', 'flex', 'items-center'],
+        classList: ['relative', 'min-w-0', 'flex-1', 'flex', 'items-center'],
         children: [
           ...(iconMarkup
             ? [
@@ -105,36 +113,28 @@ export function CardModelRow({ doc, data, onSelectModel, iconMarkup, removable =
                 }),
               ]),
           {
-            tag: 'input',
+            tag: onSelectModel ? 'button' : 'span',
             classList: [
+              'model-row-name',
+              'min-w-0',
               'flex-1',
-              'bg-transparent',
+              'truncate',
+              'text-left',
               'text-sm',
-              'px-0',
-              'outline-none',
-              'rounded',
-              ...(nameSelectable ? ['cursor-pointer', 'focus:ring-1', 'ring-rose-300'] : ['cursor-default', 'select-none', 'pointer-events-none']),
-              'placeholder:text-gray-400',
-              'transition-all',
-              'duration-200',
               'font-semibold',
+              ...(onSelectModel ? ['cursor-pointer', 'hover:underline'] : []),
             ],
-            properties: {
-              type: 'text',
-              placeholder: getString('model-dialog-type-model'),
-              value: data?.name || '',
-              readOnly: true,
-            },
-            ...(nameSelectable
+            ...(onSelectModel
               ? {
+                  properties: { type: 'button' },
                   listeners: [
                     {
                       type: 'click',
-                      listener: () => onSelectModel?.(),
+                      listener: onSelectModel,
                     },
                   ],
                 }
-              : { attributes: { tabindex: '-1', 'aria-disabled': 'true' } }),
+              : {}),
           },
         ],
       },
@@ -164,15 +164,16 @@ export function CardModelRow({ doc, data, onSelectModel, iconMarkup, removable =
   if (data?.id) {
     (row as HTMLElement).dataset.modelId = data.id;
   }
+  setCardModelName(row, data?.name ?? '');
+  const label = row.querySelector('.model-row-name')!;
   const checkbox = row.querySelector('input[type="checkbox"]') as HTMLInputElement;
-  checkbox.setAttribute('aria-label', `${getString('model-dialog-model-label')}: ${data?.name || getString('model-dialog-model-label')}`);
   checkbox.addEventListener('change', () => onEnabledChange?.(checkbox.checked));
   modelRowDataMap.set(row, () => {
-    const nameValue = (row.querySelector('input[type="text"]') as HTMLInputElement).value;
+    const name = label.textContent ?? '';
     return {
-      id: (row as HTMLElement).dataset.modelId || nameValue || crypto.randomUUID(),
-      name: nameValue,
-      enabled: (row.querySelector('input[type="checkbox"]') as HTMLInputElement).checked,
+      id: (row as HTMLElement).dataset.modelId || name || crypto.randomUUID(),
+      name,
+      enabled: checkbox.checked,
     };
   });
   return row;

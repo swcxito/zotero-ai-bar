@@ -19,8 +19,10 @@
 import { config } from '../../package.json';
 import { registerChatSkinRoot } from '../utils/chatSkin';
 import { ProviderLogoButton } from '../components/buttons/providerLogoButton';
-import { ProviderCard } from '../components/providerCard';
+import { ProviderCard, type ProviderCardV2Props } from '../components/providerCard';
 import { getString } from '../utils/locale';
+import { getPref } from '../utils/prefs';
+import { createSubscriptionRuntimeSettings } from '../components/subscriptionRuntimeSettings';
 import {
   getModelsDevLogoUrl,
   resolveProviderIcon,
@@ -38,10 +40,10 @@ import { CODEX_PROVIDER_ID } from './codex/policy';
 import { publishModels, disconnectCodex, codexSettingsListeners } from './codex/settings';
 import { codexRuntime } from './codex/runtime';
 import { renderAppsPanel } from './codex/appsPanel';
-import { mountClaudeCodeSettings } from './claudeCode/settings';
+import { createClaudeCodeSettings } from './claudeCode/settings';
 import { CLAUDE_CODE_PROVIDER_ID } from './claudeCode/protocol';
 import { IconView } from '../components/iconView';
-import { CardModelRow } from '../components/modelRow';
+import { CardModelRow, setCardModelName } from '../components/modelRow';
 import { InlineButton } from '../components/buttons/inlineButton';
 import { codexHeadDetailsBlock, CODEX_HEAD_DETAILS_CLASS } from '../components/codexCardHeader';
 import { Icons } from '../components/common';
@@ -49,10 +51,6 @@ import type { UserProviderConfigV2, CommonProviders, AddedProvider, AddedModel, 
 
 /** Stable hook for the ChatGPT card's model list so refreshes can diff rows in place. */
 const CODEX_MODEL_LIST_ID = 'codex-model-list';
-
-/** Theme-coloured inline link, used for the external install guides in the connection panel. */
-const CONNECTION_PANEL_LINK_CLASS =
-  'cursor-pointer text-rose-600 underline underline-offset-2 transition-colors duration-200 hover:text-rose-500 dark:text-rose-400 dark:hover:text-rose-300';
 
 function buildModelRows(v2: UserProviderConfigV2, providerId: string): { id: string; name: string; enabled: boolean }[] {
   return (v2.addedModels ?? []).filter((m) => m.providerId === providerId).map((m) => ({ id: m.id, name: m.name, enabled: m.enabled }));
@@ -86,8 +84,9 @@ class ModelDialogV2 {
   private readonly modelList: HTMLElement | null;
   private liveFetchPromise: Promise<void> | null = null;
   private interacting = false;
-  private codexBusy = false;
-  private codexCollapsed = false;
+  private codexOperation?: AbortController;
+  private codexSettings?: ReturnType<typeof createSubscriptionRuntimeSettings>;
+  private showCodexSetup = false;
 
   // Pinned to top when search is empty (order = display order)
   private static readonly PINNED_ORDER = ['openai', 'google', 'anthropic', 'alibaba-cn', 'deepseek', 'moonshotai-cn', 'xai', 'zhipuai'];
@@ -139,29 +138,12 @@ class ModelDialogV2 {
     this.bindPopupShowHide();
     this.renderProviders();
     this.addCards();
+    this.bindSubscriptionConnect();
     this.toggleProviderCardsButton?.addEventListener('click', () => this.toggleProviderCards());
     this.updateProviderCardsToggle();
-    const connectButton = this.doc.getElementById('connect-chatgpt-button');
-    const icon = this.doc.getElementById('connect-chatgpt-icon');
-    if (icon) ztoolkit.UI.appendElement(IconView({ iconMarkup: getModelIconPath('gpt'), sizeRem: 1 }), icon);
-    this.createCodexConnectionPanel();
-    mountClaudeCodeSettings(this.doc, this.win);
-    const loginStatus = this.doc.createElement('div');
-    loginStatus.id = 'codex-login-wait';
-    loginStatus.className = 'mb-4 flex items-center gap-3 text-sm text-zinc-500';
-    const waiting = this.doc.createElement('span');
-    waiting.textContent = getString('codex-login-waiting');
-    const cancel = this.doc.createElement('button');
-    cancel.textContent = getString('codex-login-cancel');
-    cancel.addEventListener('click', () => codexRuntime.cancelLogin());
-    loginStatus.append(waiting, cancel);
-    this.doc.getElementById('provider-block')?.before(loginStatus);
-    this.updateCodexConnectionControls();
-    connectButton?.addEventListener('click', () => void this.runCodexConnection(() => codexRuntime.connectAccount()));
     const refreshCodex = () => {
       this.renderCodexCard();
-      const status = this.doc.getElementById('codex-connection-status');
-      if (status) status.textContent = [codexRuntime.status, ...codexRuntime.diagnostics].join('\n');
+      if (this.codexSettings) this.codexSettings.status.textContent = [codexRuntime.status, ...codexRuntime.diagnostics].join('\n');
       void publishModels().catch(() => undefined);
     };
     codexSettingsListeners.add(refreshCodex);
@@ -201,8 +183,7 @@ class ModelDialogV2 {
   // ---- Card rendering ----
 
   private getProviderCards(): HTMLElement[] {
-    const container = this.root?.querySelector('#provider-block');
-    return container ? Array.from(container.querySelectorAll<HTMLElement>(':scope > .provider-card')) : [];
+    return Array.from(this.root?.querySelectorAll<HTMLElement>('#provider-block > .provider-card:not([hidden])') ?? []);
   }
 
   private updateProviderCardsToggle() {
@@ -238,86 +219,212 @@ class ModelDialogV2 {
     if (!container) return;
 
     const v2 = addon.data.userProviderConfigV2!;
-    for (const [providerId] of Object.entries(v2.addedProviders)) {
+    const claude = this.createSubscriptionCard(
+      CLAUDE_CODE_PROVIDER_ID,
+      'Claude Code',
+      createClaudeCodeSettings(this.doc, this.win, () => {
+        const card = this.doc.getElementById('claude-code-provider-card');
+        if (card) card.hidden = true;
+        this.updateProviderCardsToggle();
+        this.doc.getElementById('subscription-connect-toggle')?.focus();
+      })
+    );
+    claude.id = 'claude-code-provider-card';
+    claude.hidden = !v2.addedProviders[CLAUDE_CODE_PROVIDER_ID];
+    container.append(this.createCodexCard(), claude);
+    for (const providerId of Object.keys(v2.addedProviders)) {
       if (providerId === CODEX_PROVIDER_ID || providerId === CLAUDE_CODE_PROVIDER_ID) continue;
       this.createAndAppendCard(providerId, container as HTMLElement);
     }
     this.renderCodexCard();
   }
 
-  private createCodexConnectionPanel() {
-    const panel = this.doc.createElement('div');
-    panel.id = 'codex-connection-panel';
-    panel.hidden = true;
-    panel.className = 'mb-6 rounded-2xl border border-gray-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900';
-    const status = this.doc.createElement('p');
-    status.id = 'codex-connection-status';
-    status.className = 'mb-3 whitespace-pre-wrap break-words text-sm';
-    const path = this.doc.createElement('input');
-    path.id = 'codex-runtime-path';
-    path.placeholder = getString('codex-runtime-path-placeholder');
-    path.setAttribute('aria-label', getString('codex-runtime-path-label'));
-    path.className = 'mb-3 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm dark:border-zinc-600';
-    const controls = this.doc.createElement('div');
-    controls.className = 'flex flex-wrap items-center gap-3 text-sm';
-    const button = (label: string, action: () => void) => {
-      const node = this.doc.createElement('button');
-      node.textContent = label;
-      node.className = 'rounded-lg border border-gray-300 px-3 py-1 transition-colors hover:bg-gray-100 dark:border-zinc-600 dark:hover:bg-zinc-800';
-      node.addEventListener('click', action);
-      controls.append(node);
-      return node;
-    };
-    button(
-      getString('codex-refresh-continue'),
-      () =>
-        void this.runCodexConnection(async () => {
-          if (path.value.trim()) await codexRuntime.selectPath(path.value.trim());
-          else if (!codexRuntime.info) await codexRuntime.detect();
-          await codexRuntime.connectAccount();
-        })
-    );
-    button(
-      getString('codex-select-file'),
-      () =>
-        void this.runCodexConnection(async () => {
-          const selected = await new ztoolkit.FilePicker(getString('codex-runtime-picker-title'), 'open', undefined, undefined, this.win).open();
-          if (!selected) return;
-          path.value = selected;
-          await codexRuntime.selectPath(selected);
-          await codexRuntime.connectAccount();
-        })
-    );
-    const installCliButton = button(
-      getString('codex-install-cli'),
-      () =>
-        void this.runCodexConnection(
-          async () => {
-            await codexRuntime.installCli();
-            await codexRuntime.detect();
-          },
-          true,
-          true
-        )
-    );
-    installCliButton.id = 'codex-install-cli-button';
-    const url = 'https://learn.chatgpt.com/docs/app';
-    const link = this.doc.createElement('a');
-    link.textContent = getString('codex-install-chatgpt');
-    link.href = url;
-    link.className = CONNECTION_PANEL_LINK_CLASS;
-    link.addEventListener('click', (event) => {
-      event.preventDefault();
-      Zotero.launchURL(url);
+  private bindSubscriptionConnect() {
+    const connect = this.doc.getElementById('connect-chatgpt-button')!;
+    const icon = this.doc.getElementById('connect-chatgpt-icon')!;
+    ztoolkit.UI.appendElement(IconView({ iconMarkup: getModelIconPath('gpt'), sizeRem: 1 }), icon);
+    connect.addEventListener('click', () => {
+      this.showCodexSetup = true;
+      this.renderCodexCard();
+      const card = this.doc.getElementById('codex-provider-card')!;
+      if (card.dataset.collapsed === 'true') card.querySelector<HTMLButtonElement>('.provider-card-collapse')?.click();
+      void this.runCodexConnection((signal) => codexRuntime.connectAccount(signal));
     });
-    controls.append(link);
-    panel.append(status, path, controls);
-    this.doc.getElementById('provider-block')?.before(panel);
+
+    const toggle = this.doc.getElementById('subscription-connect-toggle')!;
+    const menu = this.doc.getElementById('subscription-connect-options')!;
+    const claudeOption = this.doc.getElementById('connect-claude-code-button')!;
+    const label = getString('model-dialog-connect-options');
+    toggle.title = label;
+    toggle.setAttribute('aria-label', label);
+    ztoolkit.UI.appendElement(IconView({ iconMarkup: Icons.Chevron, sizeRem: 1 }), toggle);
+    const setMenuOpen = (open: boolean) => {
+      menu.hidden = !open;
+      toggle.setAttribute('aria-expanded', String(open));
+      if (open) claudeOption.focus();
+    };
+    toggle.addEventListener('click', () => setMenuOpen(menu.hasAttribute('hidden')));
+    this.doc.addEventListener('click', (event) => {
+      const path = event.composedPath();
+      if (!menu.hidden && !path.includes(menu) && !path.includes(toggle)) setMenuOpen(false);
+    });
+    this.doc.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape' || menu.hidden) return;
+      setMenuOpen(false);
+      toggle.focus();
+    });
+    claudeOption.addEventListener('click', () => {
+      setMenuOpen(false);
+      toggle.focus();
+      const card = this.doc.getElementById('claude-code-provider-card')!;
+      card.hidden = false;
+      if (card.dataset.collapsed === 'true') card.querySelector<HTMLButtonElement>('.provider-card-collapse')?.click();
+      this.updateProviderCardsToggle();
+      if (!addon.data.userProviderConfigV2?.addedProviders[CLAUDE_CODE_PROVIDER_ID])
+        card.querySelector<HTMLButtonElement>('#claude-code-check-login')?.click();
+    });
   }
 
-  /** Keep setup controls hidden during connection; reveal them only after an actionable failure. */
-  private updateCodexConnectionControls() {
-    const connected = !!codexRuntime.accountKey;
+  private createCodexConnectionPanel(): HTMLElement {
+    const settings = createSubscriptionRuntimeSettings(this.doc, this.win, {
+      provider: 'codex',
+      path: getPref('codex.runtimePath') || '',
+      description: getString('subscription-codex-description'),
+      help: 'codex-integration',
+      checkLogin: (path) =>
+        void this.runCodexConnection(async (signal) => {
+          if (path !== getPref('codex.runtimePath')) await codexRuntime.selectPath(path);
+          await codexRuntime.connectAccount(signal);
+        }),
+      install: () =>
+        void this.runCodexConnection(async (signal) => {
+          await codexRuntime.installCli(signal);
+          settings.status.textContent = getString('subscription-cli-installed');
+        }),
+      disconnectOrCancel: () => {
+        if (codexRuntime.accountKey) {
+          void this.runCodexConnection(async () => {
+            await disconnectCodex();
+            this.showCodexSetup = false;
+            settings.panel.open = false;
+          });
+          return;
+        }
+        this.showCodexSetup = false;
+        settings.panel.open = false;
+        this.codexOperation?.abort();
+        this.renderCodexCard();
+      },
+    });
+    settings.status.textContent = [codexRuntime.status, ...codexRuntime.diagnostics].join('\n');
+    this.codexSettings = settings;
+    return settings.root;
+  }
+
+  private async runCodexConnection(operation: (signal: AbortSignal) => Promise<unknown>, revealOnError = true) {
+    if (this.codexOperation) return;
+    const controller = new AbortController();
+    const { signal } = controller;
+    this.codexOperation = controller;
+    let stopping: Promise<void> | undefined;
+    signal.addEventListener(
+      'abort',
+      () => {
+        stopping = codexRuntime.stop();
+      },
+      { once: true }
+    );
+    this.renderCodexCard();
+    let failed = false;
+    try {
+      await operation(signal);
+      if (!signal.aborted) await publishModels();
+    } catch (error) {
+      if (!signal.aborted) {
+        failed = true;
+        if (this.codexSettings) this.codexSettings.status.textContent = (error as Error).message;
+      }
+    } finally {
+      await stopping;
+      this.codexOperation = undefined;
+      this.renderCodexCard();
+      if (failed && revealOnError) {
+        if (this.codexSettings) this.codexSettings.panel.open = true;
+        const card = this.doc.getElementById('codex-provider-card');
+        if (card?.dataset.collapsed === 'true') card.querySelector<HTMLButtonElement>('.provider-card-collapse')?.click();
+      }
+    }
+  }
+
+  private createSubscriptionCard(providerId: string, providerName: string, content: Node, headerDetails?: ProviderCardV2Props['headerDetails']) {
+    const card = ProviderCard({
+      providerId,
+      providerName,
+      titleClassList: ['text-sm', 'font-semibold', 'text-zinc-700', 'dark:text-zinc-200'],
+      headerDetails,
+      iconUrl: resolveProviderIcon(providerId),
+      envKeys: [],
+      envValues: {},
+      isCustom: false,
+      models: [],
+      doc: this.doc,
+      content,
+      onCollapseChange: () => this.updateProviderCardsToggle(),
+    }) as HTMLElement;
+    card.dataset.subscription = providerId;
+    return card;
+  }
+
+  private createCodexCard(): HTMLElement {
+    const content = this.doc.createElement('div');
+    content.className = 'flex flex-col gap-3 px-4 py-3 text-sm';
+
+    const loginStatus = this.doc.createElement('div');
+    loginStatus.id = 'codex-login-wait';
+    loginStatus.className = 'flex flex-wrap items-center gap-2 text-zinc-600 dark:text-zinc-300';
+    const waiting = this.doc.createElement('span');
+    waiting.setAttribute('role', 'status');
+    waiting.textContent = getString('codex-login-waiting');
+    loginStatus.append(waiting);
+
+    const models = this.doc.createElement('section');
+    models.id = 'codex-connected-settings';
+    models.className = 'flex flex-col gap-2';
+    const title = this.doc.createElement('h3');
+    title.className = 'text-xs font-semibold text-zinc-600 dark:text-zinc-300';
+    title.textContent = getString('codex-models-label');
+    const list = this.doc.createElement('div');
+    list.id = CODEX_MODEL_LIST_ID;
+    list.className = 'model-card-list flex flex-col gap-2';
+    const refresh = ztoolkit.UI.createElement(
+      this.doc,
+      'button',
+      InlineButton({
+        label: getString('codex-refresh-models'),
+        iconMarkup: Icons.Redo,
+        onClicked: () => void this.runCodexConnection(() => codexRuntime.refreshAccount()),
+      })
+    );
+    refresh.id = 'codex-refresh-models';
+    list.append(refresh);
+    models.append(title, list);
+
+    content.append(loginStatus, models, this.createCodexConnectionPanel());
+    const card = this.createSubscriptionCard(CODEX_PROVIDER_ID, getString('codex-card-title'), content, [this.codexHeadDetails()]);
+    card.id = 'codex-provider-card';
+    return card;
+  }
+
+  private codexHeadDetails(accountKey?: string) {
+    if (accountKey) return codexHeadDetailsBlock(accountKey, codexRuntime.account?.planType, codexRuntime.info?.version || 'Codex');
+    return {
+      tag: 'div',
+      classList: [CODEX_HEAD_DETAILS_CLASS, 'text-xs', 'text-zinc-600', 'dark:text-zinc-300'],
+      properties: { textContent: getString('codex-status-not-logged-in') },
+    };
+  }
+
+  private updateCodexConnectButton(connected: boolean, busy: boolean) {
     const button = this.doc.getElementById('connect-chatgpt-button') as HTMLButtonElement | null;
     const label = this.doc.getElementById('connect-chatgpt-label');
     const disconnectedLabel = label?.querySelector('[data-connect-label="disconnected"]');
@@ -333,112 +440,29 @@ class ModelDialogV2 {
     if (button) {
       button.dataset.connected = String(connected);
       button.setAttribute('aria-label', getString(connected ? 'model-dialog-chatgpt-connected' : 'model-dialog-connect-chatgpt'));
-      button.disabled = this.codexBusy || codexRuntime.loginPending || connected;
-      button.setAttribute('aria-busy', String(this.codexBusy || codexRuntime.loginPending));
-      button.style.opacity = this.codexBusy || codexRuntime.loginPending ? '0.6' : '';
+      button.disabled = busy || connected;
+      button.setAttribute('aria-busy', String(busy));
+      button.style.opacity = busy ? '0.6' : '';
       button.style.cursor = button.disabled ? 'default' : '';
-    }
-    const waiting = this.doc.getElementById('codex-login-wait');
-    if (waiting) {
-      waiting.hidden = !codexRuntime.loginPending;
-      waiting.style.display = codexRuntime.loginPending ? 'flex' : 'none';
-    }
-  }
-
-  private async runCodexConnection(operation: () => Promise<unknown>, revealOnError = true, revealOnSuccess = false) {
-    if (this.codexBusy) return;
-    this.codexBusy = true;
-    this.updateCodexConnectionControls();
-    const panel = this.doc.getElementById('codex-connection-panel')!;
-    let failed = false;
-    panel.hidden = true;
-    try {
-      await operation();
-      await publishModels();
-    } catch (error) {
-      failed = true;
-      const status = this.doc.getElementById('codex-connection-status');
-      if (status) status.textContent = (error as Error).message;
-    } finally {
-      this.codexBusy = false;
-      this.renderCodexCard();
-      if ((failed && revealOnError) || (!failed && revealOnSuccess)) panel.hidden = false;
     }
   }
 
   private renderCodexCard() {
-    this.updateCodexConnectionControls();
-    const v2 = addon.data.userProviderConfigV2;
-    const container = this.root?.querySelector('#provider-block');
-    const card = this.doc.getElementById('codex-provider-card') as HTMLElement | null;
-    // Saved provider metadata alone is not evidence of a current login.
-    if (!container || !codexRuntime.accountKey || !v2?.addedProviders[CODEX_PROVIDER_ID]) {
-      card?.remove();
-      this.updateProviderCardsToggle();
-      return;
-    }
-    const panel = this.doc.getElementById('codex-connection-panel');
-    if (panel) panel.hidden = true;
-    const models = v2.addedModels.filter((model) => model.providerId === CODEX_PROVIDER_ID);
-    // Update the mounted card in place: rebuilding it on every publish makes the list blink out.
-    if (card) this.syncCodexCard(card, models, v2, codexRuntime.accountKey);
-    else container.prepend(this.createCodexCard(models, v2, codexRuntime.accountKey));
+    const card = this.doc.getElementById('codex-provider-card');
+    if (!card) return;
+    const accountKey = codexRuntime.accountKey;
+    const busy = !!this.codexOperation || codexRuntime.loginPending;
+    card.hidden = !accountKey && !this.showCodexSetup;
+    this.updateCodexConnectButton(!!accountKey, busy);
     this.updateProviderCardsToggle();
-  }
-
-  private codexHeadDetails(accountKey: string) {
-    return codexHeadDetailsBlock(accountKey, codexRuntime.account?.planType, codexRuntime.info?.version || 'Codex');
-  }
-
-  private createCodexCard(models: AddedModel[], v2: UserProviderConfigV2, accountKey: string): HTMLElement {
-    const content = this.doc.createElement('div');
-    content.id = CODEX_MODEL_LIST_ID;
-    content.className = 'flex flex-col gap-2';
-    for (const model of models) content.append(this.createCodexModelRow(model, v2));
-    const refresh = ztoolkit.UI.createElement(
-      this.doc,
-      'button',
-      InlineButton({
-        label: getString('codex-refresh-models'),
-        iconMarkup: Icons.Redo,
-        onClicked: (event) => {
-          // Show the busy state on the button itself; revealing the connection panel would shift the
-          // whole card grid down by its height and read as the list jumping to another card.
-          (event.currentTarget as HTMLButtonElement).disabled = true;
-          void this.runCodexConnection(() => codexRuntime.refreshAccount());
-        },
-      })
-    );
-    refresh.id = 'codex-refresh-models';
-    (refresh as HTMLButtonElement).disabled = this.codexBusy;
-    content.append(refresh);
-    renderAppsPanel(content);
-    const card = ProviderCard({
-      providerId: CODEX_PROVIDER_ID,
-      providerName: getString('codex-card-title'),
-      titleClassList: ['text-sm', 'font-semibold', 'text-zinc-700', 'dark:text-zinc-200'],
-      headerDetails: [this.codexHeadDetails(accountKey)],
-      iconUrl: resolveProviderIcon(CODEX_PROVIDER_ID),
-      envKeys: [],
-      envValues: {},
-      isCustom: false,
-      models: [],
-      doc: this.doc,
-      modelListContent: content,
-      onCollapseChange: () => this.updateProviderCardsToggle(),
-      onDelete: () => {
-        this.codexCollapsed = false;
-        this.updateProviderCardsToggle();
-        void disconnectCodex().catch(() => this.renderCodexCard());
-      },
-    }) as HTMLElement;
-    card.id = 'codex-provider-card';
-    const collapse = card.querySelector('.provider-card-collapse') as HTMLButtonElement;
-    if (this.codexCollapsed) collapse?.click();
-    collapse?.addEventListener('click', () => {
-      this.codexCollapsed = !this.codexCollapsed;
-    });
-    return card;
+    this.codexSettings?.setState(!!accountKey, busy);
+    card.querySelector<HTMLElement>('#codex-login-wait')!.hidden = !codexRuntime.loginPending;
+    card.querySelector<HTMLElement>('#codex-connected-settings')!.hidden = !accountKey;
+    const details = card.querySelector(`.${CODEX_HEAD_DETAILS_CLASS}`)!;
+    const next = ztoolkit.UI.createElement(this.doc, 'div', this.codexHeadDetails(accountKey));
+    if (next.textContent !== details.textContent) details.replaceWith(next);
+    const v2 = addon.data.userProviderConfigV2;
+    if (v2) this.syncCodexCard(card, v2, !!accountKey, busy);
   }
 
   private createCodexModelRow(model: AddedModel, v2: UserProviderConfigV2) {
@@ -459,17 +483,13 @@ class ModelDialogV2 {
   }
 
   /** Diff the mounted rows against the published models: only added, removed or renamed models touch the DOM. */
-  private syncCodexCard(card: HTMLElement, models: AddedModel[], v2: UserProviderConfigV2, accountKey: string) {
-    const refresh = card.querySelector('#codex-refresh-models') as HTMLButtonElement | null;
-    if (refresh) refresh.disabled = this.codexBusy;
-    const details = card.querySelector(`.${CODEX_HEAD_DETAILS_CLASS}`);
-    if (details) {
-      const next = ztoolkit.UI.createElement(this.doc, 'div', this.codexHeadDetails(accountKey));
-      if (next.textContent !== details.textContent) details.parentElement?.replaceChild(next, details);
-    }
-    const list = card.querySelector(`#${CODEX_MODEL_LIST_ID}`);
-    if (!list) return;
-    renderAppsPanel(list as HTMLElement);
+  private syncCodexCard(card: HTMLElement, v2: UserProviderConfigV2, connected: boolean, busy: boolean) {
+    const refresh = card.querySelector<HTMLButtonElement>('#codex-refresh-models')!;
+    refresh.disabled = busy;
+    const list = card.querySelector<HTMLElement>(`#${CODEX_MODEL_LIST_ID}`)!;
+    if (connected) renderAppsPanel(list);
+    else list.querySelector('[data-codex-apps]')?.remove();
+    const models = connected ? v2.addedModels.filter((model) => model.providerId === CODEX_PROVIDER_ID) : [];
     const rows = new Map<string, HTMLElement>();
     list.querySelectorAll<HTMLElement>(':scope > [data-model-id]').forEach((row) => rows.set(row.dataset.modelId ?? '', row));
     const wanted = new Set(models.map((model) => model.id));
@@ -485,8 +505,7 @@ class ModelDialogV2 {
         continue;
       }
       // Keep the mounted row (and its checkbox state); only the displayed name can change.
-      const input = row.querySelector('input[type="text"]') as HTMLInputElement | null;
-      if (input && input.value !== model.name) input.value = model.name;
+      setCardModelName(row, model.name);
     }
     // Reapply the published order, moving only the rows that are actually out of place.
     let anchor: Node | null = refresh;
@@ -710,9 +729,8 @@ class ModelDialogV2 {
     const newAddedModels: AddedModel[] = [];
     const newAddedProviders: Record<string, AddedProvider> = {};
 
-    const cards = container.querySelectorAll('.provider-card');
+    const cards = container.querySelectorAll('.provider-card:not([data-subscription])');
     cards.forEach((cardElement) => {
-      if (cardElement.id === 'codex-provider-card') return;
       const getData = cardDataMap.get(cardElement);
       if (!getData) return;
       const cardData = getData();

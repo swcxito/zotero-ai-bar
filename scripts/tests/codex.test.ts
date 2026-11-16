@@ -203,6 +203,8 @@ describe('Codex components', function () {
     let kills: number;
     let failLaunch: boolean;
     let serverVersion: string;
+    let accountReads: number;
+    let delayedAccountRead: Promise<void> | undefined;
     const info = (version: string) => ({ path: '/codex', source: 'desktop', version, policy: {} });
 
     beforeEach(function () {
@@ -210,6 +212,8 @@ describe('Codex components', function () {
       starts = detections = kills = 0;
       failLaunch = false;
       serverVersion = '0.155.0';
+      accountReads = 0;
+      delayedAccountRead = undefined;
       runtime = new (codexRuntime.constructor as any)();
       runtime.info = info('codex-cli 0.154.0');
       runtime.detect = async () => {
@@ -217,7 +221,8 @@ describe('Codex components', function () {
         runtime.info = info('codex-cli 0.155.0');
         return runtime.info;
       };
-      g.Zotero = { Prefs: { get: () => undefined } };
+      const preferences = new Map<string, string>();
+      g.Zotero = { Prefs: { get: (key: string) => preferences.get(key), set: (key: string, value: string) => preferences.set(key, value) } };
       g.PathUtils = { join: path.posix.join, profileDir: '/profile' };
       g.Ci = { nsIProtocolProxyService: {} };
       g.Services = { io: { newURI: (url: string) => url } };
@@ -272,7 +277,16 @@ describe('Codex components', function () {
                         : message.method === 'account/read'
                           ? { account: { type: 'chatgpt', email: 'test@example.com' } }
                           : { data: [{ model: 'test-model' }] };
-                    push(JSON.stringify({ id: message.id, result }) + '\n');
+                    const response = JSON.stringify({ id: message.id, result }) + '\n';
+                    if (message.method === 'account/read') {
+                      accountReads++;
+                      if (delayedAccountRead && accountReads === 1) {
+                        push(JSON.stringify({ method: 'account/updated', params: { authMode: 'chatgpt' } }) + '\n' + response);
+                        return;
+                      }
+                      if (accountReads === 2) await delayedAccountRead;
+                    }
+                    push(response);
                   },
                 },
                 wait: () => exit,
@@ -304,6 +318,27 @@ describe('Codex components', function () {
       assert.equal(kills, 1);
       assert.equal(runtime.account.email, 'test@example.com');
       assert.equal(runtime.models[0].model, 'test-model');
+    });
+
+    it('waits for the newer account read before falling back from a shared login', async function () {
+      serverVersion = '0.154.0';
+      let release!: () => void;
+      delayedAccountRead = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const connecting = runtime.connectAccount();
+      void connecting.catch(() => undefined);
+      try {
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.equal(accountReads, 2, 'the account notification starts a fresh read');
+        assert.equal(starts, 1, 'the shared runtime remains connected while that read is pending');
+      } finally {
+        release();
+        await connecting;
+      }
+      assert.isTrue(runtime.sharedLogin);
+      assert.equal(runtime.accountKey, 'test@example.com');
+      assert.equal(starts, 1);
     });
 
     it('redetects when an update removed the cached binary', async function () {

@@ -97,7 +97,7 @@
 }
 
 [data-zaibar-skin='neumorphism'][data-zaibar-skin]
-  :is(#prompt-edit-panel > div, #add-provider-popup, #model-select-overlay > div, #codex-connection-panel) {
+  :is(#prompt-edit-panel > div, #add-provider-popup, #model-select-overlay > div) {
   box-shadow: var(--card-shadow) !important;
 }
 
@@ -106,6 +106,26 @@
   :is(input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea):not(.input-area textarea):not(.input-group textarea) {
   background: var(--raised) !important;
   box-shadow: var(--za-neu-inset) !important;
+}
+
+[data-zaibar-skin='neumorphism'] :is(#add-provider-list, #add-provider-custom, #model-select-list) > button {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text) !important;
+  cursor: pointer;
+}
+
+[data-zaibar-skin='neumorphism']
+  :is(#add-provider-list, #add-provider-custom, #model-select-list)
+  > button:is(:hover, :focus-visible):not(:disabled) {
+  background: var(--accent-soft) !important;
+  color: var(--accent-soft-ink) !important;
+  box-shadow: var(--za-neu-control-shadow);
+}
+
+[data-zaibar-skin='neumorphism'] :is(#add-provider-list, #add-provider-custom, #model-select-list) > button:active:not(:disabled) {
+  box-shadow: var(--za-neu-control-inset);
 }
 
 [data-zaibar-skin='neumorphism'][data-zaibar-skin]
@@ -130,16 +150,12 @@
     .chat-actions button,
     .zaibar-history-panel button,
     .zaibar-skin-preview-controls button,
-    .provider-card button,
+    .provider-card button:not(.model-row-name),
     .prompt-row button,
     #toggle-provider-cards,
     #connect-chatgpt-button,
-    #codex-connection-panel button,
     #codex-login-wait button,
     #add-provider-button,
-    #add-provider-list button,
-    #add-provider-custom button,
-    #model-select-list button,
     #prompt-add-button-host button,
     #prompt-cancel-btn,
     #prompt-save-btn,
@@ -165,16 +181,12 @@
     .chat-actions button,
     .zaibar-history-panel button,
     .zaibar-skin-preview-controls button,
-    .provider-card button,
+    .provider-card button:not(.model-row-name),
     .prompt-row button,
     #toggle-provider-cards,
     #connect-chatgpt-button,
-    #codex-connection-panel button,
     #codex-login-wait button,
     #add-provider-button,
-    #add-provider-list button,
-    #add-provider-custom button,
-    #model-select-list button,
     #prompt-add-button-host button,
     #prompt-cancel-btn,
     #prompt-save-btn,
@@ -203,16 +215,12 @@
     .chat-actions button,
     .zaibar-history-panel button,
     .zaibar-skin-preview-controls button,
-    .provider-card button,
+    .provider-card button:not(.model-row-name),
     .prompt-row button,
     #toggle-provider-cards,
     #connect-chatgpt-button,
-    #codex-connection-panel button,
     #codex-login-wait button,
     #add-provider-button,
-    #add-provider-list button,
-    #add-provider-custom button,
-    #model-select-list button,
     #prompt-add-button-host button,
     #prompt-cancel-btn,
     #prompt-save-btn,

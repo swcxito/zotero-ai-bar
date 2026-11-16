@@ -52,6 +52,15 @@ export async function findClaudeCode(manual?: string): Promise<string> {
   const candidates: string[] = [];
   if (home) candidates.push(PathUtils.join(home, '.local', 'bin', Zotero.isWin ? 'claude.exe' : 'claude'));
   if (Zotero.isWin && env.LOCALAPPDATA) candidates.push(PathUtils.join(env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Links', 'claude.exe'));
+  if (Zotero.isMac) candidates.push('/opt/homebrew/bin/claude', '/usr/local/bin/claude');
+  if (Zotero.isWin) {
+    const npmRoots = (env.PATH || env.Path || '')
+      .split(';')
+      .map((entry: string) => entry.trim().replace(/^"|"$/g, ''))
+      .filter(Boolean);
+    if (env.APPDATA) npmRoots.push(PathUtils.join(env.APPDATA, 'npm'));
+    for (const root of npmRoots) candidates.push(PathUtils.join(root, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe'));
+  }
   for (const candidate of candidates) if (await IOUtils.exists(candidate)) return candidate;
   try {
     return await subprocess().pathSearch(Zotero.isWin ? 'claude.exe' : 'claude');
@@ -67,10 +76,14 @@ async function launch(command: string, args: string[], env: Record<string, strin
   return child;
 }
 
-async function diagnostic(command: string, args: string[], env: Record<string, string>): Promise<string> {
+async function diagnostic(command: string, args: string[], env: Record<string, string>, signal?: AbortSignal): Promise<string> {
+  signal?.throwIfAborted();
   const child = await launch(command, args, env);
+  const cancel = () => void child.kill(1000).catch(() => undefined);
+  signal?.addEventListener('abort', cancel, { once: true });
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
+    signal?.throwIfAborted();
     await child.stdin.close();
     return await Promise.race([
       Promise.all([collect(child.stdout), collect(child.stderr), child.wait()]).then(([out, , status]) => {
@@ -83,6 +96,7 @@ async function diagnostic(command: string, args: string[], env: Record<string, s
     ]);
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', cancel);
     await child.kill(1000).catch(() => undefined);
     children.delete(child);
   }
@@ -127,31 +141,40 @@ async function networkEnvironment(): Promise<Record<string, string>> {
   return { ...env, ...(api ? { HTTPS_PROXY: api } : {}) };
 }
 
-export async function checkClaudeCode(manual?: string): Promise<{ path: string; version: string; plan: string }> {
+export async function checkClaudeCode(manual?: string, signal?: AbortSignal): Promise<{ path: string; version: string; plan: string }> {
+  signal?.throwIfAborted();
   const command = await findClaudeCode(manual);
   const env = claudeEnvironment(subprocess().getEnvironment());
-  const version = (await diagnostic(command, ['--version'], env)).trim();
+  const version = (await diagnostic(command, ['--version'], env, signal)).trim();
   if (!/Claude Code/i.test(version)) throw new Error('The selected executable is not recognized as official Claude Code.');
-  const help = await diagnostic(command, ['--help'], env);
+  const help = await diagnostic(command, ['--help'], env, signal);
   if (REQUIRED_CLAUDE_FLAGS.some((flag) => !help.includes(flag)))
     throw new Error('Update Claude Code: required streaming/isolation options are missing.');
   let status: any;
   try {
-    status = JSON.parse(await diagnostic(command, ['auth', 'status', '--json'], env));
+    status = JSON.parse(await diagnostic(command, ['auth', 'status', '--json'], env, signal));
   } catch {
+    signal?.throwIfAborted();
     throw new Error('Unable to check Claude Code login. Run claude and sign in with your Claude account, then retry.');
   }
   if (status.loggedIn !== true || status.authMethod !== 'claude.ai')
     throw new Error('Sign in to the official Claude Code CLI using your Claude subscription. This provider does not use API-key billing.');
+  signal?.throwIfAborted();
   if (manual?.trim()) setPref('claudeCode.runtimePath', command);
   return { path: command, version, plan: typeof status.subscriptionType === 'string' ? status.subscriptionType : 'Claude account' };
 }
 
 /** The models the official CLI offers this account (as in its /model picker). No model call is made. */
-export async function listClaudeCodeModels(command: string): Promise<ClaudeCodeModel[]> {
-  const child = await launch(command, claudeDiscoveryArguments(), await networkEnvironment());
+export async function listClaudeCodeModels(command: string, signal?: AbortSignal): Promise<ClaudeCodeModel[]> {
+  signal?.throwIfAborted();
+  const env = await networkEnvironment();
+  signal?.throwIfAborted();
+  const child = await launch(command, claudeDiscoveryArguments(), env);
+  const cancel = () => void child.kill(1000).catch(() => undefined);
+  signal?.addEventListener('abort', cancel, { once: true });
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
+    signal?.throwIfAborted();
     void collect(child.stderr, 64 * 1024).catch(() => undefined);
     await child.stdin.write(CLAUDE_INITIALIZE_REQUEST);
     const read = (async () => {
@@ -178,6 +201,7 @@ export async function listClaudeCodeModels(command: string): Promise<ClaudeCodeM
     ]);
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', cancel);
     await child.kill(1000).catch(() => undefined);
     children.delete(child);
   }

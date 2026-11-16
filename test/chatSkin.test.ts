@@ -66,8 +66,7 @@ async function verifyShadowRootMaterial(skin: (typeof NEW_SKINS)[number]): Promi
   const previewControls = htmlElement(doc, 'div', 'zaibar-skin-preview-controls');
   const previewButton = htmlElement(doc, 'button');
   previewControls.appendChild(previewButton);
-  const connectionPanel = htmlElement(doc, 'div');
-  connectionPanel.id = 'codex-connection-panel';
+  const connectionPanel = htmlElement(doc, 'div', 'provider-card');
   const connectionButton = htmlElement(doc, 'button');
   connectionPanel.appendChild(connectionButton);
   input.appendChild(textarea);
@@ -135,6 +134,51 @@ describe('chat skins', function () {
 
   it('loads new relief material inside a chat ShadowRoot without styling the host', async function () {
     await verifyShadowRootMaterial('neumorphism');
+  });
+
+  it('keeps Abyss picker rows flush and adds relief on hover or keyboard focus', async function () {
+    const original = getPref('chat.skin');
+    const doc = Zotero.getMainWindow().document;
+    const host = htmlElement(doc, 'div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    const root = htmlElement(doc, 'div', 'bg-white');
+    const pickers = ['add-provider-list', 'model-select-list', 'add-provider-custom'].map((id) => {
+      const element = htmlElement(doc, 'div');
+      element.id = id;
+      element.style.display = 'flex';
+      element.style.flexDirection = 'column';
+      element.append(htmlElement(doc, 'button'), htmlElement(doc, 'button'));
+      return element;
+    });
+    root.append(...pickers);
+    shadow.appendChild(root);
+    doc.documentElement.appendChild(host);
+    try {
+      await loadSkinStyles(doc, shadow);
+      setPref('chat.skin', 'neumorphism');
+      registerChatSkinRoot(root);
+      const { InspectorUtils } = doc.defaultView!;
+      for (const picker of pickers) {
+        const [first, second] = Array.from(picker.children);
+        assert.equal(computed(first).borderTopWidth, '0px');
+        assert.equal(computed(first).backgroundColor, 'rgba(0, 0, 0, 0)');
+        assert.equal(computed(first).boxShadow, 'none');
+        assert.closeTo(first.getBoundingClientRect().bottom, second.getBoundingClientRect().top, 0.01);
+        for (const pseudo of [':hover', ':focus-visible']) {
+          InspectorUtils.addPseudoClassLock(first, pseudo);
+          try {
+            assert.notEqual(computed(first).backgroundColor, computed(second).backgroundColor);
+            assert.notEqual(computed(first).boxShadow, 'none');
+            assert.closeTo(first.getBoundingClientRect().bottom, second.getBoundingClientRect().top, 0.01);
+          } finally {
+            InspectorUtils.removePseudoClassLock(first, pseudo);
+          }
+        }
+      }
+    } finally {
+      host.remove();
+      setPref('chat.skin', original || 'rose');
+    }
   });
 
   it('styles the outer side pane in the Zotero main document', async function () {

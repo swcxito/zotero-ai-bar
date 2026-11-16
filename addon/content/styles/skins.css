@@ -98,11 +98,10 @@ html[data-zaibar-skin] :is(#provider-search-input,#model-search-input):focus{out
 html[data-zaibar-skin] .provider-card>div:first-child{background:var(--raised)!important;color:var(--text)!important;border-color:var(--line)!important}
 html[data-zaibar-skin] .provider-card input[type=checkbox]{accent-color:var(--accent)!important}
 html[data-zaibar-skin] .provider-card .model-card-list>div:not(#codex-model-list):is(:hover,:focus-within),html[data-zaibar-skin] .provider-card #codex-model-list>div:is(:hover,:focus-within){background:var(--soft)!important;box-shadow:0 0 0 2px var(--accent-soft)!important}
-html[data-zaibar-skin] .provider-card .model-card-list input[type=text]:focus{outline:none!important;box-shadow:none!important}
 html[data-zaibar-skin] .provider-card button.border-dashed{background:var(--surface)!important;color:var(--muted)!important;border-color:var(--line)!important}
 html[data-zaibar-skin] .provider-card button.border-dashed:hover{background:var(--accent-soft)!important;color:var(--accent-soft-ink)!important;border-color:var(--accent)!important}
 html[data-zaibar-skin] .provider-card button:hover{color:var(--accent-soft-ink)!important}
-html[data-zaibar-skin] .provider-card>div:first-child button:hover,html[data-zaibar-skin] .provider-card .model-card-list button:not(.border-dashed):hover{background:var(--soft)!important}
+html[data-zaibar-skin] .provider-card>div:first-child button:hover,html[data-zaibar-skin] .provider-card .model-card-list button:not(.border-dashed,.model-row-name):hover{background:var(--soft)!important}
 html[data-zaibar-skin] .codex-head-details .inline-flex.border{background:var(--accent-soft)!important;color:var(--accent-soft-ink)!important;border-color:var(--accent)!important}
 html[data-zaibar-skin] #toggle-provider-cards{background:var(--soft)!important;color:var(--text)!important}
 html[data-zaibar-skin] #toggle-provider-cards:hover{background:var(--raised)!important}

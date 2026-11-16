@@ -94,6 +94,11 @@
   }
 }
 
+#provider-block > [data-subscription][hidden],
+#codex-provider-card [hidden] {
+  display: none !important;
+}
+
 .chat-turn-navigator-shell {
   position: relative;
   display: flex;

@@ -725,6 +725,7 @@ globalThis.__claudeSettingsFixture = {
   },
 };
 let settingsCode = stripTypeScriptTypes(await source('settings'));
+settingsCode = settingsCode.replace(/import \{ (getString|installSubscriptionCli|createSubscriptionRuntimeSettings) \} from '[^']+';/g, '');
 settingsCode = settingsCode.replace(/import \{ saveV2Config[^;]+;/, 'const saveV2Config = globalThis.__claudeSettingsFixture.save;');
 settingsCode = settingsCode.replace(
   /import \{ getPref, setPref \} from '[^']+';/,

@@ -1,4 +1,5 @@
 import { getPref, setPref } from '../../utils/prefs';
+import { installSubscriptionCli } from '../../utils/installSubscriptionCli';
 import { policyArguments, runtimePolicy } from './policy';
 import { CodexRpc, CodexRpcTimeoutError, type RpcMessage } from './protocol';
 import { codexString } from './i18n';
@@ -74,31 +75,6 @@ function environment(sharedLogin = false): Record<string, string> {
   return { ...env, HOME: codexDirectory(), CODEX_HOME: sharedLogin && sharedHome ? sharedHome : codexDirectory() };
 }
 
-/** Keep package-manager installation scoped to the user's normal Windows/npm environment. */
-function installEnvironment(): Record<string, string> {
-  const inherited = subprocess().getEnvironment();
-  const allowed = [
-    'PATH',
-    'Path',
-    'SystemRoot',
-    'WINDIR',
-    'COMSPEC',
-    'PATHEXT',
-    'USERPROFILE',
-    'LOCALAPPDATA',
-    'APPDATA',
-    'TEMP',
-    'TMP',
-    'TMPDIR',
-    'LANG',
-    'LC_ALL',
-  ];
-  const env = Object.fromEntries(allowed.filter((k) => inherited[k]).map((k) => [k, inherited[k]]));
-  const home = preferredUserHome(inherited, Zotero.isWin);
-  if (home) env.HOME = home;
-  return env;
-}
-
 /** Child processes do not inherit Gecko/system proxy settings. Resolve them without reading credentials. */
 export async function runtimeNetworkEnvironment(): Promise<Record<string, string>> {
   const inherited = subprocess().getEnvironment();
@@ -156,29 +132,6 @@ function environmentValue(environment: Record<string, string>, name: string): st
   return key ? environment[key] : undefined;
 }
 
-async function findNpmCommand(): Promise<string | undefined> {
-  const environment = subprocess().getEnvironment();
-  if (Zotero.isWin) {
-    const pathValue = environmentValue(environment, 'PATH') || environmentValue(environment, 'Path');
-    if (pathValue) {
-      for (const directory of pathValue
-        .split(';')
-        .map((value) => value.trim().replace(/^"|"$/g, ''))
-        .filter(Boolean)) {
-        for (const name of ['npm.cmd', 'npm.exe', 'npm']) {
-          const path = PathUtils.join(directory, name);
-          if (await IOUtils.exists(path).catch(() => false)) return path;
-        }
-      }
-    }
-  }
-  try {
-    return await subprocess().pathSearch('npm');
-  } catch {
-    return undefined;
-  }
-}
-
 export async function runLocal(command: string, args: string[], timeout = 6000): Promise<string> {
   const process = await subprocess().call({ command, arguments: args, environment: environment(), stderr: 'pipe', workdir: codexDirectory() });
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -195,36 +148,6 @@ export async function runLocal(command: string, args: string[], timeout = 6000):
   } finally {
     clearTimeout(timer);
     await process.kill(1000).catch(() => undefined);
-  }
-}
-
-async function runCliInstall(command: string, args: string[]): Promise<void> {
-  const failure = () => new Error(codexString('codex-error-cli-install-failed', 'Codex CLI 安装失败，请检查 Node.js、npm 和网络设置后重试。'));
-  let child: any;
-  try {
-    child = await subprocess().call({ command, arguments: args, environment: installEnvironment(), stderr: 'pipe', workdir: codexDirectory() });
-  } catch {
-    throw failure();
-  }
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    const result = await Promise.race([
-      Promise.all([collect(child.stdout), collect(child.stderr), child.wait()]).then(([, , exit]) => exit),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(failure()), 180000);
-      }),
-    ]);
-    if (result.exitCode !== 0) throw failure();
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === codexString('codex-error-cli-install-failed', 'Codex CLI 安装失败，请检查 Node.js、npm 和网络设置后重试。')
-    )
-      throw error;
-    throw failure();
-  } finally {
-    clearTimeout(timer);
-    await child.kill(1000).catch(() => undefined);
   }
 }
 
@@ -585,8 +508,8 @@ class CodexRuntime {
 
   async connect(): Promise<CodexRpc> {
     if (this.stopped) throw new Error(codexString('codex-error-plugin-closed', '插件已关闭。'));
-    if (this.rpc) return this.rpc;
     if (this.starting) return this.starting;
+    if (this.rpc) return this.rpc;
     const generation = this.generation;
     this.starting = (async () => {
       for (let attempt = 0; ; attempt++) {
@@ -670,6 +593,7 @@ class CodexRuntime {
       await rpc.notify('initialized');
       if (this.stopped || generation !== this.generation) throw new Error(codexString('codex-error-connection-cancelled', '连接已取消。'));
       this.rpc = rpc;
+      let accountUpdate: Promise<void> | undefined;
       rpc.listeners.add((message) => {
         if (message.method === 'client/disconnected' && this.rpc === rpc) {
           this.rpc = undefined;
@@ -688,7 +612,9 @@ class CodexRuntime {
           this.changed();
           if (!this.loginPending) {
             const revision = this.accountRevision + 1;
-            void this.refreshAccount().catch(() => {
+            const refresh = this.refreshAccount();
+            accountUpdate = refresh;
+            void refresh.catch(() => {
               if (this.rpc !== rpc || revision !== this.accountRevision) return;
               this.status = codexString('codex-status-relogin', '请重新登录 Codex');
               this.changed();
@@ -697,6 +623,19 @@ class CodexRuntime {
         }
       });
       await this.refreshAccount();
+      // Startup can publish account/updated before the first account/read
+      // returns. That read is stale, so wait for the update before choosing an
+      // auth source or showing the browser authorization flow.
+      while (accountUpdate) {
+        const refresh = accountUpdate;
+        try {
+          await refresh;
+        } catch (error) {
+          if (accountUpdate === refresh) throw error;
+        }
+        if (accountUpdate === refresh) break;
+      }
+      if (this.rpc !== rpc) throw new Error(codexString('codex-error-connection-cancelled', '连接已取消。'));
       return rpc;
     } catch (error) {
       rpc.close();
@@ -822,18 +761,23 @@ class CodexRuntime {
   }
 
   /** Let Codex read its own existing credentials; never copy or parse token files. */
-  async connectAccount(): Promise<void> {
+  async connectAccount(signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted();
     if (this.accountKey) {
       await this.refreshAccount();
       return;
     }
     await this.stop();
+    signal?.throwIfAborted();
     this.sharedLogin = true;
     await this.connect();
+    signal?.throwIfAborted();
     if (this.accountKey) return;
     await this.stop();
+    signal?.throwIfAborted();
     this.sharedLogin = false;
     await this.connect();
+    signal?.throwIfAborted();
     if (!this.accountKey) await this.login();
   }
 
@@ -853,43 +797,9 @@ class CodexRuntime {
     this.changed();
   }
 
-  async installCli(): Promise<void> {
-    await prepareDirectories();
-    const npm = await findNpmCommand();
-    if (!npm) {
-      const error = new Error(codexString('codex-error-npm-not-found', '未找到 npm，请先安装 Node.js 后重试。'));
-      this.status = error.message;
-      this.changed();
-      throw error;
-    }
-    this.status = codexString('codex-status-installing-cli', '正在安装 Codex CLI');
-    this.diagnostics = [];
-    this.changed();
-    try {
-      if (Zotero.isWin) {
-        const inherited = subprocess().getEnvironment();
-        const systemRoot = environmentValue(inherited, 'SystemRoot') || environmentValue(inherited, 'WINDIR') || 'C:\\Windows';
-        const powershell = PathUtils.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-        const escapedNpm = npm.replaceAll("'", "''");
-        await runCliInstall(powershell, [
-          '-NoProfile',
-          '-NonInteractive',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-Command',
-          `& '${escapedNpm}' install --global --no-audit --no-fund @openai/codex`,
-        ]);
-      } else {
-        await runCliInstall(npm, ['install', '--global', '--no-audit', '--no-fund', '@openai/codex']);
-      }
-    } catch (error) {
-      this.status = (error as Error).message;
-      this.changed();
-      throw error;
-    }
+  async installCli(signal?: AbortSignal): Promise<void> {
+    await installSubscriptionCli('codex', codexDirectory(), signal);
     this.info = undefined;
-    this.status = codexString('codex-status-cli-installed', 'Codex CLI 安装完成，正在重新检测运行时');
-    this.changed();
   }
 
   async stop(shutdown = false): Promise<void> {

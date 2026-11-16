@@ -28,7 +28,7 @@ export interface CardHeadProps {
   envKeys: string[];
   envValues: Record<string, string>;
   isCustom: boolean;
-  onDeleteClicked: () => void;
+  onDeleteClicked?: () => void;
   onToggleCollapse: (e: Event) => void;
   titleClassList?: string[];
   details?: TagElementProps[];
@@ -140,6 +140,26 @@ export function CardHead({
     },
   };
 
+  const deleteButton = onDeleteClicked
+    ? ButtonBase({
+        iconMarkup: Icons.Delete,
+        classList: [
+          'inline-flex',
+          'items-center',
+          'justify-center',
+          'p-2',
+          'text-zinc-500',
+          'hover:text-red-600',
+          'transition-colors',
+          'duration-200',
+          'rounded-lg',
+          'hover:bg-white/50',
+          'dark:hover:bg-red-950',
+        ],
+        onClick: () => onDeleteClicked(),
+      })
+    : undefined;
+
   return {
     classList: [
       'p-4',
@@ -182,23 +202,7 @@ export function CardHead({
             tag: 'div',
             classList: ['flex', 'items-center', 'gap-1', 'shrink-0'],
             children: [
-              ButtonBase({
-                iconMarkup: Icons.Delete,
-                classList: [
-                  'inline-flex',
-                  'items-center',
-                  'justify-center',
-                  'p-2',
-                  'text-zinc-500',
-                  'hover:text-red-600',
-                  'transition-colors',
-                  'duration-200',
-                  'rounded-lg',
-                  'hover:bg-white/50',
-                  'dark:hover:bg-red-950',
-                ],
-                onClick: () => onDeleteClicked(),
-              }),
+              ...(deleteButton ? [deleteButton] : []),
               ButtonBase({
                 iconMarkup: Icons.Chevron,
                 classList: [

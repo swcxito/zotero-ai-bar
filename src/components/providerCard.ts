@@ -17,7 +17,7 @@
  */
 
 import { CardHead, type CardHeadProps } from './cardHead';
-import { CardModelRow } from './modelRow';
+import { CardModelRow, setCardModelName } from './modelRow';
 import { InlineButton } from './buttons/inlineButton';
 import { modelRowDataMap, cardDataMap } from './common';
 
@@ -51,7 +51,7 @@ export function ProviderCard({
   models,
   doc,
   onAddModel,
-  onDelete = () => {},
+  onDelete,
   onCollapseChange = () => {},
   content,
   headerDetails,
@@ -77,11 +77,6 @@ export function ProviderCard({
     ],
   });
   (card as HTMLElement).dataset.collapsed = 'false';
-
-  function onDeleteClicked() {
-    card.remove();
-    onDelete();
-  }
 
   const cardBody = ztoolkit.UI.createElement(doc, 'div', {
     classList: ['grid', 'transition-all', 'duration-300', 'ease-in-out', 'grid-rows-[1fr]', 'opacity-100'],
@@ -116,13 +111,12 @@ export function ProviderCard({
     return names;
   };
 
-  const openSelectForRow = (row: HTMLElement, existingName?: string) => {
+  const openSelectForRow = (row: HTMLElement) => {
     onAddModel?.((id: string, name: string) => {
-      const existing = getExistingModelNames(row as HTMLElement);
+      const existing = getExistingModelNames(row);
       if (existing.has(name.toLowerCase())) return;
-      (row as HTMLElement).dataset.modelId = id;
-      const textInput = row.querySelector('input[type="text"]') as HTMLInputElement;
-      if (textInput) textInput.value = name;
+      row.dataset.modelId = id;
+      setCardModelName(row, name);
     });
   };
 
@@ -131,7 +125,7 @@ export function ProviderCard({
       const row = CardModelRow({
         doc,
         data: { id: model.id, name: model.name, enabled: model.enabled },
-        onSelectModel: () => openSelectForRow(row as HTMLElement, model.name),
+        onSelectModel: () => openSelectForRow(row as HTMLElement),
       });
       modelCardList?.appendChild(row);
     }
@@ -149,7 +143,7 @@ export function ProviderCard({
           const row = CardModelRow({
             doc,
             data: { id, name, enabled: true },
-            onSelectModel: () => openSelectForRow(row as HTMLElement, name),
+            onSelectModel: () => openSelectForRow(row as HTMLElement),
           });
           modelCardList.insertBefore(row, addModelButton);
         });
@@ -222,7 +216,12 @@ export function ProviderCard({
       envKeys,
       envValues,
       isCustom,
-      onDeleteClicked,
+      onDeleteClicked:
+        onDelete &&
+        (() => {
+          card.remove();
+          onDelete();
+        }),
       onToggleCollapse,
       details: headerDetails,
       titleClassList,

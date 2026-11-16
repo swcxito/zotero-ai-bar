@@ -1,5 +1,8 @@
 import { saveV2Config, type AddedModel } from '../../utils/providers';
 import { getPref, setPref } from '../../utils/prefs';
+import { getString } from '../../utils/locale';
+import { installSubscriptionCli } from '../../utils/installSubscriptionCli';
+import { createSubscriptionRuntimeSettings } from '../../components/subscriptionRuntimeSettings';
 import { CLAUDE_CODE_PROVIDER_ID, CLAUDE_FALLBACK_MODELS, redactClaudeError, type ClaudeCodeModel } from './protocol';
 import { checkClaudeCode, listClaudeCodeModels, stopClaudeCode } from './runtime';
 
@@ -44,8 +47,11 @@ export async function publishClaudeCodeModels(list: ClaudeCodeModel[] = CLAUDE_F
 }
 
 /** Older CLIs without a model list keep working with the plain aliases. */
-async function discoverModels(command: string): Promise<ClaudeCodeModel[]> {
-  return listClaudeCodeModels(command).catch(() => CLAUDE_FALLBACK_MODELS);
+async function discoverModels(command: string, signal: AbortSignal): Promise<ClaudeCodeModel[]> {
+  return listClaudeCodeModels(command, signal).catch(() => {
+    signal.throwIfAborted();
+    return CLAUDE_FALLBACK_MODELS;
+  });
 }
 
 let refreshing: Promise<void> | undefined;
@@ -86,87 +92,77 @@ export async function disconnectClaudeCode(): Promise<void> {
   await saveV2Config(v2);
 }
 
-/** This panel lives in the plugin-owned modelDialog.html document. */
-export function mountClaudeCodeSettings(doc: Document, win: Window): void {
-  if (doc.getElementById('claude-code-settings')) return;
-  const chinese = String(Zotero.locale).toLowerCase().startsWith('zh');
-  const label = (en: string, zh: string) => (chinese ? zh : en);
-  const panel = doc.createElement('section');
-  panel.id = 'claude-code-settings';
-  panel.className = 'mb-6 rounded-2xl border border-gray-200 bg-white p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900';
-  const title = doc.createElement('h3');
-  title.className = 'mb-2 font-semibold';
-  title.textContent = 'Claude Code';
-  const description = doc.createElement('p');
-  description.className = 'mb-3 text-zinc-500';
-  description.textContent = label(
-    "Sign in with your subscription in the official Claude Code CLI first. Supports text, full-paper questions, images, translation and Agent mode with AI Bar's Zotero tools (Claude Code's own file and shell tools stay off). Models depend on your account.",
-    '请先在官方 Claude Code 中登录订阅账号。支持选文、全文、图片问答、翻译，以及使用 AI Bar 文献库工具的 Agent 模式（Claude Code 自带的文件和命令工具保持关闭）。可用模型由你的账号决定。'
-  );
-  const path = doc.createElement('input');
-  path.type = 'text';
-  path.value = getPref('claudeCode.runtimePath') || '';
-  path.placeholder = label('Claude executable path (blank = auto-detect)', 'Claude 程序路径（留空自动检测）');
-  path.setAttribute('aria-label', path.placeholder);
-  path.className = 'mb-3 w-full rounded border border-gray-200 bg-transparent p-2 dark:border-zinc-700';
-  const status = doc.createElement('p');
-  status.className = 'my-2 whitespace-pre-wrap';
-  const controls = doc.createElement('div');
-  controls.className = 'flex flex-wrap gap-3';
-  const button = (text: string, run: () => Promise<void>) => {
-    const element = doc.createElement('button');
-    element.type = 'button';
-    element.textContent = text;
-    element.className = 'rounded border border-gray-200 px-3 py-1 dark:border-zinc-700';
-    element.addEventListener('click', () => {
-      for (const control of Array.from(controls.querySelectorAll('button'))) control.disabled = true;
-      path.disabled = true;
-      void run()
-        .catch((error) => {
-          status.textContent = redactClaudeError(String(error.message || error));
-        })
-        .finally(() => {
-          if (win.closed) return;
-          for (const control of Array.from(controls.querySelectorAll('button'))) control.disabled = false;
-          path.disabled = false;
+/** Controls for the Claude Code card in the model dialog. */
+export function createClaudeCodeSettings(doc: Document, win: Window, hide: () => void): HTMLElement {
+  const root = doc.createElement('div');
+  root.id = 'claude-code-settings';
+  root.className = 'flex flex-col gap-3 px-4 py-3 text-sm';
+  const connected = () => !!addon.data.userProviderConfigV2?.addedProviders[CLAUDE_CODE_PROVIDER_ID];
+  let operation: AbortController | undefined;
+  const settings = createSubscriptionRuntimeSettings(doc, win, {
+    provider: 'claude-code',
+    path: getPref('claudeCode.runtimePath') || '',
+    description: getString('subscription-claude-description'),
+    help: 'claude-code-integration',
+    checkLogin: (path) =>
+      void run(async (signal) => {
+        setPref('claudeCode.runtimePath', path);
+        const info = await checkClaudeCode(undefined, signal);
+        const models = await discoverModels(info.path, signal);
+        signal.throwIfAborted();
+        if (win.closed) return;
+        await publishClaudeCodeModels(models);
+        setPref('claudeCode.modelsVersion', info.version);
+        settings.status.textContent = `${info.version} · ${info.plan}\n${models.map((model) => model.name).join(', ')}`;
+        settings.panel.open = true;
+      }),
+    install: () =>
+      void run(async (signal) => {
+        await installSubscriptionCli('claude-code', PathUtils.join(PathUtils.profileDir, 'zaibar', 'claude-code', 'workspace'), signal);
+        settings.status.textContent = getString('subscription-cli-installed');
+      }),
+    disconnectOrCancel: () => {
+      if (connected()) {
+        void run(async () => {
+          await disconnectClaudeCode();
+          settings.panel.open = false;
+          settings.status.textContent = '';
+          hide();
         });
-    });
-    controls.append(element);
-  };
-  button(label('Check login and enable', '检查登录并启用'), async () => {
-    status.textContent = label('Checking official Claude Code…', '正在检查官方 Claude Code…');
-    // Empty explicitly means auto-detect, including after a previous manual selection.
-    setPref('claudeCode.runtimePath', path.value.trim());
-    const info = await checkClaudeCode();
-    if (win.closed) return;
-    status.textContent = label('Reading the models available to your account…', '正在读取账号可用的模型…');
-    const models = await discoverModels(info.path);
-    if (win.closed) return;
-    await publishClaudeCodeModels(models);
-    setPref('claudeCode.modelsVersion', info.version);
-    status.textContent =
-      `${info.version} · ${info.plan}\n${models.map((m) => m.name).join(label(', ', '、'))}\n` +
-      label('Enabled. Select a Claude Code model in the chat model menu.', '已启用，请在聊天模型菜单中选择 Claude Code 模型。');
+        return;
+      }
+      operation?.abort();
+      settings.panel.open = false;
+      settings.status.textContent = '';
+      hide();
+    },
   });
-  button(label('Choose executable', '选择程序'), async () => {
-    const selected = await new ztoolkit.FilePicker('Claude Code', 'open', undefined, undefined, win).open();
-    if (selected && !win.closed) path.value = selected;
-  });
-  button(label('Remove from AI Bar', '从 AI Bar 移除'), async () => {
-    await disconnectClaudeCode();
-    status.textContent = label('Removed. Your official Claude Code login is unchanged.', '已移除。官方 Claude Code 的登录状态保持不变。');
-  });
-  const enabled = !!addon.data.userProviderConfigV2?.addedProviders[CLAUDE_CODE_PROVIDER_ID];
-  status.textContent = enabled
-    ? label('Enabled; login is checked before each request.', '已启用，每次请求前会检查登录状态。')
-    : label('Not enabled.', '尚未启用。');
-  panel.append(title, description, path, controls, status);
-  doc.getElementById('provider-block')?.before(panel);
-  // Aliases move to new versions ("opus" → the next Opus); refresh the names
-  // in the background so the menu shows what each alias resolves to now.
-  if (enabled) {
+
+  async function run(action: (signal: AbortSignal) => Promise<void>) {
+    if (operation) return;
+    operation = new AbortController();
+    const { signal } = operation;
+    settings.status.textContent = '';
+    settings.setState(connected(), true);
+    try {
+      await action(signal);
+    } catch (error) {
+      if (!signal.aborted && !win.closed) {
+        settings.status.textContent = redactClaudeError(String((error as Error).message || error));
+        settings.panel.open = true;
+      }
+    } finally {
+      operation = undefined;
+      if (!win.closed) settings.setState(connected(), false);
+    }
+  }
+
+  settings.setState(connected(), false);
+  root.append(settings.root);
+  if (connected()) {
     void checkClaudeCode()
       .then((info) => refreshClaudeCodeModels(info.path, info.version, true))
       .catch(() => undefined);
   }
+  return root;
 }
