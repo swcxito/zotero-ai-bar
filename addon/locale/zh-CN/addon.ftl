@@ -213,6 +213,7 @@ token-usage-context-window = 上下文窗口
 token-usage-context-window-unknown = 当前模型的上下文窗口大小未知
 attachment-select-title = 选择附件
 attachment-select-message = 此条目包含多个附件，请选择要打开的文件。
+attachment-select-read-message = 请选择要交给 AI 读取的 PDF。条目为「{ $title }」。
 citation-current-document = 本文
 chat-mode-fixed = 当前区域模式固定
 codex-apps-title = ChatGPT 应用（Agent 模式）

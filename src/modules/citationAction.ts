@@ -18,6 +18,7 @@
 
 import { itemAttachments, metadataItem } from '../utils/attachments';
 import { getString } from '../utils/locale';
+import { promptForAttachment } from '../components/attachmentPicker';
 /**
  * Resolve a citation marker target and open it in Zotero's reader.
  *
@@ -47,20 +48,10 @@ export async function openCitation(itemId: number, page?: number, chooseAttachme
       if (best && best.attachmentReaderType) defaultAttachment = best;
     }
     defaultAttachment ??= candidates[0];
-    let attachment = defaultAttachment;
-    if (chooseAttachment && candidates.length > 1) {
-      const win = Zotero.getMainWindow();
-      const selected = {
-        value: Math.max(
-          0,
-          candidates.findIndex((entry) => entry.id === defaultAttachment?.id)
-        ),
-      };
-      const choices = candidates.map((entry) => `${entry.getField('title')} (#${entry.id})`);
-      if (!(Services.prompt as any).select(win, getString('attachment-select-title'), getString('attachment-select-message'), choices, selected))
-        return;
-      attachment = candidates[selected.value];
-    }
+    const attachment =
+      chooseAttachment && candidates.length > 1
+        ? promptForAttachment(candidates, getString('attachment-select-message'), undefined, defaultAttachment?.id)
+        : defaultAttachment;
     if (!attachment) return;
     const attachmentId = attachment.id;
     // Pages belong to the cited file. A different file chosen explicitly

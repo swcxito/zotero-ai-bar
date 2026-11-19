@@ -5,6 +5,7 @@
 export type FluentMessageId =
   | 'agent-max-iterations-reached'
   | 'attachment-select-message'
+  | 'attachment-select-read-message'
   | 'attachment-select-title'
   | 'capture-drag-hint'
   | 'chat-copy-markdown'
@@ -171,6 +172,7 @@ export type FluentMessageId =
   | 'model-dialog-title'
   | 'pref-advanced'
   | 'pref-attachment-read-strategy'
+  | 'pref-attachment-read-strategy-manual'
   | 'pref-attachment-read-strategy-model'
   | 'pref-attachment-read-strategy-original'
   | 'pref-auto-attach-item-data'

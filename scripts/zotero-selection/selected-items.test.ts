@@ -205,4 +205,61 @@ describe('Selected library papers in real Zotero', function () {
       setPref('chat.attachmentReadStrategy', preference);
     }
   });
+
+  it('prompts once per item and turn in manual mode and returns no text when cancelled', async function () {
+    const preference = getPref('chat.attachmentReadStrategy');
+    const prompt = Services.prompt;
+    const win = Zotero.getMainWindow();
+    const originalId = second.getAttachments()[0];
+    const turn = new win.AbortController();
+    const read = (input: { itemId: number; pageNumber?: number; startLine?: number }, signal = turn.signal) =>
+      tools.read.execute(input, { experimental_context: session, abortSignal: signal });
+    let prompts = 0;
+    let accept = true;
+    let chosenId: number | undefined;
+    (Services as any).prompt = {
+      select: (_parent: Window, _title: string, message: string, labels: string[], choice: { value: number }) => {
+        prompts++;
+        assert.include(message, 'Other reader paper');
+        assert.lengthOf(labels, 2);
+        assert.isTrue(labels.some((label) => label.endsWith(`(#${originalId})`)));
+        choice.value = labels.findIndex((label) => label.includes(`Other paper-dual`) && label.endsWith(`(#${chosenId})`));
+        assert.isAtLeast(choice.value, 0);
+        return accept;
+      },
+    };
+    try {
+      setPref('chat.attachmentReadStrategy', 'manual-choice');
+      assert.equal((await read({ itemId: second.id, pageNumber: 1 })).attachmentId, originalId);
+
+      const translated = await Zotero.Attachments.importFromFile({ file: pdfPath, parentItemID: second.id });
+      created.push(translated.id);
+      chosenId = translated.id;
+      translated.setField('title', 'Other paper-dual');
+      await translated.saveTx();
+
+      assert.equal((await read({ itemId: second.id })).itemId, second.id);
+      assert.equal((await read({ itemId: originalId, pageNumber: 1 })).attachmentId, originalId);
+      assert.equal(prompts, 0);
+
+      const results = await Promise.all([read({ itemId: second.id, pageNumber: 1 }), read({ itemId: second.id, startLine: 1 })]);
+      assert.deepEqual(
+        results.map((result) => result.attachmentId),
+        [translated.id, translated.id]
+      );
+      assert.equal(prompts, 1);
+
+      accept = false;
+      const nextTurn = new win.AbortController();
+      const cancelled = await read({ itemId: second.id, pageNumber: 1 }, nextTurn.signal);
+      assert.include(cancelled.error, 'cancelled PDF selection');
+      assert.notProperty(cancelled, 'text');
+      assert.notProperty(cancelled, 'candidates');
+      await read({ itemId: second.id, pageNumber: 1 }, nextTurn.signal);
+      assert.equal(prompts, 2);
+    } finally {
+      (Services as any).prompt = prompt;
+      setPref('chat.attachmentReadStrategy', preference);
+    }
+  });
 });

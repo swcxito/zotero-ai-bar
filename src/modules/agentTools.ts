@@ -17,6 +17,9 @@ import { checkModelSupportsImage } from '../utils/providers';
 import { addPaperToZotero, searchCrossrefPapers } from './literatureTools';
 import { attachmentSource, getItem, AttachmentSelectionError } from '../utils/attachments';
 import { getPref } from '../utils/prefs';
+import { getString } from '../utils/locale';
+import { sessionMessageContainer } from '../utils/chatSessionDOM';
+import { promptForAttachment } from '../components/attachmentPicker';
 import {
   askUserSchema,
   grepSchema,
@@ -130,21 +133,71 @@ const grepTool = defineDocumentTool({
   },
 });
 
+const readAttachmentChoices = new WeakMap<AbortSignal, Map<number, Promise<number | undefined>>>();
+let attachmentDialogQueue = Promise.resolve();
+
+function chooseReadAttachment(itemId: number, pdfs: Zotero.Item[], session?: Session, signal?: AbortSignal): Promise<number | undefined> {
+  const turn = session?.pending?.abortController?.signal ?? signal;
+  let choices = turn && readAttachmentChoices.get(turn);
+  if (turn && !choices) {
+    choices = new Map();
+    readAttachmentChoices.set(turn, choices);
+  }
+  const previous = choices?.get(itemId);
+  if (previous) return previous;
+
+  // A tool loop can request multiple pages or papers at once. Share each
+  // item's choice within the turn and never open nested native dialogs.
+  const choice = attachmentDialogQueue.then(() => {
+    turn?.throwIfAborted();
+    signal?.throwIfAborted();
+    const win = session && sessionMessageContainer(session.id)?.ownerDocument.defaultView;
+    const title = getItem(itemId)?.getField('title') || `#${itemId}`;
+    const message = getString('attachment-select-read-message', { args: { title } });
+    const selected = promptForAttachment(pdfs, message, win ?? undefined);
+    turn?.throwIfAborted();
+    return selected?.id;
+  });
+  attachmentDialogQueue = choice.then(
+    () => undefined,
+    () => undefined
+  );
+  choices?.set(itemId, choice);
+  return choice;
+}
+
 const readTool = defineDocumentTool({
   description:
-    'Read metadata and text from a Zotero item by itemId. Supports page-based reading (pageNumber) or line-based reading (startLine/endLine) with surrounding context. If a parent item returns multiple attachment candidates, choose one of those attachment IDs. To read a particular version, pass its attachment ID directly.',
+    'Read metadata and text from a Zotero item by itemId. Supports page-based reading (pageNumber) or line-based reading (startLine/endLine) with surrounding context. Use the parent item ID to apply the user’s attachment reading strategy. If multiple attachment candidates are returned, choose one of those attachment IDs. To read a particular version, pass its attachment ID directly.',
   inputSchema: readSchema,
   globalInputSchema: readSchema.extend({ itemId: explicitItemIdSchema }),
   execute: async (input: ReadPayload, options) => {
-    const itemId = documentToolItemId(input.itemId, getSession(options));
-    return readItemText(
+    const session = getSession(options);
+    const itemId = documentToolItemId(input.itemId, session);
+    const { pageNumber, startLine, endLine, contextLines } = input;
+    const strategy = getPref('chat.attachmentReadStrategy');
+    const result = await readItemText(
       itemId,
-      input.pageNumber,
-      input.startLine,
-      input.endLine,
-      input.contextLines,
-      getPref('chat.attachmentReadStrategy') !== 'model-choice'
+      pageNumber,
+      startLine,
+      endLine,
+      contextLines,
+      strategy !== 'model-choice' && strategy !== 'manual-choice'
     );
+    if (strategy !== 'manual-choice' || !('error' in result)) return result;
+
+    const pdfs = (result.candidates ?? [])
+      .filter((entry) => entry.contentType === 'application/pdf')
+      .map((entry) => getItem(entry.attachmentId))
+      .filter((item): item is Zotero.Item => !!item && !item.deleted);
+    if (pdfs.length < 2) return result;
+
+    const signal: AbortSignal | undefined = options.abortSignal;
+    const attachmentId = await chooseReadAttachment(itemId, pdfs, session, signal);
+    signal?.throwIfAborted();
+    if (!attachmentId) return { error: 'The user cancelled PDF selection. Do not retry or read another attachment for this item in this turn.' };
+    if (!pdfs.some((pdf) => pdf.id === attachmentId && !pdf.deleted)) return { error: 'The selected PDF is no longer available.' };
+    return readItemText(attachmentId, pageNumber, startLine, endLine, contextLines);
   },
 });
 
