@@ -410,14 +410,13 @@ export function InputArea(
   }
 
   // ── thinking effort (status row, right of the model) ──────────────────────
-  // Plain text label, like the effort shown next to the model in Claude.
   const thinkingBtn = doc.createElement('button');
-  thinkingBtn.title = getString('input-thinking-tooltip');
   thinkingBtn.classList.add(
     'input-thinking-btn',
     'input-status-btn',
     'flex',
     'items-center',
+    'gap-1',
     'px-1.5',
     'py-0.5',
     'rounded-md',
@@ -428,16 +427,17 @@ export function InputArea(
     'flex-shrink-0'
   );
   thinkingBtn.style.position = 'relative';
+  const thinkingIcon = ztoolkit.UI.createElement(doc, 'span', IconView({ iconMarkup: Icons.Brain, sizeRem: 0.875 }));
+  thinkingIcon.setAttribute('aria-hidden', 'true');
+  const thinkingLabel = doc.createElement('span');
+  thinkingBtn.append(thinkingIcon, thinkingLabel);
 
   function updateThinkingBtnAppearance() {
     const { efforts, current } = effortState();
     // A model without adjustable effort (e.g. Claude Haiku) shows no control.
     thinkingBtn.style.display = efforts.length ? '' : 'none';
-    thinkingBtn.innerHTML = '';
-    const labelSpan = doc.createElement('span');
-    labelSpan.textContent = current ? effortLabelMap[current] || current : getString('thinking-effort-default');
-    thinkingBtn.appendChild(labelSpan);
-    thinkingBtn.title = `${getString('input-thinking-tooltip')}: ${labelSpan.textContent}`;
+    thinkingLabel.textContent = current ? effortLabelMap[current] || current : getString('thinking-effort-default');
+    thinkingBtn.title = `${getString('input-thinking-tooltip')}: ${thinkingLabel.textContent}`;
   }
   updateThinkingBtnAppearance();
 

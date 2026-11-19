@@ -354,6 +354,22 @@ describe('shared UI behavior in isolated Zotero', function () {
     }
   });
 
+  it('renders the thinking effort icon alongside its label in the shared composer', function () {
+    const id = `thinking-effort-${Date.now()}`;
+    const wrapper = InputArea(doc, id);
+    shell.appendChild(wrapper);
+    const api = (wrapper as any)._inputAreaAPI as InputAreaAPI;
+    try {
+      const button = wrapper.querySelector('.input-thinking-btn')!;
+      const icon = button.querySelector('svg.lucide-sparkles');
+      assert.equal(icon?.namespaceURI, 'http://www.w3.org/2000/svg');
+      assert.isNotEmpty(button.textContent?.trim());
+    } finally {
+      api.dispose();
+      addon.chatManager.sessionsMap.delete(id);
+    }
+  });
+
   it('opens fixed workspace mode menus for inspection while keeping their choices disabled', function () {
     const ids = [`fixed-menu-${Date.now()}`, `article-menu-${Date.now()}`];
     const shadow = shell.attachShadow({ mode: 'open' });
