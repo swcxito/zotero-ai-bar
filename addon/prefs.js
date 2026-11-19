@@ -28,6 +28,7 @@ pref('chat.skin', 'rose');
 pref('poem.token', '');
 pref('chat.startConversationMode', 'new');
 pref('chat.autoAttachItemData', false);
+pref('chat.attachmentReadStrategy', 'prefer-original');
 pref('chat.openOnStartup', false);
 pref('chat.showPoem', true);
 pref('chat.autoImagePrompt', true);

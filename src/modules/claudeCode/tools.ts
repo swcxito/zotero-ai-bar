@@ -31,7 +31,7 @@ export function zoteroToolServer(
   messages: ModelMessage[],
   beforeTool: () => Promise<void> = async () => {}
 ): ClaudeToolServer {
-  const definitions = getSharedToolDefinitions();
+  const definitions = getSharedToolDefinitions(session.kind);
   const writes = new Map<string, Promise<ClaudeToolResult>>();
   let count = 0;
   let questionQueue = Promise.resolve();

@@ -38,6 +38,7 @@ import { createStreamRenderer } from '../utils/streamRenderer';
 import type { MarkdownRenderContext } from '../utils/markdown';
 import { getActiveModelContextLimit, PROVIDER_ENV_KEY_MAP, resolveApiUrl, type ModelSelect, type ProviderId } from '../utils/providers';
 import { buildTools } from './agentTools';
+import { carryGlobalReaderContext } from '../utils/globalReaderContext';
 import {
   extractTranslationFallback,
   normalizeTranslationResultCandidate,
@@ -157,6 +158,7 @@ async function compactRequestMessages(params: {
     contextLimit,
   });
   if (!plan?.head.length) return params.messages;
+  const tail = params.session.kind === 'global-agent' ? carryGlobalReaderContext(plan.head, plan.tail) : plan.tail;
 
   const summary = await summarizeCompactionHead({
     model: params.model,
@@ -165,8 +167,8 @@ async function compactRequestMessages(params: {
     abortSignal: params.session.pending.abortController?.signal,
   });
   const checkpointMessage = createCheckpointMessage(summary);
-  const currentTurnStart = plan.tail.map((message) => message.role).lastIndexOf('user');
-  const completedTail = currentTurnStart >= 0 ? plan.tail.slice(0, currentTurnStart) : plan.tail;
+  const currentTurnStart = tail.map((message) => message.role).lastIndexOf('user');
+  const completedTail = currentTurnStart >= 0 ? tail.slice(0, currentTurnStart) : tail;
   const completedTailRounds = completedTail.filter((message) => message.role === 'user').length;
   const coveredTurn = params.session.persistedTurns.at(-(completedTailRounds + 1));
   params.session.conversationHistory = [checkpointMessage, ...completedTail];
@@ -181,7 +183,7 @@ async function compactRequestMessages(params: {
   };
   addon.chatManager.persistActiveContext(params.session);
   Zotero.debug(`[zaibar-compaction] checkpoint created, head=${plan.head.length}, tail=${plan.tail.length}`);
-  return [...systemMessages, checkpointMessage, ...plan.tail];
+  return [...systemMessages, checkpointMessage, ...tail];
 }
 
 export async function streamLLMV2(messagesOrPromise: ModelMessage[] | Promise<ModelMessage[]>, session: Session) {
@@ -208,7 +210,7 @@ export async function streamLLMV2(messagesOrPromise: ModelMessage[] | Promise<Mo
     const maxOutputTokensSetting = maxOutputTokens === undefined ? {} : { maxOutputTokens };
 
     const agentEnabled = session.effectiveChatMode === 'agent';
-    const tools = agentEnabled ? buildTools() : undefined;
+    const tools = agentEnabled ? buildTools(session.kind) : undefined;
     ztoolkit.log('[llm] agentEnabled:', agentEnabled, 'tools:', Object.keys(tools ?? {}));
     Zotero.debug('[zaibar-llm] agentEnabled=' + agentEnabled + ', toolCount=' + Object.keys(tools ?? {}).length);
 

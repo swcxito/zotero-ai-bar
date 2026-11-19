@@ -255,7 +255,8 @@ export async function readItemText(
   pageNumber?: number,
   startLine?: number,
   endLine?: number,
-  contextLines?: number
+  contextLines?: number,
+  preferOriginalPDF = false
 ): Promise<ReadItemResult | { error: string; candidates?: ReturnType<typeof attachmentSource>[] }> {
   if (!itemId) {
     return { error: 'No item ID provided.' };
@@ -278,7 +279,7 @@ export async function readItemText(
   if (pageNumber !== undefined || startLine !== undefined || endLine !== undefined) {
     let attachment: Zotero.Item | undefined;
     try {
-      attachment = resolveAttachment(itemId, pageNumber === undefined ? 'text' : 'pdf');
+      attachment = resolveAttachment(itemId, pageNumber === undefined ? 'text' : 'pdf', preferOriginalPDF);
     } catch (error) {
       if (error instanceof AttachmentSelectionError) return { error: error.message, candidates: error.candidates };
       throw error;

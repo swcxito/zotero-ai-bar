@@ -37,6 +37,7 @@ import { createUserMessageBubble } from './userBubble';
 import { readChatTextDraft, writeChatTextDraft } from '../utils/chatDraft';
 import { applyChatInputFontSize } from '../utils/chatFontSize';
 import { getCurrentSelectionSnapshot } from '../modules/selectionHint';
+import { snapshotGlobalReaderContext } from '../utils/globalReaderContext';
 
 export interface InputAreaContext {
   sessionId: string;
@@ -625,6 +626,7 @@ export function InputArea(
       sessionKind,
       sourceTabId,
       sourceLabel,
+      globalReaderContext: sessionKind === 'global-agent' ? snapshotGlobalReaderContext() : undefined,
     };
 
     //todo enhance streaming state handling:
@@ -675,6 +677,7 @@ export function InputArea(
         sessionKind: requestContext.sessionKind,
         sourceTabId: requestContext.sourceTabId,
         itemId: requestContext.sourceTabId ? getReaderByTabId(requestContext.sourceTabId)?.itemID : undefined,
+        globalReaderContext: requestContext.globalReaderContext,
         images: imageUrls.length > 0 ? imageUrls : undefined,
         selectionSnapshot,
       });

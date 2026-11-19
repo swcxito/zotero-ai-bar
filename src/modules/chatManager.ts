@@ -26,7 +26,7 @@ import { getPref } from '../utils/prefs';
 import {
   SYSTEM_PROMPT_PREFIX,
   getAutoImagePrompt,
-  AGENT_INSTRUCTIONS_PROMPT,
+  getAgentInstructionsPrompt,
   IMAGE_ANALYSIS_PROMPT,
   IMAGE_ANALYSIS_AGENT_SUFFIX,
 } from '../utils/prompts';
@@ -37,6 +37,7 @@ import { streamChatBackend } from './chatBackend';
 import type { CodexBinding } from './codex/policy';
 import type { ModelMessage, SystemModelMessage, UserModelMessage } from 'ai';
 import { getItemIdFromTab } from './tabObserver';
+import { globalReaderContextPrefix, snapshotGlobalReaderContext, type GlobalReaderContext } from '../utils/globalReaderContext';
 import { openSidePane } from './mainWindowSidePane';
 import type { ItemMetadata } from '../utils/itemContext';
 import {
@@ -260,6 +261,8 @@ type ChatRequestParams = (
     text?: string;
     contextPromise?: Promise<string[] | undefined>;
   };
+  /** Active PDF captured before asynchronous composer work. Null means no active PDF. */
+  globalReaderContext?: GlobalReaderContext | null;
   images?: string[];
   /** Override the session's thinkingEffort for this single request. */
   thinkingEffort?: Session['thinkingEffort'];
@@ -760,7 +763,7 @@ export class ChatManager {
       sourceTabId: params.sourceTabId,
       lockedChatMode,
     });
-    session.itemId = params.itemId;
+    session.itemId = params.kind === 'global-agent' ? undefined : params.itemId;
     this.sessionsMap.set(params.sessionId, session);
     this.ensureSessionConversation(session);
     return session;
@@ -967,7 +970,7 @@ export class ChatManager {
 
     // Agent instructions: ask user when intent is unclear, plus tool orchestration
     if (chatMode === 'agent') {
-      systemPrompt += AGENT_INSTRUCTIONS_PROMPT;
+      systemPrompt += getAgentInstructionsPrompt(session?.kind === 'global-agent');
     }
 
     if (imageCapableModel) {
@@ -981,6 +984,12 @@ export class ChatManager {
   }
 
   async sendChatRequest(params: ChatRequestParams) {
+    const readerContext =
+      params.sessionKind === 'global-agent' && !params.messagesOverride
+        ? params.globalReaderContext === undefined
+          ? snapshotGlobalReaderContext()
+          : params.globalReaderContext
+        : null;
     // Translation requests carry their own immutable selection snapshot. Do
     // not read the mutable global selection after the button was clicked.
     const selectionSourceTabId = (addon.data.selection.currentReader as any)?.tabID as string | undefined;
@@ -1160,6 +1169,8 @@ export class ChatManager {
         session.lastSentSelectionContext = undefined;
       }
 
+      const contextPrefix =
+        params.sessionKind === 'global-agent' ? globalReaderContextPrefix(readerContext, session.conversationHistory) : selectionBlock;
       let userContent: UserModelMessage['content'];
       if (modelSupportsImage) {
         let promptText = params.userPrompt;
@@ -1169,10 +1180,10 @@ export class ChatManager {
           promptText = getAutoImagePrompt(outputLang);
           ztoolkit.log('[chat] Auto-supplementing image prompt');
         }
-        userContent = [{ type: 'text', text: selectionBlock + promptText }, ...images.map((dataUrl) => ({ type: 'image' as const, image: dataUrl }))];
+        userContent = [{ type: 'text', text: contextPrefix + promptText }, ...images.map((dataUrl) => ({ type: 'image' as const, image: dataUrl }))];
         ztoolkit.log(`[chat] Sending with ${images.length} image(s)`);
       } else {
-        userContent = selectionBlock + params.userPrompt;
+        userContent = contextPrefix + params.userPrompt;
       }
 
       const userMsg: UserModelMessage = {

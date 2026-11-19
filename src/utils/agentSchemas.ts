@@ -36,6 +36,8 @@ export const askUserSchema = z.object({
 
 export type AskUserPayload = z.infer<typeof askUserSchema>;
 
+export const explicitItemIdSchema = z.number().int().positive().describe('The Zotero item or attachment ID. Required in the global assistant.');
+
 export const grepSchema = z.object({
   pattern: z
     .string()

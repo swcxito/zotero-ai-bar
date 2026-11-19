@@ -34,6 +34,11 @@ pref-provider = 模型提供商
 pref-model-name = 模型名称
 # 提示词选项
 pref-prompt = 提示词设置
+pref-attachment-read-strategy = AI 读取策略
+pref-attachment-read-strategy-original =
+    .label = 优先提供原文
+pref-attachment-read-strategy-model =
+    .label = 由模型选择
 pref-extend-selection-context =
     .label = 扩展选区内容
 pref-extend-selection-size = 扩展选区大小

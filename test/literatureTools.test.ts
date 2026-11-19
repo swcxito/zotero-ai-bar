@@ -11,7 +11,7 @@ import {
   type AddPaperDependencies,
   type PaperAttachmentResult,
 } from '../src/modules/literatureTools';
-import { AGENT_INSTRUCTIONS_PROMPT } from '../src/utils/prompts';
+import { getAgentInstructionsPrompt } from '../src/utils/prompts';
 
 function crossrefItem(doi: string | undefined, title: string | undefined, score = 10) {
   return {
@@ -68,9 +68,12 @@ describe('literatureTools', function () {
   it('registers both tools and instructs the agent about confirmation and attachment warnings', function () {
     const tools = buildTools();
     assert.containsAllKeys(tools, ['search_papers', 'add_paper']);
-    assert.include(AGENT_INSTRUCTIONS_PROMPT, '`search_papers` first');
-    assert.include(AGENT_INSTRUCTIONS_PROMPT, '`DUPLICATE_ITEM`');
-    assert.include(AGENT_INSTRUCTIONS_PROMPT, '`NO_FULL_TEXT_ATTACHMENT`');
+    for (const globalAssistant of [true, false]) {
+      const prompt = getAgentInstructionsPrompt(globalAssistant);
+      assert.include(prompt, '`search_papers` first');
+      assert.include(prompt, '`DUPLICATE_ITEM`');
+      assert.include(prompt, '`NO_FULL_TEXT_ATTACHMENT`');
+    }
   });
 
   describe('title matching and Crossref parsing', function () {

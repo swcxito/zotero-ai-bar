@@ -35,6 +35,7 @@ declare namespace _ZoteroTypes {
       "poem.token": string;
       "chat.startConversationMode": string;
       "chat.autoAttachItemData": boolean;
+      "chat.attachmentReadStrategy": string;
       "chat.openOnStartup": boolean;
       "chat.showPoem": boolean;
       "chat.autoImagePrompt": boolean;

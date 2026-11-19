@@ -35,6 +35,11 @@ pref-model-name = Model Name
 
 # Prompt Options
 pref-prompt = Prompt Settings
+pref-attachment-read-strategy = AI reading strategy
+pref-attachment-read-strategy-original =
+    .label = Prefer the original
+pref-attachment-read-strategy-model =
+    .label = Let the model choose
 pref-extend-selection-context =
     .label = Extend Selection Context
 pref-extend-selection-size = Extend Selection Size

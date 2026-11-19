@@ -104,14 +104,21 @@ export function getAutoImagePrompt(outputLanguage: string): string {
  * Kept here - not inline in chatManager.ts - so prompt edits live alongside
  * the other prompt constants and the chat manager stays a dispatcher.
  */
-export const AGENT_INSTRUCTIONS_PROMPT = `
+export function getAgentInstructionsPrompt(globalAssistant: boolean): string {
+  const documentInstructions = globalAssistant
+    ? 'Always provide an explicit `itemId` to `read`, `grep`, and `capture_page`. For the current PDF, use the attachment `itemId` from the latest `<zotero-reader-context>` in a user message. A context that says there is no current PDF clears any previous attachment. If the user refers to the current PDF and none is available, ask them to open it. For a library item, obtain its ID with `glob` or `get_selected_items`.'
+    : 'Use `grep` to locate relevant lines, then `read` with startLine/endLine (default 2 context lines) or `pageNumber` for a full PDF page. If `itemId` is omitted, `grep`/`read` use the document bound to this article chat.';
+  const currentDocumentCitations = globalAssistant
+    ? 'Include the explicit attachment ID in each document citation.'
+    : 'For the current document, omit itemId/title and write `[cite:p<page>]` or `[cite:L<line>]` (line resolves to page). Ranges allowed: `[cite:p5-12]`, `[cite:L42-58]`.';
+  return `
 # Agent Instructions
 You have access to tools. Before taking any action, make sure you understand the user's request.
 If the user's goal, question, or required output format is ambiguous, incomplete, or could reasonably be interpreted in more than one way, do NOT guess - use the \`ask_user\` tool to ask 1–3 concise clarifying questions. Each question should offer 2–5 concrete label/description options when useful. Free text alongside choices is enabled by default; set \`isOther\` to false only when answers must be limited to the listed choices. Set \`options\` to null when a free-text answer is more appropriate than choices. Ask in the user's language. Clarification questions go through \`ask_user\` only - never as prose preamble.
 
 ## Tool Orchestration
 - **Selected library papers**: when the user refers to selected papers/items in the library, call \`get_selected_items\` first, including in the global assistant. Then pass the returned itemId explicitly to \`read\`/\`grep\` for full text. Follow nextOffset while truncated is true, keeping the selection unchanged. If no literature is selected, ask the user to select papers in the library. Do not substitute the open reader document or guess the selection from conversation history.
-- **Current document** (itemId is the Item ID in Item Metadata above): when the answer isn't in the provided context, \`grep\` first to locate matching line numbers, then \`read\` with startLine/endLine (default 2 context lines) or \`pageNumber\` for full PDF pages. \`grep\`/\`read\` default to this document when itemId is omitted.
+- **Current document**: ${documentInstructions}
 - **Cross-document**: \`glob\` to find items by query, then \`read\` to inspect. Don't guess from titles alone.
 - **Online paper search and import**: for a title-based download request, call \`search_papers\` first. If it returns \`highConfidence: true\`, immediately call \`add_paper\` with the recommended DOI and that candidate's exact title. If it returns \`requiresConfirmation: true\`, use \`ask_user\` to let the user choose from the returned title/author/year/DOI candidates before calling \`add_paper\`. If there are no candidates, report that no DOI was found and do not guess.
 - **Duplicate and attachment handling**: treat a \`DUPLICATE_ITEM\` error from \`add_paper\` as final; report the existing item and do not retry the same paper or silently choose another DOI. After a successful import, always report the destination collection and whether \`fullTextDownloaded\` is true. When \`warningCode\` is \`NO_FULL_TEXT_ATTACHMENT\`, explicitly tell the user that the bibliographic item was added but no local PDF/EPUB full-text attachment was downloaded.
@@ -124,8 +131,9 @@ Format: \`[cite:<itemId>[:<page>|L<line>][|<title>]]\`
 - Use the itemId exactly as returned by tools (attachment IDs are fine). Include the paper's title in the \`|title\` slot - the UI uses it as the clickable label. Titles appear ONLY here, never in prose.
 - Never apply markdown formatting to a marker; never refer to literature by raw IDs in prose ("Item 4291") - always use a marker. Only cite IDs returned by tools in this conversation.
 - A marker alone on its own line renders as a section header for that paper.
-- **Current document shorthand**: omit itemId/title and write \`[cite:p<page>]\` or \`[cite:L<line>]\` (page or line; line resolves to page). Ranges allowed: \`[cite:p5-12]\`, \`[cite:L42-58]\`.
+- ${currentDocumentCitations}
 - **Line cites** (\`L\` form) resolve the line to its PDF page at render time; use them when you only know the line number from \`grep\`/\`read\`, not the page. Works cross-document too: \`[cite:<itemId>:L<line>[|<title>]]\`.`;
+}
 
 export const IMAGE_ANALYSIS_PROMPT = `
 

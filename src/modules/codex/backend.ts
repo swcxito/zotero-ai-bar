@@ -248,7 +248,7 @@ export async function streamCodex(
     if (!model) throw new Error(codexString('codex-error-model-unavailable', '所选 Codex 模型当前不可用，请刷新模型列表并重新选择。'));
     const imageSupport = model.inputModalities?.includes('image') ?? false;
     const mode = translation ? 'translation' : session.effectiveChatMode;
-    const toolDefinitions = translation ? {} : getSharedToolDefinitions();
+    const toolDefinitions = translation ? {} : getSharedToolDefinitions(session.kind);
     // In normal/full-text mode allow only document-reading tools, not library writes.
     const tools = Object.fromEntries(
       Object.entries(toolDefinitions).filter(
@@ -290,7 +290,10 @@ export async function streamCodex(
           : ''),
       developerInstructions: `${codexSystemText}\nThe Codex-native request_user_input tool is not prefixed. Other tool names from the Zotero instructions have the prefix zotero_ in this client. ${translation ? 'Return structured translation JSON. For inapplicable scalar fields use empty strings; use an empty array for inapplicable "otherMeanings".' : 'Cite web sources using Markdown links. For Zotero items preserve the Zotero citation format.'}`,
     };
-    const before = contextFingerprint(session.conversationHistory);
+    // Resumed threads keep their original tool schemas. Rebuild global threads
+    // created before the document tools required explicit item IDs.
+    const toolContext = session.kind === 'global-agent' ? 'explicit-item-id:' : '';
+    const before = toolContext + contextFingerprint(session.conversationHistory);
     const existing = session.pending.codexRetry ? session.lastTurnSnapshot?.codexBefore : session.codex;
     const canReuse =
       !translation &&
@@ -672,11 +675,13 @@ export async function streamCodex(
     } else {
       await textRender.flush();
       if (session.pending.messagePop) (session.pending.messagePop as HTMLElement).dataset.markdown = fullText;
-      binding.context = contextFingerprint([
-        ...session.conversationHistory,
-        ...(session.pending.userMessage ? [session.pending.userMessage] : []),
-        ...(fullText ? [{ role: 'assistant', content: fullText }] : []),
-      ]);
+      binding.context =
+        toolContext +
+        contextFingerprint([
+          ...session.conversationHistory,
+          ...(session.pending.userMessage ? [session.pending.userMessage] : []),
+          ...(fullText ? [{ role: 'assistant', content: fullText }] : []),
+        ]);
       session.codex = binding;
     }
     completed = true;

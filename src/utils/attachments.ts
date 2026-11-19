@@ -1,4 +1,4 @@
-/** Shared item identity and attachment selection. Never silently choose among several files. */
+/** Shared item identity and attachment selection. */
 export function getItem(itemId: number): Zotero.Item | undefined {
   try {
     return Zotero.Items.get(itemId) || undefined;
@@ -48,7 +48,16 @@ export class AttachmentSelectionError extends Error {
   }
 }
 
-export function resolveAttachment(itemId: number, kind: 'pdf' | 'text' | 'reader' = 'text'): Zotero.Item | undefined {
+const pdfVariantMarker = /(?:^|[^\p{L}\p{N}])(?:mono|dual|compare|zh[-_]cn)(?=$|[^\p{L}\p{N}])/iu;
+
+function isPDFVariant(item: Zotero.Item): boolean {
+  return (
+    item.attachmentContentType === 'application/pdf' &&
+    [item.attachmentFilename, item.getField('title')].some((name) => pdfVariantMarker.test(String(name ?? '')))
+  );
+}
+
+export function resolveAttachment(itemId: number, kind: 'pdf' | 'text' | 'reader' = 'text', preferOriginalPDF = false): Zotero.Item | undefined {
   const candidates = itemAttachments(itemId).filter((item) => {
     if (kind === 'pdf') return item.attachmentContentType === 'application/pdf';
     if (kind === 'reader') return !!item.attachmentReaderType;
@@ -59,6 +68,9 @@ export function resolveAttachment(itemId: number, kind: 'pdf' | 'text' | 'reader
       !!item.attachmentReaderType
     );
   });
-  if (candidates.length > 1) throw new AttachmentSelectionError(itemId, candidates);
-  return candidates[0];
+  if (candidates.length <= 1) return candidates[0];
+  const hasMultiplePDFs = candidates.filter((item) => item.attachmentContentType === 'application/pdf').length > 1;
+  const preferred = preferOriginalPDF && hasMultiplePDFs ? candidates.filter((item) => !isPDFVariant(item)) : candidates;
+  if (preferred.length === 1) return preferred[0];
+  throw new AttachmentSelectionError(itemId, preferred.length ? preferred : candidates);
 }

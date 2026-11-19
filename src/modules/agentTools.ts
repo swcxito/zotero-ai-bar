@@ -8,6 +8,7 @@
 import { tool, asSchema } from 'ai';
 import type { z } from 'zod';
 import type { Session, AgentUserAnswer } from './chatManager';
+import type { ChatSessionKind } from './chatWorkspace';
 import { searchItemAttachments, getSelectedLibraryItems, readItemText, searchLibraryItems, buildLibraryTree } from '../utils/zoteroItemAccess';
 import { onAgentAskUser } from './chatUI';
 import { getReaderByTabId } from './tabObserver';
@@ -15,10 +16,12 @@ import { capturePageByNumber, getOrOpenPDFReaderForItem } from './capture';
 import { checkModelSupportsImage } from '../utils/providers';
 import { addPaperToZotero, searchCrossrefPapers } from './literatureTools';
 import { attachmentSource, getItem, AttachmentSelectionError } from '../utils/attachments';
+import { getPref } from '../utils/prefs';
 import {
   askUserSchema,
   grepSchema,
   readSchema,
+  explicitItemIdSchema,
   getSelectedItemsSchema,
   globSchema,
   treeSchema,
@@ -67,8 +70,30 @@ function defineSharedTool(definition: SharedToolDefinition) {
 }
 
 /** Both backends call the same handlers; Codex arguments are validated before any Zotero access. */
-export function getSharedToolDefinitions(): Record<string, SharedToolDefinition> {
-  return Object.fromEntries(Object.entries(buildTools()).map(([name, sdkTool]) => [name, sharedToolDefinitions.get(sdkTool)!]));
+export function getSharedToolDefinitions(kind?: ChatSessionKind): Record<string, SharedToolDefinition> {
+  return Object.fromEntries(Object.entries(buildTools(kind)).map(([name, sdkTool]) => [name, sharedToolDefinitions.get(sdkTool)!]));
+}
+
+function defineDocumentTool({ globalInputSchema, ...definition }: SharedToolDefinition & { globalInputSchema: z.ZodTypeAny }) {
+  return {
+    article: defineSharedTool({ ...definition, description: `${definition.description} If itemId is omitted, use the current article document.` }),
+    global: defineSharedTool({
+      ...definition,
+      description: `${definition.description} Always supply an explicit itemId in the global assistant.`,
+      inputSchema: globalInputSchema,
+    }),
+  };
+}
+
+function documentToolItemId(itemId: number | undefined, session: Session | undefined): number {
+  if (itemId !== undefined) return itemId;
+  if (session?.kind === 'global-agent') {
+    throw new Error(
+      'The global assistant requires an explicit itemId. Use the current PDF attachment ID from the conversation or find an item with glob or get_selected_items.'
+    );
+  }
+  if (!session?.itemId) throw new Error('No item specified and no current document is open.');
+  return session.itemId;
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -94,32 +119,32 @@ export const askUserTool = defineSharedTool({
   },
 });
 
-export const grepTool = defineSharedTool({
+const grepTool = defineDocumentTool({
   description:
-    'Search the full text of an article using a case-insensitive literal or regex pattern. Returns line numbers and PDF page numbers for each match. If itemId is omitted, the current document is searched. A parent item ID searches all its attachments; each match includes its attachment ID and title. An attachment ID searches that file only.',
+    'Search the full text of an article using a case-insensitive literal or regex pattern. Returns line numbers and PDF page numbers for each match. A parent item ID searches all its attachments; each match includes its attachment ID and title. An attachment ID searches that file only.',
   inputSchema: grepSchema,
+  globalInputSchema: grepSchema.extend({ itemId: explicitItemIdSchema }),
   execute: async (input: GrepPayload, options) => {
-    const session = getSession(options);
-    const itemId = input.itemId ?? session?.itemId;
-    if (!itemId) {
-      throw new Error('No item specified and no current document is open.');
-    }
+    const itemId = documentToolItemId(input.itemId, getSession(options));
     return searchItemAttachments(itemId, input.pattern, input.useRegex ?? true, input.maxResults ?? 50, input.offset ?? 0, options.abortSignal);
   },
 });
 
-export const readTool = defineSharedTool({
+const readTool = defineDocumentTool({
   description:
-    'Read metadata and text from a Zotero item by itemId. Supports page-based reading (pageNumber) or line-based reading (startLine/endLine) with surrounding context. If itemId is omitted, the current document is used. A parent item with multiple eligible attachments requires choosing one of the returned attachment IDs.',
+    'Read metadata and text from a Zotero item by itemId. Supports page-based reading (pageNumber) or line-based reading (startLine/endLine) with surrounding context. If a parent item returns multiple attachment candidates, choose one of those attachment IDs. To read a particular version, pass its attachment ID directly.',
   inputSchema: readSchema,
+  globalInputSchema: readSchema.extend({ itemId: explicitItemIdSchema }),
   execute: async (input: ReadPayload, options) => {
-    const session = getSession(options);
-    const itemId = input.itemId ?? session?.itemId;
-    if (!itemId) {
-      throw new Error('No item specified and no current document is open.');
-    }
-    const result = await readItemText(itemId, input.pageNumber, input.startLine, input.endLine, input.contextLines);
-    return result;
+    const itemId = documentToolItemId(input.itemId, getSession(options));
+    return readItemText(
+      itemId,
+      input.pageNumber,
+      input.startLine,
+      input.endLine,
+      input.contextLines,
+      getPref('chat.attachmentReadStrategy') !== 'model-choice'
+    );
   },
 });
 
@@ -141,7 +166,7 @@ export const globTool = defineSharedTool({
 
 export const getSelectedItemsTool = defineSharedTool({
   description:
-    'Get the literature items currently selected in the Zotero library, including metadata and abstracts. Works from the global assistant without an open document. Child attachments resolve to their parent paper, duplicate papers are removed, and notes/annotations are skipped. An empty items array means no literature is selected. Use the returned itemId with read or grep to read full text; use attachment IDs when a paper has multiple PDFs. For pagination, keep the library selection unchanged between calls.',
+    'Get the literature items currently selected in the Zotero library, including metadata and abstracts. Works from the global assistant without an open document. Child attachments resolve to their parent paper, duplicate papers are removed, and notes/annotations are skipped. An empty items array means no literature is selected. Use the returned itemId with read or grep for full text. Pass an attachment ID to read a specific version or when read returns candidates. For pagination, keep the library selection unchanged between calls.',
   inputSchema: getSelectedItemsSchema,
   execute: async (input: GetSelectedItemsPayload) => getSelectedLibraryItems(input),
 });
@@ -208,12 +233,14 @@ export const translateTool = defineSharedTool({
   },
 });
 
-export const capturePageTool = defineSharedTool({
+const capturePageTool = defineDocumentTool({
   description:
-    'Capture a specific page of a PDF as an image and display it in the chat. Use this when the user wants to see or analyze a figure, table, diagram, or other visual content from a document. If no itemId is provided, the current document is used. If the target PDF is not open in a reader, it is opened automatically in a background tab without switching away from the current tab. The returned pageNumber can be used with read(pageNumber) or grep/read searches to inspect the same page, nearby caption, and in-text references before explaining the image. Note: this tool produces an image output and requires a vision-capable model. If the current model does not support image input, you should inform the user and handle the request using text-only tools (grep, read) instead, or ask the user to switch to a vision model.',
+    'Capture a specific page of a PDF as an image and display it in the chat. Use this when the user wants to see or analyze a figure, table, diagram, or other visual content from a document. If the target PDF is not open in a reader, it is opened automatically in a background tab without switching away from the current tab. The returned pageNumber can be used with read(pageNumber) or grep/read searches to inspect the same page, nearby caption, and in-text references before explaining the image. Note: this tool produces an image output and requires a vision-capable model. If the current model does not support image input, you should inform the user and handle the request using text-only tools (grep, read) instead, or ask the user to switch to a vision model.',
   inputSchema: capturePageSchema,
+  globalInputSchema: capturePageSchema.extend({ itemId: explicitItemIdSchema }),
   execute: async (input: CapturePagePayload, options) => {
     const session = getSession(options);
+    const itemId = session?.kind === 'global-agent' ? documentToolItemId(input.itemId, session) : input.itemId;
     if (!(options.imageSupport ?? checkModelSupportsImage())) {
       throw new Error(
         'The current model does not support image input, so capture_page cannot be used. Please handle the user request using text-based tools (grep, read) instead, or ask the user to switch to a vision-capable model and try again.'
@@ -221,11 +248,11 @@ export const capturePageTool = defineSharedTool({
     }
     let reader: _ZoteroTypes.ReaderInstance<'pdf'> | null = null;
 
-    if (input.itemId !== undefined) {
+    if (itemId !== undefined) {
       // Reuses an open reader when one exists; otherwise opens the PDF in a
       // background tab (current tab keeps focus) and captures from there.
       try {
-        reader = await getOrOpenPDFReaderForItem(input.itemId);
+        reader = await getOrOpenPDFReaderForItem(itemId);
       } catch (error) {
         if (error instanceof AttachmentSelectionError) return { error: error.message, candidates: error.candidates };
         throw error;
@@ -251,17 +278,18 @@ export const capturePageTool = defineSharedTool({
 // Tool registry
 // ───────────────────────────────────────────────────────────────────────────
 
-export function buildTools(_options?: { imageSupport?: boolean }) {
+export function buildTools(kind?: ChatSessionKind) {
+  const scope = kind === 'global-agent' ? 'global' : 'article';
   return {
     ask_user: askUserTool,
-    grep: grepTool,
-    read: readTool,
+    grep: grepTool[scope],
+    read: readTool[scope],
     get_selected_items: getSelectedItemsTool,
     glob: globTool,
     tree: treeTool,
     search_papers: searchPapersTool,
     add_paper: addPaperTool,
     translate: translateTool,
-    capture_page: capturePageTool,
+    capture_page: capturePageTool[scope],
   };
 }
