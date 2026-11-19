@@ -53,7 +53,8 @@ On supported macOS and Windows setups, the beta can connect to an installed Code
 
 If Zotero AI Bar helps your work, a GitHub star or a contribution helps keep it maintained.
 
-[![Afdian](docs/assets/afdian-btn-en.png)](https://afdian.com/a/fukeke) [![Buy Me a Coffee](docs/assets/red-button.png)](https://www.buymeacoffee.com/fukeke)
+<a href="https://afdian.com/a/fukeke"><img src="docs/assets/afdian-btn-en.png" alt="Afdian" width="136"></a>
+<a href="https://www.buymeacoffee.com/fukeke"><img src="docs/assets/red-button.png" alt="Buy Me a Coffee" width="136"></a>
 
 ## Acknowledgements
 

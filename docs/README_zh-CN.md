@@ -53,7 +53,8 @@ Zotero AI Bar 是 Zotero 的 AI 阅读助手。阅读文献时选中文本，即
 
 如果 Zotero AI Bar 对你的研究有帮助，欢迎点亮 GitHub ⭐ 或赞助项目，支持后续维护。
 
-[![爱发电](assets/afdian-btn-zh.png)](https://afdian.com/a/fukeke) [![Buy Me a Coffee](assets/red-button.png)](https://www.buymeacoffee.com/fukeke)
+<a href="https://afdian.com/a/fukeke"><img src="assets/afdian-btn-zh.png" alt="爱发电" width="136"></a>
+<a href="https://www.buymeacoffee.com/fukeke"><img src="assets/red-button.png" alt="Buy Me a Coffee" width="136"></a>
 
 ## 致谢
 
