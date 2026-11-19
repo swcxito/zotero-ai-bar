@@ -2,7 +2,7 @@ import { assert } from 'chai';
 import { renderMarkdown } from '../../src/utils/markdown';
 import { updateMarkdownContent } from '../../src/utils/markdownContent';
 import { createStreamRenderer } from '../../src/utils/streamRenderer';
-import { attachCitationHandlers } from '../../src/modules/chatUI';
+import { attachMarkdownHandlers } from '../../src/modules/chatUI';
 import { CHAT_SKINS } from '../../src/utils/chatSkin';
 
 /** Opt in with: pnpm test:codex-zotero --perf. No network or paid API calls. */
@@ -58,10 +58,10 @@ describe('API streaming performance in isolated Gecko', function () {
                 const start = now();
                 const html = await renderMarkdown(text.slice(0, Math.floor(text.length * (0.5 + index / 40))), undefined, context);
                 const parsed = now();
-                if (optimized) updateMarkdownContent(content, html, attachCitationHandlers);
+                if (optimized) updateMarkdownContent(content, html, attachMarkdownHandlers);
                 else {
                   content.innerHTML = html;
-                  attachCitationHandlers(content);
+                  attachMarkdownHandlers(content);
                 }
                 const patched = now();
                 root.scrollTo({ top: root.scrollHeight, behavior: 'instant' });
@@ -94,7 +94,7 @@ describe('API streaming performance in isolated Gecko', function () {
           async (text, isCurrent) => {
             const html = await renderMarkdown(text, undefined, context);
             if (!isCurrent()) return;
-            updateMarkdownContent(content, html, attachCitationHandlers);
+            updateMarkdownContent(content, html, attachMarkdownHandlers);
             root.scrollTo({ top: root.scrollHeight, behavior: 'instant' });
             content.getBoundingClientRect();
             const committed = now();

@@ -1,7 +1,7 @@
 import { ChatBox } from './chatBox';
 import { ToolCallBox } from './toolCallBox';
 import { renderMarkdown } from '../utils/markdown';
-import { attachCitationHandlers } from '../modules/chatUI';
+import { attachMarkdownHandlers } from '../modules/chatUI';
 
 /** Fixed, local-only conversation used to inspect development skins. */
 const PREVIEW_ANSWER = `# 长距离依赖与注意力
@@ -93,7 +93,7 @@ export function createSkinPreview(doc: Document): HTMLElement {
   void renderMarkdown(PREVIEW_ANSWER).then((html) => {
     if (!container.isConnected) return;
     content.innerHTML = html;
-    attachCitationHandlers(content);
+    attachMarkdownHandlers(content);
   });
 
   const shortUser = ChatBox({ doc, isUser: true }) as HTMLElement;

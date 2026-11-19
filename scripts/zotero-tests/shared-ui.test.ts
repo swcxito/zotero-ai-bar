@@ -4,7 +4,7 @@ import { setButtonIcon } from '../../src/components/buttonIcon';
 import { registerModelInfoAnchor, refreshAllModelInfoAnchors, unregisterModelInfoAnchors } from '../../src/components/modelInfo';
 import { renderMarkdown } from '../../src/utils/markdown';
 import { openCitation } from '../../src/modules/citationAction';
-import { attachCitationHandlers } from '../../src/modules/chatUI';
+import { attachMarkdownHandlers } from '../../src/modules/chatUI';
 import { bindMenu, disposeMenusWithin } from '../../src/components/menuController';
 import { openDropdownMenu } from '../../src/components/dropdownMenu';
 import { createChatHistoryController } from '../../src/modules/chatViewController';
@@ -225,7 +225,7 @@ describe('shared UI behavior in isolated Zotero', function () {
     };
     try {
       shell.innerHTML = '<span class="zaibar-cite" data-item-id="911" data-page="3">p.3</span>';
-      attachCitationHandlers(shell);
+      attachMarkdownHandlers(shell);
       const pill = shell.firstElementChild!;
       pill.dispatchEvent(new doc.defaultView!.MouseEvent('click', { bubbles: true }));
       await wait(10);

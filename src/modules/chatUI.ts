@@ -88,7 +88,7 @@ export async function renderPersistedTranscript(session: Session, container: HTM
       // parsing/citation resolution. Never append either half of a stale turn.
       if (!isCurrentRender()) return;
       content.innerHTML = html;
-      attachCitationHandlers(content);
+      attachMarkdownHandlers(content);
       chatMessage.appendChild(content);
     }
     pop.dataset.markdown = turn.assistantMarkdown;
@@ -101,8 +101,9 @@ export async function renderPersistedTranscript(session: Session, container: HTM
 }
 
 /** Wire interactions for rendered Markdown. Safe to call repeatedly. */
-export function attachCitationHandlers(root: HTMLElement): void {
+export function attachMarkdownHandlers(root: HTMLElement): void {
   attachCodeBlockHandlers(root);
+  attachMarkdownLinkHandlers(root);
 
   const spans = [
     ...(root.matches('.zaibar-cite:not([data-bound])') ? [root] : []),
@@ -132,6 +133,25 @@ export function attachCitationHandlers(root: HTMLElement): void {
       navigate(true);
     });
     attachCitationTooltip(span);
+  }
+}
+
+function attachMarkdownLinkHandlers(root: HTMLElement): void {
+  const selector = 'a[href]:not([data-bound])';
+  const links = [...(root.matches(selector) ? [root as HTMLAnchorElement] : []), ...root.querySelectorAll<HTMLAnchorElement>(selector)];
+  for (const link of links) {
+    // Model output is untrusted. Only absolute web URLs may leave the chat.
+    if (!/^https?:\/\//i.test(link.getAttribute('href')!.trim()) || !link.hostname) {
+      link.removeAttribute('href');
+      continue;
+    }
+    const url = link.href;
+    link.setAttribute('data-bound', '1');
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      Zotero.launchURL(url);
+    });
   }
 }
 
@@ -572,7 +592,7 @@ export async function onLLMStreamUpdateV2(data: {
     (data.isCurrent && !data.isCurrent())
   )
     return;
-  updateMarkdownContent(chatMessage, html, attachCitationHandlers);
+  updateMarkdownContent(chatMessage, html, attachMarkdownHandlers);
   (pop as HTMLElement).dataset.markdown = data.fullText;
   data.session.pending.lastRenderedLength = newLen;
   // Keep the active segment reference in sync; the updater preserves its root.
@@ -1293,7 +1313,7 @@ export function onTranslationResultV2(session: Session, output: TranslationResul
         if (!markdownEl.isConnected) return;
         markdownEl.classList.remove('whitespace-pre-wrap');
         markdownEl.innerHTML = html;
-        attachCitationHandlers(markdownEl);
+        attachMarkdownHandlers(markdownEl);
         maybeAutoScroll(session);
       });
     }
@@ -1463,7 +1483,7 @@ export async function consumeAgentStream(
       const pending = session.pending;
       const html = await renderMarkdown(text, session.itemId, renderContext);
       if (!isCurrent() || session.pending !== pending || !seg.isConnected || pending.currentTextSegment !== seg) return;
-      updateMarkdownContent(seg, html, attachCitationHandlers);
+      updateMarkdownContent(seg, html, attachMarkdownHandlers);
       maybeAutoScroll(session);
     });
   }

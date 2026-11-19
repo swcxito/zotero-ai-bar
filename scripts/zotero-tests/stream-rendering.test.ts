@@ -1,7 +1,7 @@
 import { assert } from 'chai';
 import { Session } from '../../src/modules/chatManager';
 import {
-  attachCitationHandlers,
+  attachMarkdownHandlers,
   consumeAgentStream,
   onLLMStreamEndV2,
   onLLMStreamUpdateV2,
@@ -83,7 +83,7 @@ describe('API text streaming in isolated Zotero', function () {
     assert.include(content.textContent!, '新内容');
     // External error/placeholder replacement invalidates the previous snapshot.
     content.innerHTML = '<p>external replacement</p>';
-    updateMarkdownContent(content, await renderMarkdown('恢复正常'), attachCitationHandlers);
+    updateMarkdownContent(content, await renderMarkdown('恢复正常'), attachMarkdownHandlers);
     assert.equal(content.textContent!.trim(), '恢复正常');
   });
 
@@ -97,10 +97,51 @@ describe('API text streaming in isolated Zotero', function () {
       const text = markdown.slice(0, end);
       await onLLMStreamUpdateV2({ session, fullText: text, force: true, renderContext: context });
       expected.innerHTML = await renderMarkdown(text);
-      attachCitationHandlers(expected);
+      attachMarkdownHandlers(expected);
       assert.equal(content.innerHTML, expected.innerHTML, `Character ${end}`);
     }
     assert.include(content.querySelector('a')!.getAttribute('href')!, 'https://example.org');
+  });
+
+  it('opens streamed web links once, including after later updates reuse the link', async function () {
+    const content = session.pending.currentTextSegment!;
+    const url = 'https://doi.org/10.1000/example?first=1&second=2#page';
+    const markdown = `[**Paper**](${url})\n\n<http://example.org/reference>`;
+    const launched: string[] = [];
+    const launchURL = Zotero.launchURL;
+    Zotero.launchURL = (href) => void launched.push(href);
+    try {
+      await onLLMStreamUpdateV2({ session, fullText: markdown, force: true });
+      assert.lengthOf(content.querySelectorAll('a[href]'), 2);
+      const link = content.querySelector('a')!;
+      const click = new content.ownerDocument.defaultView!.MouseEvent('click', { bubbles: true, cancelable: true });
+      assert.isNotNull(link.querySelector('strong'));
+      link.querySelector('strong')!.dispatchEvent(click);
+      assert.deepEqual(launched, [url]);
+      assert.isTrue(click.defaultPrevented);
+
+      await onLLMStreamUpdateV2({ session, fullText: `${markdown}\n\nMore text`, force: true });
+      assert.strictEqual(content.querySelector('a'), link);
+      attachMarkdownHandlers(content);
+      link.click();
+      content.querySelectorAll('a')[1].click();
+      assert.deepEqual(launched, [url, url, 'http://example.org/reference']);
+    } finally {
+      Zotero.launchURL = launchURL;
+    }
+  });
+
+  it('removes non-web destinations from anchors during hydration', function () {
+    const doc = wrapper.ownerDocument;
+    for (const href of ['other.html', 'file:///tmp/reference.pdf', 'chrome://zotero/content/', 'https://']) {
+      // Build the anchor directly to exercise the link policy independently of innerHTML sanitization.
+      const link = doc.createElementNS('http://www.w3.org/1999/xhtml', 'a');
+      link.setAttribute('href', href);
+      link.textContent = 'Reference';
+      attachMarkdownHandlers(link);
+      assert.isFalse(link.hasAttribute('href'), href);
+      assert.equal(link.textContent, 'Reference');
+    }
   });
 
   it('caches math and highlighting per response without crossing concurrent contexts', async function () {

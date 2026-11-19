@@ -131,6 +131,11 @@ function createMarkdownParser(cache?: ReturnType<typeof createMarkdownRenderCach
       },
     },
     renderer: {
+      link(token) {
+        // Marked URL-encodes destinations, but leaves query separators unescaped for XHTML.
+        token.href = token.href.replace(/&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[\da-fA-F]+;)/g, '&amp;');
+        return false;
+      },
       html(token: any) {
         const raw = typeof token === 'string' ? token : (token?.text ?? '');
         return escapeHtml(raw);

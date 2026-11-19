@@ -11,7 +11,7 @@ import { renderMarkdown } from '../utils/markdown';
 import { getString } from '../utils/locale';
 import { installChatSelectionCopyHandler, registerChatSelectionCopyContainer, uninstallChatSelectionCopyHandler } from '../utils/chatSelectionCopy';
 import { SHARED_CHAT_DRAFT_ID } from '../utils/chatDraft';
-import { attachCitationHandlers, renderPersistedTranscript } from './chatUI';
+import { attachMarkdownHandlers, renderPersistedTranscript } from './chatUI';
 import { applyChatFontSize } from '../utils/chatFontSize';
 import { registerChatSkinRoot } from '../utils/chatSkin';
 import { disposeChatTabHighlight, syncChatTabHighlight } from '../utils/chatTabHighlight';
@@ -326,7 +326,7 @@ export function ensureChatWindowUI(doc: Document) {
       const msgEl = bubble.querySelector('.chat-message') as HTMLElement | null;
       if (!msgEl) return;
       msgEl.innerHTML = await renderMarkdown(text, addon.chatManager.sessionsMap.get(sessionId)?.itemId);
-      attachCitationHandlers(msgEl);
+      attachMarkdownHandlers(msgEl);
       (msgEl as any).dataset.markdown = text;
     },
   });

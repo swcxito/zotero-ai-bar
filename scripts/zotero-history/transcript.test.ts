@@ -41,6 +41,22 @@ describe('History transcript rendering in real Zotero', function () {
     assert.lengthOf(container.querySelectorAll('[data-chat-role="user"]'), 2);
   });
 
+  it('opens links in restored replies', async function () {
+    const url = 'https://example.org/reference?a=1&b=2';
+    session.persistedTurns[0].assistantMarkdown = `[Reference](${url.replace('&', '&amp;')})`;
+    await renderPersistedTranscript(session, container);
+
+    const launched: string[] = [];
+    const launchURL = Zotero.launchURL;
+    Zotero.launchURL = (href) => void launched.push(href);
+    try {
+      container.querySelector('a')!.click();
+      assert.deepEqual(launched, [url]);
+    } finally {
+      Zotero.launchURL = launchURL;
+    }
+  });
+
   it('never appends an old reply after switching conversations during Markdown rendering', async function () {
     const oldRender = renderPersistedTranscript(session, container);
     session.conversationId = 'new-conversation';
