@@ -684,6 +684,7 @@ function hasLocalIcon(providerId: string): boolean {
 export function resolveProviderIcon(providerId: string): string {
   if (providerId === 'codex-subscription') return getV2LogoUrl('openai');
   if (providerId === 'claude-code-local') return getV2LogoUrl('anthropic');
+  if (providerId === 'agy-local') return getV2LogoUrl('google');
   if (hasLocalIcon(providerId)) return getV2LogoUrl(providerId);
   const cached = loadIconCache()[providerId];
   if (cached) return cached;

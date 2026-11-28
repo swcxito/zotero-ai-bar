@@ -58,6 +58,8 @@ declare namespace _ZoteroTypes {
       "sync.lastSyncAt": string;
       "claudeCode.runtimePath": string;
       "claudeCode.modelsVersion": string;
+      "agy.runtimePath": string;
+      "agy.modelsVersion": string;
     };
   }
 }

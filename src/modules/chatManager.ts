@@ -94,6 +94,8 @@ export class Session {
   codexThinkingEffort?: string;
   /** Claude Code --effort level; only levels the selected model reports are sent. */
   claudeThinkingEffort?: string;
+  /** Antigravity (agy) thinking level; only levels the selected model reports are sent. */
+  agyThinkingEffort?: string;
   sourceLabel?: string;
   chatMode: 'normal' | 'full-text' | 'agent' = 'normal';
   thinkingEffort: 'none' | 'low' | 'medium' | 'high' | 'xhigh' = 'none';

@@ -26,6 +26,8 @@ import { getString } from '../utils/locale';
 import { codexEfforts } from '../modules/codex/settings';
 import { claudeCodeEfforts } from '../modules/claudeCode/settings';
 import { CLAUDE_CODE_PROVIDER_ID, claudeEffort } from '../modules/claudeCode/protocol';
+import { agyEfforts } from '../modules/agy/settings';
+import { AGY_PROVIDER_ID, agyEffort } from '../modules/agy/protocol';
 import type { ChatSessionKind } from '../modules/chatWorkspace';
 
 import { startCaptureMode } from '../modules/capture';
@@ -404,6 +406,14 @@ export function InputArea(
         efforts,
         current: claudeEffort(efforts, session.claudeThinkingEffort ?? session.thinkingEffort),
         set: (e) => (session.claudeThinkingEffort = e),
+      };
+    }
+    if (addon.data.userProviderConfigV2?.active?.providerId === AGY_PROVIDER_ID) {
+      const efforts = agyEfforts();
+      return {
+        efforts,
+        current: agyEffort(efforts, session.agyThinkingEffort ?? session.thinkingEffort),
+        set: (e) => (session.agyThinkingEffort = e),
       };
     }
     return { efforts: effortOrder, current: session.thinkingEffort, set: (e) => (session.thinkingEffort = e as typeof session.thinkingEffort) };

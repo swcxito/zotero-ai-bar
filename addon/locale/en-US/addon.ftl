@@ -81,6 +81,7 @@ model-dialog-connect-chatgpt = Connect ChatGPT
 model-dialog-chatgpt-connected = Connected
 model-dialog-connect-options = More connection options
 model-dialog-connect-claude-code = Connect Claude Code
+model-dialog-connect-agy = Connect Antigravity (agy)
 model-dialog-model-label = Model
 
 # Codex subscription
@@ -240,6 +241,9 @@ subscription-choose-program = Choose executable
 subscription-cli-installed = CLI installation complete. Check login to connect.
 subscription-codex-description = Uses the local Codex CLI and reuses your ChatGPT login when available.
 subscription-claude-description = Uses the local Claude Code CLI. Sign in to Claude Code first.
+subscription-agy-card-title = Antigravity subscription
+subscription-agy-description = Uses the local Antigravity CLI (agy). Sign in via agy first.
+subscription-agy-not-logged-in = Not signed in to Antigravity
 subscription-disconnect = Disconnect
 subscription-install-cli = Install CLI
 subscription-install-help = Installation help

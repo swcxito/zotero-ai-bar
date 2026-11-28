@@ -1,12 +1,13 @@
 import { getString } from '../utils/locale';
 
 interface RuntimeSettingsOptions {
-  provider: 'codex' | 'claude-code';
+  provider: 'codex' | 'claude-code' | 'agy';
   path: string;
   description: string;
-  help: 'codex-integration' | 'claude-code-integration';
+  help?: 'codex-integration' | 'claude-code-integration';
+  helpUrl?: string;
   checkLogin: (path: string) => void;
-  install: () => void;
+  install?: () => void;
   disconnectOrCancel: () => void;
 }
 
@@ -60,22 +61,23 @@ export function createSubscriptionRuntimeSettings(doc: Document, win: Window, op
         status.textContent = String((error as Error).message || error);
       });
   });
-  const install = button(`${provider}-install-cli-button`, getString('subscription-install-cli'), options.install);
+  const install = options.install ? button(`${provider}-install-cli-button`, getString('subscription-install-cli'), options.install) : undefined;
   const language = String(Zotero.locale).toLowerCase().startsWith('zh') ? 'zh-cn' : 'en';
   const help = doc.createElement('a');
-  help.href = `https://zotero.fukeke.com/${language}/reference/${options.help}/`;
+  help.href = options.helpUrl ?? `https://zotero.fukeke.com/${language}/reference/${options.help}/`;
   help.textContent = getString('subscription-install-help');
   help.className = 'text-rose-600 underline underline-offset-2 hover:text-rose-500 dark:text-rose-400 dark:hover:text-rose-300';
   help.addEventListener('click', (event) => {
     event.preventDefault();
     Zotero.launchURL(help.href);
   });
-  controls.append(check, choose, install, help);
+  controls.append(check, choose, ...(install ? [install] : []), help);
   panel.append(summary, description, status, path, controls);
 
   const end = button(`${provider}-connection-action`, '', options.disconnectOrCancel);
   end.classList.add('absolute', 'right-0', 'top-3', 'h-8');
   root.append(panel, end);
+  const busyControls: Array<HTMLInputElement | HTMLButtonElement> = [path, check, choose, ...(install ? [install] : [])];
   return {
     root,
     panel,
@@ -84,7 +86,7 @@ export function createSubscriptionRuntimeSettings(doc: Document, win: Window, op
       const label = getString(connected ? 'subscription-disconnect' : 'subscription-cancel-connect');
       if (end.textContent !== label) end.textContent = label;
       end.disabled = connected && busy;
-      for (const control of [path, check, choose, install]) control.disabled = busy;
+      for (const control of busyControls) control.disabled = busy;
     },
   };
 }

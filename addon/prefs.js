@@ -51,3 +51,5 @@ pref('sync.includeApiKeys', false);
 pref('sync.lastSyncAt', '');
 pref('claudeCode.runtimePath', '');
 pref('claudeCode.modelsVersion', '');
+pref('agy.runtimePath', '');
+pref('agy.modelsVersion', '');
