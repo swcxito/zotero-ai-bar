@@ -81,6 +81,7 @@ model-dialog-connect-chatgpt = 连接 ChatGPT
 model-dialog-chatgpt-connected = 已连接
 model-dialog-connect-options = 更多连接选项
 model-dialog-connect-claude-code = 连接 Claude Code
+model-dialog-connect-agy = 连接 Antigravity (agy)
 model-dialog-model-label = 模型
 
 # Codex 订阅
@@ -240,6 +241,9 @@ subscription-choose-program = 选择程序
 subscription-cli-installed = CLI 安装完成。点击「检查登录」继续连接。
 subscription-codex-description = 使用本地 Codex CLI，优先复用已有的 ChatGPT 登录。
 subscription-claude-description = 使用本地 Claude Code CLI。请先在 Claude Code 中登录。
+subscription-agy-card-title = Antigravity 订阅
+subscription-agy-description = 使用本地 Antigravity CLI（agy）。请先在终端运行 agy 完成登录。
+subscription-agy-not-logged-in = 尚未登录 Antigravity
 subscription-disconnect = 断开连接
 subscription-install-cli = 安装 CLI
 subscription-install-help = 安装帮助

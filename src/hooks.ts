@@ -14,6 +14,7 @@ import { convertLegacyLLMConfigByKey, ensureCommonProviders, initIconCache, load
 import { isReaderZoteroTab, updateSelectedZoteroTab } from './modules/chatWorkspace';
 import { codexRuntime } from './modules/codex/runtime';
 import { stopClaudeCode } from './modules/claudeCode/runtime';
+import { stopAgy } from './modules/agy/runtime';
 import { startChatSkinSync, stopChatSkinSync } from './utils/chatSkin';
 import { startWebDavAutoSync, stopWebDavAutoSync } from './modules/webdavSync';
 
@@ -174,6 +175,7 @@ async function onShutdown(): Promise<void> {
   stopChatSkinSync();
   await codexRuntime.stop(true);
   await stopClaudeCode();
+  await stopAgy();
   await addon.chatManager.flushHistory();
   ztoolkit.unregisterAll();
   if (addon.data._tabObserverID) {

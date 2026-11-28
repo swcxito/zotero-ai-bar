@@ -42,6 +42,8 @@ import { codexRuntime } from './codex/runtime';
 import { renderAppsPanel } from './codex/appsPanel';
 import { createClaudeCodeSettings } from './claudeCode/settings';
 import { CLAUDE_CODE_PROVIDER_ID } from './claudeCode/protocol';
+import { createAgySettings, agyHeadDetailsBlock, AGY_HEAD_DETAILS_CLASS } from './agy/settings';
+import { AGY_PROVIDER_ID } from './agy/protocol';
 import { IconView } from '../components/iconView';
 import { CardModelRow, setCardModelName } from '../components/modelRow';
 import { InlineButton } from '../components/buttons/inlineButton';
@@ -231,9 +233,38 @@ class ModelDialogV2 {
     );
     claude.id = 'claude-code-provider-card';
     claude.hidden = !v2.addedProviders[CLAUDE_CODE_PROVIDER_ID];
-    container.append(this.createCodexCard(), claude);
+    const updateAgyHeader = () => {
+      const card = this.doc.getElementById('agy-provider-card');
+      const details = card?.querySelector(`.${AGY_HEAD_DETAILS_CLASS}`);
+      if (!details) return;
+      const next = ztoolkit.UI.createElement(
+        this.doc,
+        'div',
+        agyHeadDetailsBlock(!!addon.data.userProviderConfigV2?.addedProviders[AGY_PROVIDER_ID])
+      );
+      if (next.textContent !== details.textContent) details.replaceWith(next);
+    };
+    const agy = this.createSubscriptionCard(
+      AGY_PROVIDER_ID,
+      getString('subscription-agy-card-title'),
+      createAgySettings(
+        this.doc,
+        this.win,
+        () => {
+          const card = this.doc.getElementById('agy-provider-card');
+          if (card) card.hidden = true;
+          this.updateProviderCardsToggle();
+          this.doc.getElementById('subscription-connect-toggle')?.focus();
+        },
+        updateAgyHeader
+      ),
+      [agyHeadDetailsBlock(!!v2.addedProviders[AGY_PROVIDER_ID])]
+    );
+    agy.id = 'agy-provider-card';
+    agy.hidden = !v2.addedProviders[AGY_PROVIDER_ID];
+    container.append(this.createCodexCard(), claude, agy);
     for (const providerId of Object.keys(v2.addedProviders)) {
-      if (providerId === CODEX_PROVIDER_ID || providerId === CLAUDE_CODE_PROVIDER_ID) continue;
+      if (providerId === CODEX_PROVIDER_ID || providerId === CLAUDE_CODE_PROVIDER_ID || providerId === AGY_PROVIDER_ID) continue;
       this.createAndAppendCard(providerId, container as HTMLElement);
     }
     this.renderCodexCard();
@@ -254,6 +285,7 @@ class ModelDialogV2 {
     const toggle = this.doc.getElementById('subscription-connect-toggle')!;
     const menu = this.doc.getElementById('subscription-connect-options')!;
     const claudeOption = this.doc.getElementById('connect-claude-code-button')!;
+    const agyOption = this.doc.getElementById('connect-agy-button')!;
     const label = getString('model-dialog-connect-options');
     toggle.title = label;
     toggle.setAttribute('aria-label', label);
@@ -282,6 +314,15 @@ class ModelDialogV2 {
       this.updateProviderCardsToggle();
       if (!addon.data.userProviderConfigV2?.addedProviders[CLAUDE_CODE_PROVIDER_ID])
         card.querySelector<HTMLButtonElement>('#claude-code-check-login')?.click();
+    });
+    agyOption.addEventListener('click', () => {
+      setMenuOpen(false);
+      toggle.focus();
+      const card = this.doc.getElementById('agy-provider-card')!;
+      card.hidden = false;
+      if (card.dataset.collapsed === 'true') card.querySelector<HTMLButtonElement>('.provider-card-collapse')?.click();
+      this.updateProviderCardsToggle();
+      if (!addon.data.userProviderConfigV2?.addedProviders[AGY_PROVIDER_ID]) card.querySelector<HTMLButtonElement>('#agy-check-login')?.click();
     });
   }
 
@@ -821,6 +862,10 @@ class ModelDialogV2 {
     if (v2.addedProviders[CLAUDE_CODE_PROVIDER_ID]) {
       newAddedProviders[CLAUDE_CODE_PROVIDER_ID] = v2.addedProviders[CLAUDE_CODE_PROVIDER_ID];
       newAddedModels.push(...v2.addedModels.filter((model) => model.providerId === CLAUDE_CODE_PROVIDER_ID));
+    }
+    if (v2.addedProviders[AGY_PROVIDER_ID]) {
+      newAddedProviders[AGY_PROVIDER_ID] = v2.addedProviders[AGY_PROVIDER_ID];
+      newAddedModels.push(...v2.addedModels.filter((model) => model.providerId === AGY_PROVIDER_ID));
     }
     if (v2.addedProviders[CODEX_PROVIDER_ID]) {
       newAddedProviders[CODEX_PROVIDER_ID] = v2.addedProviders[CODEX_PROVIDER_ID];
